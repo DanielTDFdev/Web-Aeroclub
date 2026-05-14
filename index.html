@@ -41,7 +41,7 @@ h3{font-size:16px;font-weight:500;margin-bottom:.75rem}
 .field{margin-bottom:.75rem}
 .field label{display:block;font-size:13px;color:var(--text2);margin-bottom:4px}
 .field input,.field select{width:100%;padding:8px 10px;border:.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:14px}
-.field input:focus,.field select:focus{outline:none;border-color:var(--info-border)}
+.field input:focus{outline:none;border-color:var(--info-border)}
 button{padding:8px 16px;border:.5px solid var(--border2);border-radius:var(--radius);background:transparent;color:var(--text);font-size:14px;cursor:pointer}
 button:hover{background:var(--bg2)}
 button.primary{background:var(--info-bg);color:var(--info-text);border-color:var(--info-border)}
@@ -78,6 +78,8 @@ button.danger{background:var(--danger-bg);color:var(--danger-text);border-color:
 input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--info-border)}
 .row{display:flex;gap:12px}.row .field{flex:1}
 .tab-bar{display:flex;gap:8px;align-items:center;margin-bottom:1rem;flex-wrap:wrap}
+.link-btn{background:none;border:none;color:var(--info-text);cursor:pointer;font-size:13px;padding:0;text-decoration:underline}
+.link-btn:hover{opacity:.75}
 </style>
 </head>
 <body>
@@ -93,18 +95,49 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--in
 
 <!-- LOGIN -->
 <div id="login-screen" class="screen active">
-  <div style="max-width:360px;margin:2rem auto">
+  <div style="max-width:380px;margin:2rem auto">
     <div class="card">
       <div style="display:flex;gap:8px;margin-bottom:1rem">
-        <button class="nav-btn active" id="tab-btn-alumno" onclick="switchLoginTab('alumno')">Soy alumno</button>
+        <button class="nav-btn active" id="tab-btn-alumno" onclick="switchLoginTab('alumno')">Alumno</button>
+        <button class="nav-btn" id="tab-btn-registro" onclick="switchLoginTab('registro')">Registrarme</button>
         <button class="nav-btn" id="tab-btn-instructor" onclick="switchLoginTab('instructor')">Instructor</button>
       </div>
+
+      <!-- Login alumno -->
       <div id="tab-alumno">
-        <div class="field"><label>Nombre completo</label><input type="text" id="al-nombre" placeholder="Tu nombre"></div>
-        <div class="field"><label>Email</label><input type="email" id="al-email" placeholder="tu@email.com"></div>
+        <div class="field"><label>Email</label><input type="email" id="al-login-email" placeholder="tu@email.com"></div>
+        <div class="field"><label>Contraseña</label><input type="password" id="al-login-pass" placeholder="contraseña"></div>
         <div id="login-err" class="error" style="display:none"></div>
         <button class="primary" style="width:100%;margin-top:.5rem" onclick="loginAlumno()">Ingresar</button>
+        <div style="text-align:center;margin-top:.75rem">
+          <button class="link-btn" onclick="switchLoginTab('olvide')">Olvidé mi contraseña</button>
+        </div>
       </div>
+
+      <!-- Registro alumno -->
+      <div id="tab-registro" style="display:none">
+        <div class="field"><label>Nombre completo</label><input type="text" id="reg-nombre" placeholder="Tu nombre"></div>
+        <div class="field"><label>Email</label><input type="email" id="reg-email" placeholder="tu@email.com"></div>
+        <div class="field"><label>Contraseña</label><input type="password" id="reg-pass" placeholder="mínimo 6 caracteres"></div>
+        <div class="field"><label>Confirmar contraseña</label><input type="password" id="reg-pass2" placeholder="repetí la contraseña"></div>
+        <div id="reg-err" class="error" style="display:none"></div>
+        <div id="reg-ok" class="success-msg" style="display:none"></div>
+        <button class="primary" style="width:100%;margin-top:.5rem" onclick="registrarAlumno()">Crear cuenta</button>
+      </div>
+
+      <!-- Olvidé contraseña -->
+      <div id="tab-olvide" style="display:none">
+        <p style="font-size:14px;color:var(--text2);margin-bottom:.75rem">Ingresá tu email y te enviamos una contraseña temporal.</p>
+        <div class="field"><label>Email</label><input type="email" id="olvide-email" placeholder="tu@email.com"></div>
+        <div id="olvide-err" class="error" style="display:none"></div>
+        <div id="olvide-ok" class="success-msg" style="display:none"></div>
+        <button class="primary" style="width:100%;margin-top:.5rem" onclick="olvideClave()">Enviar contraseña temporal</button>
+        <div style="text-align:center;margin-top:.75rem">
+          <button class="link-btn" onclick="switchLoginTab('alumno')">Volver al login</button>
+        </div>
+      </div>
+
+      <!-- Login instructor -->
       <div id="tab-instructor" style="display:none">
         <div class="field"><label>Usuario</label><input type="text" id="inst-user" placeholder="usuario"></div>
         <div class="field"><label>Contraseña</label><input type="password" id="inst-pass" placeholder="contraseña"></div>
@@ -120,6 +153,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--in
   <div class="tab-bar">
     <button class="nav-btn active" id="al-tab-mis" onclick="showAlumnoTab('mis-turnos')">Mis turnos</button>
     <button class="nav-btn" id="al-tab-pedir" onclick="showAlumnoTab('pedir-turno')">Pedir turno</button>
+    <button class="nav-btn" id="al-tab-perfil" onclick="showAlumnoTab('perfil')">Mi perfil</button>
     <span style="margin-left:auto;font-size:13px;color:var(--text2)" id="al-nombre-display"></span>
     <button onclick="logout()">Salir</button>
   </div>
@@ -148,6 +182,18 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--in
           <button onclick="cancelarSeleccion()">Cancelar</button>
         </div>
       </div>
+    </div>
+  </div>
+  <div id="alumno-perfil" class="screen">
+    <h2>Mi perfil</h2>
+    <div class="card">
+      <h3>Cambiar contraseña</h3>
+      <div class="field"><label>Contraseña actual</label><input type="password" id="perfil-pass-actual" placeholder="contraseña actual"></div>
+      <div class="field"><label>Nueva contraseña</label><input type="password" id="perfil-pass-nueva" placeholder="mínimo 6 caracteres"></div>
+      <div class="field"><label>Confirmar nueva contraseña</label><input type="password" id="perfil-pass-nueva2" placeholder="repetí la nueva contraseña"></div>
+      <div id="perfil-err" class="error" style="display:none"></div>
+      <div id="perfil-ok" class="success-msg" style="display:none"></div>
+      <button class="primary" onclick="cambiarClave()">Cambiar contraseña</button>
     </div>
   </div>
 </div>
@@ -191,20 +237,26 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--in
       </div>
       <button onclick="agregarInstructor()">Agregar instructor</button>
     </div>
+    <div class="card">
+      <h3>Alumnos registrados</h3>
+      <div id="alumnos-list"></div>
+    </div>
   </div>
 </div>
 
 </div>
 
 <script>
-const EMAILJS_SERVICE  = 'dcamargo70@gmail.com';
-const EMAILJS_TEMPLATE = 'template_v4qu4x6';
-const EMAILJS_PUBKEY   = '0IoRm88tZQepkHAdK';
+const EMAILJS_SERVICE        = 'dcamargo70@gmail.com';
+const EMAILJS_TEMPLATE_CANCEL = 'template_v4qu4x6';
+const EMAILJS_TEMPLATE_RESET  = 'template_scbsgfg';
+const EMAILJS_PUBKEY          = '0IoRm88tZQepkHAdK';
 
-const LS_KEY = 'lvoad_turnos_v2';
+const LS_KEY = 'lvoad_turnos_v3';
 
 let state = {
   reservas: [],
+  alumnos: [],
   instructores: [{ user: 'admin', pass: 'admin123', nombre: 'Instructor' }],
   horarios: ['07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00'],
   horariosActivos: ['08:00','09:00','10:00','11:00','14:00','15:00','16:00'],
@@ -236,27 +288,90 @@ function isMinimas12h(dateStr, hora) {
 function getSlotsTaken(dateStr) {
   return state.reservas.filter(r => r.fecha===dateStr && r.estado!=='cancelado').map(r => r.hora);
 }
-
-function switchLoginTab(tab) {
-  document.getElementById('tab-alumno').style.display = tab==='alumno'?'block':'none';
-  document.getElementById('tab-instructor').style.display = tab==='instructor'?'block':'none';
-  document.getElementById('tab-btn-alumno').classList.toggle('active', tab==='alumno');
-  document.getElementById('tab-btn-instructor').classList.toggle('active', tab==='instructor');
+function generarPassTemp() {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  let pass = '';
+  for (let i = 0; i < 8; i++) pass += chars[Math.floor(Math.random()*chars.length)];
+  return pass;
 }
 
-function loginAlumno() {
-  const nombre = document.getElementById('al-nombre').value.trim();
-  const email  = document.getElementById('al-email').value.trim();
-  const err    = document.getElementById('login-err');
-  if (!nombre||!email) { err.textContent='Completá nombre y email.'; err.style.display='block'; return; }
+// LOGIN TABS
+function switchLoginTab(tab) {
+  ['alumno','registro','instructor','olvide'].forEach(t => {
+    const el = document.getElementById('tab-'+t);
+    if (el) el.style.display = t===tab ? 'block' : 'none';
+  });
+  ['alumno','registro','instructor'].forEach(t => {
+    const btn = document.getElementById('tab-btn-'+t);
+    if (btn) btn.classList.toggle('active', t===tab);
+  });
+}
+
+// REGISTRO
+function registrarAlumno() {
+  const nombre = document.getElementById('reg-nombre').value.trim();
+  const email  = document.getElementById('reg-email').value.trim().toLowerCase();
+  const pass   = document.getElementById('reg-pass').value;
+  const pass2  = document.getElementById('reg-pass2').value;
+  const err    = document.getElementById('reg-err');
+  const ok     = document.getElementById('reg-ok');
+  err.style.display='none'; ok.style.display='none';
+  if (!nombre||!email||!pass) { err.textContent='Completá todos los campos.'; err.style.display='block'; return; }
   if (!email.includes('@')) { err.textContent='Email inválido.'; err.style.display='block'; return; }
+  if (pass.length < 6) { err.textContent='La contraseña debe tener al menos 6 caracteres.'; err.style.display='block'; return; }
+  if (pass !== pass2) { err.textContent='Las contraseñas no coinciden.'; err.style.display='block'; return; }
+  if (state.alumnos.find(a => a.email===email)) { err.textContent='Ya existe una cuenta con ese email.'; err.style.display='block'; return; }
+  state.alumnos.push({ nombre, email, pass, ts: new Date().toISOString() });
+  saveState();
+  ok.textContent = '¡Cuenta creada! Ya podés ingresar.';
+  ok.style.display='block';
+  document.getElementById('reg-nombre').value='';
+  document.getElementById('reg-email').value='';
+  document.getElementById('reg-pass').value='';
+  document.getElementById('reg-pass2').value='';
+  setTimeout(() => switchLoginTab('alumno'), 1500);
+}
+
+// LOGIN ALUMNO
+function loginAlumno() {
+  const email = document.getElementById('al-login-email').value.trim().toLowerCase();
+  const pass  = document.getElementById('al-login-pass').value;
+  const err   = document.getElementById('login-err');
   err.style.display='none';
-  session = { tipo:'alumno', nombre, email };
-  document.getElementById('al-nombre-display').textContent = nombre;
+  if (!email||!pass) { err.textContent='Completá email y contraseña.'; err.style.display='block'; return; }
+  const alumno = state.alumnos.find(a => a.email===email && a.pass===pass);
+  if (!alumno) { err.textContent='Email o contraseña incorrectos.'; err.style.display='block'; return; }
+  session = { tipo:'alumno', nombre:alumno.nombre, email:alumno.email };
+  document.getElementById('al-nombre-display').textContent = alumno.nombre;
   showScreen('alumno-screen');
   renderMisTurnos(); renderDaysGrid();
 }
 
+// OLVIDÉ CONTRASEÑA
+function olvideClave() {
+  const email = document.getElementById('olvide-email').value.trim().toLowerCase();
+  const err   = document.getElementById('olvide-err');
+  const ok    = document.getElementById('olvide-ok');
+  err.style.display='none'; ok.style.display='none';
+  if (!email) { err.textContent='Ingresá tu email.'; err.style.display='block'; return; }
+  const alumno = state.alumnos.find(a => a.email===email);
+  if (!alumno) { err.textContent='No encontramos una cuenta con ese email.'; err.style.display='block'; return; }
+  const nuevaPass = generarPassTemp();
+  alumno.pass = nuevaPass;
+  saveState();
+  if (typeof emailjs !== 'undefined') {
+    emailjs.init(EMAILJS_PUBKEY);
+    emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE_RESET, {
+      to_email: alumno.email,
+      alumno_nombre: alumno.nombre,
+      nueva_password: nuevaPass
+    }).catch(e => console.warn('EmailJS error:', e));
+  }
+  ok.textContent = 'Te enviamos una contraseña temporal a ' + email + '. Revisá también el spam.';
+  ok.style.display='block';
+}
+
+// LOGIN INSTRUCTOR
 function loginInstructor() {
   const user = document.getElementById('inst-user').value.trim();
   const pass = document.getElementById('inst-pass').value;
@@ -277,12 +392,14 @@ function showScreen(id) {
   document.getElementById(id).classList.add('active');
 }
 
+// ALUMNO TABS
 function showAlumnoTab(tab) {
-  ['mis-turnos','pedir-turno'].forEach(t => {
+  ['mis-turnos','pedir-turno','perfil'].forEach(t => {
     document.getElementById('alumno-'+t).classList.toggle('active', t===tab);
   });
   document.getElementById('al-tab-mis').classList.toggle('active', tab==='mis-turnos');
   document.getElementById('al-tab-pedir').classList.toggle('active', tab==='pedir-turno');
+  document.getElementById('al-tab-perfil').classList.toggle('active', tab==='perfil');
   if (tab==='mis-turnos') renderMisTurnos();
   if (tab==='pedir-turno') {
     selectedDay=null; selectedSlot=null;
@@ -290,17 +407,38 @@ function showAlumnoTab(tab) {
     document.getElementById('slot-confirm').style.display='none';
     renderDaysGrid();
   }
+  if (tab==='perfil') {
+    document.getElementById('perfil-pass-actual').value='';
+    document.getElementById('perfil-pass-nueva').value='';
+    document.getElementById('perfil-pass-nueva2').value='';
+    document.getElementById('perfil-err').style.display='none';
+    document.getElementById('perfil-ok').style.display='none';
+  }
 }
 
-function showInstTab(tab) {
-  document.getElementById('instructor-reservas').classList.toggle('active', tab==='reservas');
-  document.getElementById('instructor-config').classList.toggle('active', tab==='config');
-  document.getElementById('inst-tab-res').classList.toggle('active', tab==='reservas');
-  document.getElementById('inst-tab-cfg').classList.toggle('active', tab==='config');
-  if (tab==='reservas') renderTodasReservas();
-  if (tab==='config') renderConfig();
+// CAMBIAR CLAVE
+function cambiarClave() {
+  const actual  = document.getElementById('perfil-pass-actual').value;
+  const nueva   = document.getElementById('perfil-pass-nueva').value;
+  const nueva2  = document.getElementById('perfil-pass-nueva2').value;
+  const err     = document.getElementById('perfil-err');
+  const ok      = document.getElementById('perfil-ok');
+  err.style.display='none'; ok.style.display='none';
+  const alumno = state.alumnos.find(a => a.email===session.email);
+  if (!alumno) return;
+  if (alumno.pass !== actual) { err.textContent='La contraseña actual es incorrecta.'; err.style.display='block'; return; }
+  if (nueva.length < 6) { err.textContent='La nueva contraseña debe tener al menos 6 caracteres.'; err.style.display='block'; return; }
+  if (nueva !== nueva2) { err.textContent='Las contraseñas no coinciden.'; err.style.display='block'; return; }
+  alumno.pass = nueva;
+  saveState();
+  ok.textContent = 'Contraseña cambiada correctamente.';
+  ok.style.display='block';
+  document.getElementById('perfil-pass-actual').value='';
+  document.getElementById('perfil-pass-nueva').value='';
+  document.getElementById('perfil-pass-nueva2').value='';
 }
 
+// MIS TURNOS
 function renderMisTurnos() {
   const el  = document.getElementById('mis-turnos-list');
   const mis = state.reservas.filter(r => r.email===session.email)
@@ -316,6 +454,7 @@ function renderMisTurnos() {
     </div>`).join('');
 }
 
+// DÍAS Y SLOTS
 function renderDaysGrid() {
   const grid = document.getElementById('days-grid');
   grid.innerHTML = getDays().map(d => {
@@ -382,6 +521,7 @@ function confirmarTurno() {
   renderSlots(selectedDay);
 }
 
+// INSTRUCTOR — RESERVAS
 function renderTodasReservas() {
   const el     = document.getElementById('todas-reservas-list');
   const sorted = [...state.reservas].sort((a,b) => (a.fecha+a.hora).localeCompare(b.fecha+b.hora));
@@ -419,12 +559,13 @@ function cancelarReserva(id) {
 function enviarMailCancelacion(r) {
   if (typeof emailjs==='undefined') return;
   emailjs.init(EMAILJS_PUBKEY);
-  emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
+  emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE_CANCEL, {
     to_email: r.email, alumno_nombre: r.nombre, fecha: r.fecha, hora: r.hora, avion: 'LV-OAD'
   }).catch(err => console.warn('EmailJS error:', err));
 }
 
-function renderConfig() { renderHorariosConfig(); renderDaysGridConfig(); renderInstructoresList(); }
+// CONFIG
+function renderConfig() { renderHorariosConfig(); renderDaysGridConfig(); renderInstructoresList(); renderAlumnosList(); }
 
 function renderHorariosConfig() {
   document.getElementById('horarios-config').innerHTML = state.horarios.map(h => `
@@ -464,6 +605,19 @@ function renderInstructoresList() {
     </div>`).join('');
 }
 
+function renderAlumnosList() {
+  const el = document.getElementById('alumnos-list');
+  if (!state.alumnos.length) { el.innerHTML='<div class="empty">No hay alumnos registrados aún.</div>'; return; }
+  el.innerHTML = state.alumnos.map((a,i) => `
+    <div class="toggle-row">
+      <div>
+        <span style="font-size:14px;font-weight:500">${a.nombre}</span>
+        <span style="font-size:13px;color:var(--text2);margin-left:8px">${a.email}</span>
+      </div>
+      <button onclick="eliminarAlumno(${i})" style="font-size:12px;padding:3px 10px">Quitar</button>
+    </div>`).join('');
+}
+
 function agregarInstructor() {
   const user=document.getElementById('new-inst-user').value.trim();
   const pass=document.getElementById('new-inst-pass').value.trim();
@@ -482,6 +636,15 @@ function eliminarInstructor(i) {
   state.instructores.splice(i,1); saveState(); renderInstructoresList();
 }
 
+function eliminarAlumno(i) {
+  if (!confirm('¿Eliminar este alumno? También se eliminarán sus reservas.')) return;
+  const email = state.alumnos[i].email;
+  state.alumnos.splice(i,1);
+  state.reservas = state.reservas.filter(r => r.email !== email);
+  saveState(); renderAlumnosList(); renderTodasReservas();
+}
+
+// INIT
 loadState();
 </script>
 </body>
