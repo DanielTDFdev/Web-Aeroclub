@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Turnos LV-OAD</title>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getDatabase, ref, set, get, update, remove, push, onValue, child }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyATPSaoOV_wKLaJR_dc1jgTzEF2L5p0tHk",
+    authDomain: "turnos-lv-oad.firebaseapp.com",
+    databaseURL: "https://turnos-lv-oad-default-rtdb.firebaseio.com",
+    projectId: "turnos-lv-oad",
+    storageBucket: "turnos-lv-oad.firebasestorage.app",
+    messagingSenderId: "855020455192",
+    appId: "1:855020455192:web:4b6d18f1b2efbb52faca6d"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db  = getDatabase(app);
+
+  // ── helpers Firebase ──────────────────────────────────────────────
+  const dbRef = () => ref(db);
+
+  async function fbGet(path) {
+    const snap = await get(child(dbRef(), path));
+    return snap.exists() ? snap.val() : null;
+  }
+  async function fbSet(path, val)    { await set(ref(db, path), val); }
+  async function fbUpdate(path, val) { await update(ref(db, path), val); }
+  async function fbPush(path, val)   { return await push(ref(db, path), val); }
+  async function fbRemove(path)      { await remove(ref(db, path)); }
+
+  // ── estado local (config base + caché UI) ─────────────────────────
+  const DEFAULT_CONFIG = {
+    horarios: ['00:00','01:00','02:00','03:00','04:00','05:00','06:00',
+               '07:00','08:00','09:00','10:00','11:00','12:00','13:00',
+               '14:00','15:00','16:00','17:00','18:00','19:00','20:00',
+               '21:00','22:00','23:00'],
+    horariosActivos: ['07:00','08:00','09:00','10:00','11:00','12:00',
+                      '13:00','14:00','15:00','16:00','17:00','18:00',
+                      '19:00','20:00'],
+    diasBloqueados: []
+  };
+
+  let config     = { ...DEFAULT_CONFIG };
+  let session    = null;
+  let selectedDay  = null;
+  let selectedSlot = null;
+
+  // suscripción en tiempo real a reservas
+  let unsubReservas = null;
+
+  // ── util fechas ───────────────────────────────────────────────────
+  function getDays() {
+    const days = [], now = new Date();
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(now);
+      d.setDate(now.getDate() + i);
+      days.push(d);
+    }
+    return days;
+  }
+  function fmtDate(d) { return d.toISOString().slice(0, 10); }
+  function fmtDateLabel(d) {
+    const dias = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+    return dias[d.getDay()] + ' ' + d.getDate() + '/' + (d.getMonth() + 1);
+  }
+  function isMinimas12h(dateStr, hora) {
+    return (new Date(dateStr + 'T' + hora + ':00') - new Date()) >= 12 * 3600 * 1000;
+  }
+  function generarPassTemp() {
+    const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    let p = '';
+    for (let i = 0; i < 8; i++) p += chars[Math.floor(Math.random() * chars.length)];
+    return p;
+  }
+
+  // ── EmailJS ───────────────────────────────────────────────────────
+  const EMAILJS_SERVICE         = 'dcamargo70@gmail.com';
+  const EMAILJS_TEMPLATE_CANCEL = 'template_v4qu4x6';
+  const EMAILJS_TEMPLATE_RESET  = 'template_scbsgfg';
+  const EMAILJS_PUBKEY          = '0IoRm88tZQepkHAdK';
+
+  function enviarMailCancelacion(r) {
+    if (typeof emailjs === 'undefined') return;
+    emailjs.init(EMAILJS_PUBKEY);
+    emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE_CANCEL, {
+      to_email: r.email, alumno_nombre: r.nombre,
+      fecha: r.fecha, hora: r.hora, avion: 'LV-OAD'
+    }).catch(e => console.warn('EmailJS:', e));
+  }
+  function enviarMailReset(alumno, nuevaPass) {
+    if (typeof emailjs === 'undefined') return;
+    emailjs.init(EMAILJS_PUBKEY);
+    emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE_RESET, {
+      to_email: alumno.email, alumno_nombre: alumno.nombre, nueva_password: nuevaPass
+    }).catch(e => console.warn('EmailJS:', e));
+  }
+
+  // ── UI helpers ────────────────────────────────────────────────────
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+  function showErr(id, msg)  { const e = document.getElementById(id); e.textContent = msg; e.style.display = 'block'; }
+  function hideEl(id)        { document.getElementById(id).style.display = 'none'; }
+  function showOk(id, msg)   { const e = document.getElementById(id); e.textContent = msg; e.style.display = 'block'; }
+  function val(id)           { return document.getElementById(id).value.trim(); }
+  function clearVal(...ids)  { ids.forEach(id => { document.getElementById(id).value = ''; }); }
+
+  function setLoading(btnId, loading) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    btn.disabled = loading;
+    btn.textContent = loading ? 'Espere...' : btn.dataset.label || btn.textContent;
+  }
+
+  // ── LOGIN TABS ────────────────────────────────────────────────────
+  window.switchLoginTab = function(tab) {
+    ['alumno','registro','instructor','olvide'].forEach(t => {
+      const el = document.getElementById('tab-' + t);
+      if (el) el.style.display = (t === tab ? 'block' : 'none');
+    });
+    ['alumno','registro','instructor'].forEach(t => {
+      const btn = document.getElementById('tab-btn-' + t);
+      if (btn) btn.classList.toggle('active', t === tab);
+    });
+    hideEl('login-err'); hideEl('login-err2'); hideEl('reg-err'); hideEl('reg-ok');
+  };
+
+  // ── REGISTRO ──────────────────────────────────────────────────────
+  window.registrarAlumno = async function() {
+    hideEl('reg-err'); hideEl('reg-ok');
+    const nombre = val('reg-nombre');
+    const email  = val('reg-email').toLowerCase();
+    const pass   = val('reg-pass');
+    const pass2  = val('reg-pass2');
+    if (!nombre || !email || !pass)  { showErr('reg-err', 'Completá todos los campos.'); return; }
+    if (!email.includes('@'))        { showErr('reg-err', 'Email inválido.'); return; }
+    if (pass.length < 6)             { showErr('reg-err', 'La contraseña debe tener al menos 6 caracteres.'); return; }
+    if (pass !== pass2)              { showErr('reg-err', 'Las contraseñas no coinciden.'); return; }
+
+    setLoading('btn-registrar', true);
+    try {
+      const emailKey = email.replace(/\./g, '_').replace(/@/g, '__at__');
+      const existing = await fbGet('alumnos/' + emailKey);
+      if (existing) { showErr('reg-err', 'Ya existe una cuenta con ese email.'); return; }
+      await fbSet('alumnos/' + emailKey, { nombre, email, pass, ts: new Date().toISOString() });
+      showOk('reg-ok', '¡Cuenta creada! Ya podés ingresar.');
+      clearVal('reg-nombre','reg-email','reg-pass','reg-pass2');
+      setTimeout(() => switchLoginTab('alumno'), 1500);
+    } catch(e) {
+      showErr('reg-err', 'Error al crear la cuenta. Intentá de nuevo.');
+      console.error(e);
+    } finally {
+      setLoading('btn-registrar', false);
+    }
+  };
+
+  // ── LOGIN ALUMNO ──────────────────────────────────────────────────
+  window.loginAlumno = async function() {
+    hideEl('login-err');
+    const email = val('al-login-email').toLowerCase();
+    const pass  = val('al-login-pass');
+    if (!email || !pass) { showErr('login-err', 'Completá email y contraseña.'); return; }
+
+    setLoading('btn-login-al', true);
+    try {
+      const emailKey = email.replace(/\./g, '_').replace(/@/g, '__at__');
+      const alumno   = await fbGet('alumnos/' + emailKey);
+      if (!alumno || alumno.pass !== pass) {
+        showErr('login-err', 'Email o contraseña incorrectos.'); return;
+      }
+      session = { tipo: 'alumno', nombre: alumno.nombre, email: alumno.email, emailKey };
+      document.getElementById('al-nombre-display').textContent = alumno.nombre;
+      showScreen('alumno-screen');
+      showAlumnoTab('mis-turnos');
+      suscribirReservas();
+    } catch(e) {
+      showErr('login-err', 'Error al iniciar sesión.');
+      console.error(e);
+    } finally {
+      setLoading('btn-login-al', false);
+    }
+  };
+
+  // ── OLVIDÉ ────────────────────────────────────────────────────────
+  window.olvideClave = async function() {
+    hideEl('olvide-err'); hideEl('olvide-ok');
+    const email = val('olvide-email').toLowerCase();
+    if (!email) { showErr('olvide-err', 'Ingresá tu email.'); return; }
+
+    setLoading('btn-olvide', true);
+    try {
+      const emailKey = email.replace(/\./g, '_').replace(/@/g, '__at__');
+      const alumno   = await fbGet('alumnos/' + emailKey);
+      if (!alumno) { showErr('olvide-err', 'No encontramos una cuenta con ese email.'); return; }
+      const nuevaPass = generarPassTemp();
+      await fbUpdate('alumnos/' + emailKey, { pass: nuevaPass });
+      enviarMailReset({ ...alumno }, nuevaPass);
+      showOk('olvide-ok', 'Te enviamos una contraseña temporal a ' + email + '. Revisá también el spam.');
+    } catch(e) {
+      showErr('olvide-err', 'Error. Intentá de nuevo.');
+    } finally {
+      setLoading('btn-olvide', false);
+    }
+  };
+
+  // ── LOGIN INSTRUCTOR ──────────────────────────────────────────────
+  window.loginInstructor = async function() {
+    hideEl('login-err2');
+    const user = val('inst-user');
+    const pass = val('inst-pass');
+    if (!user || !pass) { showErr('login-err2', 'Completá usuario y contraseña.'); return; }
+
+    setLoading('btn-login-inst', true);
+    try {
+      // instructor admin hardcodeado como fallback + los de Firebase
+      const instData = await fbGet('instructores');
+      let found = null;
+      if (instData) {
+        for (const [key, inst] of Object.entries(instData)) {
+          if (inst.user === user && inst.pass === pass) { found = { ...inst, key }; break; }
+        }
+      }
+      // fallback: si no hay ningún instructor en Firebase todavía, crear el admin
+      if (!found) {
+        const adminSnap = await fbGet('instructores/admin');
+        if (!adminSnap) {
+          // primer uso: crear instructor admin por defecto
+          await fbSet('instructores/admin', { user: 'admin', pass: 'admin123', nombre: 'Instructor' });
+        }
+        if (user === 'admin' && pass === 'admin123') {
+          found = { user: 'admin', pass: 'admin123', nombre: 'Instructor', key: 'admin' };
+        }
+      }
+      if (!found) { showErr('login-err2', 'Usuario o contraseña incorrectos.'); return; }
+      session = { tipo: 'instructor', nombre: found.nombre, user: found.user };
+      document.getElementById('inst-nombre-display').textContent = found.nombre;
+      showScreen('instructor-screen');
+      showInstTab('reservas');
+      suscribirReservas();
+      loadConfig();
+    } catch(e) {
+      showErr('login-err2', 'Error al iniciar sesión.');
+      console.error(e);
+    } finally {
+      setLoading('btn-login-inst', false);
+    }
+  };
+
+  // ── LOGOUT ────────────────────────────────────────────────────────
+  window.logout = function() {
+    if (unsubReservas) { unsubReservas(); unsubReservas = null; }
+    session = null; selectedDay = null; selectedSlot = null;
+    showScreen('login-screen');
+    switchLoginTab('alumno');
+  };
+
+  // ── CONFIG (horarios, días bloqueados) ────────────────────────────
+  async function loadConfig() {
+    const saved = await fbGet('config');
+    if (saved) {
+      config = { ...DEFAULT_CONFIG, ...saved };
+      if (!Array.isArray(config.diasBloqueados)) config.diasBloqueados = [];
+    }
+    renderConfig();
+  }
+
+  async function saveConfig() {
+    await fbSet('config', config);
+  }
+
+  // ── SUSCRIPCIÓN RESERVAS (tiempo real) ────────────────────────────
+  function suscribirReservas() {
+    if (unsubReservas) unsubReservas();
+    const reservasRef = ref(db, 'reservas');
+    unsubReservas = onValue(reservasRef, snap => {
+      if (session?.tipo === 'alumno') renderMisTurnos(snap.val());
+      if (session?.tipo === 'instructor') renderTodasReservas(snap.val());
+      if (selectedDay) renderSlots(selectedDay, snap.val());
+    });
+  }
+
+  function reservasArray(data) {
+    if (!data) return [];
+    return Object.entries(data).map(([key, val]) => ({ ...val, key }));
+  }
+
+  // ── MIS TURNOS (alumno) ───────────────────────────────────────────
+  function renderMisTurnos(data) {
+    const el  = document.getElementById('mis-turnos-list');
+    const mis = reservasArray(data)
+      .filter(r => r.email === session.email)
+      .sort((a, b) => (a.fecha + a.hora).localeCompare(b.fecha + b.hora));
+    if (!mis.length) { el.innerHTML = '<div class="empty">No tenés turnos solicitados.</div>'; return; }
+    el.innerHTML = mis.map(r => `
+      <div class="reserva-item">
+        <div>
+          <div style="font-weight:500">${r.fecha} — ${r.hora} hs</div>
+          ${r.obs ? `<div style="font-size:13px;color:var(--text2);margin-top:2px">${r.obs}</div>` : ''}
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="badge badge-${r.estado}">${r.estado}</span>
+          ${r.estado === 'pendiente'
+            ? `<button class="danger" onclick="cancelarTurnoAlumno('${r.key}')" style="font-size:12px;padding:4px 10px">Cancelar</button>`
+            : ''}
+        </div>
+      </div>`).join('');
+  }
+
+  window.cancelarTurnoAlumno = async function(key) {
+    if (!confirm('¿Cancelar este turno?')) return;
+    await fbUpdate('reservas/' + key, { estado: 'cancelado' });
+  };
+
+  // ── DÍAS y SLOTS ──────────────────────────────────────────────────
+  function renderDaysGrid(containerId) {
+    const grid = document.getElementById(containerId || 'days-grid');
+    grid.innerHTML = getDays().map(d => {
+      const ds  = fmtDate(d);
+      const bl  = config.diasBloqueados.includes(ds);
+      const sel = selectedDay === ds;
+      return `<div class="day-btn${bl ? ' blocked' : sel ? ' selected' : ''}" data-date="${ds}">${fmtDateLabel(d)}</div>`;
+    }).join('');
+    grid.querySelectorAll('.day-btn:not(.blocked)').forEach(btn => {
+      btn.addEventListener('click', () => selectDay(btn.dataset.date));
+    });
+  }
+
+  function selectDay(dateStr) {
+    selectedDay  = dateStr;
+    selectedSlot = null;
+    document.getElementById('slot-confirm').style.display = 'none';
+    renderDaysGrid();
+    // leer reservas actuales del snapshot
+    get(ref(db, 'reservas')).then(snap => renderSlots(dateStr, snap.val()));
+  }
+
+  function renderSlots(dateStr, data) {
+    const grid  = document.getElementById('slots-grid');
+    if (!grid) return;
+    const taken = reservasArray(data)
+      .filter(r => r.fecha === dateStr && r.estado !== 'cancelado')
+      .map(r => r.hora);
+    document.getElementById('selected-day-label').textContent = dateStr;
+    document.getElementById('slots-section').style.display = 'block';
+    const available = config.horariosActivos.filter(h => isMinimas12h(dateStr, h));
+    if (!available.length) {
+      grid.innerHTML = '<div class="empty">No hay horarios disponibles (se requieren al menos 12 hs de anticipación).</div>';
+      return;
+    }
+    grid.innerHTML = available.map(h => {
+      const isTaken = taken.includes(h), isSel = selectedSlot === h;
+      return `<div class="slot${isTaken ? ' taken' : isSel ? ' selected' : ''}" data-hora="${h}">${h}</div>`;
+    }).join('');
+    grid.querySelectorAll('.slot:not(.taken)').forEach(s => {
+      s.addEventListener('click', () => selectSlot(s.dataset.hora));
+    });
+  }
+
+  function selectSlot(hora) {
+    selectedSlot = hora;
+    get(ref(db, 'reservas')).then(snap => renderSlots(selectedDay, snap.val()));
+    document.getElementById('confirm-label').textContent = selectedDay + ' a las ' + hora + ' hs';
+    document.getElementById('slot-confirm').style.display = 'block';
+    hideEl('turno-err'); hideEl('turno-ok');
+  }
+
+  window.cancelarSeleccion = function() {
+    selectedSlot = null;
+    document.getElementById('slot-confirm').style.display = 'none';
+    get(ref(db, 'reservas')).then(snap => renderSlots(selectedDay, snap.val()));
+  };
+
+  window.confirmarTurno = async function() {
+    hideEl('turno-err'); hideEl('turno-ok');
+    if (!selectedDay || !selectedSlot) { showErr('turno-err', 'Seleccioná día y horario.'); return; }
+    if (!isMinimas12h(selectedDay, selectedSlot)) {
+      showErr('turno-err', 'El turno debe pedirse con al menos 12 hs de anticipación.'); return;
+    }
+    const snap  = await get(ref(db, 'reservas'));
+    const taken = reservasArray(snap.val())
+      .filter(r => r.fecha === selectedDay && r.estado !== 'cancelado')
+      .map(r => r.hora);
+    if (taken.includes(selectedSlot)) { showErr('turno-err', 'Ese horario ya fue reservado.'); return; }
+
+    const obs = val('al-obs');
+    await fbPush('reservas', {
+      nombre: session.nombre, email: session.email,
+      fecha: selectedDay, hora: selectedSlot,
+      obs, estado: 'pendiente', ts: new Date().toISOString()
+    });
+    showOk('turno-ok', '¡Turno solicitado! Queda pendiente de aprobación por un instructor.');
+    selectedSlot = null;
+    document.getElementById('slot-confirm').style.display = 'none';
+    clearVal('al-obs');
+  };
+
+  // ── INSTRUCTOR — RESERVAS ─────────────────────────────────────────
+  function renderTodasReservas(data) {
+    const el     = document.getElementById('todas-reservas-list');
+    const todas  = reservasArray(data);
+    const sorted = [...todas].sort((a, b) => (a.fecha + a.hora).localeCompare(b.fecha + b.hora));
+    document.getElementById('stat-pending').textContent  = todas.filter(r => r.estado === 'pendiente').length;
+    document.getElementById('stat-approved').textContent = todas.filter(r => r.estado === 'aprobado').length;
+    document.getElementById('stat-total').textContent    = todas.length;
+    if (!sorted.length) { el.innerHTML = '<div class="empty">No hay reservas aún.</div>'; return; }
+    el.innerHTML = sorted.map(r => `
+      <div class="reserva-item">
+        <div style="flex:1;min-width:180px">
+          <div style="font-weight:500">${r.fecha} — ${r.hora} hs</div>
+          <div style="font-size:13px;color:var(--text2)">${r.nombre} &lt;${r.email}&gt;</div>
+          ${r.obs ? `<div style="font-size:12px;color:var(--text3)">${r.obs}</div>` : ''}
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span class="badge badge-${r.estado}">${r.estado}</span>
+          ${r.estado === 'pendiente'
+            ? `<button onclick="aprobarReserva('${r.key}')">Aprobar</button><button class="danger" onclick="cancelarReserva('${r.key}')">Cancelar</button>`
+            : ''}
+          ${r.estado === 'aprobado'
+            ? `<button class="danger" onclick="cancelarReserva('${r.key}')">Cancelar</button>`
+            : ''}
+        </div>
+      </div>`).join('');
+  }
+
+  window.aprobarReserva = async function(key) {
+    await fbUpdate('reservas/' + key, { estado: 'aprobado' });
+  };
+
+  window.cancelarReserva = async function(key) {
+    const r = await fbGet('reservas/' + key);
+    if (!r) return;
+    await fbUpdate('reservas/' + key, { estado: 'cancelado' });
+    enviarMailCancelacion(r);
+  };
+
+  // ── CONFIG ────────────────────────────────────────────────────────
+  function renderConfig() {
+    renderHorariosConfig();
+    renderDaysGridConfig();
+    renderInstructoresList();
+    renderAlumnosList();
+  }
+
+  function renderHorariosConfig() {
+    document.getElementById('horarios-config').innerHTML = config.horarios.map(h => `
+      <div class="toggle-row">
+        <span style="font-size:14px">${h} hs</span>
+        <input type="checkbox" ${config.horariosActivos.includes(h) ? 'checked' : ''}
+          onchange="toggleHorario('${h}',this.checked)">
+      </div>`).join('');
+  }
+
+  window.toggleHorario = async function(h, on) {
+    if (on) { if (!config.horariosActivos.includes(h)) config.horariosActivos.push(h); }
+    else    { config.horariosActivos = config.horariosActivos.filter(x => x !== h); }
+    config.horariosActivos.sort();
+    await saveConfig();
+  };
+
+  function renderDaysGridConfig() {
+    const grid = document.getElementById('days-grid-config');
+    grid.innerHTML = getDays().map(d => {
+      const ds = fmtDate(d), bl = config.diasBloqueados.includes(ds);
+      return `<div class="day-btn${bl ? ' blocked' : ''}" onclick="toggleBloqueoDia('${ds}')" style="cursor:pointer">
+        ${fmtDateLabel(d)}<br><span style="font-size:10px">${bl ? 'bloqueado' : 'libre'}</span>
+      </div>`;
+    }).join('');
+  }
+
+  window.toggleBloqueoDia = async function(dateStr) {
+    if (config.diasBloqueados.includes(dateStr))
+      config.diasBloqueados = config.diasBloqueados.filter(d => d !== dateStr);
+    else
+      config.diasBloqueados.push(dateStr);
+    await saveConfig();
+    renderDaysGridConfig();
+  };
+
+  async function renderInstructoresList() {
+    const el   = document.getElementById('instructores-list');
+    const data = await fbGet('instructores');
+    if (!data) { el.innerHTML = ''; return; }
+    const entries = Object.entries(data);
+    el.innerHTML = entries.map(([key, inst], i) => `
+      <div class="toggle-row">
+        <span style="font-size:14px"><strong>${inst.nombre}</strong> — ${inst.user}</span>
+        ${key === 'admin'
+          ? '<span style="font-size:12px;color:var(--text3)">principal</span>'
+          : `<button onclick="eliminarInstructor('${key}')" style="font-size:12px;padding:3px 10px">Quitar</button>`}
+      </div>`).join('');
+  }
+
+  async function renderAlumnosList() {
+    const el   = document.getElementById('alumnos-list');
+    const data = await fbGet('alumnos');
+    if (!data) { el.innerHTML = '<div class="empty">No hay alumnos registrados aún.</div>'; return; }
+    const entries = Object.entries(data);
+    el.innerHTML = entries.map(([key, a]) => `
+      <div class="toggle-row">
+        <div>
+          <span style="font-size:14px;font-weight:500">${a.nombre}</span>
+          <span style="font-size:13px;color:var(--text2);margin-left:8px">${a.email}</span>
+        </div>
+        <button onclick="eliminarAlumno('${key}','${a.email}')" style="font-size:12px;padding:3px 10px">Quitar</button>
+      </div>`).join('');
+  }
+
+  window.agregarInstructor = async function() {
+    const user   = val('new-inst-user');
+    const pass   = val('new-inst-pass');
+    const nombre = val('new-inst-nombre');
+    if (!user || !pass || !nombre) return;
+    const existing = await fbGet('instructores/' + user);
+    if (existing) { alert('Ese usuario ya existe.'); return; }
+    await fbSet('instructores/' + user, { user, pass, nombre });
+    clearVal('new-inst-user','new-inst-pass','new-inst-nombre');
+    renderInstructoresList();
+  };
+
+  window.eliminarInstructor = async function(key) {
+    if (!confirm('¿Eliminar este instructor?')) return;
+    await fbRemove('instructores/' + key);
+    renderInstructoresList();
+  };
+
+  window.eliminarAlumno = async function(key, email) {
+    if (!confirm('¿Eliminar este alumno? También se eliminarán sus reservas.')) return;
+    await fbRemove('alumnos/' + key);
+    // eliminar reservas del alumno
+    const snap = await get(ref(db, 'reservas'));
+    const data = snap.val();
+    if (data) {
+      for (const [rKey, r] of Object.entries(data)) {
+        if (r.email === email) await fbRemove('reservas/' + rKey);
+      }
+    }
+    renderAlumnosList();
+    get(ref(db, 'reservas')).then(s => renderTodasReservas(s.val()));
+  };
+
+  // ── TABS ──────────────────────────────────────────────────────────
+  window.showInstTab = function(tab) {
+    document.getElementById('instructor-reservas').classList.toggle('active', tab === 'reservas');
+    document.getElementById('instructor-config').classList.toggle('active', tab === 'config');
+    document.getElementById('inst-tab-res').classList.toggle('active', tab === 'reservas');
+    document.getElementById('inst-tab-cfg').classList.toggle('active', tab === 'config');
+    if (tab === 'config') loadConfig();
+  };
+
+  window.showAlumnoTab = function(tab) {
+    ['mis-turnos','pedir-turno','perfil'].forEach(t => {
+      document.getElementById('alumno-' + t).classList.toggle('active', t === tab);
+    });
+    document.getElementById('al-tab-mis').classList.toggle('active',    tab === 'mis-turnos');
+    document.getElementById('al-tab-pedir').classList.toggle('active',  tab === 'pedir-turno');
+    document.getElementById('al-tab-perfil').classList.toggle('active', tab === 'perfil');
+    if (tab === 'pedir-turno') {
+      selectedDay = null; selectedSlot = null;
+      document.getElementById('slots-section').style.display = 'none';
+      document.getElementById('slot-confirm').style.display  = 'none';
+      loadConfig().then(() => renderDaysGrid());
+    }
+    if (tab === 'perfil') {
+      clearVal('perfil-pass-actual','perfil-pass-nueva','perfil-pass-nueva2');
+      hideEl('perfil-err'); hideEl('perfil-ok');
+    }
+  };
+
+  // ── CAMBIAR CLAVE ─────────────────────────────────────────────────
+  window.cambiarClave = async function() {
+    hideEl('perfil-err'); hideEl('perfil-ok');
+    const actual  = val('perfil-pass-actual');
+    const nueva   = val('perfil-pass-nueva');
+    const nueva2  = val('perfil-pass-nueva2');
+    const alumno  = await fbGet('alumnos/' + session.emailKey);
+    if (!alumno)              { showErr('perfil-err', 'Error al obtener datos.'); return; }
+    if (alumno.pass !== actual) { showErr('perfil-err', 'La contraseña actual es incorrecta.'); return; }
+    if (nueva.length < 6)     { showErr('perfil-err', 'La nueva contraseña debe tener al menos 6 caracteres.'); return; }
+    if (nueva !== nueva2)     { showErr('perfil-err', 'Las contraseñas no coinciden.'); return; }
+    await fbUpdate('alumnos/' + session.emailKey, { pass: nueva });
+    showOk('perfil-ok', 'Contraseña cambiada correctamente.');
+    clearVal('perfil-pass-actual','perfil-pass-nueva','perfil-pass-nueva2');
+  };
+
+  // ── INIT ──────────────────────────────────────────────────────────
+  switchLoginTab('alumno');
+</script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#ffffff;--bg2:#f7f7f5;--bg3:#efefed;
+  --text:#1a1a1a;--text2:#555;--text3:#999;
+  --border:rgba(0,0,0,0.12);--border2:rgba(0,0,0,0.28);
+  --info-bg:#e6f1fb;--info-text:#185fa5;--info-border:#378add;
+  --success-bg:#eaf3de;--success-text:#3b6d11;
+  --warning-bg:#faeeda;--warning-text:#854f0b;
+  --danger-bg:#fcebeb;--danger-text:#a32d2d;
+  --radius:8px;--radius-lg:12px;
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    --bg:#1e1e1e;--bg2:#272727;--bg3:#2f2f2f;
+    --text:#f0f0f0;--text2:#aaa;--text3:#666;
+    --border:rgba(255,255,255,0.1);--border2:rgba(255,255,255,0.22);
+    --info-bg:#0c2d4a;--info-text:#85b7eb;
+    --success-bg:#173404;--success-text:#c0dd97;
+    --warning-bg:#412402;--warning-text:#fac775;
+    --danger-bg:#501313;--danger-text:#f09595;
+  }
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;color:var(--text);background:var(--bg3);min-height:100vh}
+.container{max-width:720px;margin:0 auto;padding:1rem}
+.screen{display:none}.screen.active{display:block}
+h2{font-size:18px;font-weight:500;margin-bottom:1rem}
+h3{font-size:16px;font-weight:500;margin-bottom:.75rem}
+.card{background:var(--bg);border:.5px solid var(--border);border-radius:var(--radius-lg);padding:1rem 1.25rem;margin-bottom:1rem}
+.badge{display:inline-block;font-size:12px;padding:3px 10px;border-radius:var(--radius);font-weight:500}
+.badge-pendiente{background:var(--warning-bg);color:var(--warning-text)}
+.badge-aprobado{background:var(--success-bg);color:var(--success-text)}
+.badge-cancelado{background:var(--danger-bg);color:var(--danger-text)}
+.field{margin-bottom:.75rem}
+.field label{display:block;font-size:13px;color:var(--text2);margin-bottom:4px}
+.field input,.field select{width:100%;padding:8px 10px;border:.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:14px}
+.field input:focus{outline:none;border-color:var(--info-border)}
+button{padding:8px 16px;border:.5px solid var(--border2);border-radius:var(--radius);background:transparent;color:var(--text);font-size:14px;cursor:pointer}
+button:hover{background:var(--bg2)}
+button:disabled{opacity:.5;cursor:not-allowed}
+button.primary{background:var(--info-bg);color:var(--info-text);border-color:var(--info-border)}
+button.primary:hover{opacity:.85}
+button.danger{background:var(--danger-bg);color:var(--danger-text);border-color:var(--danger-text)}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:.75rem}
+.nav-btn{padding:6px 14px;border:.5px solid transparent;border-radius:var(--radius);cursor:pointer;font-size:13px;background:transparent;color:var(--text2)}
+.nav-btn:hover{background:var(--bg2);color:var(--text)}
+.nav-btn.active{background:var(--info-bg);color:var(--info-text);border-color:var(--info-border)}
+.days-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:1rem}
+.day-btn{padding:8px 4px;text-align:center;border:.5px solid var(--border);border-radius:var(--radius);cursor:pointer;font-size:12px;background:var(--bg);color:var(--text);line-height:1.4}
+.day-btn:hover{background:var(--bg2)}
+.day-btn.selected{border:2px solid var(--info-border);color:var(--info-text)}
+.day-btn.blocked{background:var(--danger-bg);color:var(--danger-text);cursor:not-allowed}
+.slots-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;margin-top:.5rem}
+.slot{padding:10px;text-align:center;border:.5px solid var(--border);border-radius:var(--radius);font-size:13px;cursor:pointer;background:var(--bg);color:var(--text)}
+.slot:hover{background:var(--bg2)}
+.slot.selected{border:2px solid var(--info-border);color:var(--info-text)}
+.slot.taken{background:var(--bg2);color:var(--text3);cursor:not-allowed;text-decoration:line-through}
+.reserva-item{padding:.75rem 0;border-bottom:.5px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.reserva-item:last-child{border-bottom:none}
+.empty{color:var(--text3);font-size:14px;padding:1rem 0}
+.error{color:var(--danger-text);font-size:13px;margin-top:6px;display:none}
+.success-msg{color:var(--success-text);font-size:13px;margin-top:6px;display:none}
+.section-title{font-size:12px;font-weight:500;color:var(--text2);margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.04em}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:.5px solid var(--border)}
+.toggle-row:last-child{border-bottom:none}
+.stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:1rem}
+.stat{background:var(--bg2);border-radius:var(--radius);padding:.75rem 1rem}
+.stat .num{font-size:22px;font-weight:500}
+.stat .lbl{font-size:12px;color:var(--text2);margin-top:2px}
+.header-bar{background:var(--bg);border-bottom:.5px solid var(--border);padding:.75rem 1rem;display:flex;align-items:center;gap:10px}
+.header-bar h1{font-size:18px;font-weight:500;margin:0}
+input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--info-border)}
+.row{display:flex;gap:12px}.row .field{flex:1}
+.tab-bar{display:flex;gap:8px;align-items:center;margin-bottom:1rem;flex-wrap:wrap}
+.link-btn{background:none;border:none;color:var(--info-text);cursor:pointer;font-size:13px;padding:0;text-decoration:underline}
+.link-btn:hover{opacity:.75}
+</style>
+</head>
+<body>
+
+<div class="header-bar">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 16l-4-4H5l-4 4"/><path d="M12 12V4"/><path d="M8 8l4-4 4 4"/><path d="M3 20h18"/>
+  </svg>
+  <h1>LV-OAD — Sistema de Turnos</h1>
+</div>
+
+<div class="container">
+
+<!-- LOGIN -->
+<div id="login-screen" class="screen active">
+  <div style="max-width:380px;margin:2rem auto">
+    <div class="card">
+      <div style="display:flex;gap:8px;margin-bottom:1rem">
+        <button class="nav-btn active" id="tab-btn-alumno"     onclick="switchLoginTab('alumno')">Alumno</button>
+        <button class="nav-btn"        id="tab-btn-registro"   onclick="switchLoginTab('registro')">Registrarme</button>
+        <button class="nav-btn"        id="tab-btn-instructor" onclick="switchLoginTab('instructor')">Instructor</button>
+      </div>
+
+      <!-- Login alumno -->
+      <div id="tab-alumno">
+        <div class="field"><label>Email</label><input type="email" id="al-login-email" placeholder="tu@email.com"></div>
+        <div class="field"><label>Contraseña</label><input type="password" id="al-login-pass" placeholder="contraseña"></div>
+        <div id="login-err" class="error"></div>
+        <button id="btn-login-al" data-label="Ingresar" class="primary" style="width:100%;margin-top:.5rem" onclick="loginAlumno()">Ingresar</button>
+        <div style="text-align:center;margin-top:.75rem">
+          <button class="link-btn" onclick="switchLoginTab('olvide')">Olvidé mi contraseña</button>
+        </div>
+      </div>
+
+      <!-- Registro -->
+      <div id="tab-registro" style="display:none">
+        <div class="field"><label>Nombre completo</label><input type="text" id="reg-nombre" placeholder="Tu nombre"></div>
+        <div class="field"><label>Email</label><input type="email" id="reg-email" placeholder="tu@email.com"></div>
+        <div class="field"><label>Contraseña</label><input type="password" id="reg-pass" placeholder="mínimo 6 caracteres"></div>
+        <div class="field"><label>Confirmar contraseña</label><input type="password" id="reg-pass2" placeholder="repetí la contraseña"></div>
+        <div id="reg-err" class="error"></div>
+        <div id="reg-ok" class="success-msg"></div>
+        <button id="btn-registrar" data-label="Crear cuenta" class="primary" style="width:100%;margin-top:.5rem" onclick="registrarAlumno()">Crear cuenta</button>
+      </div>
+
+      <!-- Olvidé -->
+      <div id="tab-olvide" style="display:none">
+        <p style="font-size:14px;color:var(--text2);margin-bottom:.75rem">Ingresá tu email y te enviamos una contraseña temporal.</p>
+        <div class="field"><label>Email</label><input type="email" id="olvide-email" placeholder="tu@email.com"></div>
+        <div id="olvide-err" class="error"></div>
+        <div id="olvide-ok" class="success-msg"></div>
+        <button id="btn-olvide" data-label="Enviar contraseña temporal" class="primary" style="width:100%;margin-top:.5rem" onclick="olvideClave()">Enviar contraseña temporal</button>
+        <div style="text-align:center;margin-top:.75rem">
+          <button class="link-btn" onclick="switchLoginTab('alumno')">Volver al login</button>
+        </div>
+      </div>
+
+      <!-- Login instructor -->
+      <div id="tab-instructor" style="display:none">
+        <div class="field"><label>Usuario</label><input type="text" id="inst-user" placeholder="usuario"></div>
+        <div class="field"><label>Contraseña</label><input type="password" id="inst-pass" placeholder="contraseña"></div>
+        <div id="login-err2" class="error"></div>
+        <button id="btn-login-inst" data-label="Ingresar" class="primary" style="width:100%;margin-top:.5rem" onclick="loginInstructor()">Ingresar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ALUMNO -->
+<div id="alumno-screen" class="screen">
+  <div class="tab-bar">
+    <button class="nav-btn active" id="al-tab-mis"    onclick="showAlumnoTab('mis-turnos')">Mis turnos</button>
+    <button class="nav-btn"        id="al-tab-pedir"  onclick="showAlumnoTab('pedir-turno')">Pedir turno</button>
+    <button class="nav-btn"        id="al-tab-perfil" onclick="showAlumnoTab('perfil')">Mi perfil</button>
+    <span style="margin-left:auto;font-size:13px;color:var(--text2)" id="al-nombre-display"></span>
+    <button onclick="logout()">Salir</button>
+  </div>
+  <div id="alumno-mis-turnos" class="screen active">
+    <h2>Mis turnos</h2>
+    <div class="card" id="mis-turnos-list"></div>
+  </div>
+  <div id="alumno-pedir-turno" class="screen">
+    <h2>Pedir turno</h2>
+    <div class="card">
+      <div class="section-title">Seleccioná un día</div>
+      <div class="days-grid" id="days-grid"></div>
+      <div id="slots-section" style="display:none">
+        <div class="section-title" style="margin-top:.75rem">Horarios disponibles — <span id="selected-day-label"></span></div>
+        <div class="slots-grid" id="slots-grid"></div>
+      </div>
+      <div id="slot-confirm" style="display:none;margin-top:1rem">
+        <div style="padding:.75rem;background:var(--info-bg);border-radius:var(--radius);font-size:14px;color:var(--info-text);margin-bottom:.75rem">
+          Turno seleccionado: <strong id="confirm-label"></strong>
+        </div>
+        <div class="field"><label>Observaciones (opcional)</label><input type="text" id="al-obs" placeholder="Ej: vuelo de navegación, primer solo..."></div>
+        <div id="turno-err" class="error"></div>
+        <div id="turno-ok" class="success-msg"></div>
+        <div class="btn-row">
+          <button class="primary" onclick="confirmarTurno()">Confirmar solicitud</button>
+          <button onclick="cancelarSeleccion()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="alumno-perfil" class="screen">
+    <h2>Mi perfil</h2>
+    <div class="card">
+      <h3>Cambiar contraseña</h3>
+      <div class="field"><label>Contraseña actual</label><input type="password" id="perfil-pass-actual"></div>
+      <div class="field"><label>Nueva contraseña</label><input type="password" id="perfil-pass-nueva" placeholder="mínimo 6 caracteres"></div>
+      <div class="field"><label>Confirmar nueva contraseña</label><input type="password" id="perfil-pass-nueva2"></div>
+      <div id="perfil-err" class="error"></div>
+      <div id="perfil-ok" class="success-msg"></div>
+      <button class="primary" onclick="cambiarClave()">Cambiar contraseña</button>
+    </div>
+  </div>
+</div>
+
+<!-- INSTRUCTOR -->
+<div id="instructor-screen" class="screen">
+  <div class="tab-bar">
+    <button class="nav-btn active" id="inst-tab-res" onclick="showInstTab('reservas')">Reservas</button>
+    <button class="nav-btn"        id="inst-tab-cfg" onclick="showInstTab('config')">Configuración</button>
+    <span style="margin-left:auto;font-size:13px;color:var(--text2)" id="inst-nombre-display"></span>
+    <button onclick="logout()">Salir</button>
+  </div>
+  <div id="instructor-reservas" class="screen active">
+    <h2>Reservas</h2>
+    <div class="stat-grid">
+      <div class="stat"><div class="num" id="stat-pending">0</div><div class="lbl">Pendientes</div></div>
+      <div class="stat"><div class="num" id="stat-approved">0</div><div class="lbl">Aprobadas</div></div>
+      <div class="stat"><div class="num" id="stat-total">0</div><div class="lbl">Total</div></div>
+    </div>
+    <div class="card" id="todas-reservas-list"></div>
+  </div>
+  <div id="instructor-config" class="screen">
+    <h2>Configuración</h2>
+    <div class="card">
+      <h3>Horarios disponibles</h3>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:.75rem">Activá/desactivá los horarios que se ofrecen cada día</p>
+      <div id="horarios-config"></div>
+    </div>
+    <div class="card">
+      <h3>Bloquear días</h3>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:.75rem">Los días bloqueados no aparecen para los alumnos</p>
+      <div class="days-grid" id="days-grid-config"></div>
+    </div>
+    <div class="card">
+      <h3>Instructores</h3>
+      <div id="instructores-list"></div>
+      <div class="row" style="margin-top:.75rem">
+        <div class="field"><label>Usuario</label><input type="text" id="new-inst-user" placeholder="usuario"></div>
+        <div class="field"><label>Contraseña</label><input type="text" id="new-inst-pass" placeholder="contraseña"></div>
+        <div class="field"><label>Nombre</label><input type="text" id="new-inst-nombre" placeholder="Nombre"></div>
+      </div>
+      <button onclick="agregarInstructor()">Agregar instructor</button>
+    </div>
+    <div class="card">
+      <h3>Alumnos registrados</h3>
+      <div id="alumnos-list"></div>
+    </div>
+  </div>
+</div>
+
+</div>
+</body>
+</html>
