@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Turnos LV-OAD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0c0f;--bg2:#111418;--bg3:#161b22;--bg4:#1c2330;
+  --text:#c8d8e8;--text2:#7a9bb8;--text3:#3d5a72;
+  --amber:#f0a500;--amber2:#ffc840;--amber-dim:#7a5200;
+  --cyan:#00c8d4;--cyan-dim:#003d42;
+  --green:#39d353;--red:#f85149;
+  --border:rgba(0,200,212,0.15);--border2:rgba(0,200,212,0.35);
+  --radius:4px;--radius-lg:6px;
+  --font-mono:'Share Tech Mono',monospace;
+  --font-ui:'Rajdhani',sans-serif;
+}
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px);pointer-events:none;z-index:9999;}
+body{font-family:var(--font-ui);font-size:15px;color:var(--text);background:var(--bg);min-height:100vh;letter-spacing:.02em;}
+
+.hero{position:relative;width:100%;height:280px;overflow:hidden;}
+.hero img{width:100%;height:100%;object-fit:cover;object-position:center 60%;filter:brightness(.45) saturate(.7);}
+.hero::after{content:'';position:absolute;inset:0;background:linear-gradient(to bottom,transparent 40%,var(--bg) 100%),linear-gradient(to right,rgba(0,200,212,.08) 0%,transparent 60%);}
+.hero-text{position:absolute;bottom:1.5rem;left:1.5rem;z-index:2;}
+.hero-aeroclub{font-family:var(--font-ui);font-size:clamp(13px,2vw,17px);color:var(--text2);letter-spacing:.22em;text-transform:uppercase;margin-bottom:.4rem;font-weight:600;}
+.hero-callsign{font-family:var(--font-mono);font-size:clamp(28px,5vw,48px);color:var(--amber2);text-shadow:0 0 30px rgba(240,165,0,.6);line-height:1;letter-spacing:.12em;}
+.hero-sub{font-family:var(--font-mono);font-size:12px;color:var(--cyan);letter-spacing:.18em;margin-top:.35rem;opacity:.8;}
+.hero-status{position:absolute;top:1rem;right:1rem;z-index:2;font-family:var(--font-mono);font-size:11px;color:var(--green);letter-spacing:.1em;display:flex;align-items:center;gap:6px;}
+.hero-status::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:blink 2s ease-in-out infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+.top-nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:.6rem 1.25rem;display:flex;align-items:center;gap:8px;position:sticky;top:0;z-index:100;}
+.nav-brand{font-family:var(--font-mono);font-size:13px;color:var(--amber);letter-spacing:.1em;margin-right:auto;}
+
+.container{max-width:760px;margin:0 auto;padding:1.25rem}
+.screen{display:none}.screen.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.screen.active{animation:fadeIn .25s ease}
+
+.card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem 1.5rem;margin-bottom:1rem;position:relative;overflow:hidden;}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:.4;}
+
+h2{font-family:var(--font-mono);font-size:14px;color:var(--cyan);letter-spacing:.18em;text-transform:uppercase;margin-bottom:1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);}
+h3{font-family:var(--font-mono);font-size:12px;color:var(--amber);letter-spacing:.15em;text-transform:uppercase;margin-bottom:.75rem;}
+.section-title{font-family:var(--font-mono);font-size:10px;color:var(--text2);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.6rem;}
+
+.field{margin-bottom:.85rem}
+.field label{display:block;font-family:var(--font-mono);font-size:11px;color:var(--text2);letter-spacing:.12em;text-transform:uppercase;margin-bottom:5px;}
+.field input{width:100%;padding:9px 12px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:var(--font-mono);font-size:13px;transition:border-color .2s,box-shadow .2s;}
+.field input:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 0 3px rgba(0,200,212,.12);}
+.field input::placeholder{color:var(--text3)}
+
+button{font-family:var(--font-ui);font-weight:600;letter-spacing:.06em;padding:8px 18px;border:1px solid var(--border2);border-radius:var(--radius);background:transparent;color:var(--text2);font-size:13px;cursor:pointer;transition:all .15s;}
+button:hover{background:var(--bg4);color:var(--text);border-color:var(--cyan)}
+button:disabled{opacity:.4;cursor:not-allowed}
+button.primary{background:linear-gradient(135deg,rgba(0,200,212,.15),rgba(0,200,212,.05));color:var(--cyan);border-color:var(--cyan);text-shadow:0 0 12px rgba(0,200,212,.4);}
+button.primary:hover{background:linear-gradient(135deg,rgba(0,200,212,.25),rgba(0,200,212,.1));box-shadow:0 0 20px rgba(0,200,212,.2);}
+button.danger{background:rgba(248,81,73,.08);color:var(--red);border-color:var(--red);}
+button.danger:hover{background:rgba(248,81,73,.18)}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:.75rem}
+.link-btn{background:none;border:none;border-bottom:1px solid rgba(0,200,212,.3);color:var(--cyan);cursor:pointer;font-family:var(--font-mono);font-size:12px;padding:0;letter-spacing:.05em;}
+.link-btn:hover{color:var(--amber);border-bottom-color:var(--amber)}
+
+.nav-btn{font-family:var(--font-mono);font-size:12px;letter-spacing:.1em;padding:5px 14px;border:1px solid transparent;border-radius:var(--radius);cursor:pointer;background:transparent;color:var(--text3);text-transform:uppercase;}
+.nav-btn:hover{color:var(--text2);border-color:var(--border)}
+.nav-btn.active{color:var(--cyan);border-color:var(--cyan);background:rgba(0,200,212,.08);text-shadow:0 0 10px rgba(0,200,212,.4);}
+.tab-bar{display:flex;gap:8px;align-items:center;margin-bottom:1.25rem;flex-wrap:wrap;padding:.75rem 0;border-bottom:1px solid var(--border);}
+
+.badge{display:inline-block;font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;padding:3px 10px;border-radius:var(--radius);}
+.badge-pendiente{background:rgba(240,165,0,.12);color:var(--amber);border:1px solid var(--amber-dim)}
+.badge-aprobado{background:rgba(57,211,83,.1);color:var(--green);border:1px solid rgba(57,211,83,.3)}
+.badge-cancelado{background:rgba(248,81,73,.1);color:var(--red);border:1px solid rgba(248,81,73,.25)}
+
+.days-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:1rem}
+.day-btn{padding:10px 4px;text-align:center;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-family:var(--font-mono);font-size:11px;background:var(--bg2);color:var(--text2);line-height:1.5;transition:all .15s;}
+.day-btn:hover{border-color:var(--cyan);color:var(--cyan);background:rgba(0,200,212,.06)}
+.day-btn.selected{border:1px solid var(--cyan);color:var(--cyan);background:rgba(0,200,212,.1);box-shadow:0 0 12px rgba(0,200,212,.15)}
+.day-btn.blocked{background:rgba(248,81,73,.06);color:var(--red);border-color:rgba(248,81,73,.25);cursor:not-allowed}
+.day-btn.holiday{border-color:rgba(240,165,0,.4);color:var(--amber);background:rgba(240,165,0,.06);}
+.day-btn.holiday:hover{border-color:var(--amber);background:rgba(240,165,0,.12);}
+.day-btn-festivo{font-size:8px;line-height:1.2;opacity:.85;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px;}
+
+.slots-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;margin-top:.5rem}
+.slot{padding:12px;text-align:center;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--font-mono);font-size:13px;cursor:pointer;background:var(--bg2);color:var(--text2);transition:all .15s;}
+.slot:hover{border-color:var(--amber);color:var(--amber);background:rgba(240,165,0,.06)}
+.slot.selected{border-color:var(--amber);color:var(--amber);background:rgba(240,165,0,.1);box-shadow:0 0 12px rgba(240,165,0,.15)}
+.slot.taken{background:var(--bg);color:var(--text3);cursor:not-allowed;text-decoration:line-through;border-color:var(--border)}
+
+.reserva-item{padding:.85rem 0;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+.reserva-item:last-child{border-bottom:none}
+.reserva-fecha{font-family:var(--font-mono);font-size:14px;color:var(--amber);}
+.reserva-nombre{font-size:13px;color:var(--text2);margin-top:3px}
+.reserva-obs{font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-top:3px}
+
+.stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:1.25rem}
+.stat{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-lg);padding:.85rem 1rem;text-align:center;position:relative;overflow:hidden;}
+.stat::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:.3;}
+.stat .num{font-family:var(--font-mono);font-size:28px;color:var(--cyan);text-shadow:0 0 20px rgba(0,200,212,.4);}
+.stat .lbl{font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.15em;text-transform:uppercase;margin-top:4px;}
+
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-family:var(--font-mono);font-size:13px;}
+.toggle-row:last-child{border-bottom:none}
+input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cyan);}
+
+.error{font-family:var(--font-mono);font-size:12px;color:var(--red);margin-top:6px;display:none;padding:6px 10px;background:rgba(248,81,73,.08);border-radius:var(--radius);border-left:2px solid var(--red);}
+.success-msg{font-family:var(--font-mono);font-size:12px;color:var(--green);margin-top:6px;display:none;padding:6px 10px;background:rgba(57,211,83,.08);border-radius:var(--radius);border-left:2px solid var(--green);}
+.empty{font-family:var(--font-mono);color:var(--text3);font-size:13px;padding:1rem 0;letter-spacing:.05em;}
+.info-box{padding:.85rem 1rem;background:rgba(0,200,212,.06);border:1px solid rgba(0,200,212,.2);border-radius:var(--radius);font-family:var(--font-mono);font-size:13px;color:var(--cyan);margin-bottom:.75rem;}
+
+.row{display:flex;gap:12px}.row .field{flex:1}
+.login-wrap{max-width:400px;margin:0 auto;padding-top:1.5rem}
+.login-card{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:1.5rem;position:relative;overflow:hidden;}
+.login-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--cyan),var(--amber),transparent);}
+.login-copyright{text-align:center;margin-top:.75rem;font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.08em;}
+
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+
+/* CALENDARIO SEMANAL */
+.cal-wrap{overflow-x:auto;margin-top:.5rem;}
+.cal-table{width:100%;border-collapse:collapse;min-width:520px;}
+.cal-table th{font-family:var(--font-mono);font-size:11px;color:var(--text2);letter-spacing:.1em;text-transform:uppercase;padding:8px 6px;border-bottom:1px solid var(--border2);border-right:1px solid var(--border);text-align:center;background:var(--bg2);}
+.cal-table th.today-col{color:var(--cyan);border-bottom-color:var(--cyan);}
+.cal-table th:first-child{width:64px;color:var(--text3);}
+.cal-table td{border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:4px;vertical-align:top;background:var(--bg);min-height:36px;}
+.cal-table td.today-col{background:rgba(0,200,212,.03);}
+.cal-table td:first-child{font-family:var(--font-mono);font-size:11px;color:var(--text3);text-align:center;padding:6px 4px;white-space:nowrap;background:var(--bg2);border-right:1px solid var(--border2);}
+.cal-block{padding:5px 7px;border-radius:var(--radius);cursor:pointer;margin-bottom:3px;font-family:var(--font-mono);font-size:11px;line-height:1.4;transition:filter .15s;}
+.cal-block:hover{filter:brightness(1.25);}
+.cal-block.pendiente{background:rgba(240,165,0,.15);border:1px solid var(--amber-dim);color:var(--amber);}
+.cal-block.aprobado{background:rgba(57,211,83,.1);border:1px solid rgba(57,211,83,.3);color:var(--green);}
+.cal-block.cancelado{background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.2);color:var(--red);text-decoration:line-through;opacity:.6;}
+.cal-empty{font-family:var(--font-mono);font-size:12px;color:var(--text3);padding:.75rem 0;letter-spacing:.05em;}
+
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center;padding:1rem;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:1.5rem;max-width:420px;width:100%;position:relative;overflow:hidden;}
+.modal::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--cyan),var(--amber),transparent);}
+.modal-close{position:absolute;top:.75rem;right:.75rem;background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;line-height:1;padding:2px 6px;}
+.modal-close:hover{color:var(--text);}
+.modal-title{font-family:var(--font-mono);font-size:13px;color:var(--cyan);letter-spacing:.15em;text-transform:uppercase;margin-bottom:1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);}
+.modal-row{display:flex;gap:8px;margin-bottom:.5rem;font-family:var(--font-mono);font-size:12px;}
+.modal-lbl{color:var(--text3);min-width:80px;letter-spacing:.08em;}
+.modal-val{color:var(--text);}
+.modal-actions{display:flex;gap:8px;margin-top:1rem;flex-wrap:wrap;}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <img src="aviones.JPG" alt="LV-OAD">
+  <div class="hero-status">SISTEMA ACTIVO</div>
+  <div class="hero-text">
+    <div class="hero-aeroclub">Aeroclub Río Grande</div>
+    <div class="hero-callsign">LV-OAD</div>
+    <div class="hero-sub">▸ SISTEMA DE RESERVA DE TURNOS</div>
+  </div>
+</div>
+
+<div class="top-nav">
+  <span class="nav-brand" id="nav-brand">◈ ACCESO AL SISTEMA</span>
+  <div id="nav-user-area" style="display:none;align-items:center;gap:8px">
+    <span id="nav-user-name" style="font-family:var(--font-mono);font-size:12px;color:var(--text2)"></span>
+    <button onclick="logout()" style="font-size:11px;padding:4px 12px">SALIR</button>
+  </div>
+</div>
+
+<div class="container">
+
+<!-- LOGIN -->
+<div id="login-screen" class="screen active">
+  <div class="login-wrap">
+    <div class="login-card">
+      <div style="display:flex;gap:6px;margin-bottom:1.25rem">
+        <button class="nav-btn active" id="tab-btn-alumno"     onclick="switchLoginTab('alumno')">Alumno</button>
+        <button class="nav-btn"        id="tab-btn-registro"   onclick="switchLoginTab('registro')">Registrarme</button>
+        <button class="nav-btn"        id="tab-btn-instructor" onclick="switchLoginTab('instructor')">Instructor</button>
+      </div>
+      <div id="tab-alumno">
+        <div class="field"><label>Email</label><input type="email" id="al-login-email" placeholder="tu@email.com"></div>
+        <div class="field"><label>Contraseña</label><input type="password" id="al-login-pass" placeholder="••••••••"></div>
+        <div id="login-err" class="error"></div>
+        <button id="btn-login-al" data-label="INGRESAR" class="primary" style="width:100%;margin-top:.5rem" onclick="loginAlumno()">INGRESAR</button>
+        <div style="text-align:center;margin-top:1rem"><button class="link-btn" onclick="switchLoginTab('olvide')">Olvidé mi contraseña</button></div>
+      </div>
+      <div id="tab-registro" style="display:none">
+        <div class="field"><label>Nombre completo</label><input type="text" id="reg-nombre" placeholder="Tu nombre"></div>
+        <div class="field"><label>Email</label><input type="email" id="reg-email" placeholder="tu@email.com"></div>
+        <div class="field"><label>Contraseña</label><input type="password" id="reg-pass" placeholder="mínimo 6 caracteres"></div>
+        <div class="field"><label>Confirmar contraseña</label><input type="password" id="reg-pass2" placeholder="repetí la contraseña"></div>
+        <div id="reg-err" class="error"></div>
+        <div id="reg-ok" class="success-msg"></div>
+        <button id="btn-registrar" data-label="CREAR CUENTA" class="primary" style="width:100%;margin-top:.5rem" onclick="registrarAlumno()">CREAR CUENTA</button>
+      </div>
+      <div id="tab-olvide" style="display:none">
+        <p style="font-family:var(--font-mono);font-size:12px;color:var(--text2);margin-bottom:.85rem;line-height:1.6">Ingresá tu email y te enviamos una contraseña temporal.</p>
+        <div class="field"><label>Email</label><input type="email" id="olvide-email" placeholder="tu@email.com"></div>
+        <div id="olvide-err" class="error"></div>
+        <div id="olvide-ok" class="success-msg"></div>
+        <button id="btn-olvide" data-label="ENVIAR" class="primary" style="width:100%;margin-top:.5rem" onclick="olvideClave()">ENVIAR CONTRASEÑA TEMPORAL</button>
+        <div style="text-align:center;margin-top:1rem"><button class="link-btn" onclick="switchLoginTab('alumno')">← Volver al login</button></div>
+      </div>
+      <div id="tab-instructor" style="display:none">
+        <div class="field"><label>Usuario</label><input type="text" id="inst-user" placeholder="usuario"></div>
+        <div class="field"><label>Contraseña</label><input type="password" id="inst-pass" placeholder="••••••••"></div>
+        <div id="login-err2" class="error"></div>
+        <button id="btn-login-inst" data-label="INGRESAR" class="primary" style="width:100%;margin-top:.5rem" onclick="loginInstructor()">INGRESAR</button>
+      </div>
+    </div>
+    <div class="login-copyright">© 2026 — by DAC</div>
+  </div>
+</div>
+
+<!-- ALUMNO -->
+<div id="alumno-screen" class="screen">
+  <div class="tab-bar">
+    <button class="nav-btn active" id="al-tab-mis"    onclick="showAlumnoTab('mis-turnos')">Mis Turnos</button>
+    <button class="nav-btn"        id="al-tab-pedir"  onclick="showAlumnoTab('pedir-turno')">Pedir Turno</button>
+    <button class="nav-btn"        id="al-tab-perfil" onclick="showAlumnoTab('perfil')">Mi Perfil</button>
+  </div>
+  <div id="alumno-mis-turnos" class="screen active">
+    <h2>◈ Mis Turnos</h2>
+    <div class="card" id="mis-turnos-list"></div>
+  </div>
+  <div id="alumno-pedir-turno" class="screen">
+    <h2>◈ Solicitar Turno</h2>
+    <div class="card">
+      <div class="section-title">▸ Seleccioná un día</div>
+      <div class="days-grid" id="days-grid"></div>
+      <div id="slots-section" style="display:none">
+        <div class="section-title" style="margin-top:1rem">▸ Horarios disponibles — <span id="selected-day-label" style="color:var(--amber)"></span></div>
+        <div class="slots-grid" id="slots-grid"></div>
+      </div>
+      <div id="slot-confirm" style="display:none;margin-top:1.25rem">
+        <div class="info-box">▸ Turno seleccionado: <strong id="confirm-label"></strong></div>
+        <div class="field"><label>Observaciones (opcional)</label><input type="text" id="al-obs" placeholder="Ej: vuelo de navegación, primer solo..."></div>
+        <div id="turno-err" class="error"></div>
+        <div id="turno-ok" class="success-msg"></div>
+        <div class="btn-row">
+          <button class="primary" onclick="confirmarTurno()">CONFIRMAR SOLICITUD</button>
+          <button onclick="cancelarSeleccion()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="alumno-perfil" class="screen">
+    <h2>◈ Mi Perfil</h2>
+    <div class="card">
+      <h3>Mis Datos</h3>
+      <div class="field"><label>Email (no editable)</label><input type="email" id="perfil-email" disabled style="opacity:.5;cursor:not-allowed"></div>
+      <div class="field"><label>Nombre</label><input type="text" id="perfil-nombre" placeholder="Tu nombre completo"></div>
+      <div class="field"><label>Teléfono</label><input type="tel" id="perfil-tel" placeholder="Ej: +54 9 2964 000000"></div>
+      <div id="perfil-datos-err" class="error"></div>
+      <div id="perfil-datos-ok" class="success-msg"></div>
+      <button class="primary" onclick="guardarDatosPerfil()">GUARDAR DATOS</button>
+    </div>
+    <div class="card">
+      <h3>Cambiar Contraseña</h3>
+      <div class="field"><label>Contraseña actual</label><input type="password" id="perfil-pass-actual"></div>
+      <div class="field"><label>Nueva contraseña</label><input type="password" id="perfil-pass-nueva" placeholder="mínimo 6 caracteres"></div>
+      <div class="field"><label>Confirmar nueva contraseña</label><input type="password" id="perfil-pass-nueva2"></div>
+      <div id="perfil-err" class="error"></div>
+      <div id="perfil-ok" class="success-msg"></div>
+      <button class="primary" onclick="cambiarClave()">ACTUALIZAR CONTRASEÑA</button>
+    </div>
+  </div>
+</div>
+
+<!-- INSTRUCTOR -->
+<div id="instructor-screen" class="screen">
+  <div class="tab-bar">
+    <button class="nav-btn active" id="inst-tab-res" onclick="showInstTab('reservas')">Reservas</button>
+    <button class="nav-btn"        id="inst-tab-cfg" onclick="showInstTab('config')">Configuración</button>
+  </div>
+  <div id="instructor-reservas" class="screen active">
+    <h2>◈ Reservas</h2>
+    <div class="stat-grid">
+      <div class="stat"><div class="num" id="stat-pending">0</div><div class="lbl">Pendientes</div></div>
+      <div class="stat"><div class="num" id="stat-approved">0</div><div class="lbl">Aprobadas</div></div>
+      <div class="stat"><div class="num" id="stat-total">0</div><div class="lbl">Total</div></div>
+    </div>
+    <div class="card" style="padding:1rem">
+      <div class="cal-wrap"><div id="cal-semanal"></div></div>
+    </div>
+  </div>
+
+  <!-- MODAL DETALLE TURNO -->
+  <div class="modal-overlay" id="modal-turno">
+    <div class="modal">
+      <button class="modal-close" onclick="cerrarModal()">✕</button>
+      <div class="modal-title">◈ Detalle del Turno</div>
+      <div class="modal-row"><span class="modal-lbl">FECHA</span><span class="modal-val" id="md-fecha"></span></div>
+      <div class="modal-row"><span class="modal-lbl">HORA</span><span class="modal-val" id="md-hora"></span></div>
+      <div class="modal-row"><span class="modal-lbl">ALUMNO</span><span class="modal-val" id="md-nombre"></span></div>
+      <div class="modal-row"><span class="modal-lbl">EMAIL</span><span class="modal-val" id="md-email"></span></div>
+      <div class="modal-row" id="md-obs-row"><span class="modal-lbl">OBS</span><span class="modal-val" id="md-obs"></span></div>
+      <div class="modal-row"><span class="modal-lbl">ESTADO</span><span class="modal-val" id="md-estado"></span></div>
+      <div class="modal-row" id="md-inst-row"><span class="modal-lbl">INSTRUCTOR</span><span class="modal-val" id="md-inst"></span></div>
+      <div class="modal-actions" id="md-actions"></div>
+    </div>
+  </div>
+
+  <div id="instructor-config" class="screen">
+    <h2>◈ Configuración</h2>
+    <div class="tab-bar" style="margin-bottom:.75rem">
+      <button class="nav-btn active" id="cfg-tab-horarios"    onclick="showCfgTab('horarios')">Horarios</button>
+      <button class="nav-btn"        id="cfg-tab-dias"        onclick="showCfgTab('dias')">Días</button>
+      <button class="nav-btn"        id="cfg-tab-instructores" onclick="showCfgTab('instructores')">Instructores</button>
+      <button class="nav-btn"        id="cfg-tab-alumnos"     onclick="showCfgTab('alumnos')">Alumnos</button>
+      <button class="nav-btn"        id="cfg-tab-sistema"     onclick="showCfgTab('sistema')" style="color:var(--red);border-color:rgba(248,81,73,.3)">Sistema</button>
+    </div>
+
+    <div id="cfg-horarios" class="cfg-panel">
+      <div class="card">
+        <h3>Horarios por Día de Semana</h3>
+        <p style="font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-bottom:.75rem;letter-spacing:.05em">SELECCIONÁ LAS HORAS DISPONIBLES PARA CADA DÍA</p>
+        <div style="display:flex;gap:6px;margin-bottom:.75rem;flex-wrap:wrap" id="dow-tabs">
+          <button class="nav-btn active" onclick="selectDowTab(1)">LUN</button>
+          <button class="nav-btn" onclick="selectDowTab(2)">MAR</button>
+          <button class="nav-btn" onclick="selectDowTab(3)">MIÉ</button>
+          <button class="nav-btn" onclick="selectDowTab(4)">JUE</button>
+          <button class="nav-btn" onclick="selectDowTab(5)">VIE</button>
+          <button class="nav-btn" onclick="selectDowTab(6)">SÁB</button>
+          <button class="nav-btn" onclick="selectDowTab(0)">DOM</button>
+        </div>
+        <div id="horarios-config"></div>
+      </div>
+    </div>
+
+    <div id="cfg-dias" class="cfg-panel" style="display:none">
+      <div class="card">
+        <h3>Bloquear Días</h3>
+        <p style="font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-bottom:.75rem;letter-spacing:.05em">HACÉ CLICK EN UN DÍA PARA BLOQUEARLO O LIBERARLO</p>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.85rem;">
+          <button onclick="mesAnterior()" style="font-size:13px;padding:5px 14px">◀</button>
+          <span id="cal-mes-label" style="font-family:var(--font-mono);font-size:13px;color:var(--amber);letter-spacing:.12em;text-transform:uppercase"></span>
+          <button onclick="mesSiguiente()" style="font-size:13px;padding:5px 14px">▶</button>
+        </div>
+        <div id="cal-mes-grid"></div>
+        <div style="display:flex;gap:16px;margin-top:.85rem;font-family:var(--font-mono);font-size:11px;color:var(--text3);flex-wrap:wrap;">
+          <span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:2px;background:rgba(248,81,73,.2);border:1px solid rgba(248,81,73,.4);display:inline-block"></span>BLOQUEADO</span>
+          <span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:2px;background:rgba(240,165,0,.1);border:1px solid rgba(240,165,0,.35);display:inline-block"></span>FERIADO</span>
+          <span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:2px;background:rgba(0,200,212,.08);border:1px solid rgba(0,200,212,.2);display:inline-block"></span>HOY</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="cfg-instructores" class="cfg-panel" style="display:none">
+      <div class="card">
+        <h3>Instructores</h3>
+        <div id="instructores-list"></div>
+        <div class="row" style="margin-top:1rem">
+          <div class="field"><label>Usuario</label><input type="text" id="new-inst-user" placeholder="usuario"></div>
+          <div class="field"><label>Contraseña</label><input type="text" id="new-inst-pass" placeholder="contraseña"></div>
+          <div class="field"><label>Nombre</label><input type="text" id="new-inst-nombre" placeholder="Nombre"></div>
+        </div>
+        <button onclick="agregarInstructor()">AGREGAR INSTRUCTOR</button>
+      </div>
+    </div>
+
+    <div id="cfg-alumnos" class="cfg-panel" style="display:none">
+      <div class="card">
+        <h3>Alumnos Registrados</h3>
+        <div id="alumnos-list"></div>
+      </div>
+    </div>
+
+    <!-- MODAL EDITAR ALUMNO -->
+    <div class="modal-overlay" id="modal-alumno">
+      <div class="modal">
+        <button class="modal-close" onclick="cerrarModalAlumno()">✕</button>
+        <div class="modal-title">◈ Editar Alumno</div>
+        <div class="field">
+          <label>Email (solo lectura)</label>
+          <input type="email" id="edit-al-email" disabled style="opacity:.5;cursor:not-allowed">
+        </div>
+        <div class="field">
+          <label>Nombre</label>
+          <input type="text" id="edit-al-nombre" placeholder="Nombre completo">
+        </div>
+        <div class="field">
+          <label>Teléfono</label>
+          <input type="tel" id="edit-al-tel" placeholder="Ej: +54 9 2964 000000">
+        </div>
+        <div id="edit-al-err" class="error"></div>
+        <div id="edit-al-ok" class="success-msg"></div>
+        <div class="modal-actions">
+          <button class="primary" onclick="guardarAlumno()">GUARDAR</button>
+          <button onclick="cerrarModalAlumno()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="cfg-sistema" class="cfg-panel" style="display:none">
+      <div class="card" style="border-color:rgba(248,81,73,.3)">
+        <h3 style="color:var(--red)">Zona Peligrosa</h3>
+        <p style="font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-bottom:.75rem;letter-spacing:.05em">ACCIONES IRREVERSIBLES — USAR CON CUIDADO</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="danger" onclick="borrarTodosLosTurnos()">BORRAR TODOS LOS TURNOS</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getDatabase, ref, set, get, update, remove, push, onValue, child }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyATPSaoOV_wKLaJR_dc1jgTzEF2L5p0tHk",
+    authDomain: "turnos-lv-oad.firebaseapp.com",
+    databaseURL: "https://turnos-lv-oad-default-rtdb.firebaseio.com",
+    projectId: "turnos-lv-oad",
+    storageBucket: "turnos-lv-oad.firebasestorage.app",
+    messagingSenderId: "855020455192",
+    appId: "1:855020455192:web:4b6d18f1b2efbb52faca6d"
+  };
+
+  const app=initializeApp(firebaseConfig), db=getDatabase(app);
+  const dbRef=()=>ref(db);
+  async function fbGet(p){const s=await get(child(dbRef(),p));return s.exists()?s.val():null;}
+  async function fbSet(p,v){await set(ref(db,p),v);}
+  async function fbUpdate(p,v){await update(ref(db,p),v);}
+  async function fbPush(p,v){return await push(ref(db,p),v);}
+  async function fbRemove(p){await remove(ref(db,p));}
+
+  const TODAS_HORAS=['00:00','01:00','02:00','03:00','04:00','05:00','06:00','07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00','23:00'];
+  const HORAS_DEFAULT=['07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00'];
+  const DEFAULT_CONFIG={
+    horariosDia:{0:HORAS_DEFAULT,1:HORAS_DEFAULT,2:HORAS_DEFAULT,3:HORAS_DEFAULT,4:HORAS_DEFAULT,5:HORAS_DEFAULT,6:HORAS_DEFAULT},
+    diasBloqueados:[]
+  };
+  function horasParaDia(dateStr){
+    const [_y,_m,_d]=dateStr.split('-').map(Number);const dow=new Date(_y,_m-1,_d).getDay();
+    const h=config.horariosDia&&config.horariosDia[dow];
+    return Array.isArray(h)?h:HORAS_DEFAULT;
+  }
+  let activeDow=1;
+  let config={...DEFAULT_CONFIG}, session=null, selectedDay=null, selectedSlot=null, unsubReservas=null;
+
+  const EJS_SVC='dcamargo70@gmail.com', EJS_TMPL_CANCEL='template_v4qu4x6', EJS_TMPL_RESET='template_scbsgfg', EJS_KEY='0IoRm88tZQepkHAdK';
+  function mailCancel(r){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);emailjs.send(EJS_SVC,EJS_TMPL_CANCEL,{to_email:r.email,alumno_nombre:r.nombre,fecha:r.fecha,hora:r.hora,avion:'LV-OAD'}).catch(e=>console.warn(e));}
+  function mailReset(a,np){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);emailjs.send(EJS_SVC,EJS_TMPL_RESET,{to_email:a.email,alumno_nombre:a.nombre,nueva_password:np}).catch(e=>console.warn(e));}
+
+  function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');}
+  function showErr(id,msg){const e=document.getElementById(id);e.textContent=msg;e.style.display='block';}
+  function hideEl(id){const e=document.getElementById(id);if(e)e.style.display='none';}
+  function showOk(id,msg){const e=document.getElementById(id);e.textContent=msg;e.style.display='block';}
+  function val(id){return document.getElementById(id).value.trim();}
+  function clearVal(...ids){ids.forEach(id=>{const e=document.getElementById(id);if(e)e.value=''});}
+  function setLoading(id,on){const b=document.getElementById(id);if(!b)return;b.disabled=on;b.textContent=on?'ESPERE...':(b.dataset.label||b.textContent);}
+  function ek(email){return email.replace(/\./g,'_').replace(/@/g,'__at__');}
+  function genPass(){const c='ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';let p='';for(let i=0;i<8;i++)p+=c[Math.floor(Math.random()*c.length)];return p;}
+  function getDays(){const d=[],n=new Date();for(let i=0;i<7;i++){const x=new Date(n);x.setDate(n.getDate()+i);d.push(x);}return d;}
+  function fmtDate(d){const yy=d.getFullYear(),mm=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0');return yy+'-'+mm+'-'+dd;}
+  function fmtLabel(d){const D=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];return D[d.getDay()]+'\n'+d.getDate()+'/'+(d.getMonth()+1);}
+  function ok12h(ds,h){const [y,m,d]=ds.split('-').map(Number);const [hh,mm]=h.split(':').map(Number);const fechaTurno=new Date(y,m-1,d,hh,mm,0);return(fechaTurno-new Date())>=12*3600*1000;}
+  function rArr(data){if(!data)return[];return Object.entries(data).map(([k,v])=>({...v,key:k}));}
+
+  window.switchLoginTab=function(tab){
+    ['alumno','registro','instructor','olvide'].forEach(t=>{const e=document.getElementById('tab-'+t);if(e)e.style.display=t===tab?'block':'none';});
+    ['alumno','registro','instructor'].forEach(t=>{const b=document.getElementById('tab-btn-'+t);if(b)b.classList.toggle('active',t===tab);});
+    ['login-err','login-err2','reg-err','reg-ok'].forEach(id=>hideEl(id));
+  };
+
+  window.registrarAlumno=async function(){
+    hideEl('reg-err');hideEl('reg-ok');
+    const nombre=val('reg-nombre'),email=val('reg-email').toLowerCase(),pass=val('reg-pass'),pass2=val('reg-pass2');
+    if(!nombre||!email||!pass){showErr('reg-err','Completá todos los campos.');return;}
+    if(!email.includes('@')){showErr('reg-err','Email inválido.');return;}
+    if(pass.length<6){showErr('reg-err','Mínimo 6 caracteres.');return;}
+    if(pass!==pass2){showErr('reg-err','Las contraseñas no coinciden.');return;}
+    setLoading('btn-registrar',true);
+    try{
+      const k=ek(email);
+      if(await fbGet('alumnos/'+k)){showErr('reg-err','Ya existe una cuenta con ese email.');return;}
+      await fbSet('alumnos/'+k,{nombre,email,pass,ts:new Date().toISOString()});
+      showOk('reg-ok','¡Cuenta creada! Ya podés ingresar.');
+      clearVal('reg-nombre','reg-email','reg-pass','reg-pass2');
+      setTimeout(()=>switchLoginTab('alumno'),1500);
+    }catch(e){showErr('reg-err','Error al crear la cuenta.');console.error(e);}
+    finally{setLoading('btn-registrar',false);}
+  };
+
+  window.loginAlumno=async function(){
+    hideEl('login-err');
+    const email=val('al-login-email').toLowerCase(),pass=val('al-login-pass');
+    if(!email||!pass){showErr('login-err','Completá email y contraseña.');return;}
+    setLoading('btn-login-al',true);
+    try{
+      const k=ek(email), alumno=await fbGet('alumnos/'+k);
+      if(!alumno||alumno.pass!==pass){showErr('login-err','Email o contraseña incorrectos.');return;}
+      session={tipo:'alumno',nombre:alumno.nombre,email:alumno.email,emailKey:k};
+      setNavUser(alumno.nombre,'alumno');
+      showScreen('alumno-screen');showAlumnoTab('mis-turnos');suscribirReservas();
+    }catch(e){showErr('login-err','Error al iniciar sesión.');console.error(e);}
+    finally{setLoading('btn-login-al',false);}
+  };
+
+  window.olvideClave=async function(){
+    hideEl('olvide-err');hideEl('olvide-ok');
+    const email=val('olvide-email').toLowerCase();
+    if(!email){showErr('olvide-err','Ingresá tu email.');return;}
+    setLoading('btn-olvide',true);
+    try{
+      const k=ek(email), alumno=await fbGet('alumnos/'+k);
+      if(!alumno){showErr('olvide-err','No encontramos esa cuenta.');return;}
+      const np=genPass();
+      await fbUpdate('alumnos/'+k,{pass:np});
+      mailReset({...alumno},np);
+      showOk('olvide-ok','Contraseña temporal enviada a '+email+'. Revisá el spam.');
+    }catch(e){showErr('olvide-err','Error. Intentá de nuevo.');}
+    finally{setLoading('btn-olvide',false);}
+  };
+
+  window.loginInstructor=async function(){
+    hideEl('login-err2');
+    const user=val('inst-user'),pass=val('inst-pass');
+    if(!user||!pass){showErr('login-err2','Completá usuario y contraseña.');return;}
+    setLoading('btn-login-inst',true);
+    try{
+      const data=await fbGet('instructores');
+      let found=null;
+      if(data)for(const[k,i]of Object.entries(data))if(i.user===user&&i.pass===pass){found={...i,key:k};break;}
+      if(!found){
+        if(!await fbGet('instructores/admin'))await fbSet('instructores/admin',{user:'admin',pass:'admin123',nombre:'Instructor'});
+        if(user==='admin'&&pass==='admin123')found={user:'admin',pass:'admin123',nombre:'Instructor',key:'admin'};
+      }
+      if(!found){showErr('login-err2','Usuario o contraseña incorrectos.');return;}
+      session={tipo:'instructor',nombre:found.nombre,user:found.user};
+      setNavUser(found.nombre,'instructor');
+      showScreen('instructor-screen');showInstTab('reservas');suscribirReservas();loadConfig();
+    }catch(e){showErr('login-err2','Error al iniciar sesión.');console.error(e);}
+    finally{setLoading('btn-login-inst',false);}
+  };
+
+  function setNavUser(nombre,tipo){
+    document.getElementById('nav-brand').textContent='◈ LV-OAD';
+    document.getElementById('nav-user-area').style.display='flex';
+    const icono=tipo==='instructor'?'👨‍✈️':'🛩️';
+    document.getElementById('nav-user-name').textContent=icono+' '+nombre;
+  }
+
+  window.logout=function(){
+    if(unsubReservas){unsubReservas();unsubReservas=null;}
+    session=null;selectedDay=null;selectedSlot=null;
+    document.getElementById('nav-brand').textContent='◈ ACCESO AL SISTEMA';
+    document.getElementById('nav-user-area').style.display='none';
+    showScreen('login-screen');switchLoginTab('alumno');
+  };
+
+  async function loadConfig(){
+    const s=await fbGet('config');
+    if(s){
+      config={...DEFAULT_CONFIG,...s,diasBloqueados:Array.isArray(s.diasBloqueados)?s.diasBloqueados:[]};
+      if(!config.horariosDia&&s.horariosActivos){
+        const ha=s.horariosActivos;
+        config.horariosDia={0:ha,1:ha,2:ha,3:ha,4:ha,5:ha,6:ha};
+      }
+      if(!config.horariosDia)config.horariosDia={...DEFAULT_CONFIG.horariosDia};
+      for(let d=0;d<7;d++)if(!Array.isArray(config.horariosDia[d]))config.horariosDia[d]=HORAS_DEFAULT;
+    }
+    renderConfig();
+  }
+  async function saveConfig(){await fbSet('config',config);}
+
+  function suscribirReservas(){
+    if(unsubReservas)unsubReservas();
+    unsubReservas=onValue(ref(db,'reservas'),snap=>{
+      const data=snap.val();
+      // actualizar cache para modal
+      _reservasCache={};
+      if(data)Object.entries(data).forEach(([k,v])=>{_reservasCache[k]={...v,key:k};});
+      if(session?.tipo==='alumno')renderMisTurnos(data);
+      if(session?.tipo==='instructor')renderTodasReservas(data);
+      if(selectedDay)renderSlots(selectedDay,data);
+    });
+  }
+
+  function renderMisTurnos(data){
+    const el=document.getElementById('mis-turnos-list');
+    const mis=rArr(data).filter(r=>r.email===session.email).sort((a,b)=>(a.fecha+a.hora).localeCompare(b.fecha+b.hora));
+    if(!mis.length){el.innerHTML='<div class="empty">// SIN TURNOS SOLICITADOS</div>';return;}
+    el.innerHTML=mis.map(r=>`
+      <div class="reserva-item">
+        <div>
+          <div class="reserva-fecha">${r.fecha} — ${r.hora} hs</div>
+          ${r.obs?`<div class="reserva-obs">${r.obs}</div>`:''}
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="badge badge-${r.estado}">${r.estado}</span>
+          ${r.estado==='pendiente'?`<button class="danger" onclick="cancelarTurnoAlumno('${r.key}')" style="font-size:11px;padding:4px 10px">CANCELAR</button>`:''}
+        </div>
+      </div>`).join('');
+  }
+
+  window.cancelarTurnoAlumno=async function(key){if(!confirm('¿Cancelar este turno?'))return;await fbUpdate('reservas/'+key,{estado:'cancelado'});};
+
+  async function renderDaysGrid(cid){
+    const grid=document.getElementById(cid||'days-grid');
+    const days=getDays();
+    const año=new Date().getFullYear();
+    const feriados=await getFeriados(año);
+    grid.innerHTML='';
+    days.forEach(d=>{
+      const ds=fmtDate(d),bl=config.diasBloqueados.includes(ds),sel=selectedDay===ds;
+      const lbl=fmtLabel(d).split('\n');
+      const esFeriado=!!feriados[ds];
+      const motivoFeriado=feriados[ds]||'';
+      const motCorto=motivoFeriado.length>12?motivoFeriado.slice(0,11)+'…':motivoFeriado;
+      let cls='day-btn';
+      if(bl) cls+=' blocked';
+      else if(sel) cls+=' selected';
+      else if(esFeriado) cls+=' holiday';
+      const el=document.createElement('div');
+      el.className=cls;
+      el.dataset.date=ds;
+      if(esFeriado&&!bl) el.title=motivoFeriado;
+      el.innerHTML=`<div style="font-weight:600">${lbl[0]}</div><div>${lbl[1]}</div>${esFeriado&&!bl?`<div class="day-btn-festivo">${motCorto}</div>`:''}`;
+      if(!bl) el.addEventListener('click',()=>selectDay(ds));
+      grid.appendChild(el);
+    });
+  }
+
+  function selectDay(ds){
+    selectedDay=ds;selectedSlot=null;
+    document.getElementById('slot-confirm').style.display='none';
+    renderDaysGrid();
+    get(ref(db,'reservas')).then(s=>renderSlots(ds,s.val()));
+  }
+
+  function renderSlots(ds,data){
+    const grid=document.getElementById('slots-grid');if(!grid)return;
+    const taken=rArr(data).filter(r=>r.fecha===ds&&r.estado!=='cancelado').map(r=>r.hora);
+    document.getElementById('selected-day-label').textContent=ds;
+    document.getElementById('slots-section').style.display='block';
+    const avail=horasParaDia(ds).filter(h=>ok12h(ds,h));
+    if(!avail.length){grid.innerHTML='<div class="empty">// SIN DISPONIBILIDAD (se requieren 12 hs de anticipación)</div>';return;}
+    grid.innerHTML=avail.map(h=>{
+      const tk=taken.includes(h),sl=selectedSlot===h;
+      return `<div class="slot${tk?' taken':sl?' selected':''}" data-hora="${h}">${h}</div>`;
+    }).join('');
+    grid.querySelectorAll('.slot:not(.taken)').forEach(s=>s.addEventListener('click',()=>selectSlot(s.dataset.hora)));
+  }
+
+  function selectSlot(h){
+    selectedSlot=h;
+    get(ref(db,'reservas')).then(s=>renderSlots(selectedDay,s.val()));
+    document.getElementById('confirm-label').textContent=selectedDay+' a las '+h+' hs';
+    document.getElementById('slot-confirm').style.display='block';
+    hideEl('turno-err');hideEl('turno-ok');
+  }
+
+  window.cancelarSeleccion=function(){selectedSlot=null;document.getElementById('slot-confirm').style.display='none';get(ref(db,'reservas')).then(s=>renderSlots(selectedDay,s.val()));};
+
+  window.confirmarTurno=async function(){
+    hideEl('turno-err');hideEl('turno-ok');
+    if(!selectedDay||!selectedSlot){showErr('turno-err','Seleccioná día y horario.');return;}
+    if(!ok12h(selectedDay,selectedSlot)){showErr('turno-err','Se requieren al menos 12 hs de anticipación.');return;}
+    const snap=await get(ref(db,'reservas'));
+    const taken=rArr(snap.val()).filter(r=>r.fecha===selectedDay&&r.estado!=='cancelado').map(r=>r.hora);
+    if(taken.includes(selectedSlot)){showErr('turno-err','Ese horario ya fue reservado.');return;}
+    const obs=val('al-obs');
+    await fbPush('reservas',{nombre:session.nombre,email:session.email,fecha:selectedDay,hora:selectedSlot,obs,estado:'pendiente',ts:new Date().toISOString()});
+    showOk('turno-ok','// TURNO SOLICITADO — Pendiente de aprobación por instructor.');
+    selectedSlot=null;document.getElementById('slot-confirm').style.display='none';clearVal('al-obs');
+  };
+
+  function renderTodasReservas(data){
+    const todas=rArr(data);
+    document.getElementById('stat-pending').textContent=todas.filter(r=>r.estado==='pendiente').length;
+    document.getElementById('stat-approved').textContent=todas.filter(r=>r.estado==='aprobado').length;
+    document.getElementById('stat-total').textContent=todas.length;
+
+    const cal=document.getElementById('cal-semanal');
+    const days=getDays(); // 7 días desde hoy
+    const hoy=fmtDate(new Date());
+
+    // Recopilar sólo reservas dentro del rango de 7 días y no canceladas (canceladas igual se muestran tenues)
+    const fechasRango=days.map(d=>fmtDate(d));
+    const enRango=todas.filter(r=>fechasRango.includes(r.fecha));
+
+    // Horas únicas con turnos, ordenadas
+    const horasConTurnos=[...new Set(enRango.map(r=>r.hora))].sort();
+
+    if(!horasConTurnos.length){
+      cal.innerHTML='<div class="cal-empty">// SIN RESERVAS EN LOS PRÓXIMOS 7 DÍAS</div>';
+      return;
+    }
+
+    // Encabezado
+    const DIAS_SHORT=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+    let html='<table class="cal-table"><thead><tr><th></th>';
+    days.forEach(d=>{
+      const ds=fmtDate(d),isHoy=ds===hoy;
+      const dow=DIAS_SHORT[d.getDay()];
+      const num=d.getDate()+'/'+(d.getMonth()+1);
+      html+=`<th class="${isHoy?'today-col':''}">${dow}<br>${num}</th>`;
+    });
+    html+='</tr></thead><tbody>';
+
+    // Filas: una por hora con turnos
+    horasConTurnos.forEach(hora=>{
+      html+=`<tr><td>${hora}</td>`;
+      days.forEach(d=>{
+        const ds=fmtDate(d),isHoy=ds===hoy;
+        const reservas=enRango.filter(r=>r.fecha===ds&&r.hora===hora);
+        html+=`<td class="${isHoy?'today-col':''}">`;
+        if(reservas.length){
+          reservas.forEach(r=>{
+            const nombre=r.nombre.split(' ')[0]; // solo primer nombre para ahorrar espacio
+            html+=`<div class="cal-block ${r.estado}" onclick="abrirModal('${r.key}')" title="${r.nombre}">${nombre}</div>`;
+          });
+        }
+        html+='</td>';
+      });
+      html+='</tr>';
+    });
+
+    html+='</tbody></table>';
+    cal.innerHTML=html;
+  }
+
+  // Guardamos snapshot de reservas para el modal
+  let _reservasCache={};
+  const _origSuscribir=suscribirReservas;
+
+  window.abrirModal=function(key){
+    const r=_reservasCache[key];if(!r)return;
+    document.getElementById('md-fecha').textContent=r.fecha;
+    document.getElementById('md-hora').textContent=r.hora+' hs';
+    document.getElementById('md-nombre').textContent=r.nombre;
+    document.getElementById('md-email').textContent=r.email;
+    const obsRow=document.getElementById('md-obs-row');
+    if(r.obs){document.getElementById('md-obs').textContent=r.obs;obsRow.style.display='flex';}
+    else{obsRow.style.display='none';}
+    const estadoEl=document.getElementById('md-estado');
+    estadoEl.innerHTML=`<span class="badge badge-${r.estado}">${r.estado}</span>`;
+    const instRow=document.getElementById('md-inst-row');
+    if(r.instructor){document.getElementById('md-inst').textContent=r.instructor;instRow.style.display='flex';}
+    else{instRow.style.display='none';}
+    const actions=document.getElementById('md-actions');
+    actions.innerHTML='';
+    if(r.estado==='pendiente'){
+      const ba=document.createElement('button');ba.className='primary';ba.textContent='APROBAR';
+      ba.onclick=async()=>{await fbUpdate('reservas/'+key,{estado:'aprobado',instructor:session.nombre});cerrarModal();};
+      const bc=document.createElement('button');bc.className='danger';bc.textContent='CANCELAR';
+      bc.onclick=async()=>{const rv=await fbGet('reservas/'+key);if(rv){await fbUpdate('reservas/'+key,{estado:'cancelado',instructor:session.nombre});mailCancel(rv);}cerrarModal();};
+      actions.appendChild(ba);actions.appendChild(bc);
+    } else if(r.estado==='aprobado'){
+      const bc=document.createElement('button');bc.className='danger';bc.textContent='CANCELAR';
+      bc.onclick=async()=>{const rv=await fbGet('reservas/'+key);if(rv){await fbUpdate('reservas/'+key,{estado:'cancelado',instructor:session.nombre});mailCancel(rv);}cerrarModal();};
+      actions.appendChild(bc);
+    }
+    document.getElementById('modal-turno').classList.add('open');
+  };
+
+  window.cerrarModal=function(){document.getElementById('modal-turno').classList.remove('open');};
+  document.addEventListener('click',e=>{if(e.target.id==='modal-turno')cerrarModal();});
+
+  window.aprobarReserva=async function(key){await fbUpdate('reservas/'+key,{estado:'aprobado'});};
+  window.cancelarReserva=async function(key){const r=await fbGet('reservas/'+key);if(!r)return;await fbUpdate('reservas/'+key,{estado:'cancelado'});mailCancel(r);};
+
+  function renderConfig(){renderHorariosConfig();}
+
+  function renderHorariosConfig(){
+    const horas=config.horariosDia[activeDow]||[];
+    const DIAS_NOMBRE={0:'Domingo',1:'Lunes',2:'Martes',3:'Miércoles',4:'Jueves',5:'Viernes',6:'Sábado'};
+    const tabs=document.getElementById('dow-tabs');
+    if(tabs){
+      const DOW_ORDER=[1,2,3,4,5,6,0];
+      tabs.querySelectorAll('button').forEach((btn,i)=>{
+        btn.classList.toggle('active',DOW_ORDER[i]===activeDow);
+      });
+    }
+    document.getElementById('horarios-config').innerHTML=
+      '<div style="font-family:var(--font-mono);font-size:11px;color:var(--amber);margin-bottom:.6rem;letter-spacing:.1em">'+DIAS_NOMBRE[activeDow].toUpperCase()+'</div>'+
+      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">'+
+      TODAS_HORAS.map(h=>{
+        const on=horas.includes(h);
+        return `<label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:5px 8px;border:1px solid ${on?'var(--cyan)':'var(--border)'};border-radius:var(--radius);background:${on?'rgba(0,200,212,.08)':'var(--bg2)'};font-family:var(--font-mono);font-size:12px;color:${on?'var(--cyan)':'var(--text3)'};transition:all .15s">
+          <input type="checkbox" ${on?'checked':''} onchange="toggleHorario('${h}',this.checked)" style="accent-color:var(--cyan)">
+          ${h}
+        </label>`;
+      }).join('')+
+      '</div>'+
+      '<div style="display:flex;gap:8px;margin-top:.75rem">'+
+      '<button onclick="marcarTodas(true)" style="font-size:11px;padding:4px 12px">TODAS</button>'+
+      '<button onclick="marcarTodas(false)" style="font-size:11px;padding:4px 12px">NINGUNA</button>'+
+      '</div>';
+  }
+
+  window.selectDowTab=function(dow){activeDow=dow;renderHorariosConfig();};
+
+  window.toggleHorario=async function(h,on){
+    if(!Array.isArray(config.horariosDia[activeDow]))config.horariosDia[activeDow]=[];
+    if(on){if(!config.horariosDia[activeDow].includes(h))config.horariosDia[activeDow].push(h);}
+    else config.horariosDia[activeDow]=config.horariosDia[activeDow].filter(x=>x!==h);
+    config.horariosDia[activeDow].sort();
+    await saveConfig();renderHorariosConfig();
+  };
+
+  window.marcarTodas=async function(on){
+    config.horariosDia[activeDow]=on?[...TODAS_HORAS]:[];
+    await saveConfig();renderHorariosConfig();
+  };
+
+  // Calendario mensual para bloqueo de días
+  let calMesActual=new Date();
+  calMesActual.setDate(1);
+
+  const MESES_NOMBRE=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const DOW_LABELS=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+
+  // Cache de feriados por año: { 2025: { 'YYYY-MM-DD': 'motivo', ... }, ... }
+  let _feriadosCache={};
+
+  async function getFeriados(año){
+    if(_feriadosCache[año])return _feriadosCache[año];
+    try{
+      const res=await fetch('https://api.argentinadatos.com/v1/feriados/'+año);
+      const data=await res.json();
+      const map={};
+      data.forEach(f=>{
+        // formato: { fecha: 'YYYY-MM-DD', nombre: '...', tipo: '...' }
+        if(f.fecha) map[f.fecha]=f.nombre||'Feriado';
+      });
+      _feriadosCache[año]=map;
+      return map;
+    }catch(e){console.warn('No se pudo cargar feriados',e);return{};}
+  }
+
+  async function renderCalMes(){
+    const año=calMesActual.getFullYear(), mes=calMesActual.getMonth();
+    document.getElementById('cal-mes-label').textContent=MESES_NOMBRE[mes]+' '+año;
+    const hoy=fmtDate(new Date());
+    const primerDow=(new Date(año,mes,1).getDay()+6)%7;
+    const diasEnMes=new Date(año,mes+1,0).getDate();
+    const grid=document.getElementById('cal-mes-grid');
+    grid.innerHTML='<div style="font-family:var(--font-mono);font-size:11px;color:var(--text3);padding:.5rem 0">cargando...</div>';
+
+    const feriados=await getFeriados(año);
+
+    grid.innerHTML='';
+    const wrap=document.createElement('div');
+    wrap.style.cssText='display:grid;grid-template-columns:repeat(7,1fr);gap:4px;';
+
+    // cabecera días semana
+    DOW_LABELS.forEach(lbl=>{
+      const h=document.createElement('div');
+      h.style.cssText='font-family:var(--font-mono);font-size:10px;color:var(--text3);text-align:center;padding:4px 0;letter-spacing:.08em';
+      h.textContent=lbl;
+      wrap.appendChild(h);
+    });
+
+    // celdas vacías
+    for(let i=0;i<primerDow;i++){wrap.appendChild(document.createElement('div'));}
+
+    // días del mes
+    for(let d=1;d<=diasEnMes;d++){
+      const ds=año+'-'+String(mes+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+      const bl=config.diasBloqueados.includes(ds);
+      const esHoy=ds===hoy;
+      const pasado=ds<hoy;
+      const esFeriado=!!feriados[ds];
+      const motivoFeriado=feriados[ds]||'';
+
+      const cell=document.createElement('div');
+      cell.style.cssText='text-align:center;padding:6px 2px;border-radius:var(--radius);font-family:var(--font-mono);font-size:12px;transition:all .15s;position:relative;min-height:42px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:2px;';
+
+      if(pasado){
+        cell.style.color='var(--text3)';cell.style.border='1px solid transparent';cell.style.cursor='default';
+      } else if(bl){
+        cell.style.background='rgba(248,81,73,.15)';cell.style.border='1px solid rgba(248,81,73,.4)';cell.style.color='var(--red)';cell.style.cursor='pointer';cell.style.fontWeight='600';
+      } else if(esFeriado){
+        cell.style.background='rgba(240,165,0,.1)';cell.style.border='1px solid rgba(240,165,0,.35)';cell.style.color='var(--amber)';cell.style.cursor='pointer';
+      } else if(esHoy){
+        cell.style.background='rgba(0,200,212,.08)';cell.style.border='1px solid rgba(0,200,212,.3)';cell.style.color='var(--cyan)';cell.style.cursor='pointer';
+      } else {
+        cell.style.background='var(--bg2)';cell.style.border='1px solid var(--border)';cell.style.color='var(--text2)';cell.style.cursor='pointer';
+      }
+
+      // número del día
+      const numEl=document.createElement('div');
+      numEl.textContent=d;
+      cell.appendChild(numEl);
+
+      // indicador estado
+      if(bl){
+        const x=document.createElement('div');
+        x.style.cssText='font-size:8px;opacity:.8;line-height:1';
+        x.textContent='✕ BLOQ';
+        cell.appendChild(x);
+      } else if(esFeriado){
+        const f=document.createElement('div');
+        f.style.cssText='font-size:7px;line-height:1.2;color:var(--amber);opacity:.85;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;padding:0 2px;';
+        // abreviar el motivo si es muy largo
+        const motCorto=motivoFeriado.length>14?motivoFeriado.slice(0,13)+'…':motivoFeriado;
+        f.textContent=motCorto;
+        f.title=motivoFeriado;
+        cell.appendChild(f);
+      }
+
+      // tooltip completo con el motivo del feriado
+      if(esFeriado) cell.title=motivoFeriado;
+
+      if(!pasado){
+        const borderDefault=bl?'rgba(248,81,73,.4)':esFeriado?'rgba(240,165,0,.35)':esHoy?'rgba(0,200,212,.3)':'var(--border)';
+        const colorDefault=bl?'var(--red)':esFeriado?'var(--amber)':esHoy?'var(--cyan)':'var(--text2)';
+        cell.addEventListener('mouseover',()=>{cell.style.borderColor='var(--cyan)';});
+        cell.addEventListener('mouseout',()=>{cell.style.borderColor=borderDefault;cell.style.color=colorDefault;});
+        cell.addEventListener('click',()=>toggleBloqueoDia(ds));
+      }
+      wrap.appendChild(cell);
+    }
+    grid.appendChild(wrap);
+  }
+
+  window.mesAnterior=function(){
+    calMesActual.setMonth(calMesActual.getMonth()-1);
+    renderCalMes();
+  };
+  window.mesSiguiente=function(){
+    calMesActual.setMonth(calMesActual.getMonth()+1);
+    renderCalMes();
+  };
+
+  window.toggleBloqueoDia=async function(ds){
+    if(config.diasBloqueados.includes(ds))config.diasBloqueados=config.diasBloqueados.filter(d=>d!==ds);
+    else config.diasBloqueados.push(ds);
+    await saveConfig();renderCalMes();
+  };
+
+  async function renderInstructoresList(){
+    const el=document.getElementById('instructores-list');
+    const data=await fbGet('instructores');
+    if(!data){el.innerHTML='';return;}
+    el.innerHTML=Object.entries(data).map(([k,i])=>`
+      <div class="toggle-row">
+        <span><strong>${i.nombre}</strong> — ${i.user}</span>
+        ${k==='admin'?'<span style="font-size:11px;color:var(--text3)">PRINCIPAL</span>':`<button onclick="eliminarInstructor('${k}')" style="font-size:11px;padding:3px 10px">QUITAR</button>`}
+      </div>`).join('');
+  }
+
+  async function renderAlumnosList(){
+    const el=document.getElementById('alumnos-list');
+    const data=await fbGet('alumnos');
+    if(!data){el.innerHTML='<div class="empty">// SIN ALUMNOS REGISTRADOS</div>';return;}
+    el.innerHTML=Object.entries(data).map(([k,a])=>{
+      const tel=a.tel?`<span style="font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-left:8px">☎ ${a.tel}</span>`:'';
+      return `<div class="toggle-row" style="cursor:pointer" onclick="abrirModalAlumno('${k}')">
+        <div>
+          <span style="font-weight:600">${a.nombre}</span>
+          <span style="font-size:12px;color:var(--text2);margin-left:8px">${a.email}</span>
+          ${tel}
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">EDITAR</span>
+          <button onclick="event.stopPropagation();eliminarAlumno('${k}','${a.email}')" style="font-size:11px;padding:3px 10px">QUITAR</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  let _editAlumnoKey=null;
+
+  window.abrirModalAlumno=function(key){
+    _editAlumnoKey=key;
+    fbGet('alumnos/'+key).then(a=>{
+      if(!a)return;
+      document.getElementById('edit-al-email').value=a.email||'';
+      document.getElementById('edit-al-nombre').value=a.nombre||'';
+      document.getElementById('edit-al-tel').value=a.tel||'';
+      hideEl('edit-al-err');hideEl('edit-al-ok');
+      document.getElementById('modal-alumno').classList.add('open');
+    });
+  };
+
+  window.cerrarModalAlumno=function(){
+    document.getElementById('modal-alumno').classList.remove('open');
+    _editAlumnoKey=null;
+  };
+
+  window.guardarAlumno=async function(){
+    hideEl('edit-al-err');hideEl('edit-al-ok');
+    const nombre=document.getElementById('edit-al-nombre').value.trim();
+    const tel=document.getElementById('edit-al-tel').value.trim();
+    if(!nombre){showErr('edit-al-err','El nombre no puede estar vacío.');return;}
+    await fbUpdate('alumnos/'+_editAlumnoKey,{nombre,tel});
+    showOk('edit-al-ok','// DATOS ACTUALIZADOS');
+    renderAlumnosList();
+    setTimeout(()=>cerrarModalAlumno(),1200);
+  };
+
+  document.addEventListener('click',e=>{if(e.target.id==='modal-alumno')cerrarModalAlumno();});
+
+  window.agregarInstructor=async function(){
+    const user=val('new-inst-user'),pass=val('new-inst-pass'),nombre=val('new-inst-nombre');
+    if(!user||!pass||!nombre)return;
+    if(await fbGet('instructores/'+user)){alert('Ese usuario ya existe.');return;}
+    await fbSet('instructores/'+user,{user,pass,nombre});
+    clearVal('new-inst-user','new-inst-pass','new-inst-nombre');
+    renderInstructoresList();
+  };
+
+  window.eliminarInstructor=async function(k){if(!confirm('¿Eliminar este instructor?'))return;await fbRemove('instructores/'+k);renderInstructoresList();};
+
+  window.eliminarAlumno=async function(k,email){
+    if(!confirm('¿Eliminar este alumno? También se eliminarán sus reservas.'))return;
+    await fbRemove('alumnos/'+k);
+    const snap=await get(ref(db,'reservas'));const data=snap.val();
+    if(data)for(const[rk,r]of Object.entries(data))if(r.email===email)await fbRemove('reservas/'+rk);
+    renderAlumnosList();
+    get(ref(db,'reservas')).then(s=>renderTodasReservas(s.val()));
+  };
+
+  window.showInstTab=function(tab){
+    document.getElementById('instructor-reservas').classList.toggle('active',tab==='reservas');
+    document.getElementById('instructor-config').classList.toggle('active',tab==='config');
+    document.getElementById('inst-tab-res').classList.toggle('active',tab==='reservas');
+    document.getElementById('inst-tab-cfg').classList.toggle('active',tab==='config');
+    if(tab==='config')loadConfig();
+  };
+
+  window.showAlumnoTab=function(tab){
+    ['mis-turnos','pedir-turno','perfil'].forEach(t=>document.getElementById('alumno-'+t).classList.toggle('active',t===tab));
+    document.getElementById('al-tab-mis').classList.toggle('active',tab==='mis-turnos');
+    document.getElementById('al-tab-pedir').classList.toggle('active',tab==='pedir-turno');
+    document.getElementById('al-tab-perfil').classList.toggle('active',tab==='perfil');
+    if(tab==='pedir-turno'){
+      selectedDay=null;selectedSlot=null;
+      document.getElementById('slots-section').style.display='none';
+      document.getElementById('slot-confirm').style.display='none';
+      loadConfig().then(()=>renderDaysGrid());
+    }
+    if(tab==='perfil'){
+      clearVal('perfil-pass-actual','perfil-pass-nueva','perfil-pass-nueva2');
+      hideEl('perfil-err');hideEl('perfil-ok');hideEl('perfil-datos-err');hideEl('perfil-datos-ok');
+      fbGet('alumnos/'+session.emailKey).then(a=>{
+        if(!a)return;
+        document.getElementById('perfil-email').value=a.email||'';
+        document.getElementById('perfil-nombre').value=a.nombre||'';
+        document.getElementById('perfil-tel').value=a.tel||'';
+      });
+    }
+  };
+
+  window.guardarDatosPerfil=async function(){
+    hideEl('perfil-datos-err');hideEl('perfil-datos-ok');
+    const nombre=document.getElementById('perfil-nombre').value.trim();
+    const tel=document.getElementById('perfil-tel').value.trim();
+    if(!nombre){showErr('perfil-datos-err','El nombre no puede estar vacío.');return;}
+    await fbUpdate('alumnos/'+session.emailKey,{nombre,tel});
+    session.nombre=nombre;
+    document.getElementById('nav-user-name').textContent='🛩️ '+nombre;
+    showOk('perfil-datos-ok','// DATOS ACTUALIZADOS CORRECTAMENTE');
+  };
+
+  window.cambiarClave=async function(){
+    hideEl('perfil-err');hideEl('perfil-ok');
+    const actual=val('perfil-pass-actual'),nueva=val('perfil-pass-nueva'),nueva2=val('perfil-pass-nueva2');
+    const alumno=await fbGet('alumnos/'+session.emailKey);
+    if(!alumno){showErr('perfil-err','Error al obtener datos.');return;}
+    if(alumno.pass!==actual){showErr('perfil-err','Contraseña actual incorrecta.');return;}
+    if(nueva.length<6){showErr('perfil-err','Mínimo 6 caracteres.');return;}
+    if(nueva!==nueva2){showErr('perfil-err','Las contraseñas no coinciden.');return;}
+    await fbUpdate('alumnos/'+session.emailKey,{pass:nueva});
+    showOk('perfil-ok','// CONTRASEÑA ACTUALIZADA CORRECTAMENTE');
+    clearVal('perfil-pass-actual','perfil-pass-nueva','perfil-pass-nueva2');
+  };
+
+  switchLoginTab('alumno');
+
+  window.showCfgTab=function(tab){
+    ['horarios','dias','instructores','alumnos','sistema'].forEach(t=>{
+      const panel=document.getElementById('cfg-'+t);
+      const btn=document.getElementById('cfg-tab-'+t);
+      if(panel)panel.style.display=t===tab?'block':'none';
+      if(btn)btn.classList.toggle('active',t===tab);
+    });
+    if(tab==='instructores')renderInstructoresList();
+    if(tab==='alumnos')renderAlumnosList();
+    if(tab==='dias'){calMesActual=new Date();calMesActual.setDate(1);renderCalMes();}
+    if(tab==='horarios')renderHorariosConfig();
+  };
+
+  window.borrarTodosLosTurnos=async function(){
+    if(!confirm('¿Borrar TODOS los turnos? Esta acción es irreversible.'))return;
+    if(!confirm('Segunda confirmación: ¿estás seguro?'))return;
+    await fbRemove('reservas');
+    alert('Todos los turnos fueron eliminados.');
+  };
+
+</script>
+</body>
+</html>
