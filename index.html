@@ -1154,7 +1154,11 @@ window.showInstTab=function(tab){
   document.getElementById('instructor-config').classList.toggle('active',tab==='config');
   document.getElementById('inst-tab-res').classList.toggle('active',tab==='reservas');
   document.getElementById('inst-tab-cfg').classList.toggle('active',tab==='config');
-  if(tab==='config'){loadConfig().then(()=>{buildCfgAvionTabs();renderConfig();});}
+  if(tab==='config'){
+    loadConfig().then(()=>{buildCfgAvionTabs();renderConfig();});
+    const btnSistema=document.getElementById('cfg-tab-sistema');
+    if(btnSistema) btnSistema.style.display=session?.user==='admin'?'':'none';
+  }
 };
 
 function buildCfgAvionTabs(){
@@ -1180,6 +1184,7 @@ window.selectCfgAvion=function(key){
 };
 
 window.showCfgTab=function(tab){
+  if(tab==='sistema'&&session?.user!=='admin') return;
   ['horarios','dias','instructores','usuarios','auditoria','sistema'].forEach(t=>{
     const panel=document.getElementById('cfg-'+t);
     const btn=document.getElementById('cfg-tab-'+t);
