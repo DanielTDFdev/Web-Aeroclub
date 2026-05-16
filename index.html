@@ -1078,7 +1078,7 @@ window.abrirModal=function(key){
     const dt=new Date(r.ts);
     const DIAS=['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
     const MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-    const fmtTs='Solicitado el día '+DIAS[dt.getDay()]+' '+dt.getDate()+' de '+MESES[dt.getMonth()]+' de '+dt.getFullYear()+', '+String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0')+' hs';
+    const fmtTs=DIAS[dt.getDay()]+' '+dt.getDate()+' de '+MESES[dt.getMonth()]+' de '+dt.getFullYear()+', '+String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0')+' hs';
     document.getElementById('md-ts').textContent=fmtTs;
   } else {
     document.getElementById('md-ts').textContent='—';
