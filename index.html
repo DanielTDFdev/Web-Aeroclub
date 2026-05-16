@@ -1056,6 +1056,12 @@ function renderTodasReservas(data){
 // ── MODAL TURNO ────────────────────────────────────────────────
 let _reservasCache={};
 
+function turnoYaPaso(r){
+  const[y,m,d]=r.fecha.split('-').map(Number);
+  const[hh,mm]=(r.hora||'00:00').split(':').map(Number);
+  return new Date(y,m-1,d,hh,mm,0).getTime()<Date.now();
+}
+
 window.abrirModal=function(key){
   const r=_reservasCache[key];if(!r)return;
   document.getElementById('md-avion').textContent=r.avion||'LV-OAD';
@@ -1081,11 +1087,11 @@ window.abrirModal=function(key){
     const ba=document.createElement('button');ba.className='primary';ba.textContent='APROBAR TURNO';
     ba.onclick=async()=>{if(!confirm('¿Aprobar el turno de '+r.nombre+'?'))return;await fbUpdate('reservas/'+key,{estado:'aprobado',instructor:session.nombre});cerrarModal();};
     const bc=document.createElement('button');bc.className='danger';bc.textContent='CANCELAR TURNO';
-    bc.onclick=async()=>{if(!confirm('¿Cancelar el turno de '+r.nombre+'?'))return;const rv=await fbGet('reservas/'+key);if(rv){await fbUpdate('reservas/'+key,{estado:'cancelado',instructor:session.nombre});mailCancel(rv);}cerrarModal();};
+    bc.onclick=async()=>{if(!confirm('¿Cancelar el turno de '+r.nombre+'?'))return;const rv=await fbGet('reservas/'+key);if(rv){await fbUpdate('reservas/'+key,{estado:'cancelado',instructor:session.nombre});if(!turnoYaPaso(rv))mailCancel(rv);}cerrarModal();};
     actions.appendChild(ba);actions.appendChild(bc);
   } else if(r.estado==='aprobado'){
     const bc=document.createElement('button');bc.className='danger';bc.textContent='CANCELAR TURNO';
-    bc.onclick=async()=>{if(!confirm('¿Cancelar el turno de '+r.nombre+'?'))return;const rv=await fbGet('reservas/'+key);if(rv){await fbUpdate('reservas/'+key,{estado:'cancelado',instructor:session.nombre});mailCancel(rv);}cerrarModal();};
+    bc.onclick=async()=>{if(!confirm('¿Cancelar el turno de '+r.nombre+'?'))return;const rv=await fbGet('reservas/'+key);if(rv){await fbUpdate('reservas/'+key,{estado:'cancelado',instructor:session.nombre});if(!turnoYaPaso(rv))mailCancel(rv);}cerrarModal();};
     actions.appendChild(bc);
   }
   document.getElementById('modal-turno').classList.add('open');
@@ -1104,7 +1110,9 @@ async function vencerTurnosPendientes(data){
     const[y,m,d]=r.fecha.split('-').map(Number);
     const[hh,mm]=(r.hora||'00:00').split(':').map(Number);
     const fechaHoraTurno=new Date(y,m-1,d,hh,mm,0).getTime();
-    if((fechaHoraTurno-ahora)<LIMITE_MS) promesas.push(fbUpdate('reservas/'+k,{estado:'vencido'}));
+    // pendiente: vence 14hs antes; aprobado: solo cuando la hora ya pasó
+    const limite=r.estado==='pendiente'?LIMITE_MS:0;
+    if((fechaHoraTurno-ahora)<limite) promesas.push(fbUpdate('reservas/'+k,{estado:'vencido'}));
   }
   if(promesas.length)await Promise.all(promesas);
 }
