@@ -752,7 +752,7 @@ async function loadConfig(){
         horariosDia:s.horariosDia||{...DEFAULT_CONFIG_AVION.horariosDia},
         diasBloqueados:Array.isArray(s.diasBloqueados)?s.diasBloqueados:[]
       };
-      for(let d=0;d<7;d++)if(!Array.isArray(configs[av.key].horariosDia[d]))configs[av.key].horariosDia[d]=HORAS_DEFAULT;
+      for(let d=0;d<7;d++)if(configs[av.key].horariosDia[d]===undefined||configs[av.key].horariosDia[d]===null)configs[av.key].horariosDia[d]=HORAS_DEFAULT;
     } else {
       // migración: si existe /config antiguo sin clave de avión, usarlo para LV-OAD
       if(av.key==='LV-OAD'){
