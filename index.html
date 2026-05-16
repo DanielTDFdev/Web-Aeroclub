@@ -949,6 +949,7 @@ window.confirmarTurno=async function(){
     avion:selectedAvion,
     obs,
     estado,
+    rol:session.rol||'alumno',
     ts:new Date().toISOString()
   });
   if(esPiloto){
@@ -1110,8 +1111,9 @@ async function vencerTurnosPendientes(data){
     const[y,m,d]=r.fecha.split('-').map(Number);
     const[hh,mm]=(r.hora||'00:00').split(':').map(Number);
     const fechaHoraTurno=new Date(y,m-1,d,hh,mm,0).getTime();
-    // pendiente: vence 14hs antes; aprobado: solo cuando la hora ya pasó
-    const limite=r.estado==='pendiente'?LIMITE_MS:0;
+    // pendiente de alumno: vence 14hs antes; piloto y aprobados: solo cuando ya pasó la hora
+    const esAlumno=(r.rol||'alumno')==='alumno';
+    const limite=(r.estado==='pendiente'&&esAlumno)?LIMITE_MS:0;
     if((fechaHoraTurno-ahora)<limite) promesas.push(fbUpdate('reservas/'+k,{estado:'vencido'}));
   }
   if(promesas.length)await Promise.all(promesas);
