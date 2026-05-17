@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Turnos Aeronaves — Aeroclub Río Grande</title>
+<title>Turnos — Aeroclub Río Grande</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -196,8 +196,8 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-status">SISTEMA ACTIVO</div>
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
-    <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES</div>
+    <div class="hero-callsign" id="hero-callsign">LV-OAD</div>
+    <div class="hero-sub">▸ SISTEMA DE RESERVA DE TURNOS</div>
   </div>
 </div>
 
@@ -1037,9 +1037,19 @@ function renderMisTurnos(data){
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <span class="badge badge-${r.estado}">${r.estado}</span>
-        ${r.estado==='pendiente'?`<button class="danger" onclick="cancelarTurnoAlumno('${r.key}')" style="font-size:11px;padding:4px 10px">CANCELAR</button>`:''}
+        ${(r.estado==='pendiente'||r.estado==='aprobado')&&puedeAlumnoCancelar(r)?`<button class="danger" onclick="cancelarTurnoAlumno('${r.key}')" style="font-size:11px;padding:4px 10px">CANCELAR</button>`:''}
       </div>
     </div>`).join('');
+}
+
+function puedeAlumnoCancelar(r){
+  // pilotos siempre pueden cancelar
+  if((r.rol||'alumno')==='piloto') return true;
+  // alumnos: no pueden cancelar si faltan menos de 2 horas
+  const[y,m,d]=r.fecha.split('-').map(Number);
+  const[hh,mm]=(r.hora||'00:00').split(':').map(Number);
+  const fechaTurno=new Date(y,m-1,d,hh,mm,0).getTime();
+  return (fechaTurno - Date.now()) >= 2*60*60*1000;
 }
 
 window.cancelarTurnoAlumno=async function(key){
