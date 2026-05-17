@@ -1028,7 +1028,7 @@ function renderMisTurnos(data){
   el.innerHTML=mis.map(r=>`
     <div class="reserva-item">
       <div>
-        <div class="reserva-fecha">${r.fecha} — ${r.hora} hs</div>
+        <div class="reserva-fecha">${r.fecha} — ${r.horaInicio&&r.horaFin?r.horaInicio+' a '+r.horaFin+' hs':r.hora+' hs'}</div>
         <div class="reserva-avion">✈ ${r.avion||'LV-OAD'}</div>
         ${r.obs?`<div class="reserva-obs">${r.obs}</div>`:''}
       </div>
