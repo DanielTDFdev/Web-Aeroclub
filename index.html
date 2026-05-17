@@ -741,7 +741,7 @@ function setNavUser(nombre,tipo){
 window.logout=function(){
   if(unsubReservas){unsubReservas();unsubReservas=null;}
   session=null;selectedDay=null;selectedSlot=null;selectedAvion=null;
-  document.getElementById('hero-callsign').textContent='LV-OAD';
+  document.getElementById('hero-callsign').textContent='TURNOS';
   document.getElementById('nav-brand').textContent='◈ ACCESO AL SISTEMA';
   document.getElementById('nav-user-area').style.display='none';
   showScreen('login-screen');switchLoginTab('alumno');
