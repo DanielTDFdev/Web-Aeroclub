@@ -197,7 +197,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v2.0</div>
   </div>
 </div>
 
@@ -1050,13 +1050,6 @@ function puedeAlumnoCancelar(r){
   const[hh,mm]=(r.hora||'00:00').split(':').map(Number);
   const fechaTurno=new Date(y,m-1,d,hh,mm,0).getTime();
   return (fechaTurno - Date.now()) >= 2*60*60*1000;
-}
-
-function puedeAlumnoCancelar(r){
-  if((r.rol||'alumno')==='piloto') return true;
-  const[y,m,d]=r.fecha.split('-').map(Number);
-  const[hh,mm]=(r.hora||'00:00').split(':').map(Number);
-  return (new Date(y,m-1,d,hh,mm,0).getTime()-Date.now())>=2*60*60*1000;
 }
 
 window.cancelarTurnoAlumno=async function(key){
