@@ -1495,7 +1495,7 @@ async function renderAlumnosList(){
   const el=document.getElementById('alumnos-list');
   const data=await fbGet('alumnos');
   if(!data){el.innerHTML='<div class="empty">// SIN USUARIOS REGISTRADOS</div>';return;}
-  const todos=Object.entries(data).sort(([,a],[,b])=>(b.ts||'').localeCompare(a.ts||''));
+  const todos=Object.entries(data).sort(([,a],[,b])=>new Date(b.ts||0)-new Date(a.ts||0));
   const pendientes=todos.filter(([k,a])=>a.estado==='pendiente_aprobacion');
   const aprobados=todos.filter(([k,a])=>a.estado!=='pendiente_aprobacion');
   let html='';
@@ -1531,7 +1531,10 @@ async function renderAlumnosList(){
             <span style="font-size:12px;color:var(--text2)">${a.email}</span>
             ${tel}
           </div>
-          <div style="margin-top:4px"><span class="badge badge-${rol}">${rol}</span></div>
+          <div style="margin-top:4px;display:flex;align-items:center;gap:8px">
+            <span class="badge badge-${rol}">${rol}</span>
+            ${a.ts?`<span style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">${(d=>String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear())(new Date(a.ts))}</span>`:''}
+          </div>
         </div>
         <div style="display:flex;gap:6px;align-items:center">
           <span style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">EDITAR</span>
