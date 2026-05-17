@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aeroclub Río Grande — Tierra del Fuego</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#07090d;--bg2:#0e1218;--bg3:#141a24;
+  --text:#c8d8e8;--text2:#7a9bb8;--text3:#3d5a72;
+  --amber:#f0a500;--amber2:#ffc840;
+  --cyan:#00c8d4;
+  --border:rgba(0,200,212,0.12);--border2:rgba(0,200,212,0.3);
+  --font-mono:'Share Tech Mono',monospace;
+  --font-ui:'Rajdhani',sans-serif;
+  --font-display:'Orbitron',sans-serif;
+}
+:root.light{
+  --bg:#eef2f7;--bg2:#dde4ef;--bg3:#ffffff;
+  --text:#1a2a3a;--text2:#3a5a78;--text3:#7a9ab8;
+  --amber:#b87000;--amber2:#d08000;
+  --cyan:#0090a0;
+  --border:rgba(0,100,140,0.15);--border2:rgba(0,100,140,0.3);
+}
+
+html{scroll-behavior:smooth}
+body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;transition:background .3s,color .3s;}
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.04) 2px,rgba(0,0,0,.04) 4px);pointer-events:none;z-index:9999;}
+
+nav{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:.75rem 2rem;background:rgba(7,9,13,.88);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);transition:background .3s;}
+:root.light nav{background:rgba(238,242,247,.92);}
+.nav-logo{display:flex;align-items:center;gap:12px;}
+.nav-logo img{width:36px;height:36px;object-fit:contain;filter:drop-shadow(0 0 8px rgba(0,200,212,.4));}
+:root.light .nav-logo img{filter:none;}
+.nav-logo-text{font-family:var(--font-mono);font-size:13px;color:var(--amber);letter-spacing:.15em;}
+.nav-right{display:flex;align-items:center;gap:14px;}
+.theme-toggle{display:flex;align-items:center;gap:6px;cursor:pointer;}
+.theme-track{width:34px;height:18px;border-radius:9px;background:var(--bg3);border:1px solid var(--border2);position:relative;}
+.theme-thumb{width:12px;height:12px;border-radius:50%;background:var(--cyan);position:absolute;top:2px;left:2px;transition:transform .25s;box-shadow:0 0 6px rgba(0,200,212,.5);}
+:root.light .theme-thumb{transform:translateX(16px);background:var(--amber);}
+.btn-nav{font-family:var(--font-mono);font-size:12px;letter-spacing:.1em;padding:8px 20px;background:linear-gradient(135deg,rgba(0,200,212,.14),rgba(0,200,212,.04));border:1px solid var(--cyan);border-radius:3px;color:var(--cyan);text-decoration:none;text-transform:uppercase;transition:all .2s;text-shadow:0 0 10px rgba(0,200,212,.35);}
+.btn-nav:hover{background:linear-gradient(135deg,rgba(0,200,212,.24),rgba(0,200,212,.1));box-shadow:0 0 20px rgba(0,200,212,.2);}
+
+.hero{position:relative;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;padding:6rem 2rem 4rem;}
+.hero-bg{position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 40%,rgba(0,100,120,.16) 0%,transparent 70%),radial-gradient(ellipse 40% 40% at 80% 20%,rgba(240,165,0,.05) 0%,transparent 60%);}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(0,200,212,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(0,200,212,.035) 1px,transparent 1px);background-size:60px 60px;animation:gridDrift 30s linear infinite;}
+@keyframes gridDrift{0%{background-position:0 0}100%{background-position:60px 60px}}
+
+.radar{position:absolute;right:-100px;bottom:-100px;width:450px;height:450px;opacity:.055;pointer-events:none;}
+:root.light .radar{opacity:.035;}
+.radar-circle{position:absolute;inset:0;border:1px solid var(--cyan);border-radius:50%;animation:rp 3s ease-in-out infinite;}
+.radar-circle:nth-child(2){inset:15%;animation-delay:.5s;}
+.radar-circle:nth-child(3){inset:30%;animation-delay:1s;}
+.radar-circle:nth-child(4){inset:45%;animation-delay:1.5s;}
+.radar-sweep{position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 0deg,transparent 340deg,rgba(0,200,212,.6) 360deg);animation:sweep 4s linear infinite;}
+@keyframes sweep{to{transform:rotate(360deg)}}
+@keyframes rp{0%,100%{opacity:.6}50%{opacity:1}}
+
+.hero-content{position:relative;z-index:2;text-align:center;max-width:800px;}
+
+.hero-eyebrow{font-family:var(--font-mono);font-size:11px;color:var(--cyan);letter-spacing:.3em;text-transform:uppercase;margin-bottom:1.5rem;opacity:0;animation:fadeUp .8s ease .2s forwards;}
+.hero-logo{width:130px;height:130px;object-fit:contain;margin-bottom:1.5rem;filter:drop-shadow(0 0 24px rgba(0,200,212,.28)) drop-shadow(0 0 48px rgba(240,165,0,.14));opacity:0;animation:fadeUp .8s ease .4s forwards;}
+:root.light .hero-logo{filter:drop-shadow(0 0 12px rgba(0,100,120,.2));}
+.hero-title{font-family:var(--font-display);font-size:clamp(30px,6vw,70px);font-weight:900;color:var(--amber2);text-shadow:0 0 40px rgba(240,165,0,.45),0 0 80px rgba(240,165,0,.18);letter-spacing:.08em;line-height:1;margin-bottom:.5rem;opacity:0;animation:fadeUp .8s ease .5s forwards;}
+.hero-subtitle{font-family:var(--font-display);font-size:clamp(13px,2.5vw,20px);font-weight:400;color:var(--text2);letter-spacing:.28em;text-transform:uppercase;margin-bottom:.75rem;opacity:0;animation:fadeUp .8s ease .6s forwards;}
+.hero-location{font-family:var(--font-mono);font-size:12px;color:var(--text3);letter-spacing:.2em;margin-bottom:2.5rem;opacity:0;animation:fadeUp .8s ease .7s forwards;}
+
+.construccion-badge{display:inline-flex;align-items:center;gap:10px;padding:.7rem 1.5rem;background:rgba(240,165,0,.07);border:1px solid rgba(240,165,0,.22);border-radius:3px;font-family:var(--font-mono);font-size:12px;color:var(--amber);letter-spacing:.15em;text-transform:uppercase;margin-bottom:2rem;opacity:0;animation:fadeUp .8s ease .85s forwards;}
+.construccion-badge::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--amber);box-shadow:0 0 10px var(--amber);animation:blink 1.5s ease-in-out infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+
+.hero-desc{font-size:clamp(14px,2vw,17px);color:var(--text2);line-height:1.75;max-width:520px;margin:0 auto 2.5rem;opacity:0;animation:fadeUp .8s ease .95s forwards;}
+
+.hero-cta{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;opacity:0;animation:fadeUp .8s ease 1.1s forwards;}
+.btn-primary{display:inline-flex;align-items:center;gap:10px;font-family:var(--font-mono);font-size:13px;letter-spacing:.12em;padding:14px 32px;background:linear-gradient(135deg,rgba(0,200,212,.16),rgba(0,200,212,.05));border:1px solid var(--cyan);border-radius:3px;color:var(--cyan);text-decoration:none;text-transform:uppercase;transition:all .2s;text-shadow:0 0 12px rgba(0,200,212,.38);}
+.btn-primary:hover{box-shadow:0 0 30px rgba(0,200,212,.22);transform:translateY(-2px);}
+
+.stats{display:flex;justify-content:center;flex-wrap:wrap;margin-top:3rem;opacity:0;animation:fadeUp .8s ease 1.3s forwards;}
+.stat-item{padding:1.5rem 2.5rem;border-right:1px solid var(--border);text-align:center;}
+.stat-item:last-child{border-right:none;}
+.stat-num{font-family:var(--font-display);font-size:clamp(26px,4vw,40px);font-weight:700;color:var(--cyan);text-shadow:0 0 20px rgba(0,200,212,.35);display:block;}
+.stat-lbl{font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.18em;text-transform:uppercase;margin-top:4px;}
+
+footer{border-top:1px solid var(--border);padding:1.5rem 2rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+.footer-brand{font-family:var(--font-mono);font-size:12px;color:var(--text3);letter-spacing:.1em;}
+.footer-coords{font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.07em;}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+
+@media(max-width:600px){
+  nav{padding:.6rem 1rem;}
+  .btn-nav{display:none;}
+  .stat-item{padding:1rem 1.25rem;}
+  .hero{padding:5rem 1.25rem 3rem;}
+  footer{flex-direction:column;text-align:center;}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">
+    <img src="logo_aeroclub.png" alt="Logo Aeroclub">
+    <span class="nav-logo-text">AEROCLUB RÍO GRANDE</span>
+  </div>
+  <div class="nav-right">
+    <div class="theme-toggle" onclick="toggleTheme()">
+      <span style="font-size:13px">🌙</span>
+      <div class="theme-track"><div class="theme-thumb"></div></div>
+      <span style="font-size:13px">☀️</span>
+    </div>
+    <a href="turnos.html" class="btn-nav">▸ Ingreso Pilotos / Alumnos</a>
+  </div>
+</nav>
+
+<main class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-grid"></div>
+  <div class="radar">
+    <div class="radar-circle"></div>
+    <div class="radar-circle"></div>
+    <div class="radar-circle"></div>
+    <div class="radar-circle"></div>
+    <div class="radar-sweep"></div>
+  </div>
+
+  <div class="hero-content">
+    <div class="hero-eyebrow">▸ Tierra del Fuego · Argentina · SAWE</div>
+    <img src="logo_aeroclub.png" alt="Aeroclub Río Grande" class="hero-logo">
+    <h1 class="hero-title">AEROCLUB<br>RÍO GRANDE</h1>
+    <div class="hero-subtitle">Tierra del Fuego</div>
+    <div class="hero-location">53°46'S — 67°45'O</div>
+
+    <div class="construccion-badge">Sitio en construcción</div>
+
+    <p class="hero-desc">
+      Próximamente toda la información sobre nuestra institución,
+      flota, instructores y actividades.<br>
+      Mientras tanto, el sistema de reservas está operativo.
+    </p>
+
+    <div class="hero-cta">
+      <a href="turnos.html" class="btn-primary">
+        <span>✈</span>
+        Ingreso Pilotos / Alumnos
+      </a>
+    </div>
+
+    <div class="stats">
+      <div class="stat-item">
+        <span class="stat-num">3</span>
+        <span class="stat-lbl">Aeronaves</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-num">TDF</span>
+        <span class="stat-lbl">Tierra del Fuego</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-num">SAWE</span>
+        <span class="stat-lbl">OACI</span>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <span class="footer-brand">◈ AEROCLUB RÍO GRANDE — © 2026</span>
+  <span class="footer-coords">53°46'S 67°45'O · SAWE · RÍO GRANDE, TIERRA DEL FUEGO</span>
+</footer>
+
+<script>
+(function(){
+  if(localStorage.getItem('arc-theme')==='light')
+    document.documentElement.classList.add('light');
+})();
+function toggleTheme(){
+  const isLight=document.documentElement.classList.toggle('light');
+  localStorage.setItem('arc-theme',isLight?'light':'dark');
+}
+</script>
+</body>
+</html>
