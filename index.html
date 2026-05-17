@@ -382,6 +382,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <h3>Horarios por Avión y Día</h3>
         <p style="font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-bottom:.75rem;letter-spacing:.05em">SELECCIONÁ PRIMERO EL AVIÓN, LUEGO EL DÍA</p>
         <div style="display:flex;gap:6px;margin-bottom:.75rem;flex-wrap:wrap" id="cfg-avion-tabs"></div>
+        <div id="avion-toggle-wrap"></div>
         <div style="display:flex;gap:6px;margin-bottom:.75rem;flex-wrap:wrap" id="dow-tabs">
           <button class="nav-btn active" onclick="selectDowTab(1)">LUN</button>
           <button class="nav-btn" onclick="selectDowTab(2)">MAR</button>
@@ -561,8 +562,9 @@ const AVIONES=[
 
 // Devuelve los aviones que puede reservar el usuario según su rol
 function avionesParaRol(rol){
-  if(rol==='piloto') return AVIONES;
-  return AVIONES.filter(a=>a.key==='LV-OAD'); // alumno solo LV-OAD
+  const activos=AVIONES.filter(a=>(configs[a.key]?.activo)!==false);
+  if(rol==='piloto') return activos;
+  return activos.filter(a=>a.key==='LV-OAD');
 }
 
 // ── AUDITORÍA ──────────────────────────────────────────────────
@@ -752,7 +754,8 @@ async function loadConfig(){
     if(s){
       configs[av.key]={
         horariosDia:s.horariosDia||{...DEFAULT_CONFIG_AVION.horariosDia},
-        diasBloqueados:Array.isArray(s.diasBloqueados)?s.diasBloqueados:[]
+        diasBloqueados:Array.isArray(s.diasBloqueados)?s.diasBloqueados:[],
+        activo:s.activo!==false
       };
       for(let d=0;d<7;d++)if(configs[av.key].horariosDia[d]===undefined||configs[av.key].horariosDia[d]===null)configs[av.key].horariosDia[d]=HORAS_DEFAULT;
     } else {
@@ -760,7 +763,7 @@ async function loadConfig(){
       if(av.key==='LV-OAD'){
         const old=await fbGet('config');
         if(old&&old.horariosDia){
-          configs[av.key]={horariosDia:old.horariosDia,diasBloqueados:Array.isArray(old.diasBloqueados)?old.diasBloqueados:[]};
+          configs[av.key]={horariosDia:old.horariosDia,diasBloqueados:Array.isArray(old.diasBloqueados)?old.diasBloqueados:[],activo:true};
         } else {
           configs[av.key]={...DEFAULT_CONFIG_AVION,horariosDia:{...DEFAULT_CONFIG_AVION.horariosDia},diasBloqueados:[]};
         }
@@ -1289,6 +1292,20 @@ function renderHorariosConfig(){
     const DOW_ORDER=[1,2,3,4,5,6,0];
     tabs.querySelectorAll('button').forEach((btn,i)=>{btn.classList.toggle('active',DOW_ORDER[i]===activeDow);});
   }
+  const cfgActual=configs[activeConfigAvion]||DEFAULT_CONFIG_AVION;
+  const estaActivo=cfgActual.activo!==false;
+  document.getElementById('avion-toggle-wrap').innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem .85rem;background:${estaActivo?'rgba(57,211,83,.07)':'rgba(248,81,73,.07)'};border:1px solid ${estaActivo?'rgba(57,211,83,.25)':'rgba(248,81,73,.3)'};border-radius:var(--radius);margin-bottom:.85rem">
+      <div>
+        <span style="font-family:var(--font-mono);font-size:12px;color:${estaActivo?'var(--green)':'var(--red)'};letter-spacing:.1em">
+          ${estaActivo?'✓ AERONAVE DISPONIBLE':'✕ AERONAVE NO DISPONIBLE'}
+        </span>
+        <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);margin-top:2px;letter-spacing:.05em">
+          ${estaActivo?'Los usuarios pueden reservar esta aeronave':'No aparece en el sistema de reservas'}
+        </div>
+      </div>
+      <button onclick="toggleActivoAvion()" style="font-size:12px;padding:6px 16px;${estaActivo?'color:var(--red);border-color:var(--red);background:rgba(248,81,73,.08)':'color:var(--green);border-color:var(--green);background:rgba(57,211,83,.08)'}">${estaActivo?'DESHABILITAR':'HABILITAR'}</button>
+    </div>`;
   document.getElementById('horarios-config').innerHTML=
     '<div style="font-family:var(--font-mono);font-size:11px;color:var(--amber);margin-bottom:.6rem;letter-spacing:.1em">'+DIAS_NOMBRE[activeDow].toUpperCase()+'</div>'+
     '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">'+
@@ -1306,6 +1323,16 @@ function renderHorariosConfig(){
 }
 
 window.selectDowTab=function(dow){activeDow=dow;renderHorariosConfig();};
+
+window.toggleActivoAvion=async function(){
+  if(!configs[activeConfigAvion])configs[activeConfigAvion]={...DEFAULT_CONFIG_AVION,horariosDia:{...DEFAULT_CONFIG_AVION.horariosDia},diasBloqueados:[],activo:true};
+  const actual=configs[activeConfigAvion].activo!==false;
+  const nuevo=!actual;
+  if(!nuevo&&!confirm('¿Deshabilitar '+activeConfigAvion+'? Los usuarios no podrán verla ni reservarla hasta que la vuelvas a habilitar.'))return;
+  configs[activeConfigAvion].activo=nuevo;
+  await saveConfigAvion(activeConfigAvion);
+  renderHorariosConfig();
+};
 
 window.toggleHorario=async function(h,on){
   if(!configs[activeConfigAvion])configs[activeConfigAvion]={...DEFAULT_CONFIG_AVION,horariosDia:{...DEFAULT_CONFIG_AVION.horariosDia},diasBloqueados:[]};
