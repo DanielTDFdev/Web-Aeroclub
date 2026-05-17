@@ -1037,9 +1037,15 @@ function renderMisTurnos(data){
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <span class="badge badge-${r.estado}">${r.estado}</span>
-        ${r.estado==='pendiente'?`<button class="danger" onclick="cancelarTurnoAlumno('${r.key}')" style="font-size:11px;padding:4px 10px">CANCELAR</button>`:''}
+        ${(r.estado==='pendiente'||(r.estado==='aprobado'&&!turnoYaPasoStr(r.fecha,r.hora)))?`<button class="danger" onclick="cancelarTurnoAlumno('${r.key}')" style="font-size:11px;padding:4px 10px">CANCELAR</button>`:''}
       </div>
     </div>`).join('');
+}
+
+function turnoYaPasoStr(fecha,hora){
+  const[y,m,d]=fecha.split('-').map(Number);
+  const[hh,mm]=(hora||'00:00').split(':').map(Number);
+  return new Date(y,m-1,d,hh,mm,0).getTime()<Date.now();
 }
 
 window.cancelarTurnoAlumno=async function(key){
