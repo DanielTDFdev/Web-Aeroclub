@@ -901,7 +901,6 @@ function slotsTomados(ds,avion,data){
   const taken=new Set();
   reservas.forEach(r=>{
     if(r.horaInicio&&r.horaFin){
-      // reserva de rango: bloquear todos los slots entre inicio y fin (exclusivo)
       const horas=horasParaDia(ds,avion);
       const idxIni=horas.indexOf(r.horaInicio);
       const idxFin=horas.indexOf(r.horaFin);
@@ -933,23 +932,24 @@ function selectSlot(h){
   get(ref(db,'reservas')).then(s=>renderSlots(selectedDay,s.val()));
   const rol=session?.rol||'alumno';
   if(rol==='piloto'){
-    // construir selector de hora fin
-    const horas=horasParaDia(selectedDay,selectedAvion);
-    const idx=horas.indexOf(h);
-    // slots disponibles para fin: desde h+1 hasta el primer slot tomado o fin de lista
     get(ref(db,'reservas')).then(snap=>{
       const taken=slotsTomados(selectedDay,selectedAvion,snap.val());
+      const horas=horasParaDia(selectedDay,selectedAvion);
+      const idx=horas.indexOf(h);
       const opcionesFin=[];
       for(let i=idx+1;i<horas.length;i++){
-        if(taken.includes(horas[i]))break; // no puede saltar un slot tomado
+        if(taken.includes(horas[i]))break;
         opcionesFin.push(horas[i]);
       }
       let finHtml='<div class="field" style="margin-top:.75rem"><label>Hora de fin (exclusiva)</label><select id="slot-fin-select" onchange="actualizarLabelRango()">';
       finHtml+=`<option value="${h}">Solo ${h} hs (1 slot)</option>`;
-      opcionesFin.forEach(hf=>{finHtml+=`<option value="${hf}">${hf} hs</option>`;});
+      opcionesFin.forEach(hf=>{
+        const slots=horas.indexOf(hf)-idx;
+        finHtml+=`<option value="${hf}">${hf} hs (${slots} slots)</option>`;
+      });
       finHtml+='</select></div>';
       document.getElementById('slot-fin-wrap').innerHTML=finHtml;
-      selectedSlotFin=h; // por defecto fin = inicio (1 slot)
+      selectedSlotFin=h;
       actualizarLabelRango();
     });
   } else {
@@ -968,7 +968,7 @@ window.actualizarLabelRango=function(){
   const horas=horasParaDia(selectedDay,selectedAvion);
   const idxIni=horas.indexOf(selectedSlot);
   const idxFin=horas.indexOf(selectedSlotFin);
-  const count=idxFin>=idxIni?(idxFin-idxIni+1):1; // slots que ocupa
+  const count=idxFin>idxIni?(idxFin-idxIni):1;
   const label=selectedSlotFin===selectedSlot
     ?selectedAvion+' — '+selectedDay+' a las '+selectedSlot+' hs (1 slot)'
     :selectedAvion+' — '+selectedDay+' de '+selectedSlot+' a '+selectedSlotFin+' hs ('+count+' slots)';
@@ -997,10 +997,6 @@ window.confirmarTurno=async function(){
   const estado=esPiloto?'aprobado':'pendiente';
   const horas=horasParaDia(selectedDay,selectedAvion);
   const esRango=esPiloto&&selectedSlotFin&&selectedSlotFin!==selectedSlot;
-  const horaFin=esRango?selectedSlotFin:null;
-  const idxIni=horas.indexOf(selectedSlot);
-  const idxFin=esRango?horas.indexOf(selectedSlotFin):idxIni;
-  const slotsRango=esRango?horas.slice(idxIni,idxFin):[];
   await fbPush('reservas',{
     nombre:session.nombre,
     email:session.email,
@@ -1106,7 +1102,7 @@ function renderTodasReservas(data){
       reservas.forEach(r=>{
         const nombre=r.nombre.split(' ')[0];
         const avLabel=calAvionFiltro==='todos'?`<span style="font-size:9px;opacity:.7">${r.avion||'LV-OAD'}</span><br>`:'';
-        const rangoLabel=r.horaInicio&&r.horaFin?`<span style="font-size:9px;opacity:.8"> ${r.horaInicio}–${r.horaFin}</span><br>`:'';
+        const rangoLabel=r.horaInicio&&r.horaFin?`<span style="font-size:9px;opacity:.8">${r.horaInicio}–${r.horaFin}</span><br>`:'';
         html+=`<div class="cal-block ${r.estado}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'}">${avLabel}${rangoLabel}${nombre}</div>`;
       });
       html+='</td>';
@@ -1180,11 +1176,13 @@ async function vencerTurnosPendientes(data){
   const ahora=Date.now(), LIMITE_MS=14*60*60*1000;
   const promesas=[];
   for(const[k,r] of Object.entries(data)){
-    if(r.estado!=='pendiente')continue;
+    if(r.estado!=='pendiente'&&r.estado!=='aprobado')continue;
     const[y,m,d]=r.fecha.split('-').map(Number);
     const[hh,mm]=(r.hora||'00:00').split(':').map(Number);
     const fechaHoraTurno=new Date(y,m-1,d,hh,mm,0).getTime();
-    if((fechaHoraTurno-ahora)<LIMITE_MS) promesas.push(fbUpdate('reservas/'+k,{estado:'vencido'}));
+    const esAlumno=(r.rol||'alumno')==='alumno';
+    const limite=(r.estado==='pendiente'&&esAlumno)?LIMITE_MS:0;
+    if((fechaHoraTurno-ahora)<limite) promesas.push(fbUpdate('reservas/'+k,{estado:'vencido'}));
   }
   if(promesas.length)await Promise.all(promesas);
 }
