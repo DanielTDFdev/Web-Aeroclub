@@ -167,8 +167,47 @@ footer{border-top:1px solid var(--border);padding:1.5rem 2rem;display:flex;align
   </div>
 </main>
 
+<!-- METEOROLOGÍA -->
+<section style="max-width:600px;margin:0 auto;padding:2rem 2rem 0;">
+  <div style="text-align:center;margin-bottom:1.5rem">
+    <div style="font-family:var(--font-mono);font-size:11px;color:var(--cyan);letter-spacing:.3em;text-transform:uppercase;margin-bottom:.5rem">◈ Condiciones actuales</div>
+    <div style="font-family:var(--font-display);font-size:clamp(20px,3vw,28px);color:var(--amber2);letter-spacing:.08em">AERÓDROMO SAWE</div>
+  </div>
+  <div id="meteo-widget" style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:1.5rem;position:relative;overflow:hidden;">
+    <div style="position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:.4"></div>
+    <div id="meteo-loading" style="font-family:var(--font-mono);font-size:12px;color:var(--text3);text-align:center;padding:1rem">// Cargando datos meteorológicos...</div>
+    <div id="meteo-data" style="display:none">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
+        <div style="text-align:center;padding:1rem;background:var(--bg);border:1px solid var(--border);border-radius:4px">
+          <div id="meteo-temp" style="font-family:var(--font-display);font-size:42px;font-weight:700;color:var(--cyan);text-shadow:0 0 20px rgba(0,200,212,.35);line-height:1"></div>
+          <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.15em;margin-top:4px">TEMPERATURA</div>
+        </div>
+        <div style="text-align:center;padding:1rem;background:var(--bg);border:1px solid var(--border);border-radius:4px">
+          <div id="meteo-icon" style="font-size:36px;line-height:1;margin-bottom:4px"></div>
+          <div id="meteo-desc" style="font-family:var(--font-mono);font-size:11px;color:var(--text2);letter-spacing:.08em"></div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+        <div style="text-align:center;padding:.75rem .5rem;background:var(--bg);border:1px solid var(--border);border-radius:4px">
+          <div id="meteo-viento" style="font-family:var(--font-mono);font-size:16px;color:var(--amber);font-weight:700"></div>
+          <div style="font-family:var(--font-mono);font-size:9px;color:var(--text3);letter-spacing:.12em;margin-top:3px">VIENTO km/h</div>
+        </div>
+        <div style="text-align:center;padding:.75rem .5rem;background:var(--bg);border:1px solid var(--border);border-radius:4px">
+          <div id="meteo-humedad" style="font-family:var(--font-mono);font-size:16px;color:var(--amber);font-weight:700"></div>
+          <div style="font-family:var(--font-mono);font-size:9px;color:var(--text3);letter-spacing:.12em;margin-top:3px">HUMEDAD %</div>
+        </div>
+        <div style="text-align:center;padding:.75rem .5rem;background:var(--bg);border:1px solid var(--border);border-radius:4px">
+          <div id="meteo-rafagas" style="font-family:var(--font-mono);font-size:16px;color:var(--amber);font-weight:700"></div>
+          <div style="font-family:var(--font-mono);font-size:9px;color:var(--text3);letter-spacing:.12em;margin-top:3px">RÁFAGAS km/h</div>
+        </div>
+      </div>
+      <div id="meteo-update" style="font-family:var(--font-mono);font-size:10px;color:var(--text3);text-align:right;margin-top:.75rem;letter-spacing:.06em"></div>
+    </div>
+  </div>
+</section>
+
 <footer>
-  <span class="footer-brand">◈ AEROCLUB RÍO GRANDE — © 2026 — v1.0</span>
+  <span class="footer-brand">◈ AEROCLUB RÍO GRANDE — © 2026 — v1.3</span>
   <span class="footer-coords">53°46'S 67°45'O · SAWE · RÍO GRANDE, TIERRA DEL FUEGO</span>
 </footer>
 
@@ -177,6 +216,52 @@ footer{border-top:1px solid var(--border);padding:1.5rem 2rem;display:flex;align
   if(localStorage.getItem('arc-theme')==='light')
     document.documentElement.classList.add('light');
 })();
+// ── METEOROLOGÍA ──────────────────────────────────────────────
+async function cargarMeteo(){
+  try{
+    const url='https://api.open-meteo.com/v1/forecast?latitude=-53.7833&longitude=-67.7&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_gusts_10m&wind_speed_unit=kmh&timezone=America/Argentina/Ushuaia';
+    const res=await fetch(url);
+    const data=await res.json();
+    const c=data.current;
+
+    const WMO={
+      0:'Despejado ☀️', 1:'Mayormente despejado 🌤️', 2:'Parcialmente nublado ⛅', 3:'Nublado ☁️',
+      45:'Niebla 🌫️', 48:'Niebla con escarcha 🌫️',
+      51:'Llovizna leve 🌦️', 53:'Llovizna moderada 🌦️', 55:'Llovizna intensa 🌧️',
+      61:'Lluvia leve 🌧️', 63:'Lluvia moderada 🌧️', 65:'Lluvia intensa 🌧️',
+      71:'Nieve leve 🌨️', 73:'Nieve moderada 🌨️', 75:'Nieve intensa ❄️',
+      77:'Granizo ❄️', 80:'Chaparrones leves 🌦️', 81:'Chaparrones moderados 🌧️',
+      82:'Chaparrones intensos ⛈️', 85:'Nevadas leves 🌨️', 86:'Nevadas intensas ❄️',
+      95:'Tormenta ⛈️', 96:'Tormenta con granizo ⛈️', 99:'Tormenta severa ⛈️'
+    };
+
+    const desc=WMO[c.weather_code]||'Variable';
+    const partes=desc.split(' ');
+    const icono=partes[partes.length-1];
+    const texto=partes.slice(0,-1).join(' ');
+
+    document.getElementById('meteo-temp').textContent=Math.round(c.temperature_2m)+'°C';
+    document.getElementById('meteo-icon').textContent=icono;
+    document.getElementById('meteo-desc').textContent=texto.toUpperCase();
+    document.getElementById('meteo-viento').textContent=Math.round(c.wind_speed_10m);
+    document.getElementById('meteo-humedad').textContent=Math.round(c.relative_humidity_2m);
+    document.getElementById('meteo-rafagas').textContent=Math.round(c.wind_gusts_10m);
+
+    const now=new Date();
+    document.getElementById('meteo-update').textContent=
+      '// Actualizado: '+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+' hs';
+
+    document.getElementById('meteo-loading').style.display='none';
+    document.getElementById('meteo-data').style.display='block';
+  } catch(e){
+    document.getElementById('meteo-loading').textContent='// Error al cargar datos meteorológicos.';
+  }
+}
+cargarMeteo();
+setInterval(cargarMeteo, 10*60*1000); // actualizar cada 10 min
+
+
+
 function toggleTheme(){
   const isLight=document.documentElement.classList.toggle('light');
   localStorage.setItem('arc-theme',isLight?'light':'dark');
