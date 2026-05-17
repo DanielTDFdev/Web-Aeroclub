@@ -288,6 +288,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       </div>
       <div id="slot-confirm" style="display:none;margin-top:1.25rem">
         <div class="info-box">▸ Turno seleccionado: <strong id="confirm-label"></strong></div>
+        <div id="slot-fin-wrap"></div>
         <div class="field"><label>Observaciones (opcional)</label><input type="text" id="al-obs" placeholder="Ej: vuelo de navegación, primer solo..."></div>
         <div style="font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-bottom:.5rem;letter-spacing:.05em" id="confirm-nota"></div>
         <div id="turno-err" class="error"></div>
@@ -583,7 +584,7 @@ const DEFAULT_CONFIG_AVION={
 // Estado global
 let configs={};       // configs['LV-OAD'] = {horariosDia, diasBloqueados}
 let session=null;
-let selectedDay=null, selectedSlot=null, selectedAvion=null;
+let selectedDay=null, selectedSlot=null, selectedSlotFin=null, selectedAvion=null;
 let unsubReservas=null;
 let activeDow=1;
 let activeConfigAvion='LV-OAD';  // avión activo en cfg horarios/días
@@ -895,10 +896,26 @@ function selectDay(ds){
   get(ref(db,'reservas')).then(s=>renderSlots(ds,s.val()));
 }
 
+function slotsTomados(ds,avion,data){
+  const reservas=rArr(data).filter(r=>r.fecha===ds&&r.avion===avion&&r.estado!=='cancelado'&&r.estado!=='vencido');
+  const taken=new Set();
+  reservas.forEach(r=>{
+    if(r.horaInicio&&r.horaFin){
+      // reserva de rango: bloquear todos los slots entre inicio y fin (exclusivo)
+      const horas=horasParaDia(ds,avion);
+      const idxIni=horas.indexOf(r.horaInicio);
+      const idxFin=horas.indexOf(r.horaFin);
+      for(let i=idxIni;i<idxFin;i++)if(horas[i])taken.add(horas[i]);
+    } else {
+      taken.add(r.hora);
+    }
+  });
+  return [...taken];
+}
+
 function renderSlots(ds,data){
   const grid=document.getElementById('slots-grid');if(!grid||!selectedAvion)return;
-  // bloquear solo reservas del mismo avión
-  const taken=rArr(data).filter(r=>r.fecha===ds&&r.avion===selectedAvion&&r.estado!=='cancelado'&&r.estado!=='vencido').map(r=>r.hora);
+  const taken=slotsTomados(ds,selectedAvion,data);
   document.getElementById('selected-day-label').textContent=ds;
   document.getElementById('slots-section').style.display='block';
   const avail=horasParaDia(ds,selectedAvion).filter(h=>ok12h(ds,h));
@@ -912,20 +929,57 @@ function renderSlots(ds,data){
 
 function selectSlot(h){
   selectedSlot=h;
+  selectedSlotFin=null;
   get(ref(db,'reservas')).then(s=>renderSlots(selectedDay,s.val()));
   const rol=session?.rol||'alumno';
-  document.getElementById('confirm-label').textContent=selectedAvion+' — '+selectedDay+' a las '+h+' hs';
-  document.getElementById('confirm-nota').textContent=
-    rol==='alumno'
-      ? '▸ Requerirá aprobación del instructor. Se confirma con 45 min de anticipación mínima.'
-      : '▸ Se aprobará automáticamente al confirmar.';
+  if(rol==='piloto'){
+    // construir selector de hora fin
+    const horas=horasParaDia(selectedDay,selectedAvion);
+    const idx=horas.indexOf(h);
+    // slots disponibles para fin: desde h+1 hasta el primer slot tomado o fin de lista
+    get(ref(db,'reservas')).then(snap=>{
+      const taken=slotsTomados(selectedDay,selectedAvion,snap.val());
+      const opcionesFin=[];
+      for(let i=idx+1;i<horas.length;i++){
+        if(taken.includes(horas[i]))break; // no puede saltar un slot tomado
+        opcionesFin.push(horas[i]);
+      }
+      let finHtml='<div class="field" style="margin-top:.75rem"><label>Hora de fin (exclusiva)</label><select id="slot-fin-select" onchange="actualizarLabelRango()">';
+      finHtml+=`<option value="${h}">Solo ${h} hs (1 slot)</option>`;
+      opcionesFin.forEach(hf=>{finHtml+=`<option value="${hf}">${hf} hs</option>`;});
+      finHtml+='</select></div>';
+      document.getElementById('slot-fin-wrap').innerHTML=finHtml;
+      selectedSlotFin=h; // por defecto fin = inicio (1 slot)
+      actualizarLabelRango();
+    });
+  } else {
+    document.getElementById('slot-fin-wrap').innerHTML='';
+    document.getElementById('confirm-label').textContent=selectedAvion+' — '+selectedDay+' a las '+h+' hs';
+    document.getElementById('confirm-nota').textContent='▸ Requerirá aprobación del instructor. Se confirma con 45 min de anticipación mínima.';
+  }
   document.getElementById('slot-confirm').style.display='block';
   hideEl('turno-err');hideEl('turno-ok');
 }
 
+window.actualizarLabelRango=function(){
+  const sel=document.getElementById('slot-fin-select');
+  if(!sel)return;
+  selectedSlotFin=sel.value;
+  const horas=horasParaDia(selectedDay,selectedAvion);
+  const idxIni=horas.indexOf(selectedSlot);
+  const idxFin=horas.indexOf(selectedSlotFin);
+  const count=idxFin>=idxIni?(idxFin-idxIni+1):1; // slots que ocupa
+  const label=selectedSlotFin===selectedSlot
+    ?selectedAvion+' — '+selectedDay+' a las '+selectedSlot+' hs (1 slot)'
+    :selectedAvion+' — '+selectedDay+' de '+selectedSlot+' a '+selectedSlotFin+' hs ('+count+' slots)';
+  document.getElementById('confirm-label').textContent=label;
+  document.getElementById('confirm-nota').textContent='▸ Se aprobará automáticamente al confirmar.';
+};
+
 window.cancelarSeleccion=function(){
-  selectedSlot=null;
+  selectedSlot=null;selectedSlotFin=null;
   document.getElementById('slot-confirm').style.display='none';
+  document.getElementById('slot-fin-wrap').innerHTML='';
   get(ref(db,'reservas')).then(s=>renderSlots(selectedDay,s.val()));
 };
 
@@ -941,11 +995,18 @@ window.confirmarTurno=async function(){
   const rol=session.rol||'alumno';
   const esPiloto=rol==='piloto';
   const estado=esPiloto?'aprobado':'pendiente';
+  const horas=horasParaDia(selectedDay,selectedAvion);
+  const esRango=esPiloto&&selectedSlotFin&&selectedSlotFin!==selectedSlot;
+  const horaFin=esRango?selectedSlotFin:null;
+  const idxIni=horas.indexOf(selectedSlot);
+  const idxFin=esRango?horas.indexOf(selectedSlotFin):idxIni;
+  const slotsRango=esRango?horas.slice(idxIni,idxFin):[];
   await fbPush('reservas',{
     nombre:session.nombre,
     email:session.email,
     fecha:selectedDay,
     hora:selectedSlot,
+    ...(esRango?{horaInicio:selectedSlot,horaFin:selectedSlotFin}:{}),
     avion:selectedAvion,
     obs,
     estado,
@@ -953,7 +1014,8 @@ window.confirmarTurno=async function(){
     ts:new Date().toISOString()
   });
   if(esPiloto){
-    showOk('turno-ok','// TURNO CONFIRMADO — '+selectedAvion+' '+selectedDay+' '+selectedSlot+' hs');
+    const label=esRango?selectedSlot+' a '+selectedSlotFin+' hs':selectedSlot+' hs';
+    showOk('turno-ok','// TURNO CONFIRMADO — '+selectedAvion+' '+selectedDay+' '+label);
   } else {
     showOk('turno-ok','// TURNO SOLICITADO — Pendiente de aprobación por instructor.');
   }
@@ -1044,7 +1106,8 @@ function renderTodasReservas(data){
       reservas.forEach(r=>{
         const nombre=r.nombre.split(' ')[0];
         const avLabel=calAvionFiltro==='todos'?`<span style="font-size:9px;opacity:.7">${r.avion||'LV-OAD'}</span><br>`:'';
-        html+=`<div class="cal-block ${r.estado}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'}">${avLabel}${nombre}</div>`;
+        const rangoLabel=r.horaInicio&&r.horaFin?`<span style="font-size:9px;opacity:.8"> ${r.horaInicio}–${r.horaFin}</span><br>`:'';
+        html+=`<div class="cal-block ${r.estado}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'}">${avLabel}${rangoLabel}${nombre}</div>`;
       });
       html+='</td>';
     });
@@ -1067,7 +1130,9 @@ window.abrirModal=function(key){
   const r=_reservasCache[key];if(!r)return;
   document.getElementById('md-avion').textContent=r.avion||'LV-OAD';
   document.getElementById('md-fecha').textContent=r.fecha;
-  document.getElementById('md-hora').textContent=r.hora+' hs';
+  document.getElementById('md-hora').textContent=r.horaInicio&&r.horaFin
+    ?r.horaInicio+' a '+r.horaFin+' hs (exclusivo)'
+    :r.hora+' hs';
   document.getElementById('md-nombre').textContent=r.nombre;
   document.getElementById('md-email').textContent=r.email;
   const obsRow=document.getElementById('md-obs-row');
@@ -1078,7 +1143,7 @@ window.abrirModal=function(key){
     const dt=new Date(r.ts);
     const DIAS=['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
     const MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-    const fmtTs=DIAS[dt.getDay()]+' '+dt.getDate()+' de '+MESES[dt.getMonth()]+' de '+dt.getFullYear()+', '+String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0')+' hs';
+    const fmtTs='Solicitado el día '+DIAS[dt.getDay()]+' '+dt.getDate()+' de '+MESES[dt.getMonth()]+' de '+dt.getFullYear()+', '+String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0')+' hs';
     document.getElementById('md-ts').textContent=fmtTs;
   } else {
     document.getElementById('md-ts').textContent='—';
@@ -1115,13 +1180,11 @@ async function vencerTurnosPendientes(data){
   const ahora=Date.now(), LIMITE_MS=14*60*60*1000;
   const promesas=[];
   for(const[k,r] of Object.entries(data)){
-    if(r.estado!=='pendiente'&&r.estado!=='aprobado')continue;
+    if(r.estado!=='pendiente')continue;
     const[y,m,d]=r.fecha.split('-').map(Number);
     const[hh,mm]=(r.hora||'00:00').split(':').map(Number);
     const fechaHoraTurno=new Date(y,m-1,d,hh,mm,0).getTime();
-    const esAlumno=(r.rol||'alumno')==='alumno';
-    const limite=(r.estado==='pendiente'&&esAlumno)?LIMITE_MS:0;
-    if((fechaHoraTurno-ahora)<limite) promesas.push(fbUpdate('reservas/'+k,{estado:'vencido'}));
+    if((fechaHoraTurno-ahora)<LIMITE_MS) promesas.push(fbUpdate('reservas/'+k,{estado:'vencido'}));
   }
   if(promesas.length)await Promise.all(promesas);
 }
