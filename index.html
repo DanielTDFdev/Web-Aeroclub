@@ -197,7 +197,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v2.0</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v2.1</div>
   </div>
 </div>
 
@@ -1024,6 +1024,14 @@ window.confirmarTurno=async function(){
 };
 
 // ── MIS TURNOS ─────────────────────────────────────────────────
+function fmtFechaLinda(fechaStr){
+  const DIAS=['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  const MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  const[y,m,d]=fechaStr.split('-').map(Number);
+  const dt=new Date(y,m-1,d,12,0,0);
+  return DIAS[dt.getDay()]+' '+d+' de '+MESES[m-1]+' de '+y;
+}
+
 function renderMisTurnos(data){
   const el=document.getElementById('mis-turnos-list');
   const mis=rArr(data).filter(r=>r.email===session.email).sort((a,b)=>(a.fecha+a.hora).localeCompare(b.fecha+b.hora));
@@ -1031,7 +1039,7 @@ function renderMisTurnos(data){
   el.innerHTML=mis.map(r=>`
     <div class="reserva-item">
       <div>
-        <div class="reserva-fecha">${r.fecha} — ${r.horaInicio&&r.horaFin?r.horaInicio+' a '+r.horaFin+' hs':r.hora+' hs'}</div>
+        <div class="reserva-fecha">${fmtFechaLinda(r.fecha)} — ${r.horaInicio&&r.horaFin?r.horaInicio+' a '+r.horaFin+' hs':r.hora+' hs'}</div>
         <div class="reserva-avion">✈ ${r.avion||'LV-OAD'}</div>
         ${r.obs?`<div class="reserva-obs">${r.obs}</div>`:''}
       </div>
