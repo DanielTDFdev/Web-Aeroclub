@@ -29,7 +29,7 @@
   --border:rgba(0,144,160,0.2);--border2:rgba(0,144,160,0.45);
 }
 body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px);pointer-events:none;z-index:9999;}
-body{font-family:var(--font-ui);font-size:17px;color:var(--text);background:var(--bg);min-height:100vh;letter-spacing:.02em;transition:background .25s,color .25s;}
+body{font-family:var(--font-ui);font-size:15px;color:var(--text);background:var(--bg);min-height:100vh;letter-spacing:.02em;transition:background .25s,color .25s;}
 
 .hero{position:relative;width:100%;height:280px;overflow:hidden;}
 .hero img{width:100%;height:100%;object-fit:cover;object-position:center 60%;filter:brightness(.45) saturate(.7);}
@@ -38,18 +38,18 @@ body{font-family:var(--font-ui);font-size:17px;color:var(--text);background:var(
 .hero-text{position:absolute;bottom:1.5rem;left:1.5rem;z-index:2;}
 .hero-aeroclub{font-family:var(--font-ui);font-size:clamp(13px,2vw,17px);color:var(--text2);letter-spacing:.22em;text-transform:uppercase;margin-bottom:.4rem;font-weight:600;}
 .hero-callsign{font-family:var(--font-mono);font-size:clamp(28px,5vw,48px);color:var(--amber2);text-shadow:0 0 30px rgba(240,165,0,.6);line-height:1;letter-spacing:.12em;}
-.hero-sub{font-family:var(--font-mono);font-size:16px;color:var(--cyan);letter-spacing:.18em;margin-top:.35rem;opacity:.8;}
-.hero-status{position:absolute;top:1rem;right:1rem;z-index:2;font-family:var(--font-mono);font-size:17px;color:var(--green);letter-spacing:.1em;display:flex;align-items:center;gap:6px;}
+.hero-sub{font-family:var(--font-mono);font-size:12px;color:var(--cyan);letter-spacing:.18em;margin-top:.35rem;opacity:.8;}
+.hero-status{position:absolute;top:1rem;right:1rem;z-index:2;font-family:var(--font-mono);font-size:11px;color:var(--green);letter-spacing:.1em;display:flex;align-items:center;gap:6px;}
 .hero-status::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:blink 2s ease-in-out infinite;}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
 
 .top-nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:.6rem 1.25rem;display:flex;align-items:center;gap:8px;position:sticky;top:0;z-index:100;}
-.nav-brand{font-family:var(--font-mono);font-size:17px;color:var(--amber);letter-spacing:.1em;margin-right:auto;}
+.nav-brand{font-family:var(--font-mono);font-size:13px;color:var(--amber);letter-spacing:.1em;margin-right:auto;}
 .theme-toggle{display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;}
 .theme-toggle-track{width:36px;height:20px;border-radius:10px;background:var(--bg4);border:1px solid var(--border2);position:relative;transition:background .25s;}
 .theme-toggle-thumb{width:14px;height:14px;border-radius:50%;background:var(--cyan);position:absolute;top:2px;left:2px;transition:transform .25s,background .25s;box-shadow:0 0 6px rgba(0,200,212,.5);}
 :root.light .theme-toggle-thumb{transform:translateX(16px);background:var(--amber);}
-.theme-toggle-icon{font-size:17px;line-height:1;}
+.theme-toggle-icon{font-size:13px;line-height:1;}
 
 .container{max-width:760px;margin:0 auto;padding:1.25rem}
 .screen{display:none}.screen.active{display:block}
@@ -59,18 +59,18 @@ body{font-family:var(--font-ui);font-size:17px;color:var(--text);background:var(
 .card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem 1.5rem;margin-bottom:1rem;position:relative;overflow:hidden;}
 .card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:.4;}
 
-h2{font-family:var(--font-mono);font-size:16px;color:var(--cyan);letter-spacing:.18em;text-transform:uppercase;margin-bottom:1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);}
-h3{font-family:var(--font-mono);font-size:16px;color:var(--amber);letter-spacing:.15em;text-transform:uppercase;margin-bottom:.75rem;}
-.section-title{font-family:var(--font-mono);font-size:16px;color:var(--text2);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.6rem;}
+h2{font-family:var(--font-mono);font-size:14px;color:var(--cyan);letter-spacing:.18em;text-transform:uppercase;margin-bottom:1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);}
+h3{font-family:var(--font-mono);font-size:12px;color:var(--amber);letter-spacing:.15em;text-transform:uppercase;margin-bottom:.75rem;}
+.section-title{font-family:var(--font-mono);font-size:10px;color:var(--text2);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.6rem;}
 
 .field{margin-bottom:.85rem}
-.field label{display:block;font-family:var(--font-mono);font-size:17px;color:var(--text2);letter-spacing:.12em;text-transform:uppercase;margin-bottom:5px;}
-.field input,.field select{width:100%;padding:9px 12px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:var(--font-mono);font-size:17px;transition:border-color .2s,box-shadow .2s;}
+.field label{display:block;font-family:var(--font-mono);font-size:11px;color:var(--text2);letter-spacing:.12em;text-transform:uppercase;margin-bottom:5px;}
+.field input,.field select{width:100%;padding:9px 12px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:var(--font-mono);font-size:13px;transition:border-color .2s,box-shadow .2s;}
 .field input:focus,.field select:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 0 3px rgba(0,200,212,.12);}
 .field input::placeholder{color:var(--text3)}
 .field select option{background:var(--bg2);}
 
-button{font-family:var(--font-ui);font-weight:600;letter-spacing:.06em;padding:8px 18px;border:1px solid var(--border2);border-radius:var(--radius);background:transparent;color:var(--text2);font-size:17px;cursor:pointer;transition:all .15s;}
+button{font-family:var(--font-ui);font-weight:600;letter-spacing:.06em;padding:8px 18px;border:1px solid var(--border2);border-radius:var(--radius);background:transparent;color:var(--text2);font-size:13px;cursor:pointer;transition:all .15s;}
 button:hover{background:var(--bg4);color:var(--text);border-color:var(--cyan)}
 button:disabled{opacity:.4;cursor:not-allowed}
 button.primary{background:linear-gradient(135deg,rgba(0,200,212,.15),rgba(0,200,212,.05));color:var(--cyan);border-color:var(--cyan);text-shadow:0 0 12px rgba(0,200,212,.4);}
@@ -78,10 +78,10 @@ button.primary:hover{background:linear-gradient(135deg,rgba(0,200,212,.25),rgba(
 button.danger{background:rgba(248,81,73,.08);color:var(--red);border-color:var(--red);}
 button.danger:hover{background:rgba(248,81,73,.18)}
 .btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:.75rem}
-.link-btn{background:none;border:none;border-bottom:1px solid rgba(0,200,212,.3);color:var(--cyan);cursor:pointer;font-family:var(--font-mono);font-size:16px;padding:0;letter-spacing:.05em;}
+.link-btn{background:none;border:none;border-bottom:1px solid rgba(0,200,212,.3);color:var(--cyan);cursor:pointer;font-family:var(--font-mono);font-size:12px;padding:0;letter-spacing:.05em;}
 .link-btn:hover{color:var(--amber);border-bottom-color:var(--amber)}
 
-.nav-btn{font-family:var(--font-mono);font-size:16px;letter-spacing:.1em;padding:5px 14px;border:1px solid transparent;border-radius:var(--radius);cursor:pointer;background:transparent;color:var(--text3);text-transform:uppercase;}
+.nav-btn{font-family:var(--font-mono);font-size:12px;letter-spacing:.1em;padding:5px 14px;border:1px solid transparent;border-radius:var(--radius);cursor:pointer;background:transparent;color:var(--text3);text-transform:uppercase;}
 .nav-btn:hover{color:var(--text2);border-color:var(--border)}
 .nav-btn.active{color:var(--cyan);border-color:var(--cyan);background:rgba(0,200,212,.08);text-shadow:0 0 10px rgba(0,200,212,.4);}
 .tab-bar{display:flex;gap:8px;align-items:center;margin-bottom:1.25rem;flex-wrap:wrap;padding:.75rem 0;border-bottom:1px solid var(--border);}
@@ -91,11 +91,11 @@ button.danger:hover{background:rgba(248,81,73,.18)}
 .avion-btn{display:flex;flex-direction:column;align-items:center;padding:10px 16px;border:1px solid var(--border);border-radius:var(--radius-lg);cursor:pointer;background:var(--bg2);transition:all .2s;min-width:100px;}
 .avion-btn:hover{border-color:var(--cyan);background:rgba(0,200,212,.06);}
 .avion-btn.active{border-color:var(--amber);background:rgba(240,165,0,.08);box-shadow:0 0 14px rgba(240,165,0,.15);}
-.avion-btn .mat{font-family:var(--font-mono);font-size:17px;font-weight:700;color:var(--amber2);letter-spacing:.1em;}
-.avion-btn .tipo{font-family:var(--font-mono);font-size:16px;color:var(--text3);margin-top:3px;letter-spacing:.08em;}
+.avion-btn .mat{font-family:var(--font-mono);font-size:15px;font-weight:700;color:var(--amber2);letter-spacing:.1em;}
+.avion-btn .tipo{font-family:var(--font-mono);font-size:10px;color:var(--text3);margin-top:3px;letter-spacing:.08em;}
 .avion-btn.active .tipo{color:var(--amber);}
 
-.badge{display:inline-block;font-family:var(--font-mono);font-size:16px;letter-spacing:.12em;text-transform:uppercase;padding:3px 10px;border-radius:var(--radius);}
+.badge{display:inline-block;font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;padding:3px 10px;border-radius:var(--radius);}
 .badge-pendiente{background:rgba(240,165,0,.12);color:var(--amber);border:1px solid var(--amber-dim)}
 .badge-aprobado{background:rgba(57,211,83,.1);color:var(--green);border:1px solid rgba(57,211,83,.3)}
 .badge-cancelado{background:rgba(248,81,73,.1);color:var(--red);border:1px solid rgba(248,81,73,.25)}
@@ -104,7 +104,7 @@ button.danger:hover{background:rgba(248,81,73,.18)}
 .badge-piloto{background:rgba(240,165,0,.1);color:var(--amber);border:1px solid rgba(240,165,0,.3)}
 
 .days-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:1rem}
-.day-btn{padding:10px 4px;text-align:center;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-family:var(--font-mono);font-size:17px;background:var(--bg2);color:var(--text2);line-height:1.5;transition:all .15s;}
+.day-btn{padding:10px 4px;text-align:center;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-family:var(--font-mono);font-size:11px;background:var(--bg2);color:var(--text2);line-height:1.5;transition:all .15s;}
 .day-btn:hover{border-color:var(--cyan);color:var(--cyan);background:rgba(0,200,212,.06)}
 .day-btn.selected{border:1px solid var(--cyan);color:var(--cyan);background:rgba(0,200,212,.1);box-shadow:0 0 12px rgba(0,200,212,.15)}
 .day-btn.blocked{background:rgba(248,81,73,.06);color:var(--red);border-color:rgba(248,81,73,.25);cursor:not-allowed}
@@ -113,38 +113,38 @@ button.danger:hover{background:rgba(248,81,73,.18)}
 .day-btn-festivo{font-size:8px;line-height:1.2;opacity:.85;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px;}
 
 .slots-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;margin-top:.5rem}
-.slot{padding:12px;text-align:center;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--font-mono);font-size:17px;cursor:pointer;background:var(--bg2);color:var(--text2);transition:all .15s;}
+.slot{padding:12px;text-align:center;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--font-mono);font-size:13px;cursor:pointer;background:var(--bg2);color:var(--text2);transition:all .15s;}
 .slot:hover{border-color:var(--amber);color:var(--amber);background:rgba(240,165,0,.06)}
 .slot.selected{border-color:var(--amber);color:var(--amber);background:rgba(240,165,0,.1);box-shadow:0 0 12px rgba(240,165,0,.15)}
 .slot.taken{background:var(--bg);color:var(--text3);cursor:not-allowed;text-decoration:line-through;border-color:var(--border)}
 
 .reserva-item{padding:.85rem 0;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;}
 .reserva-item:last-child{border-bottom:none}
-.reserva-fecha{font-family:var(--font-mono);font-size:16px;color:var(--amber);}
-.reserva-avion{font-family:var(--font-mono);font-size:17px;color:var(--cyan);letter-spacing:.1em;margin-top:2px;}
-.reserva-nombre{font-size:17px;color:var(--text2);margin-top:3px}
-.reserva-obs{font-family:var(--font-mono);font-size:17px;color:var(--text3);margin-top:3px}
+.reserva-fecha{font-family:var(--font-mono);font-size:14px;color:var(--amber);}
+.reserva-avion{font-family:var(--font-mono);font-size:11px;color:var(--cyan);letter-spacing:.1em;margin-top:2px;}
+.reserva-nombre{font-size:13px;color:var(--text2);margin-top:3px}
+.reserva-obs{font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-top:3px}
 
 .stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:1.25rem}
 .stat{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-lg);padding:.85rem 1rem;text-align:center;position:relative;overflow:hidden;}
 .stat::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:.3;}
 .stat .num{font-family:var(--font-mono);font-size:28px;color:var(--cyan);text-shadow:0 0 20px rgba(0,200,212,.4);}
-.stat .lbl{font-family:var(--font-mono);font-size:16px;color:var(--text3);letter-spacing:.15em;text-transform:uppercase;margin-top:4px;}
+.stat .lbl{font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.15em;text-transform:uppercase;margin-top:4px;}
 
-.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-family:var(--font-mono);font-size:17px;}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-family:var(--font-mono);font-size:13px;}
 .toggle-row:last-child{border-bottom:none}
 input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cyan);}
 
-.error{font-family:var(--font-mono);font-size:16px;color:var(--red);margin-top:6px;display:none;padding:6px 10px;background:rgba(248,81,73,.08);border-radius:var(--radius);border-left:2px solid var(--red);}
-.success-msg{font-family:var(--font-mono);font-size:16px;color:var(--green);margin-top:6px;display:none;padding:6px 10px;background:rgba(57,211,83,.08);border-radius:var(--radius);border-left:2px solid var(--green);}
-.empty{font-family:var(--font-mono);color:var(--text3);font-size:17px;padding:1rem 0;letter-spacing:.05em;}
-.info-box{padding:.85rem 1rem;background:rgba(0,200,212,.06);border:1px solid rgba(0,200,212,.2);border-radius:var(--radius);font-family:var(--font-mono);font-size:17px;color:var(--cyan);margin-bottom:.75rem;}
+.error{font-family:var(--font-mono);font-size:12px;color:var(--red);margin-top:6px;display:none;padding:6px 10px;background:rgba(248,81,73,.08);border-radius:var(--radius);border-left:2px solid var(--red);}
+.success-msg{font-family:var(--font-mono);font-size:12px;color:var(--green);margin-top:6px;display:none;padding:6px 10px;background:rgba(57,211,83,.08);border-radius:var(--radius);border-left:2px solid var(--green);}
+.empty{font-family:var(--font-mono);color:var(--text3);font-size:13px;padding:1rem 0;letter-spacing:.05em;}
+.info-box{padding:.85rem 1rem;background:rgba(0,200,212,.06);border:1px solid rgba(0,200,212,.2);border-radius:var(--radius);font-family:var(--font-mono);font-size:13px;color:var(--cyan);margin-bottom:.75rem;}
 
 .row{display:flex;gap:12px}.row .field{flex:1}
 .login-wrap{max-width:400px;margin:0 auto;padding-top:1.5rem}
 .login-card{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:1.5rem;position:relative;overflow:hidden;}
 .login-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--cyan),var(--amber),transparent);}
-.login-copyright{text-align:center;margin-top:.75rem;font-family:var(--font-mono);font-size:17px;color:var(--text3);letter-spacing:.08em;}
+.login-copyright{text-align:center;margin-top:.75rem;font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.08em;}
 
 ::-webkit-scrollbar{width:6px}
 ::-webkit-scrollbar-track{background:var(--bg)}
@@ -153,19 +153,19 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 /* CALENDARIO SEMANAL */
 .cal-wrap{overflow-x:auto;margin-top:.5rem;}
 .cal-table{width:100%;border-collapse:collapse;min-width:520px;}
-.cal-table th{font-family:var(--font-mono);font-size:17px;color:var(--text2);letter-spacing:.1em;text-transform:uppercase;padding:8px 6px;border-bottom:1px solid var(--border2);border-right:1px solid var(--border);text-align:center;background:var(--bg2);}
+.cal-table th{font-family:var(--font-mono);font-size:11px;color:var(--text2);letter-spacing:.1em;text-transform:uppercase;padding:8px 6px;border-bottom:1px solid var(--border2);border-right:1px solid var(--border);text-align:center;background:var(--bg2);}
 .cal-table th.today-col{color:var(--cyan);border-bottom-color:var(--cyan);}
 .cal-table th:first-child{width:64px;color:var(--text3);}
 .cal-table td{border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:4px;vertical-align:top;background:var(--bg);min-height:36px;}
 .cal-table td.today-col{background:rgba(0,200,212,.03);}
-.cal-table td:first-child{font-family:var(--font-mono);font-size:17px;color:var(--text3);text-align:center;padding:6px 4px;white-space:nowrap;background:var(--bg2);border-right:1px solid var(--border2);}
-.cal-block{padding:5px 7px;border-radius:var(--radius);cursor:pointer;margin-bottom:3px;font-family:var(--font-mono);font-size:17px;line-height:1.4;transition:filter .15s;}
+.cal-table td:first-child{font-family:var(--font-mono);font-size:11px;color:var(--text3);text-align:center;padding:6px 4px;white-space:nowrap;background:var(--bg2);border-right:1px solid var(--border2);}
+.cal-block{padding:5px 7px;border-radius:var(--radius);cursor:pointer;margin-bottom:3px;font-family:var(--font-mono);font-size:11px;line-height:1.4;transition:filter .15s;}
 .cal-block:hover{filter:brightness(1.25);}
 .cal-block.pendiente{background:rgba(240,165,0,.15);border:1px solid var(--amber-dim);color:var(--amber);}
 .cal-block.aprobado{background:rgba(57,211,83,.1);border:1px solid rgba(57,211,83,.3);color:var(--green);}
 .cal-block.cancelado{background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.2);color:var(--red);text-decoration:line-through;opacity:.6;}
 .cal-block.vencido{background:rgba(120,80,200,.08);border:1px solid rgba(120,80,200,.25);color:#a07ef0;text-decoration:line-through;opacity:.55;}
-.cal-empty{font-family:var(--font-mono);font-size:16px;color:var(--text3);padding:.75rem 0;letter-spacing:.05em;}
+.cal-empty{font-family:var(--font-mono);font-size:12px;color:var(--text3);padding:.75rem 0;letter-spacing:.05em;}
 
 /* MODAL */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center;padding:1rem;}
@@ -174,15 +174,15 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 .modal::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--cyan),var(--amber),transparent);}
 .modal-close{position:absolute;top:.75rem;right:.75rem;background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;line-height:1;padding:2px 6px;}
 .modal-close:hover{color:var(--text);}
-.modal-title{font-family:var(--font-mono);font-size:17px;color:var(--cyan);letter-spacing:.15em;text-transform:uppercase;margin-bottom:1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);}
-.modal-row{display:flex;gap:8px;margin-bottom:.5rem;font-family:var(--font-mono);font-size:16px;}
+.modal-title{font-family:var(--font-mono);font-size:13px;color:var(--cyan);letter-spacing:.15em;text-transform:uppercase;margin-bottom:1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);}
+.modal-row{display:flex;gap:8px;margin-bottom:.5rem;font-family:var(--font-mono);font-size:12px;}
 .modal-lbl{color:var(--text3);min-width:80px;letter-spacing:.08em;}
 .modal-val{color:var(--text);}
 .modal-actions{display:flex;gap:8px;margin-top:1rem;flex-wrap:wrap;}
 
 /* selector avión en cal instructor */
 .cal-avion-tabs{display:flex;gap:6px;margin-bottom:.85rem;flex-wrap:wrap;}
-.cal-avion-tab{font-family:var(--font-mono);font-size:16px;padding:5px 14px;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;background:var(--bg2);color:var(--text3);letter-spacing:.1em;transition:all .15s;}
+.cal-avion-tab{font-family:var(--font-mono);font-size:12px;padding:5px 14px;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;background:var(--bg2);color:var(--text3);letter-spacing:.1em;transition:all .15s;}
 .cal-avion-tab:hover{border-color:var(--amber);color:var(--amber);}
 .cal-avion-tab.active{border-color:var(--amber);color:var(--amber2);background:rgba(240,165,0,.08);}
 .cal-avion-tab.all{border-color:var(--cyan);}
@@ -209,8 +209,8 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
     <span class="theme-toggle-icon">☀️</span>
   </div>
   <div id="nav-user-area" style="display:none;align-items:center;gap:8px">
-    <span id="nav-user-name" style="font-family:var(--font-mono);font-size:14px;color:var(--text2)"></span>
-    <button onclick="logout()" style="font-size:13px;padding:4px 12px">SALIR</button>
+    <span id="nav-user-name" style="font-family:var(--font-mono);font-size:12px;color:var(--text2)"></span>
+    <button onclick="logout()" style="font-size:11px;padding:4px 12px">SALIR</button>
   </div>
 </div>
 
@@ -220,10 +220,10 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 <div id="login-screen" class="screen active">
   <div class="login-wrap">
     <div class="login-card">
-      <div style="display:flex;gap:4px;margin-bottom:1.25rem;flex-wrap:wrap">
-        <button class="nav-btn active" id="tab-btn-alumno" style="font-size:12px;padding:4px 10px"     onclick="switchLoginTab('alumno')">Ingresar</button>
-        <button class="nav-btn"        id="tab-btn-registro"   onclick="switchLoginTab('registro')" style="font-size:12px;padding:4px 10px">Registrarme</button>
-        <button class="nav-btn"        id="tab-btn-instructor" onclick="switchLoginTab('instructor')" style="font-size:12px;padding:4px 10px">Instructor</button>
+      <div style="display:flex;gap:6px;margin-bottom:1.25rem">
+        <button class="nav-btn active" id="tab-btn-alumno"     onclick="switchLoginTab('alumno')">Ingresar</button>
+        <button class="nav-btn"        id="tab-btn-registro"   onclick="switchLoginTab('registro')">Registrarme</button>
+        <button class="nav-btn"        id="tab-btn-instructor" onclick="switchLoginTab('instructor')">Instructor</button>
       </div>
       <div id="tab-alumno">
         <div class="field"><label>Email</label><input type="email" id="al-login-email" placeholder="tu@email.com"></div>
@@ -242,7 +242,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <button id="btn-registrar" data-label="CREAR CUENTA" class="primary" style="width:100%;margin-top:.5rem" onclick="registrarAlumno()">CREAR CUENTA</button>
       </div>
       <div id="tab-olvide" style="display:none">
-        <p style="font-family:var(--font-mono);font-size:14px;color:var(--text2);margin-bottom:.85rem;line-height:1.6">Ingresá tu email y te enviamos una contraseña temporal.</p>
+        <p style="font-family:var(--font-mono);font-size:12px;color:var(--text2);margin-bottom:.85rem;line-height:1.6">Ingresá tu email y te enviamos una contraseña temporal.</p>
         <div class="field"><label>Email</label><input type="email" id="olvide-email" placeholder="tu@email.com"></div>
         <div id="olvide-err" class="error"></div>
         <div id="olvide-ok" class="success-msg"></div>
@@ -279,7 +279,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <div class="section-title">▸ Seleccioná el avión</div>
         <div class="avion-selector" id="avion-selector"></div>
       </div>
-      <div id="avion-seleccionado-label" style="display:none;font-family:var(--font-mono);font-size:13px;color:var(--amber);letter-spacing:.1em;margin-bottom:.75rem"></div>
+      <div id="avion-seleccionado-label" style="display:none;font-family:var(--font-mono);font-size:11px;color:var(--amber);letter-spacing:.1em;margin-bottom:.75rem"></div>
       <div class="section-title">▸ Seleccioná un día</div>
       <div class="days-grid" id="days-grid"></div>
       <div id="slots-section" style="display:none">
@@ -290,7 +290,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <div class="info-box">▸ Turno seleccionado: <strong id="confirm-label"></strong></div>
         <div id="slot-fin-wrap"></div>
         <div class="field"><label>Observaciones (opcional)</label><input type="text" id="al-obs" placeholder="Ej: vuelo de navegación, primer solo..."></div>
-        <div style="font-family:var(--font-mono);font-size:13px;color:var(--text3);margin-bottom:.5rem;letter-spacing:.05em" id="confirm-nota"></div>
+        <div style="font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-bottom:.5rem;letter-spacing:.05em" id="confirm-nota"></div>
         <div id="turno-err" class="error"></div>
         <div id="turno-ok" class="success-msg"></div>
         <div class="btn-row">
@@ -310,7 +310,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <div id="perfil-datos-err" class="error"></div>
       <div id="perfil-datos-ok" class="success-msg"></div>
       <div style="margin-bottom:.75rem">
-        <span style="font-family:var(--font-mono);font-size:13px;color:var(--text3);letter-spacing:.1em">CATEGORÍA: </span>
+        <span style="font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.1em">CATEGORÍA: </span>
         <span id="perfil-rol-badge"></span>
       </div>
       <button class="primary" onclick="guardarDatosPerfil()">GUARDAR DATOS</button>
@@ -359,7 +359,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <div class="modal-row"><span class="modal-lbl">EMAIL</span><span class="modal-val" id="md-email"></span></div>
       <div class="modal-row" id="md-obs-row"><span class="modal-lbl">OBS</span><span class="modal-val" id="md-obs"></span></div>
       <div class="modal-row"><span class="modal-lbl">ESTADO</span><span class="modal-val" id="md-estado"></span></div>
-      <div class="modal-row"><span class="modal-lbl">SOLICITADO</span><span class="modal-val" id="md-ts" style="color:var(--text3);font-size:13px"></span></div>
+      <div class="modal-row"><span class="modal-lbl">SOLICITADO</span><span class="modal-val" id="md-ts" style="color:var(--text3);font-size:11px"></span></div>
       <div class="modal-row" id="md-inst-row"><span class="modal-lbl" id="md-inst-lbl">INSTRUCTOR</span><span class="modal-val" id="md-inst"></span></div>
       <div class="modal-actions" id="md-actions"></div>
     </div>
@@ -380,7 +380,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
     <div id="cfg-horarios" class="cfg-panel">
       <div class="card">
         <h3>Horarios por Avión y Día</h3>
-        <p style="font-family:var(--font-mono);font-size:13px;color:var(--text3);margin-bottom:.75rem;letter-spacing:.05em">SELECCIONÁ PRIMERO EL AVIÓN, LUEGO EL DÍA</p>
+        <p style="font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-bottom:.75rem;letter-spacing:.05em">SELECCIONÁ PRIMERO EL AVIÓN, LUEGO EL DÍA</p>
         <div style="display:flex;gap:6px;margin-bottom:.75rem;flex-wrap:wrap" id="cfg-avion-tabs"></div>
         <div id="avion-toggle-wrap"></div>
         <div style="display:flex;gap:6px;margin-bottom:.75rem;flex-wrap:wrap" id="dow-tabs">
@@ -402,12 +402,12 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <h3>Bloquear Días por Avión</h3>
         <div style="display:flex;gap:6px;margin-bottom:.75rem;flex-wrap:wrap" id="cfg-dias-avion-tabs"></div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.85rem;">
-          <button onclick="mesAnterior()" style="font-size:15px;padding:5px 14px">◀</button>
-          <span id="cal-mes-label" style="font-family:var(--font-mono);font-size:15px;color:var(--amber);letter-spacing:.12em;text-transform:uppercase"></span>
-          <button onclick="mesSiguiente()" style="font-size:15px;padding:5px 14px">▶</button>
+          <button onclick="mesAnterior()" style="font-size:13px;padding:5px 14px">◀</button>
+          <span id="cal-mes-label" style="font-family:var(--font-mono);font-size:13px;color:var(--amber);letter-spacing:.12em;text-transform:uppercase"></span>
+          <button onclick="mesSiguiente()" style="font-size:13px;padding:5px 14px">▶</button>
         </div>
         <div id="cal-mes-grid"></div>
-        <div style="display:flex;gap:16px;margin-top:.85rem;font-family:var(--font-mono);font-size:13px;color:var(--text3);flex-wrap:wrap;">
+        <div style="display:flex;gap:16px;margin-top:.85rem;font-family:var(--font-mono);font-size:11px;color:var(--text3);flex-wrap:wrap;">
           <span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:2px;background:rgba(248,81,73,.2);border:1px solid rgba(248,81,73,.4);display:inline-block"></span>BLOQUEADO</span>
           <span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:2px;background:rgba(240,165,0,.1);border:1px solid rgba(240,165,0,.35);display:inline-block"></span>FERIADO</span>
           <span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:2px;background:rgba(0,200,212,.08);border:1px solid rgba(0,200,212,.2);display:inline-block"></span>HOY</span>
@@ -485,8 +485,8 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
             <label>Hasta</label>
             <input type="date" id="audit-hasta" onchange="filtrarAuditoria()">
           </div>
-          <button onclick="filtrarAuditoria()" style="padding:9px 16px;font-size:14px">FILTRAR</button>
-          <button onclick="limpiarFiltrosAuditoria()" style="padding:9px 16px;font-size:14px">LIMPIAR</button>
+          <button onclick="filtrarAuditoria()" style="padding:9px 16px;font-size:12px">FILTRAR</button>
+          <button onclick="limpiarFiltrosAuditoria()" style="padding:9px 16px;font-size:12px">LIMPIAR</button>
         </div>
         <div id="audit-stats" style="display:flex;gap:10px;margin-bottom:.85rem;flex-wrap:wrap"></div>
         <div id="audit-tabla" style="overflow-x:auto"><div class="empty">// Cargando registros...</div></div>
@@ -496,30 +496,30 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
     <div id="cfg-sistema" class="cfg-panel" style="display:none">
       <div class="card" style="border-color:rgba(248,81,73,.3)">
         <h3 style="color:var(--red)">Zona Peligrosa</h3>
-        <p style="font-family:var(--font-mono);font-size:13px;color:var(--text3);margin-bottom:1rem;letter-spacing:.05em">ACCIONES IRREVERSIBLES — USAR CON CUIDADO</p>
-        <div style="font-family:var(--font-mono);font-size:13px;color:var(--text2);letter-spacing:.1em;text-transform:uppercase;margin-bottom:.6rem">¿Qué turnos borrar?</div>
+        <p style="font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-bottom:1rem;letter-spacing:.05em">ACCIONES IRREVERSIBLES — USAR CON CUIDADO</p>
+        <div style="font-family:var(--font-mono);font-size:11px;color:var(--text2);letter-spacing:.1em;text-transform:uppercase;margin-bottom:.6rem">¿Qué turnos borrar?</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem">
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--font-mono);font-size:14px;color:var(--text2);background:var(--bg2)">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--font-mono);font-size:12px;color:var(--text2);background:var(--bg2)">
             <input type="radio" name="borrar-tipo" value="cancelados" checked style="accent-color:var(--red)"> Solo cancelados
           </label>
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--font-mono);font-size:14px;color:var(--text2);background:var(--bg2)">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--font-mono);font-size:12px;color:var(--text2);background:var(--bg2)">
             <input type="radio" name="borrar-tipo" value="aprobados" style="accent-color:var(--red)"> Solo aprobados
           </label>
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--font-mono);font-size:14px;color:var(--text2);background:var(--bg2)">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--font-mono);font-size:12px;color:var(--text2);background:var(--bg2)">
             <input type="radio" name="borrar-tipo" value="vencidos" style="accent-color:var(--red)"> Solo vencidos
           </label>
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--font-mono);font-size:14px;color:var(--text2);background:var(--bg2)">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--font-mono);font-size:12px;color:var(--text2);background:var(--bg2)">
             <input type="radio" name="borrar-tipo" value="todos" style="accent-color:var(--red)"> Todos
           </label>
         </div>
-        <div style="font-family:var(--font-mono);font-size:13px;color:var(--text2);letter-spacing:.1em;text-transform:uppercase;margin-bottom:.6rem">Rango de fechas <span style="color:var(--text3)">(opcional)</span></div>
+        <div style="font-family:var(--font-mono);font-size:11px;color:var(--text2);letter-spacing:.1em;text-transform:uppercase;margin-bottom:.6rem">Rango de fechas <span style="color:var(--text3)">(opcional)</span></div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:1rem">
           <div class="field" style="margin:0;min-width:140px"><label>Desde</label><input type="date" id="borrar-desde"></div>
           <div class="field" style="margin:0;min-width:140px"><label>Hasta</label><input type="date" id="borrar-hasta"></div>
         </div>
-        <div id="borrar-preview" style="font-family:var(--font-mono);font-size:14px;color:var(--text3);margin-bottom:.85rem;min-height:1.2em"></div>
+        <div id="borrar-preview" style="font-family:var(--font-mono);font-size:12px;color:var(--text3);margin-bottom:.85rem;min-height:1.2em"></div>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
-          <button onclick="previewBorrar()" style="font-size:14px;padding:7px 16px">VER AFECTADOS</button>
+          <button onclick="previewBorrar()" style="font-size:12px;padding:7px 16px">VER AFECTADOS</button>
           <button class="danger" onclick="ejecutarBorrar()">BORRAR</button>
         </div>
       </div>
@@ -1037,7 +1037,7 @@ function renderMisTurnos(data){
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <span class="badge badge-${r.estado}">${r.estado}</span>
-        ${r.estado==='pendiente'?`<button class="danger" onclick="cancelarTurnoAlumno('${r.key}')" style="font-size:13px;padding:4px 10px">CANCELAR</button>`:''}
+        ${r.estado==='pendiente'?`<button class="danger" onclick="cancelarTurnoAlumno('${r.key}')" style="font-size:11px;padding:4px 10px">CANCELAR</button>`:''}
       </div>
     </div>`).join('');
 }
@@ -1297,28 +1297,28 @@ function renderHorariosConfig(){
   document.getElementById('avion-toggle-wrap').innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem .85rem;background:${estaActivo?'rgba(57,211,83,.07)':'rgba(248,81,73,.07)'};border:1px solid ${estaActivo?'rgba(57,211,83,.25)':'rgba(248,81,73,.3)'};border-radius:var(--radius);margin-bottom:.85rem">
       <div>
-        <span style="font-family:var(--font-mono);font-size:14px;color:${estaActivo?'var(--green)':'var(--red)'};letter-spacing:.1em">
+        <span style="font-family:var(--font-mono);font-size:12px;color:${estaActivo?'var(--green)':'var(--red)'};letter-spacing:.1em">
           ${estaActivo?'✓ AERONAVE DISPONIBLE':'✕ AERONAVE NO DISPONIBLE'}
         </span>
-        <div style="font-family:var(--font-mono);font-size:12px;color:var(--text3);margin-top:2px;letter-spacing:.05em">
+        <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);margin-top:2px;letter-spacing:.05em">
           ${estaActivo?'Los usuarios pueden reservar esta aeronave':'No aparece en el sistema de reservas'}
         </div>
       </div>
-      <button onclick="toggleActivoAvion()" style="font-size:14px;padding:6px 16px;${estaActivo?'color:var(--red);border-color:var(--red);background:rgba(248,81,73,.08)':'color:var(--green);border-color:var(--green);background:rgba(57,211,83,.08)'}">${estaActivo?'DESHABILITAR':'HABILITAR'}</button>
+      <button onclick="toggleActivoAvion()" style="font-size:12px;padding:6px 16px;${estaActivo?'color:var(--red);border-color:var(--red);background:rgba(248,81,73,.08)':'color:var(--green);border-color:var(--green);background:rgba(57,211,83,.08)'}">${estaActivo?'DESHABILITAR':'HABILITAR'}</button>
     </div>`;
   document.getElementById('horarios-config').innerHTML=
-    '<div style="font-family:var(--font-mono);font-size:13px;color:var(--amber);margin-bottom:.6rem;letter-spacing:.1em">'+DIAS_NOMBRE[activeDow].toUpperCase()+'</div>'+
+    '<div style="font-family:var(--font-mono);font-size:11px;color:var(--amber);margin-bottom:.6rem;letter-spacing:.1em">'+DIAS_NOMBRE[activeDow].toUpperCase()+'</div>'+
     '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">'+
     TODAS_HORAS.map(h=>{
       const on=horas.includes(h);
-      return `<label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:5px 8px;border:1px solid ${on?'var(--cyan)':'var(--border)'};border-radius:var(--radius);background:${on?'rgba(0,200,212,.08)':'var(--bg2)'};font-family:var(--font-mono);font-size:14px;color:${on?'var(--cyan)':'var(--text3)'};transition:all .15s">
+      return `<label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:5px 8px;border:1px solid ${on?'var(--cyan)':'var(--border)'};border-radius:var(--radius);background:${on?'rgba(0,200,212,.08)':'var(--bg2)'};font-family:var(--font-mono);font-size:12px;color:${on?'var(--cyan)':'var(--text3)'};transition:all .15s">
         <input type="checkbox" ${on?'checked':''} onchange="toggleHorario('${h}',this.checked)" style="accent-color:var(--cyan)">
         ${h}</label>`;
     }).join('')+
     '</div>'+
     '<div style="display:flex;gap:8px;margin-top:.75rem">'+
-    '<button onclick="marcarTodas(true)" style="font-size:13px;padding:4px 12px">TODAS</button>'+
-    '<button onclick="marcarTodas(false)" style="font-size:13px;padding:4px 12px">NINGUNA</button>'+
+    '<button onclick="marcarTodas(true)" style="font-size:11px;padding:4px 12px">TODAS</button>'+
+    '<button onclick="marcarTodas(false)" style="font-size:11px;padding:4px 12px">NINGUNA</button>'+
     '</div>';
 }
 
@@ -1369,7 +1369,7 @@ async function renderCalMes(){
   const primerDow=(new Date(año,mes,1).getDay()+6)%7;
   const diasEnMes=new Date(año,mes+1,0).getDate();
   const grid=document.getElementById('cal-mes-grid');
-  grid.innerHTML='<div style="font-family:var(--font-mono);font-size:13px;color:var(--text3);padding:.5rem 0">cargando...</div>';
+  grid.innerHTML='<div style="font-family:var(--font-mono);font-size:11px;color:var(--text3);padding:.5rem 0">cargando...</div>';
   const feriados=await getFeriados(año);
   const bloqueados=diasBloqueadosParaAvion(activeDiasAvion);
   grid.innerHTML='';
@@ -1377,7 +1377,7 @@ async function renderCalMes(){
   wrap.style.cssText='display:grid;grid-template-columns:repeat(7,1fr);gap:4px;';
   DOW_LABELS.forEach(lbl=>{
     const h=document.createElement('div');
-    h.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--text3);text-align:center;padding:4px 0;letter-spacing:.08em';
+    h.style.cssText='font-family:var(--font-mono);font-size:10px;color:var(--text3);text-align:center;padding:4px 0;letter-spacing:.08em';
     h.textContent=lbl;wrap.appendChild(h);
   });
   for(let i=0;i<primerDow;i++){wrap.appendChild(document.createElement('div'));}
@@ -1387,7 +1387,7 @@ async function renderCalMes(){
     const esHoy=ds===hoy, pasado=ds<hoy, esFeriado=!!feriados[ds];
     const motivoFeriado=feriados[ds]||'';
     const cell=document.createElement('div');
-    cell.style.cssText='text-align:center;padding:6px 2px;border-radius:var(--radius);font-family:var(--font-mono);font-size:14px;transition:all .15s;position:relative;min-height:42px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:2px;';
+    cell.style.cssText='text-align:center;padding:6px 2px;border-radius:var(--radius);font-family:var(--font-mono);font-size:12px;transition:all .15s;position:relative;min-height:42px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:2px;';
     if(pasado){cell.style.color='var(--text3)';cell.style.border='1px solid transparent';cell.style.cursor='default';}
     else if(bl){cell.style.background='rgba(248,81,73,.15)';cell.style.border='1px solid rgba(248,81,73,.4)';cell.style.color='var(--red)';cell.style.cursor='pointer';cell.style.fontWeight='600';}
     else if(esFeriado){cell.style.background='rgba(240,165,0,.1)';cell.style.border='1px solid rgba(240,165,0,.35)';cell.style.color='var(--amber)';cell.style.cursor='pointer';}
@@ -1428,7 +1428,7 @@ async function renderInstructoresList(){
   el.innerHTML=Object.entries(data).map(([k,i])=>`
     <div class="toggle-row">
       <span><strong>${i.nombre}</strong> — ${i.user}</span>
-      ${k==='admin'?'<span style="font-size:13px;color:var(--text3)">PRINCIPAL</span>':`<button onclick="eliminarInstructor('${k}')" style="font-size:13px;padding:3px 10px">QUITAR</button>`}
+      ${k==='admin'?'<span style="font-size:11px;color:var(--text3)">PRINCIPAL</span>':`<button onclick="eliminarInstructor('${k}')" style="font-size:11px;padding:3px 10px">QUITAR</button>`}
     </div>`).join('');
 }
 
@@ -1450,17 +1450,19 @@ async function renderAlumnosList(){
   if(!data){el.innerHTML='<div class="empty">// SIN USUARIOS REGISTRADOS</div>';return;}
   el.innerHTML=Object.entries(data).map(([k,a])=>{
     const rol=a.rol||'alumno';
-    const tel=a.tel?`<span style="font-family:var(--font-mono);font-size:13px;color:var(--text3);margin-left:8px">☎ ${a.tel}</span>`:'';
+    const tel=a.tel?`<span style="font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-left:8px">☎ ${a.tel}</span>`:'';
     return `<div class="toggle-row" style="cursor:pointer" onclick="abrirModalAlumno('${k}')">
       <div>
-        <span style="font-weight:600">${a.nombre}</span>
-        <span style="font-size:14px;color:var(--text2);margin-left:8px">${a.email}</span>
-        ${tel}
-        <span class="badge badge-${rol}" style="margin-left:8px">${rol}</span>
+        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px">
+          <span style="font-weight:600">${a.nombre}</span>
+          <span style="font-size:12px;color:var(--text2)">${a.email}</span>
+          ${tel}
+        </div>
+        <div style="margin-top:4px"><span class="badge badge-${rol}">${rol}</span></div>
       </div>
       <div style="display:flex;gap:6px;align-items:center">
-        <span style="font-family:var(--font-mono);font-size:12px;color:var(--text3)">EDITAR</span>
-        <button onclick="event.stopPropagation();eliminarAlumno('${k}','${a.email}')" style="font-size:13px;padding:3px 10px">QUITAR</button>
+        <span style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">EDITAR</span>
+        <button onclick="event.stopPropagation();eliminarAlumno('${k}','${a.email}')" style="font-size:11px;padding:3px 10px">QUITAR</button>
       </div>
     </div>`;
   }).join('');
@@ -1548,9 +1550,9 @@ function renderAuditoria(lista,skipPageReset){
   const statsEl=document.getElementById('audit-stats');
   const total=lista.length, exitos=lista.filter(r=>r.resultado==='exito').length, fallos=lista.filter(r=>r.resultado==='fallo').length;
   statsEl.innerHTML=`
-    <div style="font-family:var(--font-mono);font-size:13px;padding:5px 12px;background:rgba(0,200,212,.07);border:1px solid rgba(0,200,212,.2);border-radius:var(--radius);color:var(--cyan)">TOTAL <strong>${total}</strong></div>
-    <div style="font-family:var(--font-mono);font-size:13px;padding:5px 12px;background:rgba(57,211,83,.07);border:1px solid rgba(57,211,83,.2);border-radius:var(--radius);color:var(--green)">ÉXITOS <strong>${exitos}</strong></div>
-    <div style="font-family:var(--font-mono);font-size:13px;padding:5px 12px;background:rgba(248,81,73,.07);border:1px solid rgba(248,81,73,.2);border-radius:var(--radius);color:var(--red)">FALLOS <strong>${fallos}</strong></div>`;
+    <div style="font-family:var(--font-mono);font-size:11px;padding:5px 12px;background:rgba(0,200,212,.07);border:1px solid rgba(0,200,212,.2);border-radius:var(--radius);color:var(--cyan)">TOTAL <strong>${total}</strong></div>
+    <div style="font-family:var(--font-mono);font-size:11px;padding:5px 12px;background:rgba(57,211,83,.07);border:1px solid rgba(57,211,83,.2);border-radius:var(--radius);color:var(--green)">ÉXITOS <strong>${exitos}</strong></div>
+    <div style="font-family:var(--font-mono);font-size:11px;padding:5px 12px;background:rgba(248,81,73,.07);border:1px solid rgba(248,81,73,.2);border-radius:var(--radius);color:var(--red)">FALLOS <strong>${fallos}</strong></div>`;
   const el=document.getElementById('audit-tabla');
   if(!lista.length){el.innerHTML='<div class="empty">// SIN REGISTROS QUE COINCIDAN</div>';return;}
   const totalPages=Math.ceil(total/AUDIT_PER_PAGE);
@@ -1559,15 +1561,15 @@ function renderAuditoria(lista,skipPageReset){
   const ACCION_LABEL={'login':'Login','registro':'Registro'};
   const ROL_ICON={'alumno':'🛩️','instructor':'👨‍✈️','piloto':'✈️'};
   const paginador=totalPages>1?`
-    <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:.75rem;flex-wrap:wrap;font-family:var(--font-mono);font-size:14px">
-      <button onclick="auditGoPage(0)" ${page===0?'disabled':''} style="padding:4px 10px;font-size:13px">«</button>
-      <button onclick="auditGoPage(${page-1})" ${page===0?'disabled':''} style="padding:4px 10px;font-size:13px">‹</button>
-      ${Array.from({length:totalPages},(_,i)=>`<button onclick="auditGoPage(${i})" style="padding:4px 10px;font-size:13px;${i===page?'background:var(--cyan);color:var(--bg);border-color:var(--cyan)':''}">${i+1}</button>`).join('')}
-      <button onclick="auditGoPage(${page+1})" ${page===totalPages-1?'disabled':''} style="padding:4px 10px;font-size:13px">›</button>
-      <button onclick="auditGoPage(${totalPages-1})" ${page===totalPages-1?'disabled':''} style="padding:4px 10px;font-size:13px">»</button>
+    <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:.75rem;flex-wrap:wrap;font-family:var(--font-mono);font-size:12px">
+      <button onclick="auditGoPage(0)" ${page===0?'disabled':''} style="padding:4px 10px;font-size:11px">«</button>
+      <button onclick="auditGoPage(${page-1})" ${page===0?'disabled':''} style="padding:4px 10px;font-size:11px">‹</button>
+      ${Array.from({length:totalPages},(_,i)=>`<button onclick="auditGoPage(${i})" style="padding:4px 10px;font-size:11px;${i===page?'background:var(--cyan);color:var(--bg);border-color:var(--cyan)':''}">${i+1}</button>`).join('')}
+      <button onclick="auditGoPage(${page+1})" ${page===totalPages-1?'disabled':''} style="padding:4px 10px;font-size:11px">›</button>
+      <button onclick="auditGoPage(${totalPages-1})" ${page===totalPages-1?'disabled':''} style="padding:4px 10px;font-size:11px">»</button>
       <span style="color:var(--text3);margin-left:4px">${page*AUDIT_PER_PAGE+1}–${Math.min((page+1)*AUDIT_PER_PAGE,total)} de ${total}</span>
     </div>`:'' ;
-  el.innerHTML=`<table style="width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:14px;min-width:480px">
+  el.innerHTML=`<table style="width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:12px;min-width:480px">
     <thead><tr style="border-bottom:1px solid var(--border2)">
       <th style="text-align:left;padding:6px 8px;color:var(--text3);letter-spacing:.08em;font-weight:500">FECHA / HORA</th>
       <th style="text-align:left;padding:6px 8px;color:var(--text3);letter-spacing:.08em;font-weight:500">ACCIÓN</th>
@@ -1584,7 +1586,7 @@ function renderAuditoria(lista,skipPageReset){
       const resBg=esExito?'rgba(57,211,83,.08)':'rgba(248,81,73,.08)';
       const resBorder=esExito?'rgba(57,211,83,.25)':'rgba(248,81,73,.25)';
       return `<tr style="border-bottom:1px solid var(--border)">
-        <td style="padding:7px 8px;color:var(--text2);white-space:nowrap">${fecha}<br><span style="color:var(--text3);font-size:13px">${hora} hs</span></td>
+        <td style="padding:7px 8px;color:var(--text2);white-space:nowrap">${fecha}<br><span style="color:var(--text3);font-size:11px">${hora} hs</span></td>
         <td style="padding:7px 8px;color:var(--amber)">${ACCION_LABEL[r.accion]||r.accion}</td>
         <td style="padding:7px 8px;color:var(--text2)">${ROL_ICON[r.rol]||''} ${r.rol}</td>
         <td style="padding:7px 8px"><span style="padding:3px 8px;border-radius:var(--radius);background:${resBg};border:1px solid ${resBorder};color:${resColor}">${esExito?'✓ ÉXITO':'✗ FALLO'}</span></td>
