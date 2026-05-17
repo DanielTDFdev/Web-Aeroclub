@@ -197,7 +197,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v2.4</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v2.5</div>
   </div>
 </div>
 
@@ -731,7 +731,7 @@ window.loginInstructor=async function(){
   try{
     const data=await fbGet('instructores');
     let found=null;
-    if(data)for(const[k,i]of Object.entries(data))if(i.user===user&&i.pass===pass){found={...i,key:k};break;}
+    if(data)for(const[k,i]of Object.entries(data))if(i.user.toLowerCase()===user.toLowerCase()&&i.pass===pass){found={...i,key:k};break;}
     if(!found){
       if(!await fbGet('instructores/admin'))await fbSet('instructores/admin',{user:'admin',pass:'admin123',nombre:'Instructor'});
       if(user==='admin'&&pass==='admin123')found={user:'admin',pass:'admin123',nombre:'Instructor',key:'admin'};
