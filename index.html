@@ -1495,7 +1495,7 @@ async function renderAlumnosList(){
   const el=document.getElementById('alumnos-list');
   const data=await fbGet('alumnos');
   if(!data){el.innerHTML='<div class="empty">// SIN USUARIOS REGISTRADOS</div>';return;}
-  const todos=Object.entries(data);
+  const todos=Object.entries(data).sort(([,a],[,b])=>(b.ts||'').localeCompare(a.ts||''));
   const pendientes=todos.filter(([k,a])=>a.estado==='pendiente_aprobacion');
   const aprobados=todos.filter(([k,a])=>a.estado!=='pendiente_aprobacion');
   let html='';
