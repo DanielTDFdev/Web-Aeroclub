@@ -1,0 +1,437 @@
+<!--
+  ARCHIVO : flota.html
+  VERSION : 1.1
+  FECHA   : 2026-05-18
+  CAMBIOS : Carruseles dinámicos vía GitHub API — filtra por prefijo de matrícula (lvoad_, lvart_, lvmph_)
+-->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flota — Aeroclub Río Grande</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#07090d;--bg2:#0e1218;--bg3:#141a24;--bg4:#1c2330;
+  --text:#c8d8e8;--text2:#7a9bb8;--text3:#3d5a72;
+  --amber:#f0a500;--amber2:#ffc840;
+  --cyan:#00c8d4;--cyan-dim:#003d42;
+  --green:#39d353;--red:#f85149;
+  --border:rgba(0,200,212,0.1);--border2:rgba(0,200,212,0.3);
+  --font-mono:'Share Tech Mono',monospace;
+  --font-ui:'Rajdhani',sans-serif;
+  --font-display:'Orbitron',sans-serif;
+}
+:root.light{
+  --bg:#eef2f7;--bg2:#dde4ef;--bg3:#ffffff;--bg4:#cdd8e8;
+  --text:#1a2a3a;--text2:#3a5a78;--text3:#7a9ab8;
+  --border:rgba(0,100,140,0.12);--border2:rgba(0,100,140,0.3);
+}
+
+html{scroll-behavior:smooth}
+body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;transition:background .3s,color .3s;}
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.04) 2px,rgba(0,0,0,.04) 4px);pointer-events:none;z-index:9999;}
+
+/* NAV */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:.75rem 2rem;background:rgba(7,9,13,.88);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);transition:background .3s;}
+:root.light nav{background:rgba(238,242,247,.92);}
+.nav-logo{display:flex;align-items:center;gap:12px;}
+.nav-logo img{width:36px;height:36px;object-fit:contain;filter:drop-shadow(0 0 8px rgba(0,200,212,.4));}
+:root.light .nav-logo img{filter:none;}
+.nav-logo-text{font-family:var(--font-mono);font-size:13px;color:var(--amber);letter-spacing:.15em;}
+.nav-right{display:flex;align-items:center;gap:14px;}
+.theme-toggle{display:flex;align-items:center;gap:6px;cursor:pointer;}
+.theme-track{width:34px;height:18px;border-radius:9px;background:var(--bg3);border:1px solid var(--border2);position:relative;}
+.theme-thumb{width:12px;height:12px;border-radius:50%;background:var(--cyan);position:absolute;top:2px;left:2px;transition:transform .25s;box-shadow:0 0 6px rgba(0,200,212,.5);}
+:root.light .theme-thumb{transform:translateX(16px);background:var(--amber);}
+.btn-nav{font-family:var(--font-mono);font-size:12px;letter-spacing:.1em;padding:8px 20px;background:linear-gradient(135deg,rgba(0,200,212,.14),rgba(0,200,212,.04));border:1px solid var(--cyan);border-radius:3px;color:var(--cyan);text-decoration:none;text-transform:uppercase;transition:all .2s;}
+.btn-nav:hover{background:linear-gradient(135deg,rgba(0,200,212,.24),rgba(0,200,212,.1));box-shadow:0 0 20px rgba(0,200,212,.2);}
+
+/* HERO */
+.hero{position:relative;padding:7rem 2rem 3rem;text-align:center;overflow:hidden;}
+.hero-bg{position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 30%,rgba(0,80,100,.2) 0%,transparent 70%);}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(0,200,212,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,200,212,.03) 1px,transparent 1px);background-size:60px 60px;animation:gridDrift 30s linear infinite;}
+@keyframes gridDrift{0%{background-position:0 0}100%{background-position:60px 60px}}
+.hero-content{position:relative;z-index:2;}
+.hero-eyebrow{font-family:var(--font-mono);font-size:11px;color:var(--cyan);letter-spacing:.3em;margin-bottom:1rem;opacity:0;animation:fadeUp .7s ease .1s forwards;}
+.hero-title{font-family:var(--font-display);font-size:clamp(28px,6vw,64px);font-weight:900;color:var(--amber2);text-shadow:0 0 40px rgba(240,165,0,.4);letter-spacing:.1em;margin-bottom:.5rem;opacity:0;animation:fadeUp .7s ease .25s forwards;}
+.hero-sub{font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.2em;opacity:0;animation:fadeUp .7s ease .4s forwards;}
+
+/* TABS DE AVIONES */
+.flota-tabs{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin:2.5rem auto 0;max-width:700px;opacity:0;animation:fadeUp .7s ease .55s forwards;}
+.flota-tab{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;padding:10px 24px;background:var(--bg3);border:1px solid var(--border);border-radius:3px;color:var(--text3);cursor:pointer;transition:all .2s;text-transform:uppercase;}
+.flota-tab:hover{border-color:var(--border2);color:var(--text);}
+.flota-tab.active{border-color:var(--cyan);color:var(--cyan);background:rgba(0,200,212,.07);text-shadow:0 0 12px rgba(0,200,212,.4);}
+
+/* CONTENIDO */
+.container{max-width:960px;margin:0 auto;padding:3rem 1.5rem 4rem;}
+
+/* CARD DE AVION */
+.avion-panel{display:none;animation:fadeUp .5s ease forwards;}
+.avion-panel.active{display:block;}
+
+.avion-header{display:grid;grid-template-columns:1fr auto;align-items:start;gap:1.5rem;margin-bottom:2rem;padding-bottom:1.5rem;border-bottom:1px solid var(--border2);}
+.avion-modelo{font-family:var(--font-mono);font-size:11px;color:var(--cyan);letter-spacing:.25em;margin-bottom:.4rem;}
+.avion-nombre{font-family:var(--font-display);font-size:clamp(20px,4vw,40px);font-weight:900;color:var(--amber2);letter-spacing:.08em;text-shadow:0 0 30px rgba(240,165,0,.3);line-height:1.1;}
+.avion-desc{font-family:var(--font-ui);font-size:clamp(14px,1.8vw,16px);color:var(--text2);line-height:1.7;margin-top:.75rem;max-width:520px;}
+.avion-badge{font-family:var(--font-mono);font-size:10px;letter-spacing:.15em;padding:6px 14px;border-radius:3px;text-transform:uppercase;white-space:nowrap;}
+.badge-trainer{background:rgba(57,211,83,.08);border:1px solid rgba(57,211,83,.3);color:var(--green);}
+.badge-touring{background:rgba(0,200,212,.08);border:1px solid var(--border2);color:var(--cyan);}
+.badge-advanced{background:rgba(240,165,0,.08);border:1px solid rgba(240,165,0,.3);color:var(--amber);}
+
+/* CARRUSEL */
+.carousel-wrap{width:100%;aspect-ratio:16/7;border-radius:6px;overflow:hidden;margin-bottom:2rem;position:relative;background:var(--bg3);border:1px solid var(--border);}
+.carousel-inner{position:relative;width:100%;height:100%;}
+.c-slide{position:absolute;inset:0;background-size:cover;background-position:center;opacity:0;transition:opacity .8s ease;}
+.c-slide.active{opacity:1;}
+.c-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.15em;}
+.c-placeholder::before{content:'✈';font-size:48px;opacity:.06;position:absolute;}
+.c-placeholder span{position:relative;}
+.c-btn{position:absolute;top:50%;transform:translateY(-50%);z-index:10;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.12);color:#fff;font-size:18px;width:36px;height:36px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s;backdrop-filter:blur(4px);}
+.c-btn:hover{background:rgba(0,200,212,.3);}
+.c-btn.prev{left:12px;}
+.c-btn.next{right:12px;}
+.c-dots{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:10;}
+.c-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.3);cursor:pointer;transition:background .2s;}
+.c-dot.active{background:var(--cyan);}
+
+/* SPECS GRID */
+.specs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1px;background:var(--border);border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:2rem;}
+.spec-item{background:var(--bg3);padding:1rem 1.25rem;transition:background .2s;}
+.spec-item:hover{background:var(--bg4);}
+.spec-lbl{font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.15em;text-transform:uppercase;margin-bottom:.35rem;}
+.spec-val{font-family:var(--font-mono);font-size:clamp(13px,1.8vw,15px);color:var(--text);font-weight:500;}
+.spec-val.highlight{color:var(--cyan);text-shadow:0 0 12px rgba(0,200,212,.3);}
+.spec-val.amber{color:var(--amber);}
+
+/* VELOCIDADES */
+.vel-section{margin-bottom:2rem;}
+.vel-titulo{font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.85rem;display:flex;align-items:center;gap:10px;}
+.vel-titulo::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--border2),transparent);}
+.vel-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;}
+.vel-item{background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:.65rem 1rem;display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.vel-code{font-family:var(--font-mono);font-size:11px;color:var(--amber);letter-spacing:.1em;}
+.vel-num{font-family:var(--font-mono);font-size:13px;color:var(--text);font-weight:500;}
+
+/* FOOTER */
+footer{border-top:1px solid var(--border);padding:1.5rem 2rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+.footer-brand{font-family:var(--font-mono);font-size:12px;color:var(--text3);letter-spacing:.1em;}
+.footer-coords{font-family:var(--font-mono);font-size:11px;color:var(--text3);}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+
+@media(max-width:640px){
+  nav{padding:.6rem 1rem;}
+  .btn-nav{display:none;}
+  .hero{padding:6rem 1.25rem 2rem;}
+  .container{padding:2rem 1rem 3rem;}
+  .avion-header{grid-template-columns:1fr;}
+  .vel-grid{grid-template-columns:repeat(auto-fill,minmax(110px,1fr));}
+  footer{flex-direction:column;text-align:center;}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">
+    <img src="logo_aeroclub.png" alt="Logo Aeroclub">
+    <span class="nav-logo-text">AEROCLUB RÍO GRANDE</span>
+  </div>
+  <div class="nav-right">
+    <div class="theme-toggle" onclick="toggleTheme()">
+      <span style="font-size:13px">🌙</span>
+      <div class="theme-track"><div class="theme-thumb"></div></div>
+      <span style="font-size:13px">☀️</span>
+    </div>
+    <a href="index.html" class="btn-nav">⌂ Inicio</a>
+  </div>
+</nav>
+
+<div class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-grid"></div>
+  <div class="hero-content">
+    <div class="hero-eyebrow">▸ Aeroclub Río Grande — Tierra del Fuego</div>
+    <h1 class="hero-title">NUESTRA FLOTA</h1>
+    <div class="hero-sub">◈ AERONAVES CERTIFICADAS ANAC</div>
+
+    <div class="flota-tabs">
+      <button class="flota-tab active" onclick="mostrarAvion('tomahawk',this)">PA-38 · Tomahawk</button>
+      <button class="flota-tab" onclick="mostrarAvion('archer',this)">PA-28-181 · Archer II</button>
+      <button class="flota-tab" onclick="mostrarAvion('lance',this)">PA-32RT · Lance II</button>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- ══ TOMAHAWK ══ -->
+  <div class="avion-panel active" id="panel-tomahawk">
+    <div class="avion-header">
+      <div>
+        <div class="avion-modelo">Piper PA-38-112</div>
+        <div class="avion-nombre">TOMAHAWK</div>
+        <div class="avion-desc">Biplaza de entrenamiento diseñado específicamente para la formación de pilotos. Su perfil alar NASA GA(W)-1 exige una recuperación activa de pérdida, desarrollando mayor destreza en el piloto.</div>
+      </div>
+      <span class="avion-badge badge-trainer">✈ Entrenamiento</span>
+    </div>
+
+    <div class="carousel-wrap" id="carousel-tomahawk">
+      <div class="carousel-inner" id="inner-tomahawk">
+        <div class="c-placeholder"><span>// CARGANDO FOTOS...</span></div>
+      </div>
+      <button class="c-btn prev" onclick="moverCarrusel('tomahawk',-1)">‹</button>
+      <button class="c-btn next" onclick="moverCarrusel('tomahawk',1)">›</button>
+      <div class="c-dots" id="dots-tomahawk"></div>
+    </div>
+    <div class="specs-grid">
+      <div class="spec-item"><div class="spec-lbl">Motor</div><div class="spec-val">Lycoming O-235-L2C</div></div>
+      <div class="spec-item"><div class="spec-lbl">Potencia</div><div class="spec-val highlight">112 HP</div></div>
+      <div class="spec-item"><div class="spec-lbl">Cilindros</div><div class="spec-val">4 — aire / horizontal</div></div>
+      <div class="spec-item"><div class="spec-lbl">Hélice</div><div class="spec-val">Sensenich — bipala — paso fijo</div></div>
+      <div class="spec-item"><div class="spec-lbl">Plazas</div><div class="spec-val">2</div></div>
+      <div class="spec-item"><div class="spec-lbl">Tren de aterrizaje</div><div class="spec-val">Triciclo fijo</div></div>
+      <div class="spec-item"><div class="spec-lbl">Envergadura</div><div class="spec-val">10,36 m</div></div>
+      <div class="spec-item"><div class="spec-lbl">Longitud</div><div class="spec-val">7,04 m</div></div>
+      <div class="spec-item"><div class="spec-lbl">Altura</div><div class="spec-val">2,77 m</div></div>
+      <div class="spec-item"><div class="spec-lbl">Peso vacío</div><div class="spec-val">512 kg</div></div>
+      <div class="spec-item"><div class="spec-lbl">MTOW</div><div class="spec-val amber">757 kg</div></div>
+      <div class="spec-item"><div class="spec-lbl">Combustible</div><div class="spec-val">30 gal utilizable · AvGas 100LL</div></div>
+      <div class="spec-item"><div class="spec-lbl">Vel. crucero</div><div class="spec-val highlight">108 kts</div></div>
+      <div class="spec-item"><div class="spec-lbl">Alcance</div><div class="spec-val">468 NM</div></div>
+      <div class="spec-item"><div class="spec-lbl">Techo</div><div class="spec-val">13.000 ft</div></div>
+      <div class="spec-item"><div class="spec-lbl">Tasa de ascenso</div><div class="spec-val">720 ft/min</div></div>
+      <div class="spec-item"><div class="spec-lbl">Dist. despegue</div><div class="spec-val">450 m</div></div>
+      <div class="spec-item"><div class="spec-lbl">Dist. aterrizaje</div><div class="spec-val">471 m</div></div>
+    </div>
+
+    <div class="vel-section">
+      <div class="vel-titulo">▸ Velocidades de referencia</div>
+      <div class="vel-grid">
+        <div class="vel-item"><span class="vel-code">Vne</span><span class="vel-num">138 KIAS</span></div>
+        <div class="vel-item"><span class="vel-code">Vno</span><span class="vel-num">110 KIAS</span></div>
+        <div class="vel-item"><span class="vel-code">Vfe</span><span class="vel-num">89 KIAS</span></div>
+        <div class="vel-item"><span class="vel-code">Vx</span><span class="vel-num">61 KIAS</span></div>
+        <div class="vel-item"><span class="vel-code">Vy</span><span class="vel-num">70 KIAS</span></div>
+        <div class="vel-item"><span class="vel-code">Vr</span><span class="vel-num">53 KIAS</span></div>
+        <div class="vel-item"><span class="vel-code">Vs</span><span class="vel-num">48–52 KIAS</span></div>
+        <div class="vel-item"><span class="vel-code">Vso</span><span class="vel-num">47–49 KIAS</span></div>
+        <div class="vel-item"><span class="vel-code">Vapp</span><span class="vel-num">62 KIAS</span></div>
+        <div class="vel-item"><span class="vel-code">Vplaneo</span><span class="vel-num">70 KIAS</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ ARCHER II ══ -->
+  <div class="avion-panel" id="panel-archer">
+    <div class="avion-header">
+      <div>
+        <div class="avion-modelo">Piper PA-28-181</div>
+        <div class="avion-nombre">ARCHER II</div>
+        <div class="avion-desc">Cuatriplaza polivalente con ala semi-cónica de características de pérdida suaves. Ideal para la transición desde el entrenamiento básico al vuelo de turismo y la habilitación para vuelo instrumental.</div>
+      </div>
+      <span class="avion-badge badge-touring">✈ Turismo / IFR</span>
+    </div>
+
+    <div class="carousel-wrap" id="carousel-archer">
+      <div class="carousel-inner" id="inner-archer">
+        <div class="c-placeholder"><span>// CARGANDO FOTOS...</span></div>
+      </div>
+      <button class="c-btn prev" onclick="moverCarrusel('archer',-1)">‹</button>
+      <button class="c-btn next" onclick="moverCarrusel('archer',1)">›</button>
+      <div class="c-dots" id="dots-archer"></div>
+    </div>
+
+    <div class="specs-grid">
+      <div class="spec-item"><div class="spec-lbl">Motor</div><div class="spec-val">Lycoming O-360-A4M</div></div>
+      <div class="spec-item"><div class="spec-lbl">Potencia</div><div class="spec-val highlight">180 HP</div></div>
+      <div class="spec-item"><div class="spec-lbl">RPM máx</div><div class="spec-val">2.700 RPM</div></div>
+      <div class="spec-item"><div class="spec-lbl">Hélice</div><div class="spec-val">Sensenich 76" — bipala — paso fijo</div></div>
+      <div class="spec-item"><div class="spec-lbl">Plazas</div><div class="spec-val">4</div></div>
+      <div class="spec-item"><div class="spec-lbl">Tren de aterrizaje</div><div class="spec-val">Triciclo fijo</div></div>
+      <div class="spec-item"><div class="spec-lbl">MTOW</div><div class="spec-val amber">1.157 kg (2.550 lbs)</div></div>
+      <div class="spec-item"><div class="spec-lbl">Equipaje máx</div><div class="spec-val">200 lbs</div></div>
+      <div class="spec-item"><div class="spec-lbl">Combustible total</div><div class="spec-val">50 gal · 100/130</div></div>
+      <div class="spec-item"><div class="spec-lbl">Combustible útil</div><div class="spec-val">48 gal</div></div>
+      <div class="spec-item"><div class="spec-lbl">Vel. crucero</div><div class="spec-val highlight">102–125 kts</div></div>
+      <div class="spec-item"><div class="spec-lbl">Alcance</div><div class="spec-val">565–670 NM</div></div>
+      <div class="spec-item"><div class="spec-lbl">Techo</div><div class="spec-val">13.236 ft</div></div>
+      <div class="spec-item"><div class="spec-lbl">Tasa de ascenso</div><div class="spec-val">667 ft/min</div></div>
+      <div class="spec-item"><div class="spec-lbl">Viento cruzado máx</div><div class="spec-val">17 kts</div></div>
+      <div class="spec-item"><div class="spec-lbl">Carga útil</div><div class="spec-val">514 kg (1.134 lbs)</div></div>
+    </div>
+
+    <div class="vel-section">
+      <div class="vel-titulo">▸ Velocidades de referencia</div>
+      <div class="vel-grid">
+        <div class="vel-item"><span class="vel-code">Vne</span><span class="vel-num">154 KIAS</span></div>
+        <div class="vel-item"><span class="vel-code">Vno</span><span class="vel-num">125 KIAS</span></div>
+        <div class="vel-item"><span class="vel-code">Vfe</span><span class="vel-num">102 KIAS</span></div>
+        <div class="vel-item"><span class="vel-code">Vx</span><span class="vel-num">64 KIAS</span></div>
+        <div class="vel-item"><span class="vel-code">Vy</span><span class="vel-num">76 KIAS</span></div>
+        <div class="vel-item"><span class="vel-code">Vr</span><span class="vel-num">52–65 KIAS</span></div>
+        <div class="vel-item"><span class="vel-code">Vs</span><span class="vel-num">53 KIAS</span></div>
+        <div class="vel-item"><span class="vel-code">Vso</span><span class="vel-num">47 KIAS</span></div>
+        <div class="vel-item"><span class="vel-code">Vapp</span><span class="vel-num">66 KIAS</span></div>
+        <div class="vel-item"><span class="vel-code">Vplaneo</span><span class="vel-num">76 KIAS</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ LANCE II ══ -->
+  <div class="avion-panel" id="panel-lance">
+    <div class="avion-header">
+      <div>
+        <div class="avion-modelo">Piper PA-32RT-300</div>
+        <div class="avion-nombre">LANCE II</div>
+        <div class="avion-desc">Monomotor de alto rendimiento con tren retráctil y seis plazas. Cola en T, motor de 300 HP y alcance superior a 800 NM. El avión más potente y versátil de la flota.</div>
+      </div>
+      <span class="avion-badge badge-advanced">✈ Alto Rendimiento</span>
+    </div>
+
+    <div class="carousel-wrap" id="carousel-lance">
+      <div class="carousel-inner" id="inner-lance">
+        <div class="c-placeholder"><span>// CARGANDO FOTOS...</span></div>
+      </div>
+      <button class="c-btn prev" onclick="moverCarrusel('lance',-1)">‹</button>
+      <button class="c-btn next" onclick="moverCarrusel('lance',1)">›</button>
+      <div class="c-dots" id="dots-lance"></div>
+    </div>
+
+    <div class="specs-grid">
+      <div class="spec-item"><div class="spec-lbl">Motor</div><div class="spec-val">Lycoming IO-540-K1G5D</div></div>
+      <div class="spec-item"><div class="spec-lbl">Potencia</div><div class="spec-val highlight">300 HP</div></div>
+      <div class="spec-item"><div class="spec-lbl">Cilindros</div><div class="spec-val">6 — accionamiento directo</div></div>
+      <div class="spec-item"><div class="spec-lbl">Hélice</div><div class="spec-val">Hartzell — bipala — paso constante</div></div>
+      <div class="spec-item"><div class="spec-lbl">Diámetro hélice</div><div class="spec-val">2,03 m</div></div>
+      <div class="spec-item"><div class="spec-lbl">Plazas</div><div class="spec-val">6</div></div>
+      <div class="spec-item"><div class="spec-lbl">Tren de aterrizaje</div><div class="spec-val amber">Triciclo retráctil</div></div>
+      <div class="spec-item"><div class="spec-lbl">Envergadura</div><div class="spec-val">10,00 m</div></div>
+      <div class="spec-item"><div class="spec-lbl">Longitud</div><div class="spec-val">8,40 m</div></div>
+      <div class="spec-item"><div class="spec-lbl">Altura</div><div class="spec-val">2,40 m</div></div>
+      <div class="spec-item"><div class="spec-lbl">Vel. crucero</div><div class="spec-val highlight">156 kts</div></div>
+      <div class="spec-item"><div class="spec-lbl">Alcance</div><div class="spec-val">748–875 NM</div></div>
+      <div class="spec-item"><div class="spec-lbl">Consumo</div><div class="spec-val">18,0 GPH</div></div>
+      <div class="spec-item"><div class="spec-lbl">Cola</div><div class="spec-val">T-tail</div></div>
+    </div>
+
+  </div>
+
+</div>
+
+<footer>
+  <span class="footer-brand">◈ AEROCLUB RÍO GRANDE — © 2026</span>
+  <span class="footer-coords">53°46'S 67°45'O · SAWE · RÍO GRANDE, TIERRA DEL FUEGO</span>
+</footer>
+
+<script>
+(function(){
+  if(localStorage.getItem('arc-theme')==='light')
+    document.documentElement.classList.add('light');
+})();
+function toggleTheme(){
+  const isLight=document.documentElement.classList.toggle('light');
+  localStorage.setItem('arc-theme',isLight?'light':'dark');
+}
+
+// ── CARRUSELES ────────────────────────────────────────────────
+const REPO='danieltdfdev/Turnos-LV-OAD';
+const CARPETA='repo_fotos';
+const EXT=/\.(jpe?g|png|webp)$/i;
+
+// Mapeo tab → prefijo de matrícula
+const AVIONES_CFG={
+  tomahawk:{prefijo:'lvoad'},
+  archer:  {prefijo:'lvart'},
+  lance:   {prefijo:'lvmph'}
+};
+
+const _carruseles={};   // estado por avión
+let _todasFotos=null;   // cache de la API
+
+async function cargarTodasFotos(){
+  if(_todasFotos!==null)return _todasFotos;
+  try{
+    const res=await fetch('https://api.github.com/repos/'+REPO+'/contents/'+CARPETA);
+    _todasFotos=res.ok?(await res.json()).filter(f=>f.type==='file'&&EXT.test(f.name)):[];
+  }catch(e){_todasFotos=[];}
+  return _todasFotos;
+}
+
+async function iniciarCarrusel(id){
+  if(_carruseles[id])return; // ya iniciado
+  const cfg=AVIONES_CFG[id];
+  if(!cfg)return;
+
+  const todas=await cargarTodasFotos();
+  const fotos=todas
+    .filter(f=>f.name.toLowerCase().startsWith(cfg.prefijo+'_'))
+    .sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}))
+    .map(f=>f.download_url);
+
+  const inner=document.getElementById('inner-'+id);
+  const dotsEl=document.getElementById('dots-'+id);
+
+  if(!fotos.length){
+    inner.innerHTML='<div class="c-placeholder"><span>// SIN FOTOS AÚN</span></div>';
+    return;
+  }
+
+  inner.innerHTML='';
+  dotsEl.innerHTML='';
+
+  fotos.forEach((src,i)=>{
+    const div=document.createElement('div');
+    div.className='c-slide'+(i===0?' active':'');
+    div.style.backgroundImage='url('+src+')';
+    inner.appendChild(div);
+
+    const dot=document.createElement('div');
+    dot.className='c-dot'+(i===0?' active':'');
+    dot.onclick=()=>irA(id,i);
+    dotsEl.appendChild(dot);
+  });
+
+  _carruseles[id]={current:0,total:fotos.length,timer:null};
+  _carruseles[id].timer=setInterval(()=>moverCarrusel(id,1),5000);
+}
+
+function irA(id,idx){
+  const estado=_carruseles[id];
+  if(!estado)return;
+  const slides=document.querySelectorAll('#inner-'+id+' .c-slide');
+  const dots=document.querySelectorAll('#dots-'+id+' .c-dot');
+  slides[estado.current].classList.remove('active');
+  dots[estado.current]?.classList.remove('active');
+  estado.current=((idx%estado.total)+estado.total)%estado.total;
+  slides[estado.current].classList.add('active');
+  dots[estado.current]?.classList.add('active');
+  clearInterval(estado.timer);
+  estado.timer=setInterval(()=>moverCarrusel(id,1),5000);
+}
+
+window.moverCarrusel=function(id,dir){
+  const estado=_carruseles[id];
+  if(!estado)return;
+  irA(id,estado.current+dir);
+};
+
+function mostrarAvion(id,btn){
+  document.querySelectorAll('.avion-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.flota-tab').forEach(b=>b.classList.remove('active'));
+  document.getElementById('panel-'+id).classList.add('active');
+  btn.classList.add('active');
+  iniciarCarrusel(id);
+}
+window.mostrarAvion=mostrarAvion;
+
+// Iniciar el carrusel del primer tab al cargar
+document.addEventListener('DOMContentLoaded',()=>iniciarCarrusel('tomahawk'));
+</script>
+</body>
+</html>
