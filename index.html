@@ -98,6 +98,19 @@ footer{border-top:1px solid var(--border);padding:1.5rem 2rem;display:flex;align
   .hero{padding:5rem 1.25rem 3rem;}
   footer{flex-direction:column;text-align:center;}
 }
+
+/* CARRUSEL HERO */
+#hero-carousel{overflow:hidden;}
+.carousel-slide{
+  position:absolute;inset:0;
+  background-size:cover;
+  background-position:center 60%;
+  transition:opacity 1.2s ease;
+  opacity:0;
+  filter:brightness(.42) saturate(.7);
+}
+:root.light .carousel-slide{filter:brightness(.58) saturate(.85);}
+.carousel-slide.active{opacity:1;}
 </style>
 </head>
 <body>
@@ -118,6 +131,7 @@ footer{border-top:1px solid var(--border);padding:1.5rem 2rem;display:flex;align
 </nav>
 
 <main class="hero">
+  <div id="hero-carousel" style="position:absolute;inset:0;"></div>
   <div class="hero-bg"></div>
   <div class="hero-grid"></div>
   <div class="radar">
@@ -207,7 +221,7 @@ footer{border-top:1px solid var(--border);padding:1.5rem 2rem;display:flex;align
 </section>
 
 <footer>
-  <span class="footer-brand">◈ AEROCLUB RÍO GRANDE — © 2026 — v1.3</span>
+  <span class="footer-brand">◈ AEROCLUB RÍO GRANDE — © 2026 — v1.4</span>
   <span class="footer-coords">53°46'S 67°45'O · SAWE · RÍO GRANDE, TIERRA DEL FUEGO</span>
 </footer>
 
@@ -266,6 +280,32 @@ function toggleTheme(){
   const isLight=document.documentElement.classList.toggle('light');
   localStorage.setItem('arc-theme',isLight?'light':'dark');
 }
+
+// ── CARRUSEL HERO ──────────────────────────────────────────────
+(function(){
+  const fotos=["fotos/20151009_125642.jpg", "fotos/20151204_182521.jpg", "fotos/20160906_194348.jpg", "fotos/IMG_0688.JPG", "fotos/IMG_0689.JPG", "fotos/IMG_0898.JPG", "fotos/IMG_1221.jpg", "fotos/IMG_1406.jpg", "fotos/IMG_1409.jpg", "fotos/IMG_1411.jpg", "fotos/IMG_1580.jpg", "fotos/IMG_1725.jpg", "fotos/IMG_2142.jpg", "fotos/IMG_2824.jpg", "fotos/IMG_3176.jpg", "fotos/IMG_3590.jpg", "fotos/IMG_4347.jpg", "fotos/IMG_4396.jpg", "fotos/IMG_4541.jpg", "fotos/IMG_5121.jpg", "fotos/IMG_5333.jpg", "fotos/IMG_5416.jpg", "fotos/IMG_6435.jpg", "fotos/IMG_6443.jpg", "fotos/IMG_6521.jpg", "fotos/IMG_6901.JPG", "fotos/IMG_8079.jpg", "fotos/IMG_8469.JPG", "fotos/ea8ffd58a110626fa96a85b168589db6.jpg"];
+  const container=document.getElementById('hero-carousel');
+  if(!container)return;
+
+  // crear slides
+  fotos.forEach((src,i)=>{
+    const div=document.createElement('div');
+    div.className='carousel-slide'+(i===0?' active':'');
+    div.style.backgroundImage='url('+src+')';
+    container.appendChild(div);
+  });
+
+  let current=0;
+  const slides=container.querySelectorAll('.carousel-slide');
+
+  function siguiente(){
+    slides[current].classList.remove('active');
+    current=(current+1)%slides.length;
+    slides[current].classList.add('active');
+  }
+
+  setInterval(siguiente, 5000); // cada 5 segundos
+})();
 </script>
 </body>
 </html>
