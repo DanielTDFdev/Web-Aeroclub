@@ -1,8 +1,8 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 2.6.3
+  VERSION : 2.6.5
   FECHA   : 2026-05-18
-  CAMBIOS : Fix slotsTomados — turnos sin campo avion se normalizan a LV-OAD
+  CAMBIOS : Fix auditoría — usuarios pendientes de aprobación se registran con rol 'pendiente'
 -->
 <!DOCTYPE html>
 <html lang="es">
@@ -203,7 +203,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v2.6.3</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v2.6.5</div>
   </div>
 </div>
 
@@ -695,14 +695,15 @@ window.loginAlumno=async function(){
   try{
     const k=ek(email), alumno=await fbGet('alumnos/'+k);
     if(!alumno||alumno.pass!==pass){
-      await registrarAuditoria('login','alumno','fallo',!alumno?'Email no encontrado':'Contraseña incorrecta — '+email);
+      await registrarAuditoria('login',alumno?alumno.rol||'alumno':'alumno','fallo',!alumno?'Email no encontrado':'Contraseña incorrecta — '+email);
       showErr('login-err','Email o contraseña incorrectos.');return;
     }
     if(alumno.estado==='pendiente_aprobacion'){
+      await registrarAuditoria('login','pendiente','exito',alumno.nombre+' ('+alumno.email+')');
       showScreen('pendiente-screen');
       return;
     }
-    await registrarAuditoria('login','alumno','exito',alumno.nombre+' ('+alumno.email+')');
+    await registrarAuditoria('login',alumno.rol||'alumno','exito',alumno.nombre+' ('+alumno.email+')');
     const rol=alumno.rol||'alumno';
     session={tipo:'alumno',rol,nombre:alumno.nombre,email:alumno.email,emailKey:k};
     setNavUser(alumno.nombre,rol);
