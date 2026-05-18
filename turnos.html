@@ -1,8 +1,8 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 2.7.5
+  VERSION : 2.7.6
   FECHA   : 2026-05-18
-  CAMBIOS : Backup/Restore accesible para admin y administrador — Zona Peligrosa solo para admin
+  CAMBIOS : Fix tab Sistema visible para usuario administrador
 -->
 <!DOCTYPE html>
 <html lang="es">
@@ -203,7 +203,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v2.7.5</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v2.7.6</div>
   </div>
 </div>
 
@@ -1369,10 +1369,15 @@ window.showInstTab=function(tab){
   if(tab==='config'){
     loadConfig().then(()=>{buildCfgAvionTabs();renderConfig();});
     const btnSistema=document.getElementById('cfg-tab-sistema');
-    if(btnSistema) btnSistema.style.display=(session?.user==='admin'||session?.user==='administrador')?'':'';
+    if(btnSistema) btnSistema.style.display=(session?.user==='admin'||session?.user==='administrador')?'':'none';
     ['horarios','dias','instructores','auditoria','consultas','sistema'].forEach(t=>{
       const b=document.getElementById('cfg-tab-'+t);
-      if(b) b.style.display=session?.soloUsuarios?'none':'';
+      if(!b)return;
+      if(t==='sistema'){
+        b.style.display=(session?.user==='admin'||session?.user==='administrador')?'':'none';
+      } else {
+        b.style.display=session?.soloUsuarios?'none':'';
+      }
     });
   }
 };
