@@ -1,8 +1,8 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 2.7
+  VERSION : 2.7.1
   FECHA   : 2026-05-18
-  CAMBIOS : Nueva tab "Consultas" en Configuración — filtro por usuario/fechas/avión/estado + exportar CSV
+  CAMBIOS : Motivo de cancelación opcional al cancelar (instructor y alumno), visible en modal
 -->
 <!DOCTYPE html>
 <html lang="es">
@@ -203,7 +203,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v2.7</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v2.7.1</div>
   </div>
 </div>
 
@@ -1139,9 +1139,19 @@ function puedeAlumnoCancelar(r){
   return (fechaTurno - Date.now()) >= 2*60*60*1000;
 }
 
+function pedirMotivoCancelacion(){
+  const motivo=prompt('Motivo de cancelación (opcional):\nEjemplos: condición meteorológica, inconveniente personal, reagendado...','');
+  if(motivo===null)return null; // presionó Cancelar
+  return motivo.trim();
+}
+
 window.cancelarTurnoAlumno=async function(key){
   if(!confirm('¿Cancelar este turno?'))return;
-  await fbUpdate('reservas/'+key,{estado:'cancelado'});
+  const motivo=pedirMotivoCancelacion();
+  if(motivo===null)return;
+  const update={estado:'cancelado'};
+  if(motivo)update.obs_cancelacion=motivo;
+  await fbUpdate('reservas/'+key,update);
 };
 
 // ── CALENDARIO INSTRUCTOR ──────────────────────────────────────
@@ -1232,7 +1242,8 @@ window.abrirModal=function(key){
   document.getElementById('md-nombre').textContent=r.nombre;
   document.getElementById('md-email').textContent=r.email;
   const obsRow=document.getElementById('md-obs-row');
-  if(r.obs){document.getElementById('md-obs').textContent=r.obs;obsRow.style.display='flex';}
+  const obsTexto=[r.obs?'Obs: '+r.obs:'',r.obs_cancelacion?'Cancelación: '+r.obs_cancelacion:''].filter(Boolean).join(' — ');
+  if(obsTexto){document.getElementById('md-obs').textContent=obsTexto;obsRow.style.display='flex';}
   else{obsRow.style.display='none';}
   document.getElementById('md-estado').innerHTML=`<span class="badge badge-${r.estado}">${r.estado}</span>`;
   if(r.ts){
@@ -1257,11 +1268,11 @@ window.abrirModal=function(key){
     const ba=document.createElement('button');ba.className='primary';ba.textContent='APROBAR TURNO';
     ba.onclick=async()=>{if(!confirm('¿Aprobar el turno de '+r.nombre+'?'))return;await fbUpdate('reservas/'+key,{estado:'aprobado',instructor:session.nombre});cerrarModal();};
     const bc=document.createElement('button');bc.className='danger';bc.textContent='CANCELAR TURNO';
-    bc.onclick=async()=>{if(!confirm('¿Cancelar el turno de '+r.nombre+'?'))return;const rv=await fbGet('reservas/'+key);if(rv){await fbUpdate('reservas/'+key,{estado:'cancelado',instructor:session.nombre});if(!turnoYaPaso(rv))mailCancel(rv);}cerrarModal();};
+    bc.onclick=async()=>{if(!confirm('¿Cancelar el turno de '+r.nombre+'?'))return;const motivo=pedirMotivoCancelacion();if(motivo===null)return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre};if(motivo)upd.obs_cancelacion=motivo;await fbUpdate('reservas/'+key,upd);if(!turnoYaPaso(rv))mailCancel(rv);}cerrarModal();};
     actions.appendChild(ba);actions.appendChild(bc);
   } else if(r.estado==='aprobado'){
     const bc=document.createElement('button');bc.className='danger';bc.textContent='CANCELAR TURNO';
-    bc.onclick=async()=>{if(!confirm('¿Cancelar el turno de '+r.nombre+'?'))return;const rv=await fbGet('reservas/'+key);if(rv){await fbUpdate('reservas/'+key,{estado:'cancelado',instructor:session.nombre});if(!turnoYaPaso(rv))mailCancel(rv);}cerrarModal();};
+    bc.onclick=async()=>{if(!confirm('¿Cancelar el turno de '+r.nombre+'?'))return;const motivo=pedirMotivoCancelacion();if(motivo===null)return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre};if(motivo)upd.obs_cancelacion=motivo;await fbUpdate('reservas/'+key,upd);if(!turnoYaPaso(rv))mailCancel(rv);}cerrarModal();};
     actions.appendChild(bc);
   }
   document.getElementById('modal-turno').classList.add('open');
