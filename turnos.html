@@ -1,8 +1,8 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 2.6.1
+  VERSION : 2.6.2
   FECHA   : 2026-05-18
-  CAMBIOS : Anticipación mínima para pilotos reducida a 1 hora (alumnos siguen con 12 hs)
+  CAMBIOS : Fix race condition en confirmarTurno — re-consulta Firebase justo antes de grabar
 -->
 <!DOCTYPE html>
 <html lang="es">
@@ -1021,9 +1021,10 @@ window.confirmarTurno=async function(){
   if(!selectedAvion){showErr('turno-err','Seleccioná un avión.');return;}
   if(!selectedDay||!selectedSlot){showErr('turno-err','Seleccioná día y horario.');return;}
   if(!okAnticipacion(selectedDay,selectedSlot)){showErr('turno-err','Se requiere al menos '+(session?.rol==='piloto'?'1 hora':'12 horas')+' de anticipación.');return;}
-  const snap=await get(ref(db,'reservas'));
-  const taken=rArr(snap.val()).filter(r=>r.fecha===selectedDay&&r.avion===selectedAvion&&r.estado!=='cancelado'&&r.estado!=='vencido').map(r=>r.hora);
-  if(taken.includes(selectedSlot)){showErr('turno-err','Ese horario ya fue reservado.');return;}
+  // Re-consulta fresca justo antes de grabar para minimizar colisiones simultáneas
+  const snapFinal = await get(ref(db,'reservas'));
+  const takenFinal = slotsTomados(selectedDay, selectedAvion, snapFinal.val());
+  if(takenFinal.includes(selectedSlot)){showErr('turno-err','Ese horario acaba de ser reservado por otro usuario. Elegí otro.');return;}
   const obs=val('al-obs');
   const rol=session.rol||'alumno';
   const esPiloto=rol==='piloto';
