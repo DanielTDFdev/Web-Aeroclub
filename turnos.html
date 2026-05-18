@@ -1,8 +1,8 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 2.6.5
+  VERSION : 2.7
   FECHA   : 2026-05-18
-  CAMBIOS : Fix auditoría — usuarios pendientes de aprobación se registran con rol 'pendiente'
+  CAMBIOS : Nueva tab "Consultas" en Configuración — filtro por usuario/fechas/avión/estado + exportar CSV
 -->
 <!DOCTYPE html>
 <html lang="es">
@@ -203,7 +203,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v2.6.5</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v2.7</div>
   </div>
 </div>
 
@@ -393,6 +393,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <button class="nav-btn"        id="cfg-tab-dias"         onclick="showCfgTab('dias')">Días</button>
       <button class="nav-btn"        id="cfg-tab-instructores" onclick="showCfgTab('instructores')">Instructores</button>
       <button class="nav-btn"        id="cfg-tab-usuarios"     onclick="showCfgTab('usuarios')">Usuarios</button>
+      <button class="nav-btn"        id="cfg-tab-consultas"    onclick="showCfgTab('consultas')">Consultas</button>
       <button class="nav-btn"        id="cfg-tab-auditoria"    onclick="showCfgTab('auditoria')">Auditoría</button>
       <button class="nav-btn"        id="cfg-tab-sistema"      onclick="showCfgTab('sistema')" style="color:var(--red);border-color:rgba(248,81,73,.3)">Sistema</button>
     </div>
@@ -486,6 +487,52 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <div class="modal-actions">
           <button class="primary" onclick="guardarAlumno()">GUARDAR</button>
           <button onclick="cerrarModalAlumno()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="cfg-consultas" class="cfg-panel" style="display:none">
+      <div class="card">
+        <h3>Consulta de Turnos</h3>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:.85rem">
+          <div class="field" style="margin:0;flex:2;min-width:160px">
+            <label>Usuario (nombre o email)</label>
+            <input type="text" id="cq-usuario" placeholder="Ej: Martin o martin@...">
+          </div>
+          <div class="field" style="margin:0;min-width:130px">
+            <label>Desde</label>
+            <input type="date" id="cq-desde">
+          </div>
+          <div class="field" style="margin:0;min-width:130px">
+            <label>Hasta</label>
+            <input type="date" id="cq-hasta">
+          </div>
+          <div class="field" style="margin:0;min-width:110px">
+            <label>Avión</label>
+            <select id="cq-avion" style="width:100%;padding:9px 12px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:var(--font-mono);font-size:13px">
+              <option value="">Todos</option>
+              <option value="LV-OAD">LV-OAD</option>
+              <option value="LV-ART">LV-ART</option>
+              <option value="LV-MPH">LV-MPH</option>
+            </select>
+          </div>
+          <div class="field" style="margin:0;min-width:120px">
+            <label>Estado</label>
+            <select id="cq-estado" style="width:100%;padding:9px 12px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:var(--font-mono);font-size:13px">
+              <option value="">Todos</option>
+              <option value="pendiente">Pendiente</option>
+              <option value="aprobado">Aprobado</option>
+              <option value="cancelado">Cancelado</option>
+              <option value="vencido">Vencido</option>
+            </select>
+          </div>
+          <button class="primary" onclick="ejecutarConsulta()" style="padding:9px 20px;font-size:12px">BUSCAR</button>
+          <button onclick="limpiarConsulta()" style="padding:9px 16px;font-size:12px">LIMPIAR</button>
+        </div>
+        <div id="cq-stats" style="display:flex;gap:10px;margin-bottom:.85rem;flex-wrap:wrap"></div>
+        <div id="cq-resultado"><div class="empty">// Ingresá criterios y presioná BUSCAR</div></div>
+        <div id="cq-export-wrap" style="display:none;margin-top:.75rem">
+          <button onclick="exportarCSV()" style="font-size:12px;padding:7px 16px">⬇ EXPORTAR CSV</button>
         </div>
       </div>
     </div>
@@ -1294,7 +1341,7 @@ window.showInstTab=function(tab){
     loadConfig().then(()=>{buildCfgAvionTabs();renderConfig();});
     const btnSistema=document.getElementById('cfg-tab-sistema');
     if(btnSistema) btnSistema.style.display=session?.user==='admin'?'':'none';
-    ['horarios','dias','instructores','auditoria','sistema'].forEach(t=>{
+    ['horarios','dias','instructores','auditoria','consultas','sistema'].forEach(t=>{
       const b=document.getElementById('cfg-tab-'+t);
       if(b) b.style.display=session?.soloUsuarios?'none':'';
     });
@@ -1326,7 +1373,7 @@ window.selectCfgAvion=function(key){
 window.showCfgTab=function(tab){
   if(tab==='sistema'&&session?.user!=='admin') return;
   if(session?.soloUsuarios&&tab!=='usuarios') return;
-  ['horarios','dias','instructores','usuarios','auditoria','sistema'].forEach(t=>{
+  ['horarios','dias','instructores','usuarios','consultas','auditoria','sistema'].forEach(t=>{
     const panel=document.getElementById('cfg-'+t);
     const btn=document.getElementById('cfg-tab-'+t);
     if(panel)panel.style.display=t===tab?'block':'none';
@@ -1745,6 +1792,103 @@ window.ejecutarBorrar=async function(){
   for(const[k]of afectados)await fbRemove('reservas/'+k);
   document.getElementById('borrar-preview').textContent=`// ${afectados.length} turno(s) eliminado(s).`;
   document.getElementById('borrar-preview').style.color='var(--green)';
+};
+
+// ── CONSULTAS ──────────────────────────────────────────────────
+let _cqResultados=[];
+
+window.ejecutarConsulta=async function(){
+  const usuario=(document.getElementById('cq-usuario')?.value||'').toLowerCase().trim();
+  const desde=document.getElementById('cq-desde')?.value||'';
+  const hasta=document.getElementById('cq-hasta')?.value||'';
+  const avion=document.getElementById('cq-avion')?.value||'';
+  const estado=document.getElementById('cq-estado')?.value||'';
+
+  const el=document.getElementById('cq-resultado');
+  el.innerHTML='<div class="empty">// Consultando...</div>';
+  document.getElementById('cq-stats').innerHTML='';
+  document.getElementById('cq-export-wrap').style.display='none';
+
+  const data=await fbGet('reservas');
+  let lista=rArr(data);
+
+  if(usuario) lista=lista.filter(r=>(r.nombre||'').toLowerCase().includes(usuario)||(r.email||'').toLowerCase().includes(usuario));
+  if(desde)   lista=lista.filter(r=>r.fecha>=desde);
+  if(hasta)   lista=lista.filter(r=>r.fecha<=hasta);
+  if(avion)   lista=lista.filter(r=>(r.avion||'LV-OAD')===avion);
+  if(estado)  lista=lista.filter(r=>r.estado===estado);
+
+  lista.sort((a,b)=>a.fecha.localeCompare(b.fecha)||a.hora.localeCompare(b.hora));
+  _cqResultados=lista;
+
+  // stats
+  const total=lista.length;
+  const porEstado={pendiente:0,aprobado:0,cancelado:0,vencido:0};
+  lista.forEach(r=>{if(porEstado[r.estado]!==undefined)porEstado[r.estado]++;});
+  const statsEl=document.getElementById('cq-stats');
+  if(total){
+    statsEl.innerHTML=`
+      <div style="font-family:var(--font-mono);font-size:11px;padding:5px 12px;background:rgba(0,200,212,.07);border:1px solid rgba(0,200,212,.2);border-radius:var(--radius);color:var(--cyan)">TOTAL <strong>${total}</strong></div>
+      ${porEstado.aprobado?`<div style="font-family:var(--font-mono);font-size:11px;padding:5px 12px;background:rgba(57,211,83,.07);border:1px solid rgba(57,211,83,.2);border-radius:var(--radius);color:var(--green)">APROBADOS <strong>${porEstado.aprobado}</strong></div>`:''}
+      ${porEstado.pendiente?`<div style="font-family:var(--font-mono);font-size:11px;padding:5px 12px;background:rgba(240,165,0,.07);border:1px solid rgba(240,165,0,.2);border-radius:var(--radius);color:var(--amber)">PENDIENTES <strong>${porEstado.pendiente}</strong></div>`:''}
+      ${porEstado.cancelado?`<div style="font-family:var(--font-mono);font-size:11px;padding:5px 12px;background:rgba(248,81,73,.07);border:1px solid rgba(248,81,73,.2);border-radius:var(--radius);color:var(--red)">CANCELADOS <strong>${porEstado.cancelado}</strong></div>`:''}
+      ${porEstado.vencido?`<div style="font-family:var(--font-mono);font-size:11px;padding:5px 12px;background:rgba(120,80,200,.07);border:1px solid rgba(120,80,200,.2);border-radius:var(--radius);color:#a07ef0">VENCIDOS <strong>${porEstado.vencido}</strong></div>`:''}`;
+  }
+
+  if(!lista.length){el.innerHTML='<div class="empty">// Sin resultados para ese criterio.</div>';return;}
+
+  el.innerHTML=`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:12px;min-width:560px">
+    <thead><tr style="border-bottom:1px solid var(--border2)">
+      <th style="text-align:left;padding:6px 8px;color:var(--text3);font-weight:500;letter-spacing:.08em">FECHA</th>
+      <th style="text-align:left;padding:6px 8px;color:var(--text3);font-weight:500;letter-spacing:.08em">HORA</th>
+      <th style="text-align:left;padding:6px 8px;color:var(--text3);font-weight:500;letter-spacing:.08em">AVIÓN</th>
+      <th style="text-align:left;padding:6px 8px;color:var(--text3);font-weight:500;letter-spacing:.08em">NOMBRE</th>
+      <th style="text-align:left;padding:6px 8px;color:var(--text3);font-weight:500;letter-spacing:.08em">EMAIL</th>
+      <th style="text-align:left;padding:6px 8px;color:var(--text3);font-weight:500;letter-spacing:.08em">ESTADO</th>
+      <th style="text-align:left;padding:6px 8px;color:var(--text3);font-weight:500;letter-spacing:.08em">OBS</th>
+    </tr></thead><tbody>
+    ${lista.map(r=>`<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:7px 8px;color:var(--amber)">${r.fecha}</td>
+      <td style="padding:7px 8px;color:var(--text)">${r.horaInicio&&r.horaFin?r.horaInicio+'–'+r.horaFin:r.hora} hs</td>
+      <td style="padding:7px 8px;color:var(--cyan)">${r.avion||'LV-OAD'}</td>
+      <td style="padding:7px 8px;color:var(--text)">${r.nombre}</td>
+      <td style="padding:7px 8px;color:var(--text2);font-size:11px">${r.email}</td>
+      <td style="padding:7px 8px"><span class="badge badge-${r.estado}">${r.estado}</span></td>
+      <td style="padding:7px 8px;color:var(--text3);font-size:11px">${r.obs||'—'}</td>
+    </tr>`).join('')}
+    </tbody></table></div>`;
+
+  document.getElementById('cq-export-wrap').style.display='block';
+};
+
+window.limpiarConsulta=function(){
+  ['cq-usuario','cq-desde','cq-hasta'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  document.getElementById('cq-avion').value='';
+  document.getElementById('cq-estado').value='';
+  document.getElementById('cq-resultado').innerHTML='<div class="empty">// Ingresá criterios y presioná BUSCAR</div>';
+  document.getElementById('cq-stats').innerHTML='';
+  document.getElementById('cq-export-wrap').style.display='none';
+  _cqResultados=[];
+};
+
+window.exportarCSV=function(){
+  if(!_cqResultados.length)return;
+  const headers=['Fecha','Hora','Avión','Nombre','Email','Estado','Observaciones','Solicitado'];
+  const rows=_cqResultados.map(r=>[
+    r.fecha,
+    r.horaInicio&&r.horaFin?r.horaInicio+'-'+r.horaFin:r.hora,
+    r.avion||'LV-OAD',
+    r.nombre,
+    r.email,
+    r.estado,
+    r.obs||'',
+    r.ts?new Date(r.ts).toLocaleString('es-AR'):''
+  ].map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(','));
+  const csv='\uFEFF'+[headers.join(','),...rows].join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download='turnos_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
 };
 
 // ── INIT ────────────────────────────────────────────────────────
