@@ -1,8 +1,8 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 2.6.2
+  VERSION : 2.6.3
   FECHA   : 2026-05-18
-  CAMBIOS : Fix race condition en confirmarTurno — re-consulta Firebase justo antes de grabar
+  CAMBIOS : Fix slotsTomados — turnos sin campo avion se normalizan a LV-OAD
 -->
 <!DOCTYPE html>
 <html lang="es">
@@ -203,7 +203,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v2.6.2</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v2.6.3</div>
   </div>
 </div>
 
@@ -930,7 +930,7 @@ function selectDay(ds){
 }
 
 function slotsTomados(ds,avion,data){
-  const reservas=rArr(data).filter(r=>r.fecha===ds&&r.avion===avion&&r.estado!=='cancelado'&&r.estado!=='vencido');
+  const reservas=rArr(data).filter(r=>r.fecha===ds&&(r.avion||'LV-OAD')===avion&&r.estado!=='cancelado'&&r.estado!=='vencido');
   const taken=new Set();
   reservas.forEach(r=>{
     if(r.horaInicio&&r.horaFin){
