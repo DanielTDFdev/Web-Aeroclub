@@ -1,8 +1,8 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 2.7.1
+  VERSION : 2.7.2
   FECHA   : 2026-05-18
-  CAMBIOS : Motivo de cancelación opcional al cancelar (instructor y alumno), visible en modal
+  CAMBIOS : Fix "Solicitado solicitado" en modal, prompt cancelación texto libre
 -->
 <!DOCTYPE html>
 <html lang="es">
@@ -203,7 +203,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v2.7.1</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v2.7.2</div>
   </div>
 </div>
 
@@ -1140,8 +1140,8 @@ function puedeAlumnoCancelar(r){
 }
 
 function pedirMotivoCancelacion(){
-  const motivo=prompt('Motivo de cancelación (opcional):\nEjemplos: condición meteorológica, inconveniente personal, reagendado...','');
-  if(motivo===null)return null; // presionó Cancelar
+  const motivo=prompt('Motivo de cancelación (opcional):','');
+  if(motivo===null)return null;
   return motivo.trim();
 }
 
@@ -1250,7 +1250,7 @@ window.abrirModal=function(key){
     const dt=new Date(r.ts);
     const DIAS=['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
     const MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-    const fmtTs='Solicitado el día '+DIAS[dt.getDay()]+' '+dt.getDate()+' de '+MESES[dt.getMonth()]+' de '+dt.getFullYear()+', '+String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0')+' hs';
+    const fmtTs=DIAS[dt.getDay()]+' '+dt.getDate()+' de '+MESES[dt.getMonth()]+' de '+dt.getFullYear()+', '+String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0')+' hs';
     document.getElementById('md-ts').textContent=fmtTs;
   } else {
     document.getElementById('md-ts').textContent='—';
