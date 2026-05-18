@@ -197,7 +197,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v2.5</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v2.6</div>
   </div>
 </div>
 
@@ -671,7 +671,7 @@ window.registrarAlumno=async function(){
     if(await fbGet('alumnos/'+k)){showErr('reg-err','Ya existe una cuenta con ese email.');return;}
     // rol por defecto: alumno
     await fbSet('alumnos/'+k,{nombre,email,pass,rol:'alumno',estado:'pendiente_aprobacion',ts:new Date().toISOString()});
-    await registrarAuditoria('registro','alumno','exito',nombre+' ('+email+')');
+    await registrarAuditoria('registro','pendiente','exito',nombre+' ('+email+')');
     showOk('reg-ok','¡Cuenta creada! Ya podés ingresar.');
     clearVal('reg-nombre','reg-email','reg-pass','reg-pass2');
     setTimeout(()=>switchLoginTab('alumno'),1500);
@@ -1653,7 +1653,7 @@ function renderAuditoria(lista,skipPageReset){
   const page=Math.min(_auditPage,totalPages-1);
   const slice=lista.slice(page*AUDIT_PER_PAGE,(page+1)*AUDIT_PER_PAGE);
   const ACCION_LABEL={'login':'Login','registro':'Registro'};
-  const ROL_ICON={'alumno':'🛩️','instructor':'👨‍✈️','piloto':'✈️'};
+  const ROL_ICON={'alumno':'🛩️','instructor':'👨‍✈️','piloto':'✈️','pendiente':'⏳'};
   const paginador=totalPages>1?`
     <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:.75rem;flex-wrap:wrap;font-family:var(--font-mono);font-size:12px">
       <button onclick="auditGoPage(0)" ${page===0?'disabled':''} style="padding:4px 10px;font-size:11px">«</button>
