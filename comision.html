@@ -1,8 +1,8 @@
 <!--
   ARCHIVO : comision.html
-  VERSION : 1.1
+  VERSION : 1.2
   FECHA   : 2026-05-18
-  CAMBIOS : Agregada sección CIAC — Gerentes e Instructores
+  CAMBIOS : Títulos de cargo más grandes (10px → 12px)
 -->
 <!DOCTYPE html>
 <html lang="es">
@@ -86,8 +86,8 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:cen
 .card.presidente::before{background:linear-gradient(90deg,transparent,var(--amber),transparent);opacity:.6;}
 .card.presidente{border-color:rgba(240,165,0,.25);background:linear-gradient(135deg,var(--bg3),rgba(240,165,0,.04));}
 
-.card-cargo{font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.18em;text-transform:uppercase;margin-bottom:.4rem;}
-.card.presidente .card-cargo{color:var(--amber);}
+.card-cargo{font-family:var(--font-mono);font-size:12px;color:var(--text3);letter-spacing:.18em;text-transform:uppercase;margin-bottom:.4rem;}
+.card.presidente .card-cargo{color:var(--amber);font-size:13px;}
 .card-nombre{font-family:var(--font-ui);font-size:clamp(15px,2.5vw,18px);font-weight:700;color:var(--text);letter-spacing:.03em;line-height:1.2;}
 .card.presidente .card-nombre{color:var(--amber2);font-size:clamp(17px,3vw,22px);}
 .card-numero{position:absolute;bottom:.75rem;right:1rem;font-family:var(--font-mono);font-size:28px;color:var(--border);font-weight:900;line-height:1;pointer-events:none;}
