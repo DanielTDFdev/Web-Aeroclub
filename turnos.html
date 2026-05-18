@@ -626,6 +626,8 @@ function getDays(){const d=[],n=new Date();for(let i=0;i<7;i++){const x=new Date
 function fmtDate(d){const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${dd}`;}
 function fmtLabel(d){const D=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];return D[d.getDay()]+'\n'+d.getDate()+'/'+(d.getMonth()+1);}
 function ok12h(ds,h){const[y,m,d]=ds.split('-').map(Number);const[hh,mm]=h.split(':').map(Number);return(new Date(y,m-1,d,hh,mm,0)-new Date())>=12*3600*1000;}
+function ok1h(ds,h){const[y,m,d]=ds.split('-').map(Number);const[hh,mm]=h.split(':').map(Number);return(new Date(y,m-1,d,hh,mm,0)-new Date())>=1*3600*1000;}
+function okAnticipacion(ds,h){return(session?.rol==='piloto')?ok1h(ds,h):ok12h(ds,h);}
 function rArr(data){if(!data)return[];return Object.entries(data).map(([k,v])=>({...v,key:k}));}
 
 function horasParaDia(dateStr, avionKey){
@@ -942,8 +944,8 @@ function renderSlots(ds,data){
   const taken=slotsTomados(ds,selectedAvion,data);
   document.getElementById('selected-day-label').textContent=ds;
   document.getElementById('slots-section').style.display='block';
-  const avail=horasParaDia(ds,selectedAvion).filter(h=>ok12h(ds,h));
-  if(!avail.length){grid.innerHTML='<div class="empty">// SIN DISPONIBILIDAD (se requieren 12 hs de anticipación)</div>';return;}
+  const avail=horasParaDia(ds,selectedAvion).filter(h=>okAnticipacion(ds,h));
+  if(!avail.length){grid.innerHTML='<div class="empty">// SIN DISPONIBILIDAD (se requiere '+(session?.rol==='piloto'?'1 hora':'12 hs')+' de anticipación)</div>';return;}
   grid.innerHTML=avail.map(h=>{
     const tk=taken.includes(h),sl=selectedSlot===h;
     return `<div class="slot${tk?' taken':sl?' selected':''}" data-hora="${h}">${h}</div>`;
@@ -1012,7 +1014,7 @@ window.confirmarTurno=async function(){
   hideEl('turno-err');hideEl('turno-ok');
   if(!selectedAvion){showErr('turno-err','Seleccioná un avión.');return;}
   if(!selectedDay||!selectedSlot){showErr('turno-err','Seleccioná día y horario.');return;}
-  if(!ok12h(selectedDay,selectedSlot)){showErr('turno-err','Se requieren al menos 12 hs de anticipación.');return;}
+  if(!okAnticipacion(selectedDay,selectedSlot)){showErr('turno-err','Se requiere al menos '+(session?.rol==='piloto'?'1 hora':'12 horas')+' de anticipación.');return;}
   const snap=await get(ref(db,'reservas'));
   const taken=rArr(snap.val()).filter(r=>r.fecha===selectedDay&&r.avion===selectedAvion&&r.estado!=='cancelado'&&r.estado!=='vencido').map(r=>r.hora);
   if(taken.includes(selectedSlot)){showErr('turno-err','Ese horario ya fue reservado.');return;}
