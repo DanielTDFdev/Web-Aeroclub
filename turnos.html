@@ -1,8 +1,8 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 2.7.4
+  VERSION : 2.7.5
   FECHA   : 2026-05-18
-  CAMBIOS : Botón Restaurar Backup — selección por tabla, confirma antes de pisar datos
+  CAMBIOS : Backup/Restore accesible para admin y administrador — Zona Peligrosa solo para admin
 -->
 <!DOCTYPE html>
 <html lang="es">
@@ -203,7 +203,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v2.7.4</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v2.7.5</div>
   </div>
 </div>
 
@@ -580,7 +580,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
           </div>
         </div>
       </div>
-      <div class="card" style="border-color:rgba(248,81,73,.3)">
+      <div class="card" id="card-zona-peligrosa" style="border-color:rgba(248,81,73,.3)">
         <h3 style="color:var(--red)">Zona Peligrosa</h3>
         <p style="font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-bottom:1rem;letter-spacing:.05em">ACCIONES IRREVERSIBLES — USAR CON CUIDADO</p>
         <div style="font-family:var(--font-mono);font-size:11px;color:var(--text2);letter-spacing:.1em;text-transform:uppercase;margin-bottom:.6rem">¿Qué turnos borrar?</div>
@@ -1369,7 +1369,7 @@ window.showInstTab=function(tab){
   if(tab==='config'){
     loadConfig().then(()=>{buildCfgAvionTabs();renderConfig();});
     const btnSistema=document.getElementById('cfg-tab-sistema');
-    if(btnSistema) btnSistema.style.display=session?.user==='admin'?'':'none';
+    if(btnSistema) btnSistema.style.display=(session?.user==='admin'||session?.user==='administrador')?'':'';
     ['horarios','dias','instructores','auditoria','consultas','sistema'].forEach(t=>{
       const b=document.getElementById('cfg-tab-'+t);
       if(b) b.style.display=session?.soloUsuarios?'none':'';
@@ -1400,8 +1400,8 @@ window.selectCfgAvion=function(key){
 };
 
 window.showCfgTab=function(tab){
-  if(tab==='sistema'&&session?.user!=='admin') return;
-  if(session?.soloUsuarios&&tab!=='usuarios') return;
+  if(tab==='sistema'&&session?.user!=='admin'&&session?.user!=='administrador') return;
+  if(session?.soloUsuarios&&tab!=='usuarios'&&tab!=='sistema') return;
   ['horarios','dias','instructores','usuarios','consultas','auditoria','sistema'].forEach(t=>{
     const panel=document.getElementById('cfg-'+t);
     const btn=document.getElementById('cfg-tab-'+t);
@@ -1413,6 +1413,10 @@ window.showCfgTab=function(tab){
   if(tab==='dias'){calMesActual=new Date();calMesActual.setDate(1);buildCfgAvionTabs();renderCalMes();}
   if(tab==='horarios'){buildCfgAvionTabs();renderHorariosConfig();}
   if(tab==='auditoria')cargarAuditoria();
+  if(tab==='sistema'){
+    const zona=document.getElementById('card-zona-peligrosa');
+    if(zona) zona.style.display=session?.user==='admin'?'block':'none';
+  }
 };
 
 function renderConfig(){renderHorariosConfig();}
