@@ -282,12 +282,31 @@ function toggleTheme(){
 }
 
 // ── CARRUSEL HERO ──────────────────────────────────────────────
-(function(){
-  const fotos=["fotos/20151009_125642.jpg", "fotos/20151204_182405.jpg", "fotos/20151204_182521.jpg", "fotos/20160906_194348.jpg", "fotos/3c5726c9-fcaa-45b0-83ab-a4269937ff61.jpg", "fotos/IMG_0688.JPG", "fotos/IMG_0689.JPG", "fotos/IMG_0898.JPG", "fotos/IMG_1221.jpg", "fotos/IMG_1406.jpg", "fotos/IMG_1409.jpg", "fotos/IMG_1411.jpg", "fotos/IMG_1580.jpg", "fotos/IMG_1725.jpg", "fotos/IMG_2055.jpg", "fotos/IMG_2142.jpg", "fotos/IMG_2199.jpg", "fotos/IMG_2824.jpg", "fotos/IMG_3176.jpg", "fotos/IMG_3590.jpg", "fotos/IMG_4347.jpg", "fotos/IMG_4396.jpg", "fotos/IMG_4541.jpg", "fotos/IMG_5121.jpg", "fotos/IMG_5333.jpg", "fotos/IMG_5371.jpg", "fotos/IMG_5416.jpg", "fotos/IMG_6435.jpg", "fotos/IMG_6443.jpg", "fotos/IMG_6521.jpg", "fotos/IMG_6901.JPG", "fotos/IMG_8079.jpg", "fotos/IMG_8469.JPG", "fotos/IMG_9638.JPG", "fotos/ca2fe1b4-96e7-4afd-bc17-14e506cb4e13.jpg", "fotos/ea8ffd58a110626fa96a85b168589db6.jpg"];
+(async function(){
   const container=document.getElementById('hero-carousel');
   if(!container)return;
 
-  // crear slides
+  const REPO='danieltdfdev/Turnos-LV-OAD';
+  const CARPETA='fotos';
+  const EXTENSIONES=/\.(jpe?g|png|gif|webp)$/i;
+
+  let fotos=[];
+  try{
+    const res=await fetch('https://api.github.com/repos/'+REPO+'/contents/'+CARPETA);
+    if(res.ok){
+      const archivos=await res.json();
+      fotos=archivos
+        .filter(f=>f.type==='file'&&EXTENSIONES.test(f.name))
+        .map(f=>f.download_url);
+    }
+  }catch(e){}
+
+  // fallback: si la API falla no se muestra nada (podría agregarse imagen por defecto)
+  if(!fotos.length)return;
+
+  // barajar orden
+  fotos.sort(()=>Math.random()-.5);
+
   fotos.forEach((src,i)=>{
     const div=document.createElement('div');
     div.className='carousel-slide'+(i===0?' active':'');
@@ -304,7 +323,7 @@ function toggleTheme(){
     slides[current].classList.add('active');
   }
 
-  setInterval(siguiente, 5000); // cada 5 segundos
+  setInterval(siguiente,5000);
 })();
 </script>
 </body>
