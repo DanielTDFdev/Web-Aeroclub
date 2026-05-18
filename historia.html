@@ -1,8 +1,8 @@
 <!--
   ARCHIVO : historia.html
-  VERSION : 1.0
+  VERSION : 1.2
   FECHA   : 2026-05-18
-  CAMBIOS : Página inicial — Historia del Aeroclub Río Grande
+  CAMBIOS : Años de historia dinámicos, alumnos corregido a 25+ por año
 -->
 <!DOCTYPE html>
 <html lang="es">
@@ -150,11 +150,11 @@ footer{border-top:1px solid var(--border);padding:1.5rem 2rem;display:flex;align
   <div class="hero-content">
     <div class="hero-eyebrow">▸ Tierra del Fuego · Argentina</div>
     <h1 class="hero-title">NUESTRA<br>HISTORIA</h1>
-    <div class="hero-fecha">◈ FUNDADO EL 23 · XI · 1954</div>
+    <div class="hero-fecha">◈ FUNDADO EL 23 DE NOVIEMBRE DE 1954</div>
     <div class="hero-sub">// Más de 70 años de aviación en el fin del mundo</div>
     <div class="stat-bar">
       <div class="stat-item">
-        <span class="stat-num">70+</span>
+        <span class="stat-num" id="stat-anios">—</span>
         <span class="stat-lbl">Años de historia</span>
       </div>
       <div class="stat-item">
@@ -162,8 +162,8 @@ footer{border-top:1px solid var(--border);padding:1.5rem 2rem;display:flex;align
         <span class="stat-lbl">Fundación</span>
       </div>
       <div class="stat-item">
-        <span class="stat-num">40+</span>
-        <span class="stat-lbl">Alumnos por tanda</span>
+        <span class="stat-num">25+</span>
+        <span class="stat-lbl">Alumnos por año</span>
       </div>
     </div>
   </div>
@@ -245,6 +245,15 @@ function toggleTheme(){
   const isLight=document.documentElement.classList.toggle('light');
   localStorage.setItem('arc-theme',isLight?'light':'dark');
 }
+// Años dinámicos desde fundación
+(function(){
+  const fundacion=new Date(1954,10,23); // 23 noviembre 1954
+  const hoy=new Date();
+  let anios=hoy.getFullYear()-fundacion.getFullYear();
+  const cumpleEsteAnio=new Date(hoy.getFullYear(),10,23);
+  if(hoy<cumpleEsteAnio) anios--;
+  document.getElementById('stat-anios').textContent=anios;
+})();
 </script>
 </body>
 </html>
