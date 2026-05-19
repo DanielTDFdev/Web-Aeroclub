@@ -1,8 +1,8 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 3.0
-  FECHA   : 2026-05-18
-  CAMBIOS : Fecha en auditoría en formato dd/mm/aaaa
+  VERSION : 3.1
+  FECHA   : 2026-05-19
+  CAMBIOS : Banner de usuarios pendientes de validación para instructores/admin
 -->
 <!DOCTYPE html>
 <html lang="es">
@@ -206,7 +206,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v3.0</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v3.1</div>
   </div>
 </div>
 
@@ -353,6 +353,13 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 
 <!-- INSTRUCTOR -->
 <div id="instructor-screen" class="screen">
+  <!-- BANNER USUARIOS PENDIENTES -->
+  <div id="banner-pendientes" style="display:none;margin-bottom:1rem;padding:.85rem 1.1rem;background:rgba(240,165,0,.08);border:1px solid rgba(240,165,0,.35);border-left:3px solid var(--amber);border-radius:var(--radius);align-items:center;gap:12px;flex-wrap:wrap;">
+    <span style="font-size:18px;line-height:1">⚠️</span>
+    <span id="banner-pendientes-txt" style="font-family:var(--font-mono);font-size:12px;color:var(--amber);letter-spacing:.08em;flex:1;min-width:160px"></span>
+    <button onclick="showInstTab('config');showCfgTab('usuarios');" style="font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;padding:5px 14px;border-color:var(--amber);color:var(--amber);background:rgba(240,165,0,.1);white-space:nowrap">VER USUARIOS →</button>
+    <button onclick="document.getElementById('banner-pendientes').style.display='none'" style="font-size:14px;padding:2px 8px;border:none;background:none;color:var(--amber);opacity:.6" title="Cerrar">✕</button>
+  </div>
   <div class="tab-bar">
     <button class="nav-btn active" id="inst-tab-res" onclick="showInstTab('reservas')">Reservas</button>
     <button class="nav-btn"        id="inst-tab-cfg" onclick="showInstTab('config')">Configuración</button>
@@ -826,6 +833,7 @@ window.loginInstructor=async function(){
     showScreen('instructor-screen');
     if(soloUsuarios){showInstTab('config');showCfgTab('usuarios');}
     else{showInstTab('reservas');suscribirReservas();}
+    suscribirPendientes();
   }catch(e){showErr('login-err2','Error al iniciar sesión.');console.error(e);}
   finally{setLoading('btn-login-inst',false);}
 };
@@ -839,6 +847,8 @@ function setNavUser(nombre,tipo){
 
 window.logout=function(){
   if(unsubReservas){unsubReservas();unsubReservas=null;}
+  if(_unsubPendientes){_unsubPendientes();_unsubPendientes=null;}
+  const banner=document.getElementById('banner-pendientes');if(banner)banner.style.display='none';
   session=null;selectedDay=null;selectedSlot=null;selectedAvion=null;
   document.getElementById('hero-callsign').textContent='TURNOS';
   document.getElementById('nav-brand').textContent='◈ ACCESO AL SISTEMA';
@@ -1412,6 +1422,27 @@ function suscribirReservas(){
     if(session?.tipo==='alumno')renderMisTurnos(dataFresh);
     if(session?.tipo==='instructor')renderTodasReservas(dataFresh);
     if(selectedDay&&selectedAvion)renderSlots(selectedDay,dataFresh);
+  });
+}
+
+// ── SUSCRIPCIÓN USUARIOS PENDIENTES (banner) ───────────────────
+let _unsubPendientes=null;
+function suscribirPendientes(){
+  if(_unsubPendientes){_unsubPendientes();_unsubPendientes=null;}
+  _unsubPendientes=onValue(ref(db,'alumnos'),snap=>{
+    const data=snap.val();
+    const banner=document.getElementById('banner-pendientes');
+    const txt=document.getElementById('banner-pendientes-txt');
+    if(!data||!banner||!txt)return;
+    const n=Object.values(data).filter(a=>a.estado==='pendiente_aprobacion').length;
+    if(n>0){
+      txt.textContent=n===1
+        ?'// HAY 1 USUARIO NUEVO PENDIENTE DE VALIDACIÓN'
+        :'// HAY '+n+' USUARIOS NUEVOS PENDIENTES DE VALIDACIÓN';
+      banner.style.display='flex';
+    } else {
+      banner.style.display='none';
+    }
   });
 }
 
@@ -2020,7 +2051,7 @@ window.ejecutarBackup=async function(){
   statusEl.style.color='var(--text3)';
   try{
     const tablas=['reservas','alumnos','instructores','config','auditoria'];
-    const backup={_meta:{fecha:new Date().toISOString(),version:'3.0',generado_por:session?.nombre||session?.user||'admin'}};
+    const backup={_meta:{fecha:new Date().toISOString(),version:'3.1',generado_por:session?.nombre||session?.user||'admin'}};
     for(const tabla of tablas) backup[tabla]=await fbGet(tabla)||{};
     const json=JSON.stringify(backup,null,2);
     const fecha=new Date().toISOString().slice(0,10);
