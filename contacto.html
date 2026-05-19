@@ -244,10 +244,11 @@ document.getElementById('contact-form').addEventListener('submit',async function
 
   try{
     const data=new FormData(this);
+    const obj=Object.fromEntries(data.entries());
     const res=await fetch(FORMSPREE_URL,{
       method:'POST',
-      body:data,
-      headers:{Accept:'application/json'}
+      body:JSON.stringify(obj),
+      headers:{'Accept':'application/json','Content-Type':'application/json'}
     });
     if(res.ok){
       msgOk.style.display='block';
