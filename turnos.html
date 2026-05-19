@@ -234,7 +234,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       </div>
       <div id="tab-alumno">
         <div class="field"><label>Email</label><input type="email" id="al-login-email" placeholder="tu@email.com"></div>
-        <div class="field"><label>Contraseña</label><input type="password" id="al-login-pass" placeholder="••••••••"></div>
+        <div class="field"><label>Contraseña</label><input type="password" id="al-login-pass" placeholder="••••••••" autocomplete="new-password"></div>
         <div id="login-err" class="error"></div>
         <button id="btn-login-al" data-label="INGRESAR" class="primary" style="width:100%;margin-top:.5rem" onclick="loginAlumno()">INGRESAR</button>
         <div style="text-align:center;margin-top:1rem"><button class="link-btn" onclick="switchLoginTab('olvide')">Olvidé mi contraseña</button></div>
@@ -257,8 +257,8 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <div style="text-align:center;margin-top:1rem"><button class="link-btn" onclick="switchLoginTab('alumno')">← Volver al login</button></div>
       </div>
       <div id="tab-instructor" style="display:none">
-        <div class="field"><label>Usuario</label><input type="text" id="inst-user" placeholder="usuario"></div>
-        <div class="field"><label>Contraseña</label><input type="password" id="inst-pass" placeholder="••••••••"></div>
+        <div class="field"><label>Usuario</label><input type="text" id="inst-user" placeholder="usuario" autocomplete="off"></div>
+        <div class="field"><label>Contraseña</label><input type="password" id="inst-pass" placeholder="••••••••" autocomplete="new-password"></div>
         <div id="login-err2" class="error"></div>
         <button id="btn-login-inst" data-label="INGRESAR" class="primary" style="width:100%;margin-top:.5rem" onclick="loginInstructor()">INGRESAR</button>
       </div>
