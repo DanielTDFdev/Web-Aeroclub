@@ -1168,7 +1168,7 @@ window.cancelarTurnoAlumno=async function(key){
   const motivo=pedirMotivoCancelacion();
   if(motivo===null)return;
   const update={estado:'cancelado'};
-  if(motivo)update.obs_cancelacion=motivo;
+  update.obs_cancelacion=motivo?'Cancelado por el usuario — '+motivo:'Cancelado por el usuario';
   await fbUpdate('reservas/'+key,update);
 };
 
