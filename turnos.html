@@ -1,8 +1,8 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 2.7.6
+  VERSION : 2.7.7
   FECHA   : 2026-05-18
-  CAMBIOS : Fix tab Sistema visible para usuario administrador
+  CAMBIOS : Fecha en auditoría en formato dd/mm/aaaa
 -->
 <!DOCTYPE html>
 <html lang="es">
@@ -203,7 +203,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v2.7.6</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v2.7.7</div>
   </div>
 </div>
 
@@ -1768,7 +1768,7 @@ function renderAuditoria(lista,skipPageReset){
     </tr></thead><tbody>
     ${slice.map(r=>{
       const dt=new Date(r.ts);
-      const fecha=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
+      const fecha=String(dt.getDate()).padStart(2,'0')+'/'+String(dt.getMonth()+1).padStart(2,'0')+'/'+dt.getFullYear();
       const hora=String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0');
       const esExito=r.resultado==='exito';
       const resColor=esExito?'var(--green)':'var(--red)';
