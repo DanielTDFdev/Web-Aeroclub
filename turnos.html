@@ -157,7 +157,10 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
 
 /* CALENDARIO SEMANAL */
-.cal-wrap{overflow-x:auto;margin-top:.5rem;}
+.cal-wrap{overflow-x:auto;margin-top:.5rem;position:relative;}
+.cal-now-line{position:absolute;left:0;right:0;height:2px;background:var(--red);pointer-events:none;z-index:10;transition:top .5s ease;}
+.cal-now-line::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:8px;height:8px;border-radius:50%;background:var(--red);box-shadow:0 0 8px rgba(248,81,73,.7);}
+.cal-now-line::after{content:attr(data-hora);position:absolute;left:12px;top:50%;transform:translateY(-50%);font-family:var(--font-mono);font-size:10px;color:var(--red);letter-spacing:.08em;background:var(--bg);padding:0 4px;}
 .cal-table{width:100%;border-collapse:collapse;min-width:520px;}
 .cal-table th{font-family:var(--font-mono);font-size:11px;color:var(--text2);letter-spacing:.1em;text-transform:uppercase;padding:8px 6px;border-bottom:1px solid var(--border2);border-right:1px solid var(--border);text-align:center;background:var(--bg2);}
 .cal-table th.today-col{color:var(--cyan);border-bottom-color:var(--cyan);}
@@ -1247,7 +1250,80 @@ function renderTodasReservas(data){
   });
   html+='</tbody></table>';
   cal.innerHTML=html;
+  dibujarLineaHoraActual();
 }
+
+// ── LÍNEA HORA ACTUAL EN CALENDARIO ────────────────────────────
+function dibujarLineaHoraActual(){
+  const wrap=document.querySelector('.cal-wrap');
+  const tabla=wrap&&wrap.querySelector('.cal-table');
+  if(!tabla)return;
+
+  // remover línea anterior si existe
+  const anterior=wrap.querySelector('.cal-now-line');
+  if(anterior)anterior.remove();
+
+  const ahora=new Date();
+  const horaActual=ahora.getHours();
+  const minActual=ahora.getMinutes();
+  const hoyStr=fmtDate(ahora);
+
+  // verificar que hoy esté en el rango visible
+  const days=getDays();
+  const enRango=days.some(d=>fmtDate(d)===hoyStr);
+  if(!enRango)return;
+
+  // buscar filas de la tabla por hora
+  const filas=tabla.querySelectorAll('tbody tr');
+  if(!filas.length)return;
+
+  // encontrar la fila inmediatamente anterior a la hora actual
+  let filaAntes=null,filaDesp=null;
+  filas.forEach(fila=>{
+    const celdaHora=fila.querySelector('td:first-child');
+    if(!celdaHora)return;
+    const txt=celdaHora.textContent.trim();
+    const [hh]=txt.split(':').map(Number);
+    if(hh<=horaActual)filaAntes=fila;
+    if(hh>horaActual&&!filaDesp)filaDesp=fila;
+  });
+
+  if(!filaAntes&&!filaDesp)return;
+
+  const wrapRect=wrap.getBoundingClientRect();
+  let posY;
+
+  if(filaAntes&&filaDesp){
+    const rectA=filaAntes.getBoundingClientRect();
+    const rectD=filaDesp.getBoundingClientRect();
+    const [hhA]=filaAntes.querySelector('td').textContent.trim().split(':').map(Number);
+    const [hhD]=filaDesp.querySelector('td').textContent.trim().split(':').map(Number);
+    const totalMin=(hhD-hhA)*60;
+    const pasaronMin=(horaActual-hhA)*60+minActual;
+    const fraccion=totalMin>0?pasaronMin/totalMin:0;
+    const topA=rectA.top+window.scrollY-(wrap.getBoundingClientRect().top+window.scrollY)+wrap.scrollTop;
+    const topD=rectD.top+window.scrollY-(wrap.getBoundingClientRect().top+window.scrollY)+wrap.scrollTop;
+    posY=topA+fraccion*(topD-topA);
+  } else if(filaAntes){
+    const rect=filaAntes.getBoundingClientRect();
+    posY=rect.bottom+window.scrollY-(wrap.getBoundingClientRect().top+window.scrollY)+wrap.scrollTop;
+  } else {
+    const rect=filaDesp.getBoundingClientRect();
+    posY=rect.top+window.scrollY-(wrap.getBoundingClientRect().top+window.scrollY)+wrap.scrollTop;
+  }
+
+  const linea=document.createElement('div');
+  linea.className='cal-now-line';
+  linea.style.top=posY+'px';
+  linea.setAttribute('data-hora',String(horaActual).padStart(2,'0')+':'+String(minActual).padStart(2,'0'));
+  wrap.appendChild(linea);
+}
+
+// actualizar la línea cada minuto
+setInterval(()=>{
+  if(document.querySelector('.cal-now-line')||document.querySelector('.cal-table'))
+    dibujarLineaHoraActual();
+},60000);
 
 // ── MODAL TURNO ────────────────────────────────────────────────
 let _reservasCache={};
