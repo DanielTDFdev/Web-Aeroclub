@@ -1286,11 +1286,11 @@ window.abrirModal=function(key){
     const ba=document.createElement('button');ba.className='primary';ba.textContent='APROBAR TURNO';
     ba.onclick=async()=>{if(!confirm('¿Aprobar el turno de '+r.nombre+'?'))return;await fbUpdate('reservas/'+key,{estado:'aprobado',instructor:session.nombre});cerrarModal();};
     const bc=document.createElement('button');bc.className='danger';bc.textContent='CANCELAR TURNO';
-    bc.onclick=async()=>{if(!confirm('¿Cancelar el turno de '+r.nombre+'?'))return;const motivo=pedirMotivoCancelacion();if(motivo===null)return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre};if(motivo)upd.obs_cancelacion=motivo;await fbUpdate('reservas/'+key,upd);if(!turnoYaPaso(rv))mailCancel(rv);}cerrarModal();};
+    bc.onclick=async()=>{if(!confirm('¿Cancelar el turno de '+r.nombre+'?'))return;const motivo=pedirMotivoCancelacion();if(motivo===null)return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre};upd.obs_cancelacion=motivo?'Cancelado por el instructor — '+motivo:'Cancelado por el instructor';await fbUpdate('reservas/'+key,upd);if(!turnoYaPaso(rv))mailCancel(rv);}cerrarModal();};
     actions.appendChild(ba);actions.appendChild(bc);
   } else if(r.estado==='aprobado'){
     const bc=document.createElement('button');bc.className='danger';bc.textContent='CANCELAR TURNO';
-    bc.onclick=async()=>{if(!confirm('¿Cancelar el turno de '+r.nombre+'?'))return;const motivo=pedirMotivoCancelacion();if(motivo===null)return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre};if(motivo)upd.obs_cancelacion=motivo;await fbUpdate('reservas/'+key,upd);if(!turnoYaPaso(rv))mailCancel(rv);}cerrarModal();};
+    bc.onclick=async()=>{if(!confirm('¿Cancelar el turno de '+r.nombre+'?'))return;const motivo=pedirMotivoCancelacion();if(motivo===null)return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre};upd.obs_cancelacion=motivo?'Cancelado por el instructor — '+motivo:'Cancelado por el instructor';await fbUpdate('reservas/'+key,upd);if(!turnoYaPaso(rv))mailCancel(rv);}cerrarModal();};
     actions.appendChild(bc);
   }
   document.getElementById('modal-turno').classList.add('open');
