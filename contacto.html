@@ -1,0 +1,267 @@
+<!--
+  ARCHIVO : contacto.html
+  VERSION : 1.0
+  FECHA   : 2026-05-19
+  CAMBIOS : Página inicial — formulario de contacto vía Formspree
+-->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contacto — Aeroclub Río Grande</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#07090d;--bg2:#0e1218;--bg3:#141a24;--bg4:#1c2330;
+  --text:#c8d8e8;--text2:#7a9bb8;--text3:#3d5a72;
+  --amber:#f0a500;--amber2:#ffc840;--amber-dim:#7a5200;
+  --cyan:#00c8d4;--cyan-dim:#003d42;
+  --green:#39d353;--red:#f85149;
+  --border:rgba(0,200,212,0.12);--border2:rgba(0,200,212,0.3);
+  --font-mono:'Share Tech Mono',monospace;
+  --font-ui:'Rajdhani',sans-serif;
+  --font-display:'Orbitron',sans-serif;
+}
+:root.light{
+  --bg:#eef2f7;--bg2:#dde4ef;--bg3:#ffffff;--bg4:#cdd8e8;
+  --text:#1a2a3a;--text2:#3a5a78;--text3:#7a9ab8;
+  --amber:#b87000;--amber2:#d08000;--amber-dim:#f5d080;
+  --cyan:#0090a0;--cyan-dim:#b0e8ee;
+  --border:rgba(0,100,140,0.15);--border2:rgba(0,100,140,0.3);
+}
+
+html{scroll-behavior:smooth}
+body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;transition:background .3s,color .3s;}
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.04) 2px,rgba(0,0,0,.04) 4px);pointer-events:none;z-index:9999;}
+
+/* NAV */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:.75rem 2rem;background:rgba(7,9,13,.88);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);transition:background .3s;}
+:root.light nav{background:rgba(238,242,247,.92);}
+.nav-logo{display:flex;align-items:center;gap:12px;}
+.nav-logo img{width:36px;height:36px;object-fit:contain;filter:drop-shadow(0 0 8px rgba(0,200,212,.4));}
+:root.light .nav-logo img{filter:none;}
+.nav-logo-text{font-family:var(--font-mono);font-size:13px;color:var(--amber);letter-spacing:.15em;}
+.nav-right{display:flex;align-items:center;gap:14px;}
+.theme-toggle{display:flex;align-items:center;gap:6px;cursor:pointer;}
+.theme-track{width:34px;height:18px;border-radius:9px;background:var(--bg3);border:1px solid var(--border2);position:relative;}
+.theme-thumb{width:12px;height:12px;border-radius:50%;background:var(--cyan);position:absolute;top:2px;left:2px;transition:transform .25s;box-shadow:0 0 6px rgba(0,200,212,.5);}
+:root.light .theme-thumb{transform:translateX(16px);background:var(--amber);}
+.btn-nav{font-family:var(--font-mono);font-size:12px;letter-spacing:.1em;padding:8px 20px;background:linear-gradient(135deg,rgba(0,200,212,.14),rgba(0,200,212,.04));border:1px solid var(--cyan);border-radius:3px;color:var(--cyan);text-decoration:none;text-transform:uppercase;transition:all .2s;text-shadow:0 0 10px rgba(0,200,212,.35);}
+.btn-nav:hover{background:linear-gradient(135deg,rgba(0,200,212,.24),rgba(0,200,212,.1));box-shadow:0 0 20px rgba(0,200,212,.2);}
+
+/* HERO */
+.hero{position:relative;padding:7rem 2rem 3rem;text-align:center;overflow:hidden;}
+.hero-bg{position:absolute;inset:0;background:radial-gradient(ellipse 70% 50% at 50% 30%,rgba(0,100,120,.18) 0%,transparent 70%);}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(0,200,212,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,200,212,.03) 1px,transparent 1px);background-size:60px 60px;animation:gridDrift 30s linear infinite;}
+@keyframes gridDrift{0%{background-position:0 0}100%{background-position:60px 60px}}
+.hero-content{position:relative;z-index:2;}
+.hero-eyebrow{font-family:var(--font-mono);font-size:11px;color:var(--cyan);letter-spacing:.3em;text-transform:uppercase;margin-bottom:1rem;opacity:0;animation:fadeUp .7s ease .1s forwards;}
+.hero-title{font-family:var(--font-display);font-size:clamp(28px,6vw,56px);font-weight:900;color:var(--amber2);text-shadow:0 0 40px rgba(240,165,0,.4);letter-spacing:.08em;line-height:1.1;margin-bottom:.5rem;opacity:0;animation:fadeUp .7s ease .25s forwards;}
+.hero-sub{font-family:var(--font-mono);font-size:12px;color:var(--text3);letter-spacing:.2em;opacity:0;animation:fadeUp .7s ease .4s forwards;}
+
+/* CONTENIDO */
+.container{max-width:680px;margin:0 auto;padding:2rem 1.5rem 4rem;}
+
+/* INFO CARDS */
+.info-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:2.5rem;opacity:0;animation:fadeUp .7s ease .5s forwards;}
+.info-card{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:1rem 1.25rem;display:flex;flex-direction:column;gap:6px;}
+.info-card-label{font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.2em;text-transform:uppercase;}
+.info-card-value{font-family:var(--font-ui);font-size:15px;font-weight:600;color:var(--text2);}
+.info-card-value a{color:var(--cyan);text-decoration:none;}
+.info-card-value a:hover{text-decoration:underline;}
+
+/* FORMULARIO */
+.form-card{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:1.75rem;position:relative;overflow:hidden;opacity:0;animation:fadeUp .7s ease .65s forwards;}
+.form-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);}
+
+.form-title{font-family:var(--font-mono);font-size:12px;color:var(--cyan);letter-spacing:.2em;text-transform:uppercase;margin-bottom:1.5rem;display:flex;align-items:center;gap:10px;}
+.form-title::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--border2),transparent);}
+
+.field{margin-bottom:1.1rem;}
+.field label{display:block;font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.18em;text-transform:uppercase;margin-bottom:.4rem;}
+.field input,.field select,.field textarea{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--font-ui);font-size:15px;padding:.6rem .85rem;transition:border-color .2s,box-shadow .2s;outline:none;resize:none;}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(0,200,212,.08);}
+.field input::placeholder,.field textarea::placeholder{color:var(--text3);}
+.field select{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%233d5a72' d='M6 8L0 0h12z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right .85rem center;}
+.field textarea{min-height:120px;line-height:1.6;}
+
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+
+.btn-submit{width:100%;padding:.85rem;background:linear-gradient(135deg,rgba(0,200,212,.18),rgba(0,200,212,.06));border:1px solid var(--cyan);border-radius:4px;color:var(--cyan);font-family:var(--font-mono);font-size:13px;letter-spacing:.2em;text-transform:uppercase;cursor:pointer;transition:all .2s;text-shadow:0 0 10px rgba(0,200,212,.3);margin-top:.5rem;}
+.btn-submit:hover{background:linear-gradient(135deg,rgba(0,200,212,.28),rgba(0,200,212,.12));box-shadow:0 0 24px rgba(0,200,212,.18);}
+.btn-submit:disabled{opacity:.4;cursor:not-allowed;}
+
+/* ESTADOS */
+.msg{display:none;padding:.85rem 1rem;border-radius:4px;font-family:var(--font-mono);font-size:12px;letter-spacing:.1em;margin-top:1rem;text-align:center;}
+.msg.ok{display:block;background:rgba(57,211,83,.1);border:1px solid rgba(57,211,83,.3);color:var(--green);}
+.msg.err{display:block;background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.3);color:var(--red);}
+
+/* FOOTER */
+footer{border-top:1px solid var(--border);padding:1.5rem 2rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+.footer-brand{font-family:var(--font-mono);font-size:12px;color:var(--text3);letter-spacing:.1em;}
+.footer-coords{font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.07em;}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+
+@media(max-width:600px){
+  nav{padding:.6rem 1rem;}
+  .btn-nav{display:none;}
+  .hero{padding:6rem 1.25rem 2rem;}
+  .container{padding:1.5rem 1rem 3rem;}
+  .field-row{grid-template-columns:1fr;}
+  footer{flex-direction:column;text-align:center;}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">
+    <img src="logo_aeroclub.png" alt="Logo Aeroclub">
+    <span class="nav-logo-text">AEROCLUB RÍO GRANDE</span>
+  </div>
+  <div class="nav-right">
+    <div class="theme-toggle" onclick="toggleTheme()">
+      <span style="font-size:13px">🌙</span>
+      <div class="theme-track"><div class="theme-thumb"></div></div>
+      <span style="font-size:13px">☀️</span>
+    </div>
+    <a href="index.html" class="btn-nav">⌂ Inicio</a>
+  </div>
+</nav>
+
+<div class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-grid"></div>
+  <div class="hero-content">
+    <div class="hero-eyebrow">▸ Aeroclub Río Grande — Tierra del Fuego</div>
+    <h1 class="hero-title">CONTACTO</h1>
+    <div class="hero-sub">◈ ESCRIBINOS — TE RESPONDEMOS A LA BREVEDAD</div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- INFO RÁPIDA -->
+  <div class="info-grid">
+    <div class="info-card">
+      <span class="info-card-label">Email</span>
+      <span class="info-card-value"><a href="mailto:administracion@aeroclubriogrande.com">administracion@<br>aeroclubriogrande.com</a></span>
+    </div>
+    <div class="info-card">
+      <span class="info-card-label">Ubicación</span>
+      <span class="info-card-value">Aeródromo SAWE<br>Río Grande, TDF</span>
+    </div>
+    <div class="info-card">
+      <span class="info-card-label">Redes sociales</span>
+      <span class="info-card-value">
+        <a href="https://www.instagram.com/aeroclub.riogrande/" target="_blank" rel="noopener">Instagram</a> ·
+        <a href="https://www.facebook.com/acrgtdf/?locale=es_LA" target="_blank" rel="noopener">Facebook</a>
+      </span>
+    </div>
+  </div>
+
+  <!-- FORMULARIO -->
+  <div class="form-card">
+    <div class="form-title">◈ Formulario de contacto</div>
+
+    <form id="contact-form">
+      <div class="field-row">
+        <div class="field">
+          <label>Nombre</label>
+          <input type="text" name="nombre" placeholder="Tu nombre" required autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Apellido</label>
+          <input type="text" name="apellido" placeholder="Tu apellido" required autocomplete="off">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Email</label>
+        <input type="email" name="email" placeholder="tu@email.com" required autocomplete="off">
+      </div>
+
+      <div class="field">
+        <label>Asunto</label>
+        <select name="asunto" required>
+          <option value="" disabled selected>Seleccioná un tema...</option>
+          <option value="Consulta sobre instrucción de vuelo">Consulta sobre instrucción de vuelo</option>
+          <option value="Información sobre la escuela CIAC">Información sobre la escuela CIAC</option>
+          <option value="Asociarse al Aeroclub">Asociarse al Aeroclub</option>
+          <option value="Hangaraje / Estacionamiento de aeronaves">Hangaraje / Estacionamiento de aeronaves</option>
+          <option value="Consulta general">Consulta general</option>
+          <option value="Otro">Otro</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Mensaje</label>
+        <textarea name="mensaje" placeholder="Escribí tu consulta acá..." required></textarea>
+      </div>
+
+      <button type="submit" class="btn-submit" id="btn-submit">▸ ENVIAR MENSAJE</button>
+    </form>
+
+    <div class="msg ok" id="msg-ok">// MENSAJE ENVIADO — Te responderemos a la brevedad.</div>
+    <div class="msg err" id="msg-err">// ERROR AL ENVIAR — Intentá de nuevo o escribinos directamente a administracion@aeroclubriogrande.com</div>
+  </div>
+
+</div>
+
+<footer>
+  <span class="footer-brand">◈ AEROCLUB RÍO GRANDE — © 2026</span>
+  <span class="footer-coords">53°46'S 67°45'O · SAWE · RÍO GRANDE, TIERRA DEL FUEGO</span>
+</footer>
+
+<script>
+(function(){
+  if(localStorage.getItem('arc-theme')==='light')
+    document.documentElement.classList.add('light');
+})();
+function toggleTheme(){
+  const isLight=document.documentElement.classList.toggle('light');
+  localStorage.setItem('arc-theme',isLight?'light':'dark');
+}
+
+// ── FORMSPREE ──────────────────────────────────────────────────
+// REEMPLAZÁ la URL de abajo con la que te da Formspree al crear el form
+const FORMSPREE_URL='https://formspree.io/f/XXXXXXXX';
+
+document.getElementById('contact-form').addEventListener('submit',async function(e){
+  e.preventDefault();
+  const btn=document.getElementById('btn-submit');
+  const msgOk=document.getElementById('msg-ok');
+  const msgErr=document.getElementById('msg-err');
+  msgOk.style.display='none';
+  msgErr.style.display='none';
+  btn.disabled=true;
+  btn.textContent='▸ ENVIANDO...';
+
+  try{
+    const data=new FormData(this);
+    const res=await fetch(FORMSPREE_URL,{
+      method:'POST',
+      body:data,
+      headers:{Accept:'application/json'}
+    });
+    if(res.ok){
+      msgOk.style.display='block';
+      this.reset();
+    } else {
+      msgErr.style.display='block';
+    }
+  } catch(err){
+    msgErr.style.display='block';
+  } finally {
+    btn.disabled=false;
+    btn.textContent='▸ ENVIAR MENSAJE';
+  }
+});
+</script>
+</body>
+</html>
