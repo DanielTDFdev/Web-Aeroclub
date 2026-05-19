@@ -1,6 +1,6 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 2.7.7
+  VERSION : 3.0
   FECHA   : 2026-05-18
   CAMBIOS : Fecha en auditoría en formato dd/mm/aaaa
 -->
@@ -203,7 +203,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v2.7.7</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v3.0</div>
   </div>
 </div>
 
@@ -1109,6 +1109,9 @@ window.confirmarTurno=async function(){
     rol:session.rol||'alumno',
     ts:new Date().toISOString()
   });
+  const labelAudit=(esRango?selectedSlot+' a '+selectedSlotFin+' hs':selectedSlot+' hs');
+  await registrarAuditoria('alta_turno',session.rol||'alumno','exito',
+    session.nombre+' — '+selectedAvion+' — '+selectedDay+' '+labelAudit);
   if(esPiloto){
     const label=esRango?selectedSlot+' a '+selectedSlotFin+' hs':selectedSlot+' hs';
     showOk('turno-ok','// TURNO CONFIRMADO — '+selectedAvion+' '+selectedDay+' '+label);
@@ -1167,9 +1170,14 @@ window.cancelarTurnoAlumno=async function(key){
   if(!confirm('¿Cancelar este turno?'))return;
   const motivo=pedirMotivoCancelacion();
   if(motivo===null)return;
+  const rv=await fbGet('reservas/'+key);
   const update={estado:'cancelado'};
   update.obs_cancelacion=motivo?'Cancelado por el usuario — '+motivo:'Cancelado por el usuario';
   await fbUpdate('reservas/'+key,update);
+  if(rv){
+    await registrarAuditoria('cancelacion_turno',session.rol||'alumno','exito',
+      session.nombre+' (usuario) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs'+(motivo?' — '+motivo:''));
+  }
 };
 
 // ── CALENDARIO INSTRUCTOR ──────────────────────────────────────
@@ -1286,11 +1294,11 @@ window.abrirModal=function(key){
     const ba=document.createElement('button');ba.className='primary';ba.textContent='APROBAR TURNO';
     ba.onclick=async()=>{if(!confirm('¿Aprobar el turno de '+r.nombre+'?'))return;await fbUpdate('reservas/'+key,{estado:'aprobado',instructor:session.nombre});cerrarModal();};
     const bc=document.createElement('button');bc.className='danger';bc.textContent='CANCELAR TURNO';
-    bc.onclick=async()=>{if(!confirm('¿Cancelar el turno de '+r.nombre+'?'))return;const motivo=pedirMotivoCancelacion();if(motivo===null)return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre};upd.obs_cancelacion=motivo?'Cancelado por el instructor — '+motivo:'Cancelado por el instructor';await fbUpdate('reservas/'+key,upd);if(!turnoYaPaso(rv))mailCancel(rv);}cerrarModal();};
+    bc.onclick=async()=>{if(!confirm('¿Cancelar el turno de '+r.nombre+'?'))return;const motivo=pedirMotivoCancelacion();if(motivo===null)return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre};upd.obs_cancelacion=motivo?'Cancelado por el instructor — '+motivo:'Cancelado por el instructor';await fbUpdate('reservas/'+key,upd);await registrarAuditoria('cancelacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+(motivo?' — '+motivo:''));if(!turnoYaPaso(rv))mailCancel(rv);}cerrarModal();};
     actions.appendChild(ba);actions.appendChild(bc);
   } else if(r.estado==='aprobado'){
     const bc=document.createElement('button');bc.className='danger';bc.textContent='CANCELAR TURNO';
-    bc.onclick=async()=>{if(!confirm('¿Cancelar el turno de '+r.nombre+'?'))return;const motivo=pedirMotivoCancelacion();if(motivo===null)return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre};upd.obs_cancelacion=motivo?'Cancelado por el instructor — '+motivo:'Cancelado por el instructor';await fbUpdate('reservas/'+key,upd);if(!turnoYaPaso(rv))mailCancel(rv);}cerrarModal();};
+    bc.onclick=async()=>{if(!confirm('¿Cancelar el turno de '+r.nombre+'?'))return;const motivo=pedirMotivoCancelacion();if(motivo===null)return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre};upd.obs_cancelacion=motivo?'Cancelado por el instructor — '+motivo:'Cancelado por el instructor';await fbUpdate('reservas/'+key,upd);await registrarAuditoria('cancelacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+(motivo?' — '+motivo:''));if(!turnoYaPaso(rv))mailCancel(rv);}cerrarModal();};
     actions.appendChild(bc);
   }
   document.getElementById('modal-turno').classList.add('open');
@@ -1936,7 +1944,7 @@ window.ejecutarBackup=async function(){
   statusEl.style.color='var(--text3)';
   try{
     const tablas=['reservas','alumnos','instructores','config','auditoria'];
-    const backup={_meta:{fecha:new Date().toISOString(),version:'2.7.4',generado_por:session?.nombre||session?.user||'admin'}};
+    const backup={_meta:{fecha:new Date().toISOString(),version:'3.0',generado_por:session?.nombre||session?.user||'admin'}};
     for(const tabla of tablas) backup[tabla]=await fbGet(tabla)||{};
     const json=JSON.stringify(backup,null,2);
     const fecha=new Date().toISOString().slice(0,10);
