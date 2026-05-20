@@ -175,6 +175,16 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 .cal-block.cancelado{background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.2);color:var(--red);text-decoration:line-through;opacity:.6;}
 .cal-block.vencido{background:rgba(120,80,200,.08);border:1px solid rgba(120,80,200,.25);color:#a07ef0;text-decoration:line-through;opacity:.55;}
 .cal-empty{font-family:var(--font-mono);font-size:12px;color:var(--text3);padding:.75rem 0;letter-spacing:.05em;}
+/* columnas informativas semana anterior / siguiente */
+.cal-table th.col-pasado{color:var(--text3);opacity:.5;font-style:italic;}
+.cal-table th.col-futuro{color:var(--text3);opacity:.6;}
+.cal-table td.col-pasado{background:rgba(0,0,0,.1);opacity:.5;}
+.cal-table td.col-futuro{background:rgba(0,200,212,.02);opacity:.6;}
+:root.light .cal-table td.col-pasado{background:rgba(0,0,0,.04);}
+/* feriado en header de col informativa */
+.cal-th-feriado{display:block;font-size:8px;font-family:var(--font-mono);color:var(--amber);letter-spacing:.03em;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:62px;opacity:.85;}
+/* separador entre semanas */
+.cal-table th.col-sep, .cal-table td.col-sep{border-left:2px solid var(--border2)!important;}
 
 /* MODAL */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center;padding:1rem;}
@@ -1214,45 +1224,74 @@ window.setCalFiltroAvion=function(key){
   get(ref(db,'reservas')).then(s=>renderTodasReservas(s.val()));
 };
 
-function renderTodasReservas(data){
+async function renderTodasReservas(data){
   const todas=rArr(data);
   document.getElementById('stat-pending').textContent=todas.filter(r=>r.estado==='pendiente').length;
   document.getElementById('stat-approved').textContent=todas.filter(r=>r.estado==='aprobado').length;
   document.getElementById('stat-total').textContent=todas.length;
 
   const cal=document.getElementById('cal-semanal');
-  const days=getDays();
   const hoy=fmtDate(new Date());
-  const fechasRango=days.map(d=>fmtDate(d));
+
+  // Rango: 7 pasados + 7 actuales (hoy+6) + 7 futuros = 21 días
+  function buildRango(){
+    const dias=[];
+    const base=new Date(); base.setHours(12,0,0,0);
+    for(let i=7;i>=1;i--){const d=new Date(base);d.setDate(base.getDate()-i);dias.push({d,tipo:'pasado'});}
+    for(let i=0;i<7;i++){const d=new Date(base);d.setDate(base.getDate()+i);dias.push({d,tipo:'actual'});}
+    for(let i=7;i<14;i++){const d=new Date(base);d.setDate(base.getDate()+i);dias.push({d,tipo:'futuro'});}
+    return dias;
+  }
+  const rango=buildRango();
+
+  // Feriados (puede abarcar hasta 2 años distintos en el rango)
+  const años=[...new Set(rango.map(({d})=>d.getFullYear()))];
+  const feriadosMap={};
+  await Promise.all(años.map(async y=>{const f=await getFeriados(y);Object.assign(feriadosMap,f);}));
+
+  const fechasRango=rango.map(({d})=>fmtDate(d));
   let enRango=todas.filter(r=>fechasRango.includes(r.fecha));
   if(calAvionFiltro!=='todos') enRango=enRango.filter(r=>(r.avion||'LV-OAD')===calAvionFiltro);
 
   const horasConTurnos=[...new Set(enRango.map(r=>r.hora))].sort();
   if(!horasConTurnos.length){
-    cal.innerHTML='<div class="cal-empty">// SIN RESERVAS EN LOS PRÓXIMOS 7 DÍAS</div>';return;
+    cal.innerHTML='<div class="cal-empty">// SIN RESERVAS EN LOS 21 DÍAS VISIBLES</div>';return;
   }
 
   const DIAS_SHORT=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+
+  // ── Header ──────────────────────────────────────────────────────
   let html='<table class="cal-table"><thead><tr><th></th>';
-  days.forEach(d=>{
-    const ds=fmtDate(d),isHoy=ds===hoy;
+  rango.forEach(({d,tipo},idx)=>{
+    const ds=fmtDate(d), isHoy=ds===hoy;
     const dow=DIAS_SHORT[d.getDay()];
     const num=d.getDate()+'/'+(d.getMonth()+1);
-    html+=`<th class="${isHoy?'today-col':''}">${dow}<br>${num}</th>`;
+    const feriado=feriadosMap[ds]||'';
+    const feriadoCorto=feriado.length>9?feriado.slice(0,8)+'…':feriado;
+    let cls=isHoy?'today-col':(tipo==='pasado'?'col-pasado':(tipo==='futuro'?'col-futuro':''));
+    // separador visual al inicio de cada semana
+    if(idx===7||idx===14) cls+=(cls?' ':'')+'col-sep';
+    const feriadoHtml=feriado?`<span class="cal-th-feriado" title="${feriado}">📅 ${feriadoCorto}</span>`:'';
+    html+=`<th class="${cls}">${dow}<br>${num}${feriadoHtml}</th>`;
   });
   html+='</tr></thead><tbody>';
 
+  // ── Filas ────────────────────────────────────────────────────────
   horasConTurnos.forEach(hora=>{
     html+=`<tr><td>${hora}</td>`;
-    days.forEach(d=>{
-      const ds=fmtDate(d),isHoy=ds===hoy;
+    rango.forEach(({d,tipo},idx)=>{
+      const ds=fmtDate(d), isHoy=ds===hoy;
       const reservas=enRango.filter(r=>r.fecha===ds&&r.hora===hora);
-      html+=`<td class="${isHoy?'today-col':''}">`;
+      let tdCls=isHoy?'today-col':(tipo==='pasado'?'col-pasado':(tipo==='futuro'?'col-futuro':''));
+      if(idx===7||idx===14) tdCls+=(tdCls?' ':'')+'col-sep';
+      html+=`<td class="${tdCls}">`;
       reservas.forEach(r=>{
         const nombre=r.nombre.split(' ')[0];
         const avLabel=calAvionFiltro==='todos'?`<span style="font-size:9px;opacity:.7">${r.avion||'LV-OAD'}</span><br>`:'';
         const rangoLabel=r.horaInicio&&r.horaFin?`<span style="font-size:9px;opacity:.8">${r.horaInicio}–${r.horaFin}</span><br>`:'';
-        html+=`<div class="cal-block ${r.estado}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'}">${avLabel}${rangoLabel}${nombre}</div>`;
+        // reservas pasadas: tachadas
+        const estiloExtra=tipo==='pasado'?'text-decoration:line-through;':'';
+        html+=`<div class="cal-block ${r.estado}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'}" style="${estiloExtra}">${avLabel}${rangoLabel}${nombre}</div>`;
       });
       html+='</td>';
     });
