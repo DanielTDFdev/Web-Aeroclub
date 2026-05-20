@@ -1,6 +1,6 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 3.3
+  VERSION : 3.4
   FECHA   : 2026-05-19
   CAMBIOS : Calendario instructor extendido a 21 días (7 pasados + 7 actuales + 7 futuros)
             Semanas informativas con estilo atenuado, reservas pasadas tachadas
@@ -102,6 +102,10 @@ button.danger:hover{background:rgba(248,81,73,.18)}
 .avion-btn .mat{font-family:var(--font-mono);font-size:15px;font-weight:700;color:var(--amber2);letter-spacing:.1em;}
 .avion-btn .tipo{font-family:var(--font-mono);font-size:10px;color:var(--text3);margin-top:3px;letter-spacing:.08em;}
 .avion-btn.active .tipo{color:var(--amber);}
+.avion-btn.inactivo{opacity:.45;cursor:pointer;border-color:rgba(248,81,73,.25);background:rgba(248,81,73,.04);}
+.avion-btn.inactivo:hover{border-color:rgba(248,81,73,.5);background:rgba(248,81,73,.07);}
+.avion-btn.inactivo .mat{color:var(--red);opacity:.7;}
+.avion-btn.inactivo .tipo{color:var(--red);opacity:.5;}
 
 .badge{display:inline-block;font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;padding:3px 10px;border-radius:var(--radius);}
 .badge-pendiente{background:rgba(240,165,0,.12);color:var(--amber);border:1px solid var(--amber-dim)}
@@ -218,7 +222,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v3.3</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v3.4</div>
   </div>
 </div>
 
@@ -673,9 +677,8 @@ const AVIONES=[
 
 // Devuelve los aviones que puede reservar el usuario según su rol
 function avionesParaRol(rol){
-  const activos=AVIONES.filter(a=>(configs[a.key]?.activo)!==false);
-  if(rol==='piloto') return activos;
-  return activos.filter(a=>a.key==='LV-OAD');
+  if(rol==='piloto') return AVIONES;
+  return AVIONES.filter(a=>a.key==='LV-OAD');
 }
 
 // ── AUDITORÍA ──────────────────────────────────────────────────
@@ -913,41 +916,56 @@ function initAvionSelector(){
   avisoNoDisp.style.display='none';
 
   if(aviones.length===1){
-    // alumno: solo LV-OAD, no muestra selector
-    selectedAvion=aviones[0].key;
+    // alumno: solo LV-OAD
+    const activo=(configs['LV-OAD']?.activo)!==false;
+    selectedAvion=activo?aviones[0].key:null;
     wrap.style.display='none';
     document.getElementById('avion-seleccionado-label').style.display='none';
-  } else if(aviones.length===0){
-    // sin aviones disponibles (alumno con LV-OAD inactivo, o piloto sin ninguno)
-    selectedAvion=null;
-    wrap.style.display='none';
-    document.getElementById('avion-seleccionado-label').style.display='none';
-    avisoNoDisp.style.display='block';
-    document.getElementById('days-grid').innerHTML='';
-    document.getElementById('slots-section').style.display='none';
-    document.getElementById('slot-confirm').style.display='none';
-    return;
+    if(!activo){
+      avisoNoDisp.style.display='block';
+      document.getElementById('days-grid').innerHTML='';
+      document.getElementById('slots-section').style.display='none';
+      document.getElementById('slot-confirm').style.display='none';
+      return;
+    }
   } else {
-    // piloto: muestra botonera
+    // piloto: muestra botonera con todos, marcando inactivos
     selectedAvion=null;
     wrap.style.display='block';
-    sel.innerHTML=aviones.map(av=>`
-      <div class="avion-btn" onclick="seleccionarAvion('${av.key}')">
+    sel.innerHTML=aviones.map(av=>{
+      const activo=(configs[av.key]?.activo)!==false;
+      return `<div class="avion-btn${activo?'':' inactivo'}" onclick="seleccionarAvion('${av.key}')">
         <div class="mat">${av.mat}</div>
-        <div class="tipo">${av.tipo}</div>
-      </div>`).join('');
+        <div class="tipo">${activo?av.tipo:'NO DISPONIBLE'}</div>
+      </div>`;
+    }).join('');
     document.getElementById('avion-seleccionado-label').style.display='none';
   }
 }
 
 window.seleccionarAvion=function(key){
-  selectedAvion=key;
+  const activo=(configs[key]?.activo)!==false;
+  const avisoNoDisp=document.getElementById('avion-no-disponible');
+
+  selectedAvion=activo?key:null;
   selectedDay=null;selectedSlot=null;
-  document.getElementById('avion-no-disponible').style.display='none';
+
   // actualizar visual
   document.querySelectorAll('.avion-btn').forEach(b=>{
-    b.classList.toggle('active',b.querySelector('.mat').textContent===key);
+    b.classList.toggle('active',b.querySelector('.mat').textContent===key&&activo);
   });
+
+  if(!activo){
+    avisoNoDisp.style.display='block';
+    document.getElementById('avion-seleccionado-label').style.display='none';
+    document.getElementById('days-grid').innerHTML='';
+    document.getElementById('slots-section').style.display='none';
+    document.getElementById('slot-confirm').style.display='none';
+    document.getElementById('hero-callsign').textContent=key;
+    return;
+  }
+
+  avisoNoDisp.style.display='none';
   const lbl=document.getElementById('avion-seleccionado-label');
   lbl.textContent='▸ AVIÓN: '+key;
   lbl.style.display='block';
@@ -2109,7 +2127,7 @@ window.ejecutarBackup=async function(){
   statusEl.style.color='var(--text3)';
   try{
     const tablas=['reservas','alumnos','instructores','config','auditoria'];
-    const backup={_meta:{fecha:new Date().toISOString(),version:'3.3',generado_por:session?.nombre||session?.user||'admin'}};
+    const backup={_meta:{fecha:new Date().toISOString(),version:'3.4',generado_por:session?.nombre||session?.user||'admin'}};
     for(const tabla of tablas) backup[tabla]=await fbGet(tabla)||{};
     const json=JSON.stringify(backup,null,2);
     const fecha=new Date().toISOString().slice(0,10);
