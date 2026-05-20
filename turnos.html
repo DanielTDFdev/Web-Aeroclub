@@ -1,8 +1,8 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 3.5
+  VERSION : 3.6
   FECHA   : 2026-05-20
-  CAMBIOS : Fix flash de tema: detección movida al <head>
+  CAMBIOS : Mejora contraste cal-blocks (cancelado/vencido/pendiente/aprobado) en dark mode
             Semanas informativas con estilo atenuado, reservas pasadas tachadas
             Feriados en headers de las tres semanas, separadores visuales entre semanas
 -->
@@ -176,10 +176,10 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 .cal-table td:first-child{font-family:var(--font-mono);font-size:11px;color:var(--text3);text-align:center;padding:6px 4px;white-space:nowrap;background:var(--bg2);border-right:1px solid var(--border2);}
 .cal-block{padding:5px 7px;border-radius:var(--radius);cursor:pointer;margin-bottom:3px;font-family:var(--font-mono);font-size:11px;line-height:1.4;transition:filter .15s;}
 .cal-block:hover{filter:brightness(1.25);}
-.cal-block.pendiente{background:rgba(240,165,0,.15);border:1px solid var(--amber-dim);color:var(--amber);}
-.cal-block.aprobado{background:rgba(57,211,83,.1);border:1px solid rgba(57,211,83,.3);color:var(--green);}
-.cal-block.cancelado{background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.2);color:var(--red);text-decoration:line-through;opacity:.6;}
-.cal-block.vencido{background:rgba(120,80,200,.08);border:1px solid rgba(120,80,200,.25);color:#a07ef0;text-decoration:line-through;opacity:.55;}
+.cal-block.pendiente{background:rgba(240,165,0,.22);border:1px solid rgba(240,165,0,.5);color:var(--amber);}
+.cal-block.aprobado{background:rgba(57,211,83,.15);border:1px solid rgba(57,211,83,.45);color:var(--green);}
+.cal-block.cancelado{background:rgba(248,81,73,.18);border:1px solid rgba(248,81,73,.45);color:var(--red);text-decoration:line-through;}
+.cal-block.vencido{background:rgba(120,80,200,.18);border:1px solid rgba(120,80,200,.45);color:#c4aef8;text-decoration:line-through;}
 .cal-empty{font-family:var(--font-mono);font-size:12px;color:var(--text3);padding:.75rem 0;letter-spacing:.05em;}
 /* columnas informativas semana anterior / siguiente */
 .cal-table th.col-pasado{color:var(--text3);opacity:.5;font-style:italic;}
