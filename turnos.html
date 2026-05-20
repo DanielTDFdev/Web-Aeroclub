@@ -1,8 +1,10 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 4.0
+  VERSION : 4.1
   FECHA   : 2026-05-20
-  CAMBIOS : Scroll automático al hoy en calendario instructor al cargar
+  CAMBIOS : Pilotos: horizonte de reserva 30 días (alumnos mantienen 7 días)
+            Reglas de negocio documentadas en bloque de comentarios
+            Scroll automático al hoy en calendario instructor al cargar
             Favicon: link rel icon + apple-touch-icon para logo_aeroclub.png
             Fix grilla calendario instructor: min-width aumentado a 1400px y
             min-width:62px por columna para evitar que columnas del extremo
@@ -230,7 +232,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v4.0</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v4.1</div>
   </div>
 </div>
 
@@ -729,7 +731,19 @@ function clearVal(...ids){ids.forEach(id=>{const e=document.getElementById(id);i
 function setLoading(id,on){const b=document.getElementById(id);if(!b)return;b.disabled=on;b.textContent=on?'ESPERE...':(b.dataset.label||b.textContent);}
 function ek(email){return email.replace(/\./g,'_').replace(/@/g,'__at__');}
 function genPass(){const c='ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';let p='';for(let i=0;i<8;i++)p+=c[Math.floor(Math.random()*c.length)];return p;}
-function getDays(){const d=[],n=new Date();for(let i=0;i<7;i++){const x=new Date(n);x.setDate(n.getDate()+i);d.push(x);}return d;}
+// ── REGLAS DE RESERVA ─────────────────────────────────────────
+// ANTICIPACIÓN MÍNIMA : Alumnos = 12 hs | Pilotos = 1 hs
+// HORIZONTE MÁXIMO    : Alumnos = 7 días | Pilotos = 30 días
+// CANCELACIÓN ALUMNO  : hasta 2 hs antes | Piloto: sin límite
+// APROBACIÓN          : Alumnos = manual por instructor | Pilotos = automática
+// ──────────────────────────────────────────────────────────────
+function getDays(cantidad){
+  // Alumnos: 7 días | Pilotos: 30 días
+  const max=cantidad||(session?.rol==='piloto'?30:7);
+  const d=[],n=new Date();
+  for(let i=0;i<max;i++){const x=new Date(n);x.setDate(n.getDate()+i);d.push(x);}
+  return d;
+}
 function fmtDate(d){const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${dd}`;}
 function fmtLabel(d){const D=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];return D[d.getDay()]+'\n'+d.getDate()+'/'+(d.getMonth()+1);}
 function ok12h(ds,h){const[y,m,d]=ds.split('-').map(Number);const[hh,mm]=h.split(':').map(Number);return(new Date(y,m-1,d,hh,mm,0)-new Date())>=12*3600*1000;}
