@@ -1,10 +1,12 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 3.7
+  VERSION : 3.8
   FECHA   : 2026-05-20
   CAMBIOS : Fix grilla calendario instructor: min-width aumentado a 1400px y
             min-width:62px por columna para evitar que columnas del extremo
             derecho queden cortadas al hacer scroll horizontal
+            Timeout de sesión: cierre automático por inactividad a los 10 minutos
+            startSessionTimeout() en login alumno e instructor, stopSessionTimeout() en logout
 -->
 <!DOCTYPE html>
 <html lang="es">
@@ -806,6 +808,7 @@ window.loginAlumno=async function(){
     initAvionSelector();
     showAlumnoTab('mis-turnos');
     suscribirReservas();
+    startSessionTimeout();
   }catch(e){showErr('login-err','Error al iniciar sesión.');console.error(e);}
   finally{setLoading('btn-login-al',false);}
 };
@@ -853,6 +856,7 @@ window.loginInstructor=async function(){
     if(soloUsuarios){showInstTab('config');showCfgTab('usuarios');}
     else{showInstTab('reservas');suscribirReservas();}
     suscribirPendientes();
+    startSessionTimeout();
   }catch(e){showErr('login-err2','Error al iniciar sesión.');console.error(e);}
   finally{setLoading('btn-login-inst',false);}
 };
@@ -865,6 +869,7 @@ function setNavUser(nombre,tipo){
 }
 
 window.logout=function(){
+  stopSessionTimeout();
   if(unsubReservas){unsubReservas();unsubReservas=null;}
   if(_unsubPendientes){_unsubPendientes();_unsubPendientes=null;}
   const banner=document.getElementById('banner-pendientes');if(banner)banner.style.display='none';
@@ -874,6 +879,31 @@ window.logout=function(){
   document.getElementById('nav-user-area').style.display='none';
   showScreen('login-screen');switchLoginTab('alumno');
 };
+
+// ── TIMEOUT DE SESIÓN ──────────────────────────────────────────
+const SESSION_TIMEOUT_MS=10*60*1000; // 10 minutos de inactividad
+let _sessionTimer=null;
+
+function resetSessionTimer(){
+  if(!session)return;
+  clearTimeout(_sessionTimer);
+  _sessionTimer=setTimeout(()=>{if(session)logout();},SESSION_TIMEOUT_MS);
+}
+
+function startSessionTimeout(){
+  resetSessionTimer();
+  ['mousemove','mousedown','keydown','touchstart','scroll','click'].forEach(ev=>{
+    document.addEventListener(ev,resetSessionTimer,{passive:true});
+  });
+}
+
+function stopSessionTimeout(){
+  clearTimeout(_sessionTimer);
+  _sessionTimer=null;
+  ['mousemove','mousedown','keydown','touchstart','scroll','click'].forEach(ev=>{
+    document.removeEventListener(ev,resetSessionTimer);
+  });
+}
 
 // ── CONFIGURACIÓN (por avión) ──────────────────────────────────
 async function loadConfig(){
