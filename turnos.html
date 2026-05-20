@@ -315,6 +315,9 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <div class="section-title">▸ Seleccioná el avión</div>
         <div class="avion-selector" id="avion-selector"></div>
       </div>
+      <div id="avion-no-disponible" style="display:none;background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.3);border-radius:4px;padding:.85rem 1rem;margin-bottom:1rem;font-family:var(--font-mono);font-size:12px;color:var(--red);letter-spacing:.08em;">
+        ✕ AERONAVE NO DISPONIBLE — La aeronave seleccionada no se encuentra disponible para reservas en este momento. Contactate con el instructor para más información.
+      </div>
       <div id="avion-seleccionado-label" style="display:none;font-family:var(--font-mono);font-size:11px;color:var(--amber);letter-spacing:.1em;margin-bottom:.75rem"></div>
       <div class="section-title">▸ Seleccioná un día</div>
       <div class="days-grid" id="days-grid"></div>
@@ -799,7 +802,6 @@ window.loginAlumno=async function(){
     initAvionSelector();
     showAlumnoTab('mis-turnos');
     suscribirReservas();
-    startSessionTimeout();
   }catch(e){showErr('login-err','Error al iniciar sesión.');console.error(e);}
   finally{setLoading('btn-login-al',false);}
 };
@@ -847,7 +849,6 @@ window.loginInstructor=async function(){
     if(soloUsuarios){showInstTab('config');showCfgTab('usuarios');}
     else{showInstTab('reservas');suscribirReservas();}
     suscribirPendientes();
-    startSessionTimeout();
   }catch(e){showErr('login-err2','Error al iniciar sesión.');console.error(e);}
   finally{setLoading('btn-login-inst',false);}
 };
@@ -860,7 +861,6 @@ function setNavUser(nombre,tipo){
 }
 
 window.logout=function(){
-  stopSessionTimeout();
   if(unsubReservas){unsubReservas();unsubReservas=null;}
   if(_unsubPendientes){_unsubPendientes();_unsubPendientes=null;}
   const banner=document.getElementById('banner-pendientes');if(banner)banner.style.display='none';
@@ -870,35 +870,6 @@ window.logout=function(){
   document.getElementById('nav-user-area').style.display='none';
   showScreen('login-screen');switchLoginTab('alumno');
 };
-
-// ── TIMEOUT DE SESIÓN ──────────────────────────────────────────
-const SESSION_TIMEOUT_MS=10*60*1000; // 10 minutos
-let _sessionTimer=null;
-
-function resetSessionTimer(){
-  if(!session)return;
-  clearTimeout(_sessionTimer);
-  _sessionTimer=setTimeout(()=>{
-    if(session){
-      logout();
-    }
-  },SESSION_TIMEOUT_MS);
-}
-
-function startSessionTimeout(){
-  resetSessionTimer();
-  ['mousemove','mousedown','keydown','touchstart','scroll','click'].forEach(ev=>{
-    document.addEventListener(ev,resetSessionTimer,{passive:true});
-  });
-}
-
-function stopSessionTimeout(){
-  clearTimeout(_sessionTimer);
-  _sessionTimer=null;
-  ['mousemove','mousedown','keydown','touchstart','scroll','click'].forEach(ev=>{
-    document.removeEventListener(ev,resetSessionTimer);
-  });
-}
 
 // ── CONFIGURACIÓN (por avión) ──────────────────────────────────
 async function loadConfig(){
@@ -937,12 +908,25 @@ function initAvionSelector(){
   const aviones=avionesParaRol(rol);
   const wrap=document.getElementById('avion-selector-wrap');
   const sel=document.getElementById('avion-selector');
+  const avisoNoDisp=document.getElementById('avion-no-disponible');
+
+  avisoNoDisp.style.display='none';
 
   if(aviones.length===1){
     // alumno: solo LV-OAD, no muestra selector
     selectedAvion=aviones[0].key;
     wrap.style.display='none';
     document.getElementById('avion-seleccionado-label').style.display='none';
+  } else if(aviones.length===0){
+    // sin aviones disponibles (alumno con LV-OAD inactivo, o piloto sin ninguno)
+    selectedAvion=null;
+    wrap.style.display='none';
+    document.getElementById('avion-seleccionado-label').style.display='none';
+    avisoNoDisp.style.display='block';
+    document.getElementById('days-grid').innerHTML='';
+    document.getElementById('slots-section').style.display='none';
+    document.getElementById('slot-confirm').style.display='none';
+    return;
   } else {
     // piloto: muestra botonera
     selectedAvion=null;
@@ -959,6 +943,7 @@ function initAvionSelector(){
 window.seleccionarAvion=function(key){
   selectedAvion=key;
   selectedDay=null;selectedSlot=null;
+  document.getElementById('avion-no-disponible').style.display='none';
   // actualizar visual
   document.querySelectorAll('.avion-btn').forEach(b=>{
     b.classList.toggle('active',b.querySelector('.mat').textContent===key);
