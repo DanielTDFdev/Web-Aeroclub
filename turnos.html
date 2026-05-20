@@ -1,10 +1,10 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 3.6
+  VERSION : 3.7
   FECHA   : 2026-05-20
-  CAMBIOS : Mejora contraste cal-blocks (cancelado/vencido/pendiente/aprobado) en dark mode
-            Semanas informativas con estilo atenuado, reservas pasadas tachadas
-            Feriados en headers de las tres semanas, separadores visuales entre semanas
+  CAMBIOS : Fix grilla calendario instructor: min-width aumentado a 1400px y
+            min-width:62px por columna para evitar que columnas del extremo
+            derecho queden cortadas al hacer scroll horizontal
 -->
 <!DOCTYPE html>
 <html lang="es">
@@ -167,11 +167,11 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 .cal-now-line{position:absolute;left:0;right:0;height:2px;background:var(--red);pointer-events:none;z-index:10;transition:top .5s ease;}
 .cal-now-line::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:8px;height:8px;border-radius:50%;background:var(--red);box-shadow:0 0 8px rgba(248,81,73,.7);}
 .cal-now-line::after{content:attr(data-hora);position:absolute;left:12px;top:50%;transform:translateY(-50%);font-family:var(--font-mono);font-size:10px;color:var(--red);letter-spacing:.08em;background:var(--bg);padding:0 4px;}
-.cal-table{width:100%;border-collapse:collapse;min-width:520px;}
-.cal-table th{font-family:var(--font-mono);font-size:11px;color:var(--text2);letter-spacing:.1em;text-transform:uppercase;padding:8px 6px;border-bottom:1px solid var(--border2);border-right:1px solid var(--border);text-align:center;background:var(--bg2);}
+.cal-table{width:100%;border-collapse:collapse;min-width:1400px;}
+.cal-table th{font-family:var(--font-mono);font-size:11px;color:var(--text2);letter-spacing:.1em;text-transform:uppercase;padding:8px 6px;border-bottom:1px solid var(--border2);border-right:1px solid var(--border);text-align:center;background:var(--bg2);min-width:62px;}
 .cal-table th.today-col{color:var(--cyan);border-bottom-color:var(--cyan);}
-.cal-table th:first-child{width:64px;color:var(--text3);}
-.cal-table td{border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:4px;vertical-align:top;background:var(--bg);min-height:36px;}
+.cal-table th:first-child{width:64px;min-width:64px;color:var(--text3);}
+.cal-table td{border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:4px;vertical-align:top;background:var(--bg);min-height:36px;min-width:62px;}
 .cal-table td.today-col{background:rgba(0,200,212,.03);}
 .cal-table td:first-child{font-family:var(--font-mono);font-size:11px;color:var(--text3);text-align:center;padding:6px 4px;white-space:nowrap;background:var(--bg2);border-right:1px solid var(--border2);}
 .cal-block{padding:5px 7px;border-radius:var(--radius);cursor:pointer;margin-bottom:3px;font-family:var(--font-mono);font-size:11px;line-height:1.4;transition:filter .15s;}
