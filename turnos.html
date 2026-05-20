@@ -1,6 +1,6 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 3.2
+  VERSION : 3.3
   FECHA   : 2026-05-19
   CAMBIOS : Calendario instructor extendido a 21 días (7 pasados + 7 actuales + 7 futuros)
             Semanas informativas con estilo atenuado, reservas pasadas tachadas
@@ -218,7 +218,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v3.1</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v3.3</div>
   </div>
 </div>
 
@@ -799,6 +799,7 @@ window.loginAlumno=async function(){
     initAvionSelector();
     showAlumnoTab('mis-turnos');
     suscribirReservas();
+    startSessionTimeout();
   }catch(e){showErr('login-err','Error al iniciar sesión.');console.error(e);}
   finally{setLoading('btn-login-al',false);}
 };
@@ -846,6 +847,7 @@ window.loginInstructor=async function(){
     if(soloUsuarios){showInstTab('config');showCfgTab('usuarios');}
     else{showInstTab('reservas');suscribirReservas();}
     suscribirPendientes();
+    startSessionTimeout();
   }catch(e){showErr('login-err2','Error al iniciar sesión.');console.error(e);}
   finally{setLoading('btn-login-inst',false);}
 };
@@ -858,6 +860,7 @@ function setNavUser(nombre,tipo){
 }
 
 window.logout=function(){
+  stopSessionTimeout();
   if(unsubReservas){unsubReservas();unsubReservas=null;}
   if(_unsubPendientes){_unsubPendientes();_unsubPendientes=null;}
   const banner=document.getElementById('banner-pendientes');if(banner)banner.style.display='none';
@@ -867,6 +870,35 @@ window.logout=function(){
   document.getElementById('nav-user-area').style.display='none';
   showScreen('login-screen');switchLoginTab('alumno');
 };
+
+// ── TIMEOUT DE SESIÓN ──────────────────────────────────────────
+const SESSION_TIMEOUT_MS=10*60*1000; // 10 minutos
+let _sessionTimer=null;
+
+function resetSessionTimer(){
+  if(!session)return;
+  clearTimeout(_sessionTimer);
+  _sessionTimer=setTimeout(()=>{
+    if(session){
+      logout();
+    }
+  },SESSION_TIMEOUT_MS);
+}
+
+function startSessionTimeout(){
+  resetSessionTimer();
+  ['mousemove','mousedown','keydown','touchstart','scroll','click'].forEach(ev=>{
+    document.addEventListener(ev,resetSessionTimer,{passive:true});
+  });
+}
+
+function stopSessionTimeout(){
+  clearTimeout(_sessionTimer);
+  _sessionTimer=null;
+  ['mousemove','mousedown','keydown','touchstart','scroll','click'].forEach(ev=>{
+    document.removeEventListener(ev,resetSessionTimer);
+  });
+}
 
 // ── CONFIGURACIÓN (por avión) ──────────────────────────────────
 async function loadConfig(){
@@ -2092,7 +2124,7 @@ window.ejecutarBackup=async function(){
   statusEl.style.color='var(--text3)';
   try{
     const tablas=['reservas','alumnos','instructores','config','auditoria'];
-    const backup={_meta:{fecha:new Date().toISOString(),version:'3.1',generado_por:session?.nombre||session?.user||'admin'}};
+    const backup={_meta:{fecha:new Date().toISOString(),version:'3.3',generado_por:session?.nombre||session?.user||'admin'}};
     for(const tabla of tablas) backup[tabla]=await fbGet(tabla)||{};
     const json=JSON.stringify(backup,null,2);
     const fecha=new Date().toISOString().slice(0,10);
