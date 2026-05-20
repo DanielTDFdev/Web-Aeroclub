@@ -1,8 +1,9 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 3.9
+  VERSION : 4.0
   FECHA   : 2026-05-20
-  CAMBIOS : Favicon: link rel icon + apple-touch-icon para logo_aeroclub.png
+  CAMBIOS : Scroll automático al hoy en calendario instructor al cargar
+            Favicon: link rel icon + apple-touch-icon para logo_aeroclub.png
             Fix grilla calendario instructor: min-width aumentado a 1400px y
             min-width:62px por columna para evitar que columnas del extremo
             derecho queden cortadas al hacer scroll horizontal
@@ -229,7 +230,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v3.9</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v4.0</div>
   </div>
 </div>
 
@@ -1372,6 +1373,19 @@ async function renderTodasReservas(data){
   html+='</tbody></table>';
   cal.innerHTML=html;
   dibujarLineaHoraActual();
+  scrollCalAHoy();
+}
+
+function scrollCalAHoy(){
+  const wrap=document.querySelector('.cal-wrap');
+  if(!wrap)return;
+  const todayTh=wrap.querySelector('th.today-col');
+  if(!todayTh)return;
+  // Centrar la columna de hoy dentro del wrap
+  const wrapRect=wrap.getBoundingClientRect();
+  const thRect=todayTh.getBoundingClientRect();
+  const scrollLeft=wrap.scrollLeft+(thRect.left-wrapRect.left)-(wrapRect.width/2)+(thRect.width/2);
+  wrap.scrollTo({left:Math.max(0,scrollLeft),behavior:'instant'});
 }
 
 // ── LÍNEA HORA ACTUAL EN CALENDARIO ────────────────────────────
