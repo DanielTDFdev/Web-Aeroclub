@@ -1,8 +1,8 @@
 <!--
   ARCHIVO : index.html
-  VERSION : 2.4
-  FECHA   : 2026-05-18
-  CAMBIOS : Punto pulsante amber en botones Flota, Historia y Comisión
+  VERSION : 2.5
+  FECHA   : 2026-05-20
+  CAMBIOS : Fix flash de tema: detección movida al <head>
 -->
 <!DOCTYPE html>
 <html lang="es">
@@ -124,6 +124,7 @@ footer{border-top:1px solid var(--border);padding:1.5rem 2rem;display:flex;align
 :root.light .carousel-slide{filter:brightness(.58) saturate(.85);}
 .carousel-slide.active{opacity:1;}
 </style>
+<script>if(localStorage.getItem('arc-theme')==='light')document.documentElement.classList.add('light');</script>
 </head>
 <body>
 

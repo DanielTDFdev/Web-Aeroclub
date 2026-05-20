@@ -1,8 +1,8 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 3.4
-  FECHA   : 2026-05-19
-  CAMBIOS : Calendario instructor extendido a 21 días (7 pasados + 7 actuales + 7 futuros)
+  VERSION : 3.5
+  FECHA   : 2026-05-20
+  CAMBIOS : Fix flash de tema: detección movida al <head>
             Semanas informativas con estilo atenuado, reservas pasadas tachadas
             Feriados en headers de las tres semanas, separadores visuales entre semanas
 -->
@@ -213,6 +213,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 .cal-avion-tab.all{border-color:var(--cyan);}
 .cal-avion-tab.all.active{border-color:var(--cyan);color:var(--cyan);background:rgba(0,200,212,.08);}
 </style>
+<script>if(localStorage.getItem('arc-theme')==='light')document.documentElement.classList.add('light');</script>
 </head>
 <body>
 

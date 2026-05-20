@@ -1,8 +1,8 @@
 <!--
   ARCHIVO : contacto.html
-  VERSION : 1.4
+  VERSION : 1.5
   FECHA   : 2026-05-20
-  CAMBIOS : Actualización endpoint Formspree a cuenta aeroclubriogrande.com
+  CAMBIOS : Fix flash de tema: detección movida al <head>
 -->
 <!DOCTYPE html>
 <html lang="es">
@@ -71,6 +71,7 @@ footer{border-top:1px solid var(--border);padding:1.5rem 2rem;display:flex;align
 @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
 @media(max-width:600px){nav{padding:.6rem 1rem;}.btn-nav{display:none;}.hero{padding:6rem 1.25rem 2rem;}.container{padding:1.5rem 1rem 3rem;}.field-row{grid-template-columns:1fr;}footer{flex-direction:column;text-align:center;}}
 </style>
+<script>if(localStorage.getItem('arc-theme')==='light')document.documentElement.classList.add('light');</script>
 </head>
 <body>
 <nav>
