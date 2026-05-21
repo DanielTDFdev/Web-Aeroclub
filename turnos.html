@@ -1,6 +1,6 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 4.1
+  VERSION : 4.2
   FECHA   : 2026-05-20
   CAMBIOS : Pilotos: horizonte de reserva 30 días (alumnos mantienen 7 días)
             Reglas de negocio documentadas en bloque de comentarios
@@ -232,7 +232,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v4.1</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v4.2</div>
   </div>
 </div>
 
@@ -1701,7 +1701,12 @@ function renderHorariosConfig(){
           ${estaActivo?'Los usuarios pueden reservar esta aeronave':'No aparece en el sistema de reservas'}
         </div>
       </div>
-      <button onclick="toggleActivoAvion()" style="font-size:12px;padding:6px 16px;${estaActivo?'color:var(--red);border-color:var(--red);background:rgba(248,81,73,.08)':'color:var(--green);border-color:var(--green);background:rgba(57,211,83,.08)'}">${estaActivo?'DESHABILITAR':'HABILITAR'}</button>
+      <div onclick="toggleActivoAvion()" style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none">
+        <span style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.08em">${estaActivo?'ON':'OFF'}</span>
+        <div style="width:42px;height:22px;border-radius:11px;background:${estaActivo?'var(--green)':'rgba(248,81,73,.3)'};border:1px solid ${estaActivo?'var(--green)':'rgba(248,81,73,.5)'};position:relative;transition:all .25s;box-shadow:${estaActivo?'0 0 10px rgba(57,211,83,.3)':'none'}">
+          <div style="width:16px;height:16px;border-radius:50%;background:#fff;position:absolute;top:2px;left:${estaActivo?'22px':'2px'};transition:left .25s;box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>
+        </div>
+      </div>
     </div>`;
   document.getElementById('horarios-config').innerHTML=
     '<div style="font-family:var(--font-mono);font-size:11px;color:var(--amber);margin-bottom:.6rem;letter-spacing:.1em">'+DIAS_NOMBRE[activeDow].toUpperCase()+'</div>'+
