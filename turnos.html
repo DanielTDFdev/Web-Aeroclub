@@ -1,8 +1,10 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 4.3
+  VERSION : 4.5
   FECHA   : 2026-05-22
-  CAMBIOS : Columna horarios sticky en scroll lateral
+  CAMBIOS : Fix tab Auditoría visible para administrador (soloUsuarios)
+            Auditoría accesible para usuario administrador (soloUsuarios)
+            Columna horarios sticky en scroll lateral
             Tab "Días" renombrado a "Bloq.Aviones"
             Pilotos: horizonte de reserva 30 días (alumnos mantienen 7 días)
             Reglas de negocio documentadas en bloque de comentarios
@@ -234,7 +236,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v4.3</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v4.5</div>
   </div>
 </div>
 
@@ -1631,6 +1633,8 @@ window.showInstTab=function(tab){
       if(!b)return;
       if(t==='sistema'){
         b.style.display=(session?.user==='admin'||session?.user==='administrador')?'':'none';
+      } else if(t==='auditoria'){
+        b.style.display=(session?.user==='admin'||session?.user==='administrador')?'':'none';
       } else {
         b.style.display=session?.soloUsuarios?'none':'';
       }
@@ -1662,7 +1666,7 @@ window.selectCfgAvion=function(key){
 
 window.showCfgTab=function(tab){
   if(tab==='sistema'&&session?.user!=='admin'&&session?.user!=='administrador') return;
-  if(session?.soloUsuarios&&tab!=='usuarios'&&tab!=='sistema') return;
+  if(session?.soloUsuarios&&tab!=='usuarios'&&tab!=='sistema'&&tab!=='auditoria') return;
   ['horarios','dias','instructores','usuarios','consultas','auditoria','sistema'].forEach(t=>{
     const panel=document.getElementById('cfg-'+t);
     const btn=document.getElementById('cfg-tab-'+t);
