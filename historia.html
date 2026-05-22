@@ -1,8 +1,9 @@
 <!--
   ARCHIVO : historia.html
-  VERSION : 1.4
-  FECHA   : 2026-05-20
-  CAMBIOS : Favicon: link rel icon + apple-touch-icon para logo_aeroclub.png
+  VERSION : 1.5
+  FECHA   : 2026-05-22
+  CAMBIOS : Logo nav: tamaño 46px y link a index.html
+            Favicon: link rel icon + apple-touch-icon para logo_aeroclub.png
             Fix flash de tema: detección movida al <head>
 -->
 <!DOCTYPE html>
@@ -45,7 +46,7 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
 nav{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:.75rem 2rem;background:rgba(7,9,13,.88);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);transition:background .3s;}
 :root.light nav{background:rgba(238,242,247,.92);}
 .nav-logo{display:flex;align-items:center;gap:12px;}
-.nav-logo img{width:36px;height:36px;object-fit:contain;filter:drop-shadow(0 0 8px rgba(0,200,212,.4));}
+.nav-logo img{width:46px;height:46px;object-fit:contain;filter:drop-shadow(0 0 8px rgba(0,200,212,.4));}
 :root.light .nav-logo img{filter:none;}
 .nav-logo-text{font-family:var(--font-mono);font-size:13px;color:var(--amber);letter-spacing:.15em;}
 .nav-right{display:flex;align-items:center;gap:14px;}
@@ -135,10 +136,10 @@ footer{border-top:1px solid var(--border);padding:1.5rem 2rem;display:flex;align
 <body>
 
 <nav>
-  <div class="nav-logo">
+  <a href="index.html" class="nav-logo" style="text-decoration:none;">
     <img src="logo_aeroclub.png" alt="Logo Aeroclub">
     <span class="nav-logo-text">AEROCLUB RÍO GRANDE</span>
-  </div>
+  </a>
   <div class="nav-right">
     <div class="theme-toggle" onclick="toggleTheme()">
       <span style="font-size:13px">🌙</span>
@@ -239,7 +240,7 @@ footer{border-top:1px solid var(--border);padding:1.5rem 2rem;display:flex;align
 <footer>
   <span class="footer-brand">◈ AEROCLUB RÍO GRANDE — © 2026</span>
   <span class="footer-coords">53°46'S 67°45'O · SAWE · RÍO GRANDE, TIERRA DEL FUEGO</span>
-  <!-- footer-ver --><span style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.06em;opacity:.6">v1.4</span>
+  <!-- footer-ver --><span style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.06em;opacity:.6">v1.5</span>
 </footer>
 
 <script>
