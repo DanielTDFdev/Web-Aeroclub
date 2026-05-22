@@ -2,7 +2,16 @@
   ARCHIVO : turnos.html
   VERSION : 4.3
   FECHA   : 2026-05-22
-  CAMBIOS : Columna de horarios sticky en scroll lateral del calendario instructor
+  CAMBIOS : Tab "Días" renombrado a "Bloq.Aviones" en menú Configuración
+            Pilotos: horizonte de reserva 30 días (alumnos mantienen 7 días)
+            Reglas de negocio documentadas en bloque de comentarios
+            Scroll automático al hoy en calendario instructor al cargar
+            Favicon: link rel icon + apple-touch-icon para logo_aeroclub.png
+            Fix grilla calendario instructor: min-width aumentado a 1400px y
+            min-width:62px por columna para evitar que columnas del extremo
+            derecho queden cortadas al hacer scroll horizontal
+            Timeout de sesión: cierre automático por inactividad a los 10 minutos
+            startSessionTimeout() en login alumno e instructor, stopSessionTimeout() en logout
 -->
 <!DOCTYPE html>
 <html lang="es">
@@ -171,10 +180,10 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 .cal-table{width:100%;border-collapse:collapse;min-width:1400px;}
 .cal-table th{font-family:var(--font-mono);font-size:11px;color:var(--text2);letter-spacing:.1em;text-transform:uppercase;padding:8px 6px;border-bottom:1px solid var(--border2);border-right:1px solid var(--border);text-align:center;background:var(--bg2);min-width:62px;}
 .cal-table th.today-col{color:var(--cyan);border-bottom-color:var(--cyan);}
-.cal-table th:first-child{width:64px;min-width:64px;color:var(--text3);position:sticky;left:0;z-index:3;background:var(--bg2);}
+.cal-table th:first-child{width:64px;min-width:64px;color:var(--text3);}
 .cal-table td{border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:4px;vertical-align:top;background:var(--bg);min-height:36px;min-width:62px;}
 .cal-table td.today-col{background:rgba(0,200,212,.03);}
-.cal-table td:first-child{font-family:var(--font-mono);font-size:11px;color:var(--text3);text-align:center;padding:6px 4px;white-space:nowrap;background:var(--bg2);border-right:1px solid var(--border2);position:sticky;left:0;z-index:2;}
+.cal-table td:first-child{font-family:var(--font-mono);font-size:11px;color:var(--text3);text-align:center;padding:6px 4px;white-space:nowrap;background:var(--bg2);border-right:1px solid var(--border2);}
 .cal-block{padding:5px 7px;border-radius:var(--radius);cursor:pointer;margin-bottom:3px;font-family:var(--font-mono);font-size:11px;line-height:1.4;transition:filter .15s;}
 .cal-block:hover{filter:brightness(1.25);}
 .cal-block.pendiente{background:rgba(240,165,0,.22);border:1px solid rgba(240,165,0,.5);color:var(--amber);}
@@ -421,7 +430,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
     <h2>◈ Configuración</h2>
     <div class="tab-bar" style="margin-bottom:.75rem">
       <button class="nav-btn active" id="cfg-tab-horarios"     onclick="showCfgTab('horarios')">Horarios</button>
-      <button class="nav-btn"        id="cfg-tab-dias"         onclick="showCfgTab('dias')">Días</button>
+      <button class="nav-btn"        id="cfg-tab-dias"         onclick="showCfgTab('dias')">Bloq.Aviones</button>
       <button class="nav-btn"        id="cfg-tab-instructores" onclick="showCfgTab('instructores')">Instructores</button>
       <button class="nav-btn"        id="cfg-tab-usuarios"     onclick="showCfgTab('usuarios')">Usuarios</button>
       <button class="nav-btn"        id="cfg-tab-consultas"    onclick="showCfgTab('consultas')">Consultas</button>
