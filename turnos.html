@@ -2,7 +2,8 @@
   ARCHIVO : turnos.html
   VERSION : 4.3
   FECHA   : 2026-05-22
-  CAMBIOS : Tab "Días" renombrado a "Bloq.Aviones" en menú Configuración
+  CAMBIOS : Columna horarios sticky en scroll lateral
+            Tab "Días" renombrado a "Bloq.Aviones"
             Pilotos: horizonte de reserva 30 días (alumnos mantienen 7 días)
             Reglas de negocio documentadas en bloque de comentarios
             Scroll automático al hoy en calendario instructor al cargar
@@ -180,10 +181,10 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 .cal-table{width:100%;border-collapse:collapse;min-width:1400px;}
 .cal-table th{font-family:var(--font-mono);font-size:11px;color:var(--text2);letter-spacing:.1em;text-transform:uppercase;padding:8px 6px;border-bottom:1px solid var(--border2);border-right:1px solid var(--border);text-align:center;background:var(--bg2);min-width:62px;}
 .cal-table th.today-col{color:var(--cyan);border-bottom-color:var(--cyan);}
-.cal-table th:first-child{width:64px;min-width:64px;color:var(--text3);}
+.cal-table th:first-child{width:64px;min-width:64px;color:var(--text3);position:sticky;left:0;z-index:3;background:var(--bg2);}
 .cal-table td{border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:4px;vertical-align:top;background:var(--bg);min-height:36px;min-width:62px;}
 .cal-table td.today-col{background:rgba(0,200,212,.03);}
-.cal-table td:first-child{font-family:var(--font-mono);font-size:11px;color:var(--text3);text-align:center;padding:6px 4px;white-space:nowrap;background:var(--bg2);border-right:1px solid var(--border2);}
+.cal-table td:first-child{font-family:var(--font-mono);font-size:11px;color:var(--text3);text-align:center;padding:6px 4px;white-space:nowrap;background:var(--bg2);border-right:1px solid var(--border2);position:sticky;left:0;z-index:2;}
 .cal-block{padding:5px 7px;border-radius:var(--radius);cursor:pointer;margin-bottom:3px;font-family:var(--font-mono);font-size:11px;line-height:1.4;transition:filter .15s;}
 .cal-block:hover{filter:brightness(1.25);}
 .cal-block.pendiente{background:rgba(240,165,0,.22);border:1px solid rgba(240,165,0,.5);color:var(--amber);}
@@ -233,7 +234,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v4.2</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v4.3</div>
   </div>
 </div>
 
