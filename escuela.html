@@ -1,0 +1,329 @@
+<!--
+  ARCHIVO : escuela.html
+  VERSION : 1.0
+  FECHA   : 2026-05-22
+  CAMBIOS : Creación inicial — Página CIAC / Escuela de Vuelo
+-->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Escuela de Vuelo — Aeroclub Río Grande</title>
+
+<link rel="icon" type="image/png" href="logo_aeroclub.png">
+<link rel="apple-touch-icon" href="logo_aeroclub.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#07090d;--bg2:#0e1218;--bg3:#141a24;--bg4:#1c2330;
+  --text:#c8d8e8;--text2:#7a9bb8;--text3:#3d5a72;
+  --amber:#f0a500;--amber2:#ffc840;
+  --cyan:#00c8d4;--cyan-dim:#003d42;
+  --green:#39d353;--red:#f85149;
+  --border:rgba(0,200,212,0.1);--border2:rgba(0,200,212,0.3);
+  --font-mono:'Share Tech Mono',monospace;
+  --font-ui:'Rajdhani',sans-serif;
+  --font-display:'Orbitron',sans-serif;
+}
+:root.light{
+  --bg:#eef2f7;--bg2:#dde4ef;--bg3:#ffffff;--bg4:#cdd8e8;
+  --text:#1a2a3a;--text2:#3a5a78;--text3:#7a9ab8;
+  --border:rgba(0,100,140,0.12);--border2:rgba(0,100,140,0.3);
+}
+
+html{scroll-behavior:smooth}
+body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;transition:background .3s,color .3s;}
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.04) 2px,rgba(0,0,0,.04) 4px);pointer-events:none;z-index:9999;}
+
+/* NAV */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:.75rem 2rem;background:rgba(7,9,13,.88);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);transition:background .3s;}
+:root.light nav{background:rgba(238,242,247,.92);}
+.nav-logo{display:flex;align-items:center;gap:12px;}
+.nav-logo img{width:36px;height:36px;object-fit:contain;filter:drop-shadow(0 0 8px rgba(0,200,212,.4));}
+:root.light .nav-logo img{filter:none;}
+.nav-logo-text{font-family:var(--font-mono);font-size:13px;color:var(--amber);letter-spacing:.15em;}
+.nav-right{display:flex;align-items:center;gap:14px;}
+.theme-toggle{display:flex;align-items:center;gap:6px;cursor:pointer;}
+.theme-track{width:34px;height:18px;border-radius:9px;background:var(--bg3);border:1px solid var(--border2);position:relative;}
+.theme-thumb{width:12px;height:12px;border-radius:50%;background:var(--cyan);position:absolute;top:2px;left:2px;transition:transform .25s;box-shadow:0 0 6px rgba(0,200,212,.5);}
+:root.light .theme-thumb{transform:translateX(16px);background:var(--amber);}
+.btn-nav{font-family:var(--font-mono);font-size:12px;letter-spacing:.1em;padding:8px 20px;background:linear-gradient(135deg,rgba(0,200,212,.14),rgba(0,200,212,.04));border:1px solid var(--cyan);border-radius:3px;color:var(--cyan);text-decoration:none;text-transform:uppercase;transition:all .2s;}
+.btn-nav:hover{background:linear-gradient(135deg,rgba(0,200,212,.24),rgba(0,200,212,.1));box-shadow:0 0 20px rgba(0,200,212,.2);}
+
+/* HERO */
+.hero{position:relative;padding:7rem 2rem 3rem;text-align:center;overflow:hidden;}
+.hero-bg{position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 30%,rgba(0,80,100,.2) 0%,transparent 70%);}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(0,200,212,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,200,212,.03) 1px,transparent 1px);background-size:60px 60px;animation:gridDrift 30s linear infinite;}
+@keyframes gridDrift{0%{background-position:0 0}100%{background-position:60px 60px}}
+.hero-content{position:relative;z-index:2;}
+.hero-eyebrow{font-family:var(--font-mono);font-size:11px;color:var(--cyan);letter-spacing:.3em;margin-bottom:1rem;opacity:0;animation:fadeUp .7s ease .1s forwards;}
+.hero-title{font-family:var(--font-display);font-size:clamp(28px,6vw,64px);font-weight:900;color:var(--amber2);text-shadow:0 0 40px rgba(240,165,0,.4);letter-spacing:.1em;margin-bottom:.5rem;opacity:0;animation:fadeUp .7s ease .25s forwards;}
+.hero-sub{font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.2em;opacity:0;animation:fadeUp .7s ease .4s forwards;}
+
+/* BADGES HERO */
+.hero-badges{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:1.75rem;opacity:0;animation:fadeUp .7s ease .55s forwards;}
+.hero-badge{font-family:var(--font-mono);font-size:10px;letter-spacing:.15em;padding:6px 16px;border-radius:3px;text-transform:uppercase;}
+.hb-green{background:rgba(57,211,83,.08);border:1px solid rgba(57,211,83,.3);color:var(--green);}
+.hb-cyan{background:rgba(0,200,212,.08);border:1px solid var(--border2);color:var(--cyan);}
+.hb-amber{background:rgba(240,165,0,.08);border:1px solid rgba(240,165,0,.3);color:var(--amber);}
+
+/* CONTAINER */
+.container{max-width:860px;margin:0 auto;padding:3rem 1.5rem 4rem;}
+
+/* SECCIÓN */
+.seccion{margin-bottom:3.5rem;opacity:0;animation:fadeUp .7s ease forwards;}
+.seccion:nth-child(1){animation-delay:.1s}
+.seccion:nth-child(2){animation-delay:.2s}
+.seccion:nth-child(3){animation-delay:.3s}
+.seccion:nth-child(4){animation-delay:.4s}
+
+.sec-header{display:flex;align-items:center;gap:12px;margin-bottom:1.5rem;padding-bottom:.85rem;border-bottom:1px solid var(--border2);}
+.sec-icon{font-family:var(--font-mono);font-size:14px;color:var(--cyan);}
+.sec-titulo{font-family:var(--font-mono);font-size:12px;color:var(--cyan);letter-spacing:.22em;text-transform:uppercase;}
+.sec-linea{flex:1;height:1px;background:linear-gradient(90deg,var(--border2),transparent);}
+
+/* TEXTO */
+.ciac-texto{font-family:var(--font-ui);font-size:clamp(15px,2vw,17px);color:var(--text2);line-height:1.85;margin-bottom:1.25rem;}
+.ciac-texto strong{color:var(--text);font-weight:600;}
+
+/* STATS */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:2rem;}
+.stat-card{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:1.25rem 1.5rem;position:relative;overflow:hidden;transition:border-color .2s;}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:.5;}
+.stat-card:hover{border-color:var(--border2);}
+.stat-num{font-family:var(--font-display);font-size:clamp(26px,4vw,36px);font-weight:900;color:var(--amber2);text-shadow:0 0 20px rgba(240,165,0,.3);line-height:1;margin-bottom:.4rem;}
+.stat-label{font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.18em;text-transform:uppercase;}
+
+/* FOTOS */
+.fotos-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:2rem;}
+.foto-wrap{border-radius:6px;overflow:hidden;border:1px solid var(--border);aspect-ratio:4/3;position:relative;background:var(--bg3);}
+.foto-wrap img{width:100%;height:100%;object-fit:cover;object-position:center;transition:transform .4s ease;display:block;}
+.foto-wrap:hover img{transform:scale(1.04);}
+.foto-caption{position:absolute;bottom:0;left:0;right:0;padding:.5rem .75rem;background:linear-gradient(transparent,rgba(0,0,0,.6));font-family:var(--font-mono);font-size:10px;color:rgba(200,216,232,.7);letter-spacing:.12em;}
+
+/* TÍTULOS */
+.titulos-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:2rem;}
+.titulo-item{background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:1rem 1.25rem;display:flex;align-items:flex-start;gap:10px;transition:border-color .2s;}
+.titulo-item:hover{border-color:var(--border2);}
+.titulo-num{font-family:var(--font-display);font-size:11px;color:var(--cyan);opacity:.5;min-width:20px;margin-top:2px;}
+.titulo-texto{font-family:var(--font-mono);font-size:11px;color:var(--text2);letter-spacing:.1em;line-height:1.5;}
+.titulo-texto span{display:block;font-family:var(--font-ui);font-size:13px;color:var(--text);font-weight:600;letter-spacing:.02em;margin-bottom:2px;}
+
+/* CONTACTO */
+.contacto-card{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:1.75rem;position:relative;overflow:hidden;}
+.contacto-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--amber),transparent);opacity:.6;}
+.contacto-texto{font-family:var(--font-ui);font-size:clamp(14px,1.8vw,16px);color:var(--text2);line-height:1.75;margin-bottom:1.5rem;}
+.contacto-links{display:flex;flex-wrap:wrap;gap:10px;}
+.c-link{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:12px;letter-spacing:.1em;padding:8px 16px;border-radius:3px;text-decoration:none;transition:all .2s;}
+.c-link-primary{background:linear-gradient(135deg,rgba(0,200,212,.14),rgba(0,200,212,.04));border:1px solid var(--cyan);color:var(--cyan);}
+.c-link-primary:hover{background:linear-gradient(135deg,rgba(0,200,212,.24),rgba(0,200,212,.1));box-shadow:0 0 16px rgba(0,200,212,.2);}
+.c-link-secondary{background:var(--bg2);border:1px solid var(--border);color:var(--text2);}
+.c-link-secondary:hover{border-color:var(--border2);color:var(--text);}
+.c-link svg{flex-shrink:0;}
+
+/* FOOTER */
+footer{border-top:1px solid var(--border);padding:1.5rem 2rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+.footer-brand{font-family:var(--font-mono);font-size:12px;color:var(--text3);letter-spacing:.1em;}
+.footer-coords{font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.07em;}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:640px){
+  nav{padding:.6rem 1rem;}
+  .btn-nav{display:none;}
+  .hero{padding:6rem 1.25rem 2rem;}
+  .container{padding:2rem 1rem 3rem;}
+  .fotos-grid{grid-template-columns:1fr;}
+  .stats-grid{grid-template-columns:1fr 1fr;}
+  footer{flex-direction:column;text-align:center;}
+}
+</style>
+<script>if(localStorage.getItem('arc-theme')==='light')document.documentElement.classList.add('light');</script>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">
+    <img src="logo_aeroclub.png" alt="Logo Aeroclub">
+    <span class="nav-logo-text">AEROCLUB RÍO GRANDE</span>
+  </div>
+  <div class="nav-right">
+    <div class="theme-toggle" onclick="toggleTheme()">
+      <span style="font-size:13px">🌙</span>
+      <div class="theme-track"><div class="theme-thumb"></div></div>
+      <span style="font-size:13px">☀️</span>
+    </div>
+    <a href="index.html" class="btn-nav">⌂ Inicio</a>
+  </div>
+</nav>
+
+<div class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-grid"></div>
+  <div class="hero-content">
+    <div class="hero-eyebrow">▸ Aeroclub Río Grande — Tierra del Fuego</div>
+    <h1 class="hero-title">ESCUELA<br>DE VUELO</h1>
+    <div class="hero-sub">◈ CIAC TIPO III — HABILITADO ANAC — DESDE 2017</div>
+    <div class="hero-badges">
+      <span class="hero-badge hb-green">✓ CIAC Tipo III</span>
+      <span class="hero-badge hb-cyan">✈ Hab. ANAC</span>
+      <span class="hero-badge hb-amber">+ 100 Egresados</span>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- RESEÑA -->
+  <div class="seccion">
+    <div class="sec-header">
+      <span class="sec-icon">◈</span>
+      <span class="sec-titulo">Centro de Instrucción Aeronáutica Civil</span>
+      <div class="sec-linea"></div>
+    </div>
+
+    <p class="ciac-texto">
+      El Aeroclub Río Grande cuenta con su propio <strong>Centro de Instrucción Aeronáutica Civil (CIAC)</strong>, habilitado por la Autoridad Nacional de Aviación Civil (ANAC) como <strong>centro Tipo III</strong>. Desde su apertura en 2017, opera en las instalaciones del aeroclub ubicado en el <strong>aeródromo Río Grande, Tierra del Fuego (SAWE)</strong>, formando pilotos en uno de los entornos de vuelo más desafiantes del país.
+    </p>
+    <p class="ciac-texto">
+      Con más de 100 egresados desde su fundación, el CIAC ofrece instrucción desde los primeros vuelos hasta la obtención del <strong>Piloto Privado, Piloto Comercial, Transporte Línea Aérea (TLA)</strong> y todas las <strong>habilitaciones adicionales</strong> contempladas por la normativa vigente. La formación se lleva a cabo con una flota de tres aeronaves: el <strong>Piper PA-38 Tomahawk (LV-OAD)</strong>, entrenador de instrucción básica; el <strong>Piper PA-28-181 Archer II (LV-ART)</strong>; y el <strong>Piper PA-32RT Lance II (LV-MPH)</strong>, que permite completar etapas avanzadas de la carrera aeronáutica.
+    </p>
+    <p class="ciac-texto">
+      Volar en Tierra del Fuego implica condiciones meteorológicas exigentes, vientos predominantes intensos y una geografía singular, factores que forjan pilotos con sólida preparación técnica y criterio operacional. El CIAC está bajo la gerencia del <strong>Ing. Jorge Martínez</strong> y trabaja en estrecha coordinación con la Comisión Directiva del aeroclub para garantizar los estándares de seguridad y calidad que exige la actividad.
+    </p>
+  </div>
+
+  <!-- STATS -->
+  <div class="seccion">
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-num">+100</div>
+        <div class="stat-label">Egresados desde 2017</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num">III</div>
+        <div class="stat-label">Tipo CIAC — máx. categoría</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num">3</div>
+        <div class="stat-label">Aeronaves de instrucción</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num">2017</div>
+        <div class="stat-label">Año de apertura</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOTOS -->
+  <div class="seccion">
+    <div class="sec-header">
+      <span class="sec-icon">◈</span>
+      <span class="sec-titulo">Nuestros Alumnos</span>
+      <div class="sec-linea"></div>
+    </div>
+    <div class="fotos-grid">
+      <div class="foto-wrap">
+        <img src="fotos/IMG_2142.jpg" alt="Alumnos del CIAC — Aeroclub Río Grande">
+        <div class="foto-caption">▸ INSTRUCCIÓN EN VUELO</div>
+      </div>
+      <div class="foto-wrap">
+        <img src="fotos/IMG_2199.jpg" alt="Alumnos del CIAC — Aeroclub Río Grande">
+        <div class="foto-caption">▸ INSTRUCCIÓN EN VUELO</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TÍTULOS Y HABILITACIONES -->
+  <div class="seccion">
+    <div class="sec-header">
+      <span class="sec-icon">◈</span>
+      <span class="sec-titulo">Títulos y Habilitaciones</span>
+      <div class="sec-linea"></div>
+    </div>
+    <div class="titulos-grid">
+      <div class="titulo-item">
+        <span class="titulo-num">01</span>
+        <div class="titulo-texto"><span>Piloto Privado</span>PPL · Primer título aeronáutico</div>
+      </div>
+      <div class="titulo-item">
+        <span class="titulo-num">02</span>
+        <div class="titulo-texto"><span>Piloto Comercial</span>CPL · Habilitación profesional</div>
+      </div>
+      <div class="titulo-item">
+        <span class="titulo-num">03</span>
+        <div class="titulo-texto"><span>Transporte Línea Aérea</span>TLA · Máxima categoría ANAC</div>
+      </div>
+      <div class="titulo-item">
+        <span class="titulo-num">04</span>
+        <div class="titulo-texto"><span>Habilitaciones Adicionales</span>Todas las previstas por normativa vigente</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTACTO -->
+  <div class="seccion">
+    <div class="sec-header">
+      <span class="sec-icon">◈</span>
+      <span class="sec-titulo">Consultanos</span>
+      <div class="sec-linea"></div>
+    </div>
+    <div class="contacto-card">
+      <p class="contacto-texto">
+        No dudes en contactarnos para interiorizarte acerca de nuestros cursos, vuelos de introducción a la actividad o una visita guiada a nuestras instalaciones.
+      </p>
+      <div class="contacto-links">
+
+        <a href="contacto.html" class="c-link c-link-primary">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+          Formulario de contacto
+        </a>
+
+        <a href="mailto:administracion@aeroclubriogrande.com" class="c-link c-link-secondary">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+          administracion@aeroclubriogrande.com
+        </a>
+
+        <a href="tel:+540296422044" class="c-link c-link-secondary">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>
+          02964-422044
+        </a>
+
+        <a href="https://wa.me/5492964586284" target="_blank" rel="noopener" class="c-link c-link-secondary">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+          WhatsApp
+        </a>
+
+        <a href="https://www.instagram.com/aeroclub.riogrande/" target="_blank" rel="noopener" class="c-link c-link-secondary">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+          Instagram
+        </a>
+
+        <a href="https://www.facebook.com/acrgtdf/?locale=es_LA" target="_blank" rel="noopener" class="c-link c-link-secondary">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+          Facebook
+        </a>
+
+      </div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<footer>
+  <span class="footer-brand">◈ AEROCLUB RÍO GRANDE — © 2026</span>
+  <span class="footer-coords">53°46'S 67°45'O · SAWE · RÍO GRANDE, TIERRA DEL FUEGO</span>
+  <!-- footer-ver --><span style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.06em;opacity:.6">v1.0</span>
+</footer>
+
+<script>
+function toggleTheme(){
+  const isLight=document.documentElement.classList.toggle('light');
+  localStorage.setItem('arc-theme',isLight?'light':'dark');
+}
+</script>
+</body>
+</html>
