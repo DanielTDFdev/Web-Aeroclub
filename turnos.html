@@ -1,6 +1,6 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.14
+  VERSION : 5.15
   FECHA   : 2026-05-25
   CAMBIOS : Filtros en listado de usuarios: búsqueda por texto, rol y estado
             Fix vencimiento automático: vencía turnos futuros con anticipación <14hs
@@ -244,7 +244,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.14</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.15</div>
   </div>
 </div>
 
@@ -767,8 +767,10 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       </div>
       <div class="field">
         <label>Nombre</label>
-        <input type="text" id="inst-perfil-user-label" disabled style="opacity:.5;cursor:not-allowed">
+        <input type="text" id="inst-perfil-user-label" placeholder="Tu nombre completo" autocomplete="off">
       </div>
+      <div id="inst-perfil-nombre-ok" class="success-msg"></div>
+      <button onclick="guardarNombreInstructor()">GUARDAR NOMBRE</button>
     </div>
 
     <div class="panel" style="max-width:460px">
@@ -1775,6 +1777,17 @@ window.cambiarClave=async function(){
 };
 
 // ── PERFIL INSTRUCTOR ──────────────────────────────────────────
+// ── PERFIL INSTRUCTOR ──────────────────────────────────────────
+window.guardarNombreInstructor=async function(){
+  hideEl('inst-perfil-nombre-ok');
+  const nombre=document.getElementById('inst-perfil-user-label').value.trim();
+  if(!nombre){return;}
+  await fbUpdate('instructores/'+session.user,{nombre});
+  session.nombre=nombre;
+  document.getElementById('nav-user-name').textContent='✈ '+nombre;
+  showOk('inst-perfil-nombre-ok','// NOMBRE ACTUALIZADO CORRECTAMENTE');
+};
+
 window.cambiarClaveInstructor=async function(){
   hideEl('inst-perfil-err');hideEl('inst-perfil-ok');
   const actual=val('inst-pass-actual'),nueva=val('inst-pass-nueva'),nueva2=val('inst-pass-nueva2');
@@ -1798,6 +1811,9 @@ window.showInstTab=function(tab){
   if(dispEl) dispEl.classList.toggle('active',tab==='disponibilidad');
   const perfilEl=document.getElementById('instructor-perfil');
   if(perfilEl) perfilEl.classList.toggle('active',tab==='perfil');
+  if(tab==='perfil'){
+    hideEl('inst-perfil-err');hideEl('inst-perfil-ok');hideEl('inst-perfil-nombre-ok');
+  }
   document.getElementById('inst-tab-res').classList.toggle('active',tab==='reservas');
   document.getElementById('inst-tab-cfg').classList.toggle('active',tab==='config');
   const instTabPerfil=document.getElementById('inst-tab-perfil');
