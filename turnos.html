@@ -1,6 +1,6 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.8
+  VERSION : 5.9
   FECHA   : 2026-05-25
   CAMBIOS : Filtros en listado de usuarios: búsqueda por texto, rol y estado
             Fix vencimiento automático: vencía turnos futuros con anticipación <14hs
@@ -244,7 +244,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.8</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.9</div>
   </div>
 </div>
 
@@ -1856,6 +1856,8 @@ window.toggleActivoAvion=async function(){
   if(!nuevo&&!confirm('¿Deshabilitar '+activeConfigAvion+'? Los usuarios no podrán verla ni reservarla hasta que la vuelvas a habilitar.'))return;
   configs[activeConfigAvion].activo=nuevo;
   await saveConfigAvion(activeConfigAvion);
+  await registrarAuditoria(nuevo?'avion_habilitado':'avion_deshabilitado',session.rol||'instructor','exito',
+    session.nombre+' — '+activeConfigAvion);
   renderHorariosConfig();
 };
 
@@ -1942,9 +1944,13 @@ window.mesSiguiente=function(){calMesActual.setMonth(calMesActual.getMonth()+1);
 window.toggleBloqueoDia=async function(ds){
   if(!configs[activeDiasAvion])configs[activeDiasAvion]={...DEFAULT_CONFIG_AVION,horariosDia:{...DEFAULT_CONFIG_AVION.horariosDia},diasBloqueados:[]};
   const bl=configs[activeDiasAvion].diasBloqueados;
-  if(bl.includes(ds))configs[activeDiasAvion].diasBloqueados=bl.filter(d=>d!==ds);
+  const estabaBloqueado=bl.includes(ds);
+  if(estabaBloqueado)configs[activeDiasAvion].diasBloqueados=bl.filter(d=>d!==ds);
   else configs[activeDiasAvion].diasBloqueados.push(ds);
-  await saveConfigAvion(activeDiasAvion);renderCalMes();
+  await saveConfigAvion(activeDiasAvion);
+  await registrarAuditoria(estabaBloqueado?'dia_desbloqueado':'dia_bloqueado',session.rol||'instructor','exito',
+    session.nombre+' — '+activeDiasAvion+' — '+ds);
+  renderCalMes();
 };
 
 // ── INSTRUCTORES ───────────────────────────────────────────────
