@@ -1,6 +1,6 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.11
+  VERSION : 5.12
   FECHA   : 2026-05-25
   CAMBIOS : Filtros en listado de usuarios: búsqueda por texto, rol y estado
             Fix vencimiento automático: vencía turnos futuros con anticipación <14hs
@@ -244,7 +244,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.11</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.12</div>
   </div>
 </div>
 
@@ -1858,9 +1858,10 @@ function renderHorariosConfig(){
     '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">'+
     TODAS_HORAS.map(h=>{
       const on=horas.includes(h);
-      return `<label style="display:flex;align-items:center;gap:6px;${esAdminRO()?'cursor:not-allowed;opacity:.7':'cursor:pointer'};padding:5px 8px;border:1px solid ${on?'var(--cyan)':'var(--border)'};border-radius:var(--radius);background:${on?'rgba(0,200,212,.08)':'var(--bg2)'};font-family:var(--font-mono);font-size:12px;color:${on?'var(--cyan)':'var(--text3)'};transition:all .15s">
-        <input type="checkbox" ${on?'checked':''} ${esAdminRO()?'disabled':"onchange=\"toggleHorario('${h}',this.checked)\""} style="accent-color:var(--cyan)">
-        ${h}</label>`;
+      const onchange=esAdminRO()?'disabled':'onchange="toggleHorario(\''+h+'\',this.checked)"';
+      return '<label style="display:flex;align-items:center;gap:6px;'+(esAdminRO()?'cursor:not-allowed;opacity:.7':'cursor:pointer')+';padding:5px 8px;border:1px solid '+(on?'var(--cyan)':'var(--border)')+';border-radius:var(--radius);background:'+(on?'rgba(0,200,212,.08)':'var(--bg2)')+';font-family:var(--font-mono);font-size:12px;color:'+(on?'var(--cyan)':'var(--text3)')+';transition:all .15s">'+
+        '<input type="checkbox" '+(on?'checked':'')+' '+onchange+' style="accent-color:var(--cyan)">'+
+        h+'</label>';
     }).join('')+
     '</div>'+
     (!esAdminRO()?'<div style="display:flex;gap:8px;margin-top:.75rem"><button onclick="marcarTodas(true)" style="font-size:11px;padding:4px 12px">TODAS</button><button onclick="marcarTodas(false)" style="font-size:11px;padding:4px 12px">NINGUNA</button></div>':'<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);margin-top:.6rem;letter-spacing:.06em">// SOLO LECTURA</div>');
