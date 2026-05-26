@@ -1,11 +1,13 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 4.8
+  VERSION : 4.9
   FECHA   : 2026-05-25
   CAMBIOS : Filtros en listado de usuarios: búsqueda por texto, rol y estado
             Fix vencimiento automático: vencía turnos futuros con anticipación <14hs
             Consultas: fechas en formato dd/mm/aaaa
             Consultas: cada fila abre modal para cambiar estado o eliminar
+            Consultas: edición de reserva solo disponible para admin
+            Login: tab instructor renombrado a Instructor / Admin
             Auditoría accesible para usuario administrador (soloUsuarios)
             Columna horarios sticky en scroll lateral
             Tab "Días" renombrado a "Bloq.Aviones"
@@ -239,7 +241,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v4.8</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v4.9</div>
   </div>
 </div>
 
@@ -266,7 +268,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <div style="display:flex;gap:6px;margin-bottom:1.25rem">
         <button class="nav-btn active" id="tab-btn-alumno"     onclick="switchLoginTab('alumno')">Ingresar</button>
         <button class="nav-btn"        id="tab-btn-registro"   onclick="switchLoginTab('registro')">Registrarme</button>
-        <button class="nav-btn"        id="tab-btn-instructor" onclick="switchLoginTab('instructor')">Instructor</button>
+        <button class="nav-btn"        id="tab-btn-instructor" onclick="switchLoginTab('instructor')">Instructor / Admin</button>
       </div>
       <div id="tab-alumno">
         <div class="field"><label>Email</label><input type="email" id="al-login-email" placeholder="tu@email.com"></div>
@@ -2285,6 +2287,7 @@ window.limpiarConsulta=function(){
 let _mcqKey=null;
 
 window.abrirModalCqReserva=function(key){
+  if(session?.user!=='admin')return;
   const r=_cqResultados.find(x=>x.key===key);
   if(!r)return;
   _mcqKey=key;
