@@ -1,6 +1,6 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.9
+  VERSION : 5.10
   FECHA   : 2026-05-25
   CAMBIOS : Filtros en listado de usuarios: búsqueda por texto, rol y estado
             Fix vencimiento automático: vencía turnos futuros con anticipación <14hs
@@ -244,7 +244,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.9</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.10</div>
   </div>
 </div>
 
@@ -1029,16 +1029,28 @@ function stopSessionTimeout(){
 }
 
 // ── CONFIGURACIÓN (por avión) ──────────────────────────────────
+// sanitiza un array de horas: descarta valores que no sean HH:MM válidos
+function sanitizarHoras(arr){
+  if(!Array.isArray(arr))return [];
+  return arr.filter(h=>typeof h==='string'&&/^\d{2}:\d{2}$/.test(h));
+}
+
 async function loadConfig(){
   for(const av of AVIONES){
     const s=await fbGet('config/'+av.key);
     if(s){
+      const hd=s.horariosDia||{...DEFAULT_CONFIG_AVION.horariosDia};
+      // normalizar: puede ser array (Firebase convierte obj numérico) u objeto
+      const hdNorm={};
+      for(let d=0;d<7;d++){
+        hdNorm[d]=sanitizarHoras(Array.isArray(hd)?hd[d]:hd[d]);
+        if(!hdNorm[d].length&&d>=1&&d<=5)hdNorm[d]=[...HORAS_DEFAULT];
+      }
       configs[av.key]={
-        horariosDia:s.horariosDia||{...DEFAULT_CONFIG_AVION.horariosDia},
+        horariosDia:hdNorm,
         diasBloqueados:Array.isArray(s.diasBloqueados)?s.diasBloqueados:[],
         activo:s.activo!==false
       };
-      for(let d=0;d<7;d++)if(configs[av.key].horariosDia[d]===undefined||configs[av.key].horariosDia[d]===null)configs[av.key].horariosDia[d]=HORAS_DEFAULT;
     } else {
       // migración: si existe /config antiguo sin clave de avión, usarlo para LV-OAD
       if(av.key==='LV-OAD'){
@@ -1056,7 +1068,11 @@ async function loadConfig(){
 }
 
 async function saveConfigAvion(avKey){
-  await fbSet('config/'+avKey, configs[avKey]);
+  const cfg=configs[avKey];
+  // sanitizar horariosDia antes de guardar
+  const hdClean={};
+  for(let d=0;d<7;d++) hdClean[d]=sanitizarHoras(cfg.horariosDia[d]);
+  await fbSet('config/'+avKey,{...cfg,horariosDia:hdClean});
 }
 
 // ── SELECTOR DE AVIÓN (usuario) ────────────────────────────────
