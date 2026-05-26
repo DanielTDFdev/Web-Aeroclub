@@ -1,6 +1,6 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.12
+  VERSION : 5.14
   FECHA   : 2026-05-25
   CAMBIOS : Filtros en listado de usuarios: búsqueda por texto, rol y estado
             Fix vencimiento automático: vencía turnos futuros con anticipación <14hs
@@ -244,7 +244,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.12</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.14</div>
   </div>
 </div>
 
@@ -402,9 +402,10 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
     <button onclick="document.getElementById('banner-pendientes').style.display='none'" style="font-size:14px;padding:2px 8px;border:none;background:none;color:var(--amber);opacity:.6" title="Cerrar">✕</button>
   </div>
   <div class="tab-bar">
-    <button class="nav-btn active" id="inst-tab-res"  onclick="showInstTab('reservas')">Reservas</button>
-    <button class="nav-btn"        id="inst-tab-disp" onclick="showInstTab('disponibilidad')">Mi Disponibilidad</button>
-    <button class="nav-btn"        id="inst-tab-cfg"  onclick="showInstTab('config')">Configuración</button>
+    <button class="nav-btn active" id="inst-tab-res"   onclick="showInstTab('reservas')">Reservas</button>
+    <button class="nav-btn"        id="inst-tab-disp"  onclick="showInstTab('disponibilidad')">Mi Disponibilidad</button>
+    <button class="nav-btn"        id="inst-tab-cfg"   onclick="showInstTab('config')">Configuración</button>
+    <button class="nav-btn"        id="inst-tab-perfil" onclick="showInstTab('perfil')">Mi Perfil</button>
   </div>
   <div id="instructor-reservas" class="screen active">
     <h2>◈ Reservas</h2>
@@ -754,6 +755,33 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   </div>
 </div>
 
+  <!-- PERFIL INSTRUCTOR -->
+  <div id="instructor-perfil" class="screen">
+    <h2>◈ Mi Perfil</h2>
+
+    <div class="panel" style="max-width:460px;margin-bottom:1.5rem">
+      <div class="section-title">▸ Datos de sesión</div>
+      <div class="field">
+        <label>Usuario</label>
+        <input type="text" id="inst-perfil-user" disabled style="opacity:.5;cursor:not-allowed">
+      </div>
+      <div class="field">
+        <label>Nombre</label>
+        <input type="text" id="inst-perfil-user-label" disabled style="opacity:.5;cursor:not-allowed">
+      </div>
+    </div>
+
+    <div class="panel" style="max-width:460px">
+      <div class="section-title">▸ Cambiar contraseña</div>
+      <div class="field"><label>Contraseña actual</label><input type="password" id="inst-pass-actual" autocomplete="new-password"></div>
+      <div class="field"><label>Nueva contraseña</label><input type="password" id="inst-pass-nueva" placeholder="mínimo 6 caracteres" autocomplete="new-password"></div>
+      <div class="field"><label>Confirmar nueva contraseña</label><input type="password" id="inst-pass-nueva2" autocomplete="new-password"></div>
+      <div id="inst-perfil-err" class="error"></div>
+      <div id="inst-perfil-ok" class="success-msg"></div>
+      <button onclick="cambiarClaveInstructor()">CAMBIAR CONTRASEÑA</button>
+    </div>
+  </div>
+
 </div><!-- /container -->
 
 <script type="module">
@@ -961,8 +989,11 @@ window.loginInstructor=async function(){
     let found=null;
     if(data)for(const[k,i]of Object.entries(data))if(i.user.toLowerCase()===user.toLowerCase()&&i.pass===pass){found={...i,key:k};break;}
     if(!found){
-      if(!await fbGet('instructores/admin'))await fbSet('instructores/admin',{user:'admin',pass:'admin123',nombre:'Instructor'});
-      if(user==='admin'&&pass==='admin123')found={user:'admin',pass:'admin123',nombre:'Instructor',key:'admin'};
+      // admin siempre accesible con clave fija (acceso de emergencia)
+      if(user==='admin'&&pass==='admin123'){
+        if(!await fbGet('instructores/admin'))await fbSet('instructores/admin',{user:'admin',pass:'admin123',nombre:'Instructor'});
+        found={user:'admin',pass:'admin123',nombre:'Instructor',key:'admin'};
+      }
     }
     if(!found){
       await registrarAuditoria('login','instructor','fallo','Usuario no encontrado — '+user);
@@ -980,6 +1011,10 @@ window.loginInstructor=async function(){
     else{showInstTab('reservas');suscribirReservas();}
     suscribirPendientes();
     startSessionTimeout();
+    const instPerfilUser=document.getElementById('inst-perfil-user');
+    const instPerfilNombre=document.getElementById('inst-perfil-user-label');
+    if(instPerfilUser) instPerfilUser.value=found.user||'';
+    if(instPerfilNombre) instPerfilNombre.value=found.nombre||'';
   }catch(e){showErr('login-err2','Error al iniciar sesión.');console.error(e);}
   finally{setLoading('btn-login-inst',false);}
 };
@@ -1739,6 +1774,21 @@ window.cambiarClave=async function(){
   clearVal('perfil-pass-actual','perfil-pass-nueva','perfil-pass-nueva2');
 };
 
+// ── PERFIL INSTRUCTOR ──────────────────────────────────────────
+window.cambiarClaveInstructor=async function(){
+  hideEl('inst-perfil-err');hideEl('inst-perfil-ok');
+  const actual=val('inst-pass-actual'),nueva=val('inst-pass-nueva'),nueva2=val('inst-pass-nueva2');
+  if(!actual||!nueva||!nueva2){showErr('inst-perfil-err','Completá todos los campos.');return;}
+  const inst=await fbGet('instructores/'+session.user);
+  if(!inst){showErr('inst-perfil-err','Error al obtener datos.');return;}
+  if(inst.pass!==actual){showErr('inst-perfil-err','Contraseña actual incorrecta.');return;}
+  if(nueva.length<6){showErr('inst-perfil-err','Mínimo 6 caracteres.');return;}
+  if(nueva!==nueva2){showErr('inst-perfil-err','Las contraseñas no coinciden.');return;}
+  await fbUpdate('instructores/'+session.user,{pass:nueva});
+  showOk('inst-perfil-ok','// CONTRASEÑA ACTUALIZADA CORRECTAMENTE');
+  clearVal('inst-pass-actual','inst-pass-nueva','inst-pass-nueva2');
+};
+
 // ── CONFIG (instructor) ────────────────────────────────────────
 window.showInstTab=function(tab){
   if(tab==='reservas'&&session?.soloUsuarios) return;
@@ -1746,8 +1796,12 @@ window.showInstTab=function(tab){
   document.getElementById('instructor-config').classList.toggle('active',tab==='config');
   const dispEl=document.getElementById('instructor-disponibilidad');
   if(dispEl) dispEl.classList.toggle('active',tab==='disponibilidad');
+  const perfilEl=document.getElementById('instructor-perfil');
+  if(perfilEl) perfilEl.classList.toggle('active',tab==='perfil');
   document.getElementById('inst-tab-res').classList.toggle('active',tab==='reservas');
   document.getElementById('inst-tab-cfg').classList.toggle('active',tab==='config');
+  const instTabPerfil=document.getElementById('inst-tab-perfil');
+  if(instTabPerfil) instTabPerfil.classList.toggle('active',tab==='perfil');
   const dispBtn=document.getElementById('inst-tab-disp');
   const esAdmin=session?.user==='admin'||session?.user==='administrador';
   if(dispBtn){ dispBtn.classList.toggle('active',tab==='disponibilidad'); dispBtn.style.display=(session?.soloUsuarios||esAdmin)?'none':''; }
