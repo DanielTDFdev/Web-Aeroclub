@@ -1,6 +1,6 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.0
+  VERSION : 5.1
   FECHA   : 2026-05-25
   CAMBIOS : Filtros en listado de usuarios: búsqueda por texto, rol y estado
             Fix vencimiento automático: vencía turnos futuros con anticipación <14hs
@@ -10,6 +10,7 @@
             Login: tab instructor renombrado a Instructor / Admin
             Disponibilidad de instructores: pantalla Mi Disponibilidad
             renderSlots: filtra slots sin instructor disponible (LV-OAD)
+            Admin: vista de disponibilidad de instructores en panel Horarios
             Auditoría accesible para usuario administrador (soloUsuarios)
             Columna horarios sticky en scroll lateral
             Tab "Días" renombrado a "Bloq.Aviones"
@@ -243,7 +244,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.0</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.1</div>
   </div>
 </div>
 
@@ -487,6 +488,22 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
           <button class="nav-btn" onclick="selectDowTab(0)">DOM</button>
         </div>
         <div id="horarios-config"></div>
+      </div>
+
+      <!-- VISTA DISPONIBILIDAD INSTRUCTORES — solo admin -->
+      <div id="card-disp-instructores" class="card" style="margin-top:1rem;display:none">
+        <h3>Disponibilidad de Instructores</h3>
+        <p style="font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-bottom:.75rem;letter-spacing:.05em">
+          PRÓXIMOS 14 DÍAS — LV-OAD
+        </p>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:.85rem;flex-wrap:wrap">
+          <button id="adm-disp-prev" onclick="admDispNav(-1)" style="font-family:var(--font-mono);font-size:11px;padding:4px 12px">◀ ANT.</button>
+          <span id="adm-disp-rango" style="font-family:var(--font-mono);font-size:12px;color:var(--cyan);flex:1;text-align:center;letter-spacing:.08em"></span>
+          <button id="adm-disp-next" onclick="admDispNav(+1)" style="font-family:var(--font-mono);font-size:11px;padding:4px 12px">SIG. ▶</button>
+        </div>
+        <div id="adm-disp-grid" style="overflow-x:auto">
+          <div class="empty">// Cargando...</div>
+        </div>
       </div>
     </div>
 
@@ -1770,7 +1787,12 @@ window.showCfgTab=function(tab){
   if(tab==='instructores')renderInstructoresList();
   if(tab==='usuarios')renderAlumnosList();
   if(tab==='dias'){calMesActual=new Date();calMesActual.setDate(1);buildCfgAvionTabs();renderCalMes();}
-  if(tab==='horarios'){buildCfgAvionTabs();renderHorariosConfig();}
+  if(tab==='horarios'){
+    buildCfgAvionTabs();renderHorariosConfig();
+    const isAdmin=session?.user==='admin'||session?.user==='administrador';
+    const cardDisp=document.getElementById('card-disp-instructores');
+    if(cardDisp){ cardDisp.style.display=isAdmin?'block':'none'; if(isAdmin){admDispOffset=0;renderAdmDisp();} }
+  }
   if(tab==='auditoria')cargarAuditoria();
   if(tab==='sistema'){
     const zona=document.getElementById('card-zona-peligrosa');
@@ -2676,6 +2698,181 @@ window.guardarDisponibilidad=async function(){
   showOk('disp-ok','// DISPONIBILIDAD GUARDADA');
   setTimeout(()=>hideEl('disp-ok'),2500);
 };
+
+
+// ── VISTA ADMIN: DISPONIBILIDAD DE INSTRUCTORES ───────────────
+let admDispOffset=0;  // offset en bloques de 7 días
+
+function admDispLunes(offset){
+  const hoy=new Date(); hoy.setHours(0,0,0,0);
+  const dow=hoy.getDay();
+  const diffLunes=dow===0?-6:1-dow;
+  const lunes=new Date(hoy);
+  lunes.setDate(hoy.getDate()+diffLunes+offset*7);
+  return lunes;
+}
+
+window.admDispNav=function(dir){
+  const lunesNew=admDispLunes(admDispOffset+dir);
+  const hoy=new Date(); hoy.setHours(0,0,0,0);
+  const diff=Math.round((lunesNew-hoy)/(86400000));
+  if(diff<-7||diff>14)return;  // máx 14 días adelante, 1 semana atrás
+  admDispOffset+=dir;
+  renderAdmDisp();
+};
+
+async function renderAdmDisp(){
+  const grid=document.getElementById('adm-disp-grid');
+  const rangoEl=document.getElementById('adm-disp-rango');
+  const prevBtn=document.getElementById('adm-disp-prev');
+  const nextBtn=document.getElementById('adm-disp-next');
+  if(!grid)return;
+  grid.innerHTML='<div class="empty">// Cargando...</div>';
+
+  const lunes=admDispLunes(admDispOffset);
+  const hoy=new Date(); hoy.setHours(0,0,0,0);
+
+  // 7 días desde el lunes
+  const dias=[];
+  for(let i=0;i<7;i++){
+    const d=new Date(lunes); d.setDate(lunes.getDate()+i);
+    dias.push(d);
+  }
+
+  // Labels de rango
+  const fmtD=d=>String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0');
+  const fmtISO=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  const fmtLabel=d=>{const nm=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];return nm[d.getDay()]+' '+fmtD(d);};
+  rangoEl.textContent=fmtLabel(dias[0])+' — '+fmtLabel(dias[6]);
+
+  // Nav limits
+  const lunesPrev=admDispLunes(admDispOffset-1);
+  const diffPrev=Math.round((lunesPrev-hoy)/86400000);
+  prevBtn.disabled=diffPrev<-7; prevBtn.style.opacity=prevBtn.disabled?'.4':'1';
+  const lunesNext=admDispLunes(admDispOffset+1);
+  const diffNext=Math.round((lunesNext-hoy)/86400000);
+  nextBtn.disabled=diffNext>14; nextBtn.style.opacity=nextBtn.disabled?'.4':'1';
+
+  const fechas=dias.map(d=>fmtISO(d));
+
+  // Cargar instructores
+  const instData=await fbGet('instructores');
+  if(!instData){grid.innerHTML='<div class="empty">// Sin instructores cargados.</div>';return;}
+  // excluir admin y administrador de la lista (no cargan disponibilidad)
+  const instructores=Object.entries(instData)
+    .filter(([k])=>k!=='admin'&&k!=='administrador')
+    .map(([k,v])=>({key:k,nombre:v.nombre||k}));
+
+  if(!instructores.length){
+    grid.innerHTML='<div class="empty">// No hay instructores con disponibilidad configurable.</div>';
+    return;
+  }
+
+  // Cargar disponibilidad de cada instructor para las fechas
+  const dispPorInst={};
+  for(const inst of instructores){
+    dispPorInst[inst.key]={};
+    for(const f of fechas){
+      const arr=await fbGet('disponibilidad/'+f+'/'+inst.key);
+      dispPorInst[inst.key][f]=new Set(Array.isArray(arr)?arr:[]);
+    }
+  }
+
+  // Cargar reservas aprobadas de la semana
+  const todasReservas=await fbGet('reservas');
+  const reservasPorFechaHora={};
+  if(todasReservas){
+    Object.values(todasReservas).forEach(r=>{
+      if(r.estado==='aprobado'&&(r.avion||'LV-OAD')==='LV-OAD'&&fechas.includes(r.fecha)){
+        const k=r.fecha+'|'+r.hora;
+        if(!reservasPorFechaHora[k]) reservasPorFechaHora[k]=0;
+        reservasPorFechaHora[k]++;
+      }
+    });
+  }
+
+  // Todos los slots posibles de la semana
+  const todosSlots=new Set();
+  dias.forEach(d=>{ horasParaDia(fmtISO(d),'LV-OAD').forEach(h=>todosSlots.add(h)); });
+  const slotsOrdenados=[...todosSlots].sort();
+
+  if(!slotsOrdenados.length){
+    grid.innerHTML='<div class="empty">// No hay horarios configurados para LV-OAD esta semana.</div>';
+    return;
+  }
+
+  // Construir tabla
+  // Cabecera: Hora | Fecha (col por día, sub-col por instructor)
+  let html='<table style="border-collapse:collapse;font-family:var(--font-mono);font-size:11px;min-width:600px;width:100%">';
+
+  // Fila 1: fechas (span por cantidad de instructores)
+  html+='<thead>';
+  html+='<tr>';
+  html+=`<th rowspan="2" style="padding:5px 8px;color:var(--text3);font-weight:500;text-align:left;border-bottom:1px solid var(--border2);min-width:55px">Hora</th>`;
+  dias.forEach(d=>{
+    const ds=fmtISO(d);
+    const esPasado=d<hoy;
+    const esHoy=ds===fmtISO(hoy);
+    const slotsDia=horasParaDia(ds,'LV-OAD');
+    if(!slotsDia.length) return; // día sin config, igual lo mostramos
+    const color=esHoy?'var(--cyan)':esPasado?'var(--text3)':'var(--text)';
+    html+=`<th colspan="${instructores.length}" style="padding:5px 8px;color:${color};font-weight:${esHoy?700:500};text-align:center;border-bottom:1px solid var(--border);border-left:1px solid var(--border2)">${fmtLabel(d)}</th>`;
+  });
+  html+='</tr>';
+
+  // Fila 2: nombres de instructores
+  html+='<tr>';
+  dias.forEach(d=>{
+    instructores.forEach((inst,i)=>{
+      html+=`<th style="padding:4px 6px;color:var(--text2);font-weight:500;text-align:center;font-size:10px;border-bottom:1px solid var(--border2);${i===0?'border-left:1px solid var(--border2)':''};white-space:nowrap;max-width:70px;overflow:hidden;text-overflow:ellipsis" title="${inst.nombre}">${inst.nombre.split(' ')[0]}</th>`;
+    });
+  });
+  html+='</tr></thead><tbody>';
+
+  // Filas de slots
+  slotsOrdenados.forEach(h=>{
+    html+='<tr style="border-bottom:1px solid var(--border)">';
+    html+=`<td style="padding:5px 8px;color:var(--text2)">${h}</td>`;
+    dias.forEach((d,di)=>{
+      const ds=fmtISO(d);
+      const esPasado=d<hoy;
+      const slotExiste=horasParaDia(ds,'LV-OAD').includes(h);
+      const tieneReserva=(reservasPorFechaHora[ds+'|'+h]||0)>0;
+
+      instructores.forEach((inst,i)=>{
+        const borderLeft=i===0?'border-left:1px solid var(--border2)':'';
+        if(!slotExiste){
+          html+=`<td style="padding:5px 6px;text-align:center;background:var(--bg2);${borderLeft}"><span style="color:var(--text3)">—</span></td>`;
+          return;
+        }
+        const disponible=dispPorInst[inst.key][ds]?.has(h);
+        let bg,symbol,color;
+        if(esPasado){
+          bg='var(--bg2)'; symbol=disponible?'✓':'·'; color=disponible?'var(--text3)':'var(--border)';
+        } else if(disponible&&tieneReserva){
+          bg='rgba(57,211,83,.12)'; symbol='✈'; color='var(--green)';
+        } else if(disponible){
+          bg='rgba(0,200,212,.1)'; symbol='✓'; color='var(--cyan)';
+        } else {
+          bg='var(--bg2)'; symbol='·'; color='var(--border)';
+        }
+        html+=`<td style="padding:5px 6px;text-align:center;background:${bg};${borderLeft}">
+          <span style="color:${color};font-size:13px;font-weight:700" title="${inst.nombre} — ${disponible?'disponible':'no disponible'}">${symbol}</span>
+        </td>`;
+      });
+    });
+    html+='</tr>';
+  });
+
+  html+='</tbody></table>';
+  html+=`<div style="margin-top:.6rem;font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.06em">
+    <span style="color:var(--cyan)">✓</span> disponible &nbsp;
+    <span style="color:var(--green)">✈</span> disponible + turno aprobado &nbsp;
+    <span style="color:var(--border)">·</span> no cargó disponibilidad
+  </div>`;
+
+  grid.innerHTML=html;
+}
 
 </script>
 </body>
