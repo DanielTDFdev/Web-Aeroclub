@@ -1,9 +1,11 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 4.7
+  VERSION : 4.8
   FECHA   : 2026-05-25
   CAMBIOS : Filtros en listado de usuarios: búsqueda por texto, rol y estado
             Fix vencimiento automático: vencía turnos futuros con anticipación <14hs
+            Consultas: fechas en formato dd/mm/aaaa
+            Consultas: cada fila abre modal para cambiar estado o eliminar
             Auditoría accesible para usuario administrador (soloUsuarios)
             Columna horarios sticky en scroll lateral
             Tab "Días" renombrado a "Bloq.Aviones"
@@ -237,7 +239,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v4.7</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v4.8</div>
   </div>
 </div>
 
@@ -521,6 +523,37 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       </div>
     </div>
 
+    <!-- MODAL EDITAR RESERVA (desde Consultas) -->
+    <div class="modal-overlay" id="modal-cq-reserva">
+      <div class="modal">
+        <button class="modal-close" onclick="cerrarModalCqReserva()">✕</button>
+        <div class="modal-title">◈ Editar Reserva</div>
+        <div class="field">
+          <label>Usuario</label>
+          <div id="mcq-usuario" style="font-family:var(--font-mono);font-size:13px;color:var(--text2);padding:4px 0"></div>
+        </div>
+        <div class="field">
+          <label>Fecha / Hora</label>
+          <div id="mcq-fechahora" style="font-family:var(--font-mono);font-size:13px;color:var(--amber);padding:4px 0"></div>
+        </div>
+        <div class="field">
+          <label>Estado</label>
+          <select id="mcq-estado" style="width:100%;padding:9px 12px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:var(--font-mono);font-size:13px">
+            <option value="pendiente">Pendiente</option>
+            <option value="aprobado">Aprobado</option>
+            <option value="cancelado">Cancelado</option>
+            <option value="vencido">Vencido</option>
+          </select>
+        </div>
+        <div id="mcq-ok"  class="ok-msg"  style="display:none"></div>
+        <div id="mcq-err" class="err-msg" style="display:none"></div>
+        <div style="display:flex;gap:10px;margin-top:.5rem;flex-wrap:wrap">
+          <button class="primary" onclick="guardarCqReserva()" style="flex:1">GUARDAR</button>
+          <button class="danger"  onclick="eliminarCqReserva()" style="flex:1">ELIMINAR</button>
+        </div>
+      </div>
+    </div>
+
     <!-- MODAL EDITAR USUARIO -->
     <div class="modal-overlay" id="modal-alumno">
       <div class="modal">
@@ -564,11 +597,13 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
           </div>
           <div class="field" style="margin:0;min-width:130px">
             <label>Desde</label>
-            <input type="date" id="cq-desde">
+            <input type="text" id="cq-desde" placeholder="dd/mm/aaaa" maxlength="10"
+              oninput="cqFmtFecha(this)" style="font-family:var(--font-mono);font-size:13px">
           </div>
           <div class="field" style="margin:0;min-width:130px">
             <label>Hasta</label>
-            <input type="date" id="cq-hasta">
+            <input type="text" id="cq-hasta" placeholder="dd/mm/aaaa" maxlength="10"
+              oninput="cqFmtFecha(this)" style="font-family:var(--font-mono);font-size:13px">
           </div>
           <div class="field" style="margin:0;min-width:110px">
             <label>Avión</label>
@@ -2145,10 +2180,35 @@ window.ejecutarBorrar=async function(){
 // ── CONSULTAS ──────────────────────────────────────────────────
 let _cqResultados=[];
 
+// Formatea automáticamente el input de fecha mientras se tipea (dd/mm/aaaa)
+window.cqFmtFecha=function(el){
+  let v=el.value.replace(/\D/g,'');
+  if(v.length>4) v=v.slice(0,2)+'/'+v.slice(2,4)+'/'+v.slice(4,8);
+  else if(v.length>2) v=v.slice(0,2)+'/'+v.slice(2);
+  el.value=v;
+};
+
+// Convierte dd/mm/aaaa → aaaa-mm-dd para comparar con r.fecha
+function cqToISO(ddmmaaaa){
+  if(!ddmmaaaa||ddmmaaaa.length<10)return '';
+  const[dd,mm,aaaa]=ddmmaaaa.split('/');
+  if(!dd||!mm||!aaaa)return '';
+  return `${aaaa}-${mm}-${dd}`;
+}
+
+// Convierte aaaa-mm-dd → dd/mm/aaaa para mostrar
+function cqToDisplay(isoDate){
+  if(!isoDate)return '';
+  const[y,m,d]=isoDate.split('-');
+  return `${d}/${m}/${y}`;
+}
+
 window.ejecutarConsulta=async function(){
   const usuario=(document.getElementById('cq-usuario')?.value||'').toLowerCase().trim();
-  const desde=document.getElementById('cq-desde')?.value||'';
-  const hasta=document.getElementById('cq-hasta')?.value||'';
+  const desdeRaw=document.getElementById('cq-desde')?.value||'';
+  const hastaRaw=document.getElementById('cq-hasta')?.value||'';
+  const desde=cqToISO(desdeRaw);
+  const hasta=cqToISO(hastaRaw);
   const avion=document.getElementById('cq-avion')?.value||'';
   const estado=document.getElementById('cq-estado')?.value||'';
 
@@ -2185,7 +2245,7 @@ window.ejecutarConsulta=async function(){
 
   if(!lista.length){el.innerHTML='<div class="empty">// Sin resultados para ese criterio.</div>';return;}
 
-  el.innerHTML=`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:12px;min-width:560px">
+  el.innerHTML=`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:12px;min-width:580px">
     <thead><tr style="border-bottom:1px solid var(--border2)">
       <th style="text-align:left;padding:6px 8px;color:var(--text3);font-weight:500;letter-spacing:.08em">FECHA</th>
       <th style="text-align:left;padding:6px 8px;color:var(--text3);font-weight:500;letter-spacing:.08em">HORA</th>
@@ -2194,15 +2254,17 @@ window.ejecutarConsulta=async function(){
       <th style="text-align:left;padding:6px 8px;color:var(--text3);font-weight:500;letter-spacing:.08em">EMAIL</th>
       <th style="text-align:left;padding:6px 8px;color:var(--text3);font-weight:500;letter-spacing:.08em">ESTADO</th>
       <th style="text-align:left;padding:6px 8px;color:var(--text3);font-weight:500;letter-spacing:.08em">OBS</th>
+      <th style="padding:6px 8px"></th>
     </tr></thead><tbody>
-    ${lista.map(r=>`<tr style="border-bottom:1px solid var(--border)">
-      <td style="padding:7px 8px;color:var(--amber)">${r.fecha}</td>
+    ${lista.map(r=>`<tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="abrirModalCqReserva('${r.key}')">
+      <td style="padding:7px 8px;color:var(--amber)">${cqToDisplay(r.fecha)}</td>
       <td style="padding:7px 8px;color:var(--text)">${r.horaInicio&&r.horaFin?r.horaInicio+'–'+r.horaFin:r.hora} hs</td>
       <td style="padding:7px 8px;color:var(--cyan)">${r.avion||'LV-OAD'}</td>
       <td style="padding:7px 8px;color:var(--text)">${r.nombre}</td>
       <td style="padding:7px 8px;color:var(--text2);font-size:11px">${r.email}</td>
       <td style="padding:7px 8px"><span class="badge badge-${r.estado}">${r.estado}</span></td>
       <td style="padding:7px 8px;color:var(--text3);font-size:11px">${r.obs||'—'}</td>
+      <td style="padding:7px 8px;text-align:right"><span style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.08em">EDITAR</span></td>
     </tr>`).join('')}
     </tbody></table></div>`;
 
@@ -2217,6 +2279,48 @@ window.limpiarConsulta=function(){
   document.getElementById('cq-stats').innerHTML='';
   document.getElementById('cq-export-wrap').style.display='none';
   _cqResultados=[];
+};
+
+// ── MODAL EDITAR RESERVA (desde Consultas) ──────────────────────
+let _mcqKey=null;
+
+window.abrirModalCqReserva=function(key){
+  const r=_cqResultados.find(x=>x.key===key);
+  if(!r)return;
+  _mcqKey=key;
+  document.getElementById('mcq-usuario').textContent=r.nombre+' — '+r.email;
+  document.getElementById('mcq-fechahora').textContent=cqToDisplay(r.fecha)+' — '+(r.hora||'')+'hs — '+(r.avion||'LV-OAD');
+  document.getElementById('mcq-estado').value=r.estado||'pendiente';
+  hideEl('mcq-ok');hideEl('mcq-err');
+  document.getElementById('modal-cq-reserva').classList.add('open');
+};
+
+window.cerrarModalCqReserva=function(){
+  document.getElementById('modal-cq-reserva').classList.remove('open');
+  _mcqKey=null;
+};
+
+document.addEventListener('click',e=>{if(e.target.id==='modal-cq-reserva')cerrarModalCqReserva();});
+
+window.guardarCqReserva=async function(){
+  if(!_mcqKey)return;
+  hideEl('mcq-ok');hideEl('mcq-err');
+  const nuevoEstado=document.getElementById('mcq-estado').value;
+  await fbUpdate('reservas/'+_mcqKey,{estado:nuevoEstado});
+  // actualizar en caché local para que la tabla refleje el cambio
+  const idx=_cqResultados.findIndex(x=>x.key===_mcqKey);
+  if(idx>=0)_cqResultados[idx].estado=nuevoEstado;
+  showOk('mcq-ok','// ESTADO ACTUALIZADO');
+  setTimeout(()=>{cerrarModalCqReserva();ejecutarConsulta();},900);
+};
+
+window.eliminarCqReserva=async function(){
+  if(!_mcqKey)return;
+  const r=_cqResultados.find(x=>x.key===_mcqKey);
+  if(!confirm('¿Eliminar el turno de '+(r?.nombre||_mcqKey)+'?'))return;
+  await fbRemove('reservas/'+_mcqKey);
+  cerrarModalCqReserva();
+  ejecutarConsulta();
 };
 
 window.exportarCSV=function(){
