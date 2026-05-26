@@ -1,8 +1,9 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 4.5
-  FECHA   : 2026-05-22
-  CAMBIOS : Fix tab Auditoría visible para administrador (soloUsuarios)
+  VERSION : 4.7
+  FECHA   : 2026-05-25
+  CAMBIOS : Filtros en listado de usuarios: búsqueda por texto, rol y estado
+            Fix vencimiento automático: vencía turnos futuros con anticipación <14hs
             Auditoría accesible para usuario administrador (soloUsuarios)
             Columna horarios sticky en scroll lateral
             Tab "Días" renombrado a "Bloq.Aviones"
@@ -236,7 +237,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v4.5</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v4.7</div>
   </div>
 </div>
 
@@ -497,6 +498,25 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
     <div id="cfg-usuarios" class="cfg-panel" style="display:none">
       <div class="card">
         <h3>Usuarios Registrados</h3>
+        <!-- FILTROS -->
+        <div id="usuarios-filtros" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:1rem;align-items:center">
+          <input type="text" id="fil-texto" placeholder="&#128269; Nombre o email&hellip;"
+            oninput="renderAlumnosList()"
+            style="flex:1;min-width:160px;font-family:var(--font-mono);font-size:12px;padding:6px 10px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text)">
+          <select id="fil-rol" onchange="renderAlumnosList()"
+            style="font-family:var(--font-mono);font-size:12px;padding:6px 10px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text)">
+            <option value="">Todos los roles</option>
+            <option value="alumno">Alumno</option>
+            <option value="piloto">Piloto</option>
+          </select>
+          <select id="fil-estado" onchange="renderAlumnosList()"
+            style="font-family:var(--font-mono);font-size:12px;padding:6px 10px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text)">
+            <option value="">Todos los estados</option>
+            <option value="aprobado">Aprobados</option>
+            <option value="pendiente_aprobacion">Pendientes</option>
+          </select>
+          <span id="fil-contador" style="font-family:var(--font-mono);font-size:11px;color:var(--text3);white-space:nowrap"></span>
+        </div>
         <div id="alumnos-list"></div>
       </div>
     </div>
@@ -1537,18 +1557,17 @@ window.cerrarModal=function(){document.getElementById('modal-turno').classList.r
 document.addEventListener('click',e=>{if(e.target.id==='modal-turno')cerrarModal();});
 
 // ── VENCIMIENTO AUTOMÁTICO ─────────────────────────────────────
+// Un turno vence cuando la hora del turno ya pasó (estado pendiente o aprobado).
 async function vencerTurnosPendientes(data){
   if(!data)return;
-  const ahora=Date.now(), LIMITE_MS=14*60*60*1000;
+  const ahora=Date.now();
   const promesas=[];
   for(const[k,r] of Object.entries(data)){
     if(r.estado!=='pendiente'&&r.estado!=='aprobado')continue;
     const[y,m,d]=r.fecha.split('-').map(Number);
     const[hh,mm]=(r.hora||'00:00').split(':').map(Number);
     const fechaHoraTurno=new Date(y,m-1,d,hh,mm,0).getTime();
-    const esAlumno=(r.rol||'alumno')==='alumno';
-    const limite=(r.estado==='pendiente'&&esAlumno)?LIMITE_MS:0;
-    if((fechaHoraTurno-ahora)<limite) promesas.push(fbUpdate('reservas/'+k,{estado:'vencido'}));
+    if(fechaHoraTurno<ahora) promesas.push(fbUpdate('reservas/'+k,{estado:'vencido'}));
   }
   if(promesas.length)await Promise.all(promesas);
 }
@@ -1856,7 +1875,33 @@ async function renderAlumnosList(){
   const el=document.getElementById('alumnos-list');
   const data=await fbGet('alumnos');
   if(!data){el.innerHTML='<div class="empty">// SIN USUARIOS REGISTRADOS</div>';return;}
-  const todos=Object.entries(data).sort(([,a],[,b])=>new Date(b.ts||0)-new Date(a.ts||0));
+
+  // Leer filtros
+  const filTexto=(document.getElementById('fil-texto')?.value||'').toLowerCase().trim();
+  const filRol=document.getElementById('fil-rol')?.value||'';
+  const filEstado=document.getElementById('fil-estado')?.value||'';
+
+  const todosRaw=Object.entries(data).sort(([,a],[,b])=>new Date(b.ts||0)-new Date(a.ts||0));
+
+  // Aplicar filtros sobre la lista completa
+  const todos=todosRaw.filter(([k,a])=>{
+    if(filTexto){
+      const hayTexto=(a.nombre||'').toLowerCase().includes(filTexto)||(a.email||'').toLowerCase().includes(filTexto);
+      if(!hayTexto)return false;
+    }
+    if(filRol&&(a.rol||'alumno')!==filRol)return false;
+    if(filEstado&&(a.estado||'')!==filEstado)return false;
+    return true;
+  });
+
+  // Actualizar contador
+  const ctEl=document.getElementById('fil-contador');
+  if(ctEl){
+    const total=todosRaw.length;
+    const vis=todos.length;
+    ctEl.textContent=vis===total?`// ${total} usuario(s)`:`// ${vis} de ${total}`;
+  }
+
   const pendientes=todos.filter(([k,a])=>a.estado==='pendiente_aprobacion');
   const aprobados=todos.filter(([k,a])=>a.estado!=='pendiente_aprobacion');
   let html='';
