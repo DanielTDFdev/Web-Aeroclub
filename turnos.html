@@ -1,6 +1,6 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.1
+  VERSION : 5.3
   FECHA   : 2026-05-25
   CAMBIOS : Filtros en listado de usuarios: búsqueda por texto, rol y estado
             Fix vencimiento automático: vencía turnos futuros con anticipación <14hs
@@ -244,7 +244,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.1</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.3</div>
   </div>
 </div>
 
@@ -1731,7 +1731,8 @@ window.showInstTab=function(tab){
   document.getElementById('inst-tab-res').classList.toggle('active',tab==='reservas');
   document.getElementById('inst-tab-cfg').classList.toggle('active',tab==='config');
   const dispBtn=document.getElementById('inst-tab-disp');
-  if(dispBtn){ dispBtn.classList.toggle('active',tab==='disponibilidad'); dispBtn.style.display=session?.soloUsuarios?'none':''; }
+  const esAdmin=session?.user==='admin'||session?.user==='administrador';
+  if(dispBtn){ dispBtn.classList.toggle('active',tab==='disponibilidad'); dispBtn.style.display=(session?.soloUsuarios||esAdmin)?'none':''; }
   if(tab==='disponibilidad'){ dispSemanaOffset=0; renderDisponibilidad(); }
   const btnRes=document.getElementById('inst-tab-res');
   if(btnRes) btnRes.style.display=session?.soloUsuarios?'none':'';
@@ -2808,7 +2809,7 @@ async function renderAdmDisp(){
   // Fila 1: fechas (span por cantidad de instructores)
   html+='<thead>';
   html+='<tr>';
-  html+=`<th rowspan="2" style="padding:5px 8px;color:var(--text3);font-weight:500;text-align:left;border-bottom:1px solid var(--border2);min-width:55px">Hora</th>`;
+  html+=`<th rowspan="2" style="padding:5px 8px;color:var(--text3);font-weight:500;text-align:left;border-bottom:1px solid var(--border2);min-width:55px;position:sticky;left:0;z-index:2;background:var(--bg3)">Hora</th>`;
   dias.forEach(d=>{
     const ds=fmtISO(d);
     const esPasado=d<hoy;
@@ -2832,7 +2833,7 @@ async function renderAdmDisp(){
   // Filas de slots
   slotsOrdenados.forEach(h=>{
     html+='<tr style="border-bottom:1px solid var(--border)">';
-    html+=`<td style="padding:5px 8px;color:var(--text2)">${h}</td>`;
+    html+=`<td style="padding:5px 8px;color:var(--text2);position:sticky;left:0;z-index:1;background:var(--bg3)">${h}</td>`;
     dias.forEach((d,di)=>{
       const ds=fmtISO(d);
       const esPasado=d<hoy;
