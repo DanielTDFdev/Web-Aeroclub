@@ -1,6 +1,6 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.10
+  VERSION : 5.11
   FECHA   : 2026-05-25
   CAMBIOS : Filtros en listado de usuarios: búsqueda por texto, rol y estado
             Fix vencimiento automático: vencía turnos futuros con anticipación <14hs
@@ -244,7 +244,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.10</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.11</div>
   </div>
 </div>
 
@@ -1755,7 +1755,11 @@ window.showInstTab=function(tab){
   const btnRes=document.getElementById('inst-tab-res');
   if(btnRes) btnRes.style.display=session?.soloUsuarios?'none':'';
   if(tab==='config'){
-    loadConfig().then(()=>{buildCfgAvionTabs();renderConfig();});
+    if(!Object.keys(configs).length){
+      loadConfig().then(()=>{buildCfgAvionTabs();renderConfig();});
+    } else {
+      buildCfgAvionTabs();renderConfig();
+    }
     const btnSistema=document.getElementById('cfg-tab-sistema');
     if(btnSistema) btnSistema.style.display=(session?.user==='admin'||session?.user==='administrador')?'':'none';
     ['horarios','dias','instructores','auditoria','consultas','sistema'].forEach(t=>{
