@@ -1,6 +1,6 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.7
+  VERSION : 5.8
   FECHA   : 2026-05-25
   CAMBIOS : Filtros en listado de usuarios: búsqueda por texto, rol y estado
             Fix vencimiento automático: vencía turnos futuros con anticipación <14hs
@@ -244,7 +244,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.7</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.8</div>
   </div>
 </div>
 
@@ -851,6 +851,7 @@ function fmtLabel(d){const D=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];retur
 function ok12h(ds,h){const[y,m,d]=ds.split('-').map(Number);const[hh,mm]=h.split(':').map(Number);return(new Date(y,m-1,d,hh,mm,0)-new Date())>=12*3600*1000;}
 function ok1h(ds,h){const[y,m,d]=ds.split('-').map(Number);const[hh,mm]=h.split(':').map(Number);return(new Date(y,m-1,d,hh,mm,0)-new Date())>=1*3600*1000;}
 function okAnticipacion(ds,h){return(session?.rol==='piloto')?ok1h(ds,h):ok12h(ds,h);}
+function esAdminRO(){return session?.user==='administrador';}  // acceso completo pero solo lectura en horarios
 function rArr(data){if(!data)return[];return Object.entries(data).map(([k,v])=>({...v,key:k}));}
 
 function horasParaDia(dateStr, avionKey){
@@ -968,7 +969,8 @@ window.loginInstructor=async function(){
       showErr('login-err2','Usuario o contraseña incorrectos.');return;
     }
     await registrarAuditoria('login','instructor','exito',found.nombre+' ('+found.user+')');
-    const soloUsuarios=found.soloUsuarios===true&&found.user!=='admin';
+    // administrador tiene acceso completo (excepto Zona Peligrosa y edición de horarios)
+    const soloUsuarios=found.soloUsuarios===true&&found.user!=='admin'&&found.user!=='administrador';
     session={tipo:'instructor',nombre:found.nombre,user:found.user,soloUsuarios};
     setNavUser(found.nombre,'instructor');
     await loadConfig();
@@ -1824,7 +1826,7 @@ function renderHorariosConfig(){
           ${estaActivo?'Los usuarios pueden reservar esta aeronave':'No aparece en el sistema de reservas'}
         </div>
       </div>
-      <div onclick="toggleActivoAvion()" style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none">
+      <div ${esAdminRO()?'':'onclick="toggleActivoAvion()"'} style="display:flex;align-items:center;gap:8px;${esAdminRO()?'opacity:.5;cursor:not-allowed':'cursor:pointer'};user-select:none">
         <span style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.08em">${estaActivo?'ON':'OFF'}</span>
         <div style="width:42px;height:22px;border-radius:11px;background:${estaActivo?'var(--green)':'rgba(248,81,73,.3)'};border:1px solid ${estaActivo?'var(--green)':'rgba(248,81,73,.5)'};position:relative;transition:all .25s;box-shadow:${estaActivo?'0 0 10px rgba(57,211,83,.3)':'none'}">
           <div style="width:16px;height:16px;border-radius:50%;background:#fff;position:absolute;top:2px;left:${estaActivo?'22px':'2px'};transition:left .25s;box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>
@@ -1836,20 +1838,18 @@ function renderHorariosConfig(){
     '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">'+
     TODAS_HORAS.map(h=>{
       const on=horas.includes(h);
-      return `<label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:5px 8px;border:1px solid ${on?'var(--cyan)':'var(--border)'};border-radius:var(--radius);background:${on?'rgba(0,200,212,.08)':'var(--bg2)'};font-family:var(--font-mono);font-size:12px;color:${on?'var(--cyan)':'var(--text3)'};transition:all .15s">
-        <input type="checkbox" ${on?'checked':''} onchange="toggleHorario('${h}',this.checked)" style="accent-color:var(--cyan)">
+      return `<label style="display:flex;align-items:center;gap:6px;${esAdminRO()?'cursor:not-allowed;opacity:.7':'cursor:pointer'};padding:5px 8px;border:1px solid ${on?'var(--cyan)':'var(--border)'};border-radius:var(--radius);background:${on?'rgba(0,200,212,.08)':'var(--bg2)'};font-family:var(--font-mono);font-size:12px;color:${on?'var(--cyan)':'var(--text3)'};transition:all .15s">
+        <input type="checkbox" ${on?'checked':''} ${esAdminRO()?'disabled':"onchange=\"toggleHorario('${h}',this.checked)\""} style="accent-color:var(--cyan)">
         ${h}</label>`;
     }).join('')+
     '</div>'+
-    '<div style="display:flex;gap:8px;margin-top:.75rem">'+
-    '<button onclick="marcarTodas(true)" style="font-size:11px;padding:4px 12px">TODAS</button>'+
-    '<button onclick="marcarTodas(false)" style="font-size:11px;padding:4px 12px">NINGUNA</button>'+
-    '</div>';
+    (!esAdminRO()?'<div style="display:flex;gap:8px;margin-top:.75rem"><button onclick="marcarTodas(true)" style="font-size:11px;padding:4px 12px">TODAS</button><button onclick="marcarTodas(false)" style="font-size:11px;padding:4px 12px">NINGUNA</button></div>':'<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);margin-top:.6rem;letter-spacing:.06em">// SOLO LECTURA</div>');
 }
 
 window.selectDowTab=function(dow){activeDow=dow;renderHorariosConfig();};
 
 window.toggleActivoAvion=async function(){
+  if(esAdminRO())return;
   if(!configs[activeConfigAvion])configs[activeConfigAvion]={...DEFAULT_CONFIG_AVION,horariosDia:{...DEFAULT_CONFIG_AVION.horariosDia},diasBloqueados:[],activo:true};
   const actual=configs[activeConfigAvion].activo!==false;
   const nuevo=!actual;
@@ -1860,6 +1860,7 @@ window.toggleActivoAvion=async function(){
 };
 
 window.toggleHorario=async function(h,on){
+  if(esAdminRO())return;
   if(!configs[activeConfigAvion])configs[activeConfigAvion]={...DEFAULT_CONFIG_AVION,horariosDia:{...DEFAULT_CONFIG_AVION.horariosDia},diasBloqueados:[]};
   if(!Array.isArray(configs[activeConfigAvion].horariosDia[activeDow]))configs[activeConfigAvion].horariosDia[activeDow]=[];
   if(on){if(!configs[activeConfigAvion].horariosDia[activeDow].includes(h))configs[activeConfigAvion].horariosDia[activeDow].push(h);}
@@ -1869,6 +1870,7 @@ window.toggleHorario=async function(h,on){
 };
 
 window.marcarTodas=async function(on){
+  if(esAdminRO())return;
   if(!configs[activeConfigAvion])configs[activeConfigAvion]={...DEFAULT_CONFIG_AVION,horariosDia:{...DEFAULT_CONFIG_AVION.horariosDia},diasBloqueados:[]};
   configs[activeConfigAvion].horariosDia[activeDow]=on?[...TODAS_HORAS]:[];
   await saveConfigAvion(activeConfigAvion);renderHorariosConfig();
