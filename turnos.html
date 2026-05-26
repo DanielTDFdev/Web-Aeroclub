@@ -1,6 +1,6 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.4
+  VERSION : 5.5
   FECHA   : 2026-05-25
   CAMBIOS : Filtros en listado de usuarios: búsqueda por texto, rol y estado
             Fix vencimiento automático: vencía turnos futuros con anticipación <14hs
@@ -244,7 +244,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.4</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.5</div>
   </div>
 </div>
 
@@ -2300,7 +2300,7 @@ window.ejecutarConsulta=async function(){
   if(avion)   lista=lista.filter(r=>(r.avion||'LV-OAD')===avion);
   if(estado)  lista=lista.filter(r=>r.estado===estado);
 
-  lista.sort((a,b)=>a.fecha.localeCompare(b.fecha)||a.hora.localeCompare(b.hora));
+  lista.sort((a,b)=>b.fecha.localeCompare(a.fecha)||b.hora.localeCompare(a.hora));
   _cqResultados=lista;
 
   // stats
