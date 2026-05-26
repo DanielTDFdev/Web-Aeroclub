@@ -1,6 +1,6 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.16
+  VERSION : 5.17
   FECHA   : 2026-05-25
   CAMBIOS : Filtros en listado de usuarios: búsqueda por texto, rol y estado
             Fix vencimiento automático: vencía turnos futuros con anticipación <14hs
@@ -244,7 +244,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.16</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.17</div>
   </div>
 </div>
 
@@ -882,6 +882,7 @@ function ok12h(ds,h){const[y,m,d]=ds.split('-').map(Number);const[hh,mm]=h.split
 function ok1h(ds,h){const[y,m,d]=ds.split('-').map(Number);const[hh,mm]=h.split(':').map(Number);return(new Date(y,m-1,d,hh,mm,0)-new Date())>=1*3600*1000;}
 function okAnticipacion(ds,h){return(session?.rol==='piloto')?ok1h(ds,h):ok12h(ds,h);}
 function esAdminRO(){return session?.user==='administrador';}  // acceso completo pero solo lectura en horarios
+function esAdminROHorarios(){return session?.user==='administrador';}  // solo lectura en checkboxes de horarios (no en toggle avión)
 function rArr(data){if(!data)return[];return Object.entries(data).map(([k,v])=>({...v,key:k}));}
 
 function horasParaDia(dateStr, avionKey){
@@ -1916,7 +1917,7 @@ function renderHorariosConfig(){
           ${estaActivo?'Los usuarios pueden reservar esta aeronave':'No aparece en el sistema de reservas'}
         </div>
       </div>
-      <div ${esAdminRO()?'':'onclick="toggleActivoAvion()"'} style="display:flex;align-items:center;gap:8px;${esAdminRO()?'opacity:.5;cursor:not-allowed':'cursor:pointer'};user-select:none">
+      <div ${session?.soloUsuarios?'':'onclick="toggleActivoAvion()"'} style="display:flex;align-items:center;gap:8px;${session?.soloUsuarios?'opacity:.5;cursor:not-allowed':'cursor:pointer'};user-select:none">
         <span style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.08em">${estaActivo?'ON':'OFF'}</span>
         <div style="width:42px;height:22px;border-radius:11px;background:${estaActivo?'var(--green)':'rgba(248,81,73,.3)'};border:1px solid ${estaActivo?'var(--green)':'rgba(248,81,73,.5)'};position:relative;transition:all .25s;box-shadow:${estaActivo?'0 0 10px rgba(57,211,83,.3)':'none'}">
           <div style="width:16px;height:16px;border-radius:50%;background:#fff;position:absolute;top:2px;left:${estaActivo?'22px':'2px'};transition:left .25s;box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>
@@ -1940,7 +1941,7 @@ function renderHorariosConfig(){
 window.selectDowTab=function(dow){activeDow=dow;renderHorariosConfig();};
 
 window.toggleActivoAvion=async function(){
-  if(esAdminRO())return;
+  if(session?.soloUsuarios)return;
   if(!configs[activeConfigAvion])configs[activeConfigAvion]={...DEFAULT_CONFIG_AVION,horariosDia:{...DEFAULT_CONFIG_AVION.horariosDia},diasBloqueados:[],activo:true};
   const actual=configs[activeConfigAvion].activo!==false;
   const nuevo=!actual;
