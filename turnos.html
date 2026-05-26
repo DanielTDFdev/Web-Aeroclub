@@ -1,6 +1,6 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.3
+  VERSION : 5.4
   FECHA   : 2026-05-25
   CAMBIOS : Filtros en listado de usuarios: búsqueda por texto, rol y estado
             Fix vencimiento automático: vencía turnos futuros con anticipación <14hs
@@ -244,7 +244,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.3</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.4</div>
   </div>
 </div>
 
@@ -546,15 +546,15 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <!-- FILTROS -->
         <div id="usuarios-filtros" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:1rem;align-items:center">
           <input type="text" id="fil-texto" placeholder="&#128269; Nombre o email&hellip;"
-            oninput="renderAlumnosList()"
+            oninput="filtrarAlumnosList()"
             style="flex:1;min-width:160px;font-family:var(--font-mono);font-size:12px;padding:6px 10px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text)">
-          <select id="fil-rol" onchange="renderAlumnosList()"
+          <select id="fil-rol" onchange="filtrarAlumnosList()"
             style="font-family:var(--font-mono);font-size:12px;padding:6px 10px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text)">
             <option value="">Todos los roles</option>
             <option value="alumno">Alumno</option>
             <option value="piloto">Piloto</option>
           </select>
-          <select id="fil-estado" onchange="renderAlumnosList()"
+          <select id="fil-estado" onchange="filtrarAlumnosList()"
             style="font-family:var(--font-mono);font-size:12px;padding:6px 10px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text)">
             <option value="">Todos los estados</option>
             <option value="aprobado">Aprobados</option>
@@ -1969,9 +1969,20 @@ window.agregarInstructor=async function(){
 window.eliminarInstructor=async function(k){if(!confirm('¿Eliminar este instructor?'))return;await fbRemove('instructores/'+k);renderInstructoresList();};
 
 // ── USUARIOS (lista con rol) ────────────────────────────────────
+let _alumnosCache=null;  // cache local para filtrado sin fbGet
+
 async function renderAlumnosList(){
   const el=document.getElementById('alumnos-list');
+  // Solo va a Firebase si no hay cache o si se llama con forceReload
   const data=await fbGet('alumnos');
+  if(!data){el.innerHTML='<div class="empty">// SIN USUARIOS REGISTRADOS</div>';_alumnosCache=null;return;}
+  _alumnosCache=data;
+  filtrarAlumnosList();
+}
+
+window.filtrarAlumnosList=function filtrarAlumnosList(){
+  const el=document.getElementById('alumnos-list');
+  const data=_alumnosCache;
   if(!data){el.innerHTML='<div class="empty">// SIN USUARIOS REGISTRADOS</div>';return;}
 
   // Leer filtros
