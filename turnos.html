@@ -1,6 +1,6 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.5
+  VERSION : 5.6
   FECHA   : 2026-05-25
   CAMBIOS : Filtros en listado de usuarios: búsqueda por texto, rol y estado
             Fix vencimiento automático: vencía turnos futuros con anticipación <14hs
@@ -244,7 +244,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.5</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.6</div>
   </div>
 </div>
 
@@ -2773,7 +2773,8 @@ async function renderAdmDisp(){
   // excluir admin y administrador de la lista (no cargan disponibilidad)
   const instructores=Object.entries(instData)
     .filter(([k])=>k!=='admin'&&k!=='administrador')
-    .map(([k,v])=>({key:k,nombre:v.nombre||k}));
+    .map(([k,v])=>({key:k, dispKey:v.user||k, nombre:v.nombre||k}));
+    // dispKey = valor de v.user, que es lo que usa session.user al guardar
 
   if(!instructores.length){
     grid.innerHTML='<div class="empty">// No hay instructores con disponibilidad configurable.</div>';
@@ -2785,7 +2786,7 @@ async function renderAdmDisp(){
   for(const inst of instructores){
     dispPorInst[inst.key]={};
     for(const f of fechas){
-      const arr=await fbGet('disponibilidad/'+f+'/'+inst.key);
+      const arr=await fbGet('disponibilidad/'+f+'/'+inst.dispKey);
       dispPorInst[inst.key][f]=new Set(Array.isArray(arr)?arr:[]);
     }
   }
