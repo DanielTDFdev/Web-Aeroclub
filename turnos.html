@@ -1,8 +1,12 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.17
-  FECHA   : 2026-05-25
-  CAMBIOS : Filtros en listado de usuarios: búsqueda por texto, rol y estado
+  VERSION : 5.18
+  FECHA   : 2026-05-26
+  CAMBIOS : Auditoría: dropdown filtro por tipo de evento
+            (ingresos exitosos/fallidos, alta turno, cancelación turno,
+            habilitación/deshabilitación avión, registro usuario)
+            ACCION_LABEL ampliado para todos los tipos de acción
+            limpiarFiltrosAuditoria limpia también el nuevo dropdown
             Fix vencimiento automático: vencía turnos futuros con anticipación <14hs
             Consultas: fechas en formato dd/mm/aaaa
             Consultas: cada fila abre modal para cambiar estado o eliminar
@@ -244,7 +248,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.17</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.18</div>
   </div>
 </div>
 
@@ -686,6 +690,19 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
           <div class="field" style="margin:0;flex:1;min-width:140px">
             <label>Buscar usuario</label>
             <input type="text" id="audit-search" placeholder="email o nombre..." oninput="filtrarAuditoria()">
+          </div>
+          <div class="field" style="margin:0;min-width:180px">
+            <label>Tipo de evento</label>
+            <select id="audit-tipo" onchange="filtrarAuditoria()">
+              <option value="">Todos</option>
+              <option value="login_exito">Ingresos exitosos</option>
+              <option value="login_fallo">Ingresos fallidos</option>
+              <option value="alta_turno">Alta de turnos</option>
+              <option value="cancelacion_turno">Cancelación de turnos</option>
+              <option value="avion_habilitado">Habilitación de aviones</option>
+              <option value="avion_deshabilitado">Deshabilitación de aviones</option>
+              <option value="registro">Registro inicial de usuario</option>
+            </select>
           </div>
           <div class="field" style="margin:0;min-width:130px">
             <label>Desde</label>
@@ -2232,17 +2249,23 @@ async function cargarAuditoria(){
 
 window.filtrarAuditoria=function(){
   const busq=(document.getElementById('audit-search')?.value||'').toLowerCase();
+  const tipo=document.getElementById('audit-tipo')?.value||'';
   const desde=document.getElementById('audit-desde')?.value||'';
   const hasta=document.getElementById('audit-hasta')?.value||'';
   let lista=_auditoriaCache;
-  if(busq)lista=lista.filter(r=>(r.detalle||'').toLowerCase().includes(busq));
+  if(busq)lista=lista.filter(r=>(r.detalle||'').toLowerCase().includes(busq)||(r.accion||'').toLowerCase().includes(busq));
+  if(tipo){
+    if(tipo==='login_exito')lista=lista.filter(r=>r.accion==='login'&&r.resultado==='exito');
+    else if(tipo==='login_fallo')lista=lista.filter(r=>r.accion==='login'&&r.resultado==='fallo');
+    else lista=lista.filter(r=>r.accion===tipo);
+  }
   if(desde)lista=lista.filter(r=>r.ts>=desde);
   if(hasta)lista=lista.filter(r=>r.ts<=hasta+'T23:59:59');
   _auditPage=0;renderAuditoria(lista);
 };
 
 window.limpiarFiltrosAuditoria=function(){
-  ['audit-search','audit-desde','audit-hasta'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  ['audit-search','audit-tipo','audit-desde','audit-hasta'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   _auditPage=0;renderAuditoria(_auditoriaCache);
 };
 
@@ -2266,7 +2289,7 @@ function renderAuditoria(lista,skipPageReset){
   const totalPages=Math.ceil(total/AUDIT_PER_PAGE);
   const page=Math.min(_auditPage,totalPages-1);
   const slice=lista.slice(page*AUDIT_PER_PAGE,(page+1)*AUDIT_PER_PAGE);
-  const ACCION_LABEL={'login':'Login','registro':'Registro'};
+  const ACCION_LABEL={'login':'Login','registro':'Registro','alta_turno':'Alta turno','cancelacion_turno':'Cancelación turno','avion_habilitado':'Avión habilitado','avion_deshabilitado':'Avión deshabilitado','dia_bloqueado':'Día bloqueado','dia_desbloqueado':'Día desbloqueado'};
   const ROL_ICON={'alumno':'🛩️','instructor':'👨‍✈️','piloto':'✈️','pendiente':'⏳'};
   const paginador=totalPages>1?`
     <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:.75rem;flex-wrap:wrap;font-family:var(--font-mono);font-size:12px">
