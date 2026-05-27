@@ -1,0 +1,349 @@
+<!--
+  ARCHIVO : opiniones.html
+  VERSION : 1.0
+  FECHA   : 2026-05-27
+  CAMBIOS : Versión inicial — testimonios hardcodeados con carrusel automático
+            y grilla de cards estáticas
+-->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Opiniones — Aeroclub Río Grande</title>
+
+<link rel="icon" type="image/png" href="logo_aeroclub.png">
+<link rel="apple-touch-icon" href="logo_aeroclub.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#07090d;--bg2:#0e1218;--bg3:#141a24;--bg4:#1c2330;
+  --text:#c8d8e8;--text2:#7a9bb8;--text3:#3d5a72;
+  --amber:#f0a500;--amber2:#ffc840;--amber-dim:#7a5200;
+  --cyan:#00c8d4;--cyan-dim:#003d42;
+  --green:#39d353;--red:#f85149;
+  --border:rgba(0,200,212,0.12);--border2:rgba(0,200,212,0.3);
+  --font-mono:'Share Tech Mono',monospace;
+  --font-ui:'Rajdhani',sans-serif;
+  --font-display:'Orbitron',sans-serif;
+}
+:root.light{
+  --bg:#eef2f7;--bg2:#dde4ef;--bg3:#ffffff;--bg4:#cdd8e8;
+  --text:#1a2a3a;--text2:#3a5a78;--text3:#7a9ab8;
+  --amber:#b87000;--amber2:#d08000;--amber-dim:#f5d080;
+  --cyan:#0090a0;--cyan-dim:#b0e8ee;
+  --border:rgba(0,100,140,0.15);--border2:rgba(0,100,140,0.3);
+}
+
+html{scroll-behavior:smooth}
+body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;transition:background .3s,color .3s;}
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.04) 2px,rgba(0,0,0,.04) 4px);pointer-events:none;z-index:9999;}
+
+/* NAV */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:.75rem 2rem;background:rgba(7,9,13,.88);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);transition:background .3s;}
+:root.light nav{background:rgba(238,242,247,.92);}
+.nav-logo{display:flex;align-items:center;gap:12px;}
+.nav-logo img{width:36px;height:36px;object-fit:contain;filter:drop-shadow(0 0 8px rgba(0,200,212,.4));}
+:root.light .nav-logo img{filter:none;}
+.nav-logo-text{font-family:var(--font-mono);font-size:13px;color:var(--amber);letter-spacing:.15em;}
+.nav-right{display:flex;align-items:center;gap:14px;}
+.theme-toggle{display:flex;align-items:center;gap:6px;cursor:pointer;}
+.theme-track{width:34px;height:18px;border-radius:9px;background:var(--bg3);border:1px solid var(--border2);position:relative;}
+.theme-thumb{width:12px;height:12px;border-radius:50%;background:var(--cyan);position:absolute;top:2px;left:2px;transition:transform .25s;box-shadow:0 0 6px rgba(0,200,212,.5);}
+:root.light .theme-thumb{transform:translateX(16px);background:var(--amber);}
+.btn-nav{font-family:var(--font-mono);font-size:12px;letter-spacing:.1em;padding:8px 20px;background:linear-gradient(135deg,rgba(0,200,212,.14),rgba(0,200,212,.04));border:1px solid var(--cyan);border-radius:3px;color:var(--cyan);text-decoration:none;text-transform:uppercase;transition:all .2s;text-shadow:0 0 10px rgba(0,200,212,.35);}
+.btn-nav:hover{background:linear-gradient(135deg,rgba(0,200,212,.24),rgba(0,200,212,.1));box-shadow:0 0 20px rgba(0,200,212,.2);}
+
+/* HERO */
+.hero{position:relative;padding:7rem 2rem 3rem;text-align:center;overflow:hidden;}
+.hero-bg{position:absolute;inset:0;background:radial-gradient(ellipse 70% 50% at 50% 30%,rgba(0,100,120,.18) 0%,transparent 70%);}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(0,200,212,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,200,212,.03) 1px,transparent 1px);background-size:60px 60px;animation:gridDrift 30s linear infinite;}
+@keyframes gridDrift{0%{background-position:0 0}100%{background-position:60px 60px}}
+.hero-content{position:relative;z-index:2;}
+.hero-eyebrow{font-family:var(--font-mono);font-size:11px;color:var(--cyan);letter-spacing:.3em;text-transform:uppercase;margin-bottom:1rem;opacity:0;animation:fadeUp .7s ease .1s forwards;}
+.hero-title{font-family:var(--font-display);font-size:clamp(22px,5vw,52px);font-weight:900;color:var(--amber2);text-shadow:0 0 40px rgba(240,165,0,.4);letter-spacing:.08em;line-height:1.1;margin-bottom:.5rem;opacity:0;animation:fadeUp .7s ease .25s forwards;}
+.hero-sub{font-family:var(--font-mono);font-size:12px;color:var(--text3);letter-spacing:.2em;opacity:0;animation:fadeUp .7s ease .4s forwards;}
+
+/* CONTENIDO */
+.container{max-width:960px;margin:0 auto;padding:2rem 1.5rem 4rem;}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+
+/* SECCIÓN */
+.seccion{margin-bottom:3.5rem;opacity:0;animation:fadeUp .7s ease forwards;}
+.seccion:nth-child(1){animation-delay:.5s}
+.seccion:nth-child(2){animation-delay:.65s}
+.seccion-header{display:flex;align-items:center;gap:14px;margin-bottom:1.5rem;padding-bottom:.75rem;border-bottom:1px solid var(--border2);}
+.seccion-icon{font-family:var(--font-mono);font-size:18px;color:var(--cyan);}
+.seccion-titulo{font-family:var(--font-display);font-size:clamp(13px,2.5vw,18px);color:var(--cyan);letter-spacing:.18em;text-transform:uppercase;}
+.seccion-linea{flex:1;height:1px;background:linear-gradient(90deg,var(--cyan-dim),transparent);opacity:.5;}
+
+/* ── CARRUSEL DESTACADO ─────────────────────────────────────── */
+.carrusel-wrap{position:relative;overflow:hidden;border:1px solid var(--border2);border-radius:6px;background:var(--bg3);min-height:220px;}
+.carrusel-slide{display:none;padding:2.5rem 3rem;flex-direction:column;align-items:center;text-align:center;gap:1.2rem;animation:fadeUp .5s ease;}
+.carrusel-slide.active{display:flex;}
+.carrusel-quote{font-family:var(--font-ui);font-size:clamp(15px,2.2vw,19px);font-weight:500;color:var(--text);line-height:1.7;max-width:680px;position:relative;}
+.carrusel-quote::before{content:'\201C';font-size:60px;color:var(--cyan);opacity:.25;position:absolute;top:-10px;left:-20px;line-height:1;font-family:Georgia,serif;}
+.carrusel-autor{display:flex;flex-direction:column;align-items:center;gap:4px;}
+.carrusel-nombre{font-family:var(--font-mono);font-size:13px;color:var(--amber);letter-spacing:.15em;}
+.carrusel-rol{font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.12em;text-transform:uppercase;}
+.carrusel-estrellas{color:var(--amber);font-size:15px;letter-spacing:3px;}
+
+.carrusel-nav{display:flex;align-items:center;justify-content:center;gap:10px;padding:1rem 0 1.25rem;}
+.carrusel-dot{width:8px;height:8px;border-radius:50%;background:var(--border2);cursor:pointer;transition:all .25s;}
+.carrusel-dot.active{background:var(--cyan);box-shadow:0 0 8px rgba(0,200,212,.6);}
+.carrusel-btn{font-family:var(--font-mono);font-size:18px;color:var(--text3);background:none;border:none;cursor:pointer;padding:0 6px;transition:color .2s;line-height:1;}
+.carrusel-btn:hover{color:var(--cyan);}
+
+/* ── GRILLA DE CARDS ────────────────────────────────────────── */
+.opinions-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;}
+.opinion-card{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:1.4rem 1.5rem;position:relative;overflow:hidden;transition:border-color .2s,transform .2s;}
+.opinion-card:hover{border-color:var(--border2);transform:translateY(-3px);}
+.opinion-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:0;transition:opacity .2s;}
+.opinion-card:hover::before{opacity:.5;}
+.opinion-card.destacada::before{background:linear-gradient(90deg,transparent,var(--amber),transparent);opacity:.4;}
+.opinion-card.destacada{border-color:rgba(240,165,0,.2);background:linear-gradient(135deg,var(--bg3),rgba(240,165,0,.03));}
+.op-estrellas{font-size:13px;letter-spacing:2px;color:var(--amber);margin-bottom:.7rem;}
+.op-texto{font-family:var(--font-ui);font-size:14px;color:var(--text2);line-height:1.65;margin-bottom:1.1rem;}
+.op-footer{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;}
+.op-nombre{font-family:var(--font-mono);font-size:12px;color:var(--text);letter-spacing:.1em;}
+.op-rol{font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-top:2px;}
+.op-num{font-family:var(--font-mono);font-size:36px;color:var(--border);font-weight:900;line-height:1;pointer-events:none;}
+.opinion-card.destacada .op-num{color:rgba(240,165,0,.08);}
+
+/* FOOTER */
+footer{border-top:1px solid var(--border);padding:1.5rem 2rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+.footer-brand{font-family:var(--font-mono);font-size:12px;color:var(--text3);letter-spacing:.1em;}
+.footer-coords{font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.07em;}
+
+@media(max-width:600px){
+  nav{padding:.6rem 1rem;}
+  .btn-nav{display:none;}
+  .hero{padding:6rem 1.25rem 2rem;}
+  .container{padding:1.5rem 1rem 3rem;}
+  .carrusel-slide{padding:2rem 1.5rem;}
+  .carrusel-quote::before{display:none;}
+  footer{flex-direction:column;text-align:center;}
+}
+</style>
+<script>if(localStorage.getItem('arc-theme')==='light')document.documentElement.classList.add('light');</script>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">
+    <img src="logo_aeroclub.png" alt="Logo Aeroclub">
+    <span class="nav-logo-text">AEROCLUB RÍO GRANDE</span>
+  </div>
+  <div class="nav-right">
+    <div class="theme-toggle" onclick="toggleTheme()">
+      <span style="font-size:13px">🌙</span>
+      <div class="theme-track"><div class="theme-thumb"></div></div>
+      <span style="font-size:13px">☀️</span>
+    </div>
+    <a href="index.html" class="btn-nav">⌂ Inicio</a>
+  </div>
+</nav>
+
+<div class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-grid"></div>
+  <div class="hero-content">
+    <div class="hero-eyebrow">▸ Aeroclub Río Grande — Tierra del Fuego</div>
+    <h1 class="hero-title">LO QUE DICEN<br>NUESTROS SOCIOS</h1>
+    <div class="hero-sub">◈ EXPERIENCIAS REALES · CIELOS FUEGUINOS</div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- CARRUSEL DESTACADO -->
+  <div class="seccion">
+    <div class="seccion-header">
+      <span class="seccion-icon">◈</span>
+      <span class="seccion-titulo">Testimonios Destacados</span>
+      <div class="seccion-linea"></div>
+    </div>
+
+    <div class="carrusel-wrap">
+      <div class="carrusel-slide active">
+        <div class="carrusel-quote">Aprender a volar en Río Grande es una experiencia única. La suma de paisajes increibles con el desafio de los vientos fueguino hace que sea algo inolvidable.</div>
+        <div class="carrusel-autor">
+          <div class="carrusel-estrellas">★★★★★</div>
+          <div class="carrusel-nombre">MARTÍNEZ, LUCÍA</div>
+          <div class="carrusel-rol">Alumna — Instrucción PPL</div>
+        </div>
+      </div>
+      <div class="carrusel-slide">
+        <div class="carrusel-quote">El nivel de los instructores es excelente. Sentí que aprendí más en tres meses acá que en cualquier otro lugar. La dedicación es notable.</div>
+        <div class="carrusel-autor">
+          <div class="carrusel-estrellas">★★★★★</div>
+          <div class="carrusel-nombre">RODRÍGUEZ, PABLO</div>
+          <div class="carrusel-rol">Piloto Privado</div>
+        </div>
+      </div>
+      <div class="carrusel-slide">
+        <div class="carrusel-quote">El sistema de turnos online me cambió la vida. Puedo coordinar los vuelos desde el teléfono sin tener que llamar a nadie. Muy práctico y moderno.</div>
+        <div class="carrusel-autor">
+          <div class="carrusel-estrellas">★★★★★</div>
+          <div class="carrusel-nombre">HERRERA, DIEGO</div>
+          <div class="carrusel-rol">Socio activo</div>
+        </div>
+      </div>
+      <div class="carrusel-slide">
+        <div class="carrusel-quote">Vine desde Buenos Aires a hacer el BHT con el LV-ART y la experiencia superó todas las expectativas. El Archer II en perfecto estado y los instructores muy profesionales.</div>
+        <div class="carrusel-autor">
+          <div class="carrusel-estrellas">★★★★★</div>
+          <div class="carrusel-nombre">ACUÑA, FERNANDA</div>
+          <div class="carrusel-rol">Piloto — BHT Bimotor</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="carrusel-nav">
+      <button class="carrusel-btn" onclick="moverCarrusel(-1)">◂</button>
+      <div id="dots"></div>
+      <button class="carrusel-btn" onclick="moverCarrusel(1)">▸</button>
+    </div>
+  </div>
+
+  <!-- GRILLA DE CARDS -->
+  <div class="seccion">
+    <div class="seccion-header">
+      <span class="seccion-icon">◈</span>
+      <span class="seccion-titulo">Más Opiniones</span>
+      <div class="seccion-linea"></div>
+    </div>
+
+    <div class="opinions-grid">
+
+      <div class="opinion-card destacada">
+        <div class="op-estrellas">★★★★★</div>
+        <div class="op-texto">Empecé de cero sin saber nada de aviación. Hoy tengo mi licencia PPL y todo gracias al club. El ambiente es increíble, los instructores tienen mucha paciencia.</div>
+        <div class="op-footer">
+          <div>
+            <div class="op-nombre">GÓMEZ, CARLOS</div>
+            <div class="op-rol">Alumno egresado</div>
+          </div>
+          <div class="op-num">01</div>
+        </div>
+      </div>
+
+      <div class="opinion-card">
+        <div class="op-estrellas">★★★★★</div>
+        <div class="op-texto">Las aeronaves están siempre bien mantenidas. Se nota que hay mucho cuidado en la seguridad. Para mí eso es lo más importante a la hora de volar.</div>
+        <div class="op-footer">
+          <div>
+            <div class="op-nombre">VARGAS, ANA</div>
+            <div class="op-rol">Socia — 8 años</div>
+          </div>
+          <div class="op-num">02</div>
+        </div>
+      </div>
+
+      <div class="opinion-card">
+        <div class="op-estrellas">★★★★★</div>
+        <div class="op-texto">Volar sobre la estepa fueguina y el Lago Fagnano es una experiencia que no se consigue en ningún otro aeroclub del país. El paisaje es espectacular.</div>
+        <div class="op-footer">
+          <div>
+            <div class="op-nombre">SOSA, ERNESTO</div>
+            <div class="op-rol">Piloto privado</div>
+          </div>
+          <div class="op-num">03</div>
+        </div>
+      </div>
+
+      <div class="opinion-card">
+        <div class="op-estrellas">★★★★★</div>
+        <div class="op-texto">La atención es excelente. Desde que me sumé como socio me sentí parte de una familia. Siempre hay alguien dispuesto a ayudar y compartir experiencias de vuelo.</div>
+        <div class="op-footer">
+          <div>
+            <div class="op-nombre">TOLEDO, MARCOS</div>
+            <div class="op-rol">Socio nuevo</div>
+          </div>
+          <div class="op-num">04</div>
+        </div>
+      </div>
+
+      <div class="opinion-card">
+        <div class="op-estrellas">★★★★★</div>
+        <div class="op-texto">Me recibí de piloto acá hace diez años y vuelvo siempre que puedo. El nivel de instrucción no bajó nunca, todo lo contrario. El club mejora año a año.</div>
+        <div class="op-footer">
+          <div>
+            <div class="op-nombre">QUIROGA, SILVANA</div>
+            <div class="op-rol">Ex-alumna · Piloto comercial</div>
+          </div>
+          <div class="op-num">05</div>
+        </div>
+      </div>
+
+      <div class="opinion-card">
+        <div class="op-estrellas">★★★★★</div>
+        <div class="op-texto">Traje a mi hijo de 14 años a un vuelo de bautismo y quedó fascinado. El instructor fue muy cuidadoso y le explicó todo. Ahora no habla de otra cosa.</div>
+        <div class="op-footer">
+          <div>
+            <div class="op-nombre">MEDINA, ROBERTO</div>
+            <div class="op-rol">Visitante — Vuelo bautismo</div>
+          </div>
+          <div class="op-num">06</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  <span class="footer-brand">◈ AEROCLUB RÍO GRANDE — © 2026</span>
+  <span class="footer-coords">53°46'S 67°45'O · SAWE · RÍO GRANDE, TIERRA DEL FUEGO</span>
+  <!-- footer-ver --><span style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.06em;opacity:.6">v1.0</span>
+</footer>
+
+<script>
+(function(){
+  if(localStorage.getItem('arc-theme')==='light')
+    document.documentElement.classList.add('light');
+})();
+
+function toggleTheme(){
+  const isLight=document.documentElement.classList.toggle('light');
+  localStorage.setItem('arc-theme',isLight?'light':'dark');
+}
+
+// ── CARRUSEL ──────────────────────────────────────────────────
+(function(){
+  const slides=document.querySelectorAll('.carrusel-slide');
+  const dotsEl=document.getElementById('dots');
+  let current=0;
+  let timer;
+
+  // crear dots
+  slides.forEach((_,i)=>{
+    const d=document.createElement('div');
+    d.className='carrusel-dot'+(i===0?' active':'');
+    d.onclick=()=>irA(i);
+    dotsEl.appendChild(d);
+  });
+
+  function irA(idx){
+    slides[current].classList.remove('active');
+    dotsEl.children[current].classList.remove('active');
+    current=((idx%slides.length)+slides.length)%slides.length;
+    slides[current].classList.add('active');
+    dotsEl.children[current].classList.add('active');
+    clearInterval(timer);
+    timer=setInterval(()=>irA(current+1),5500);
+  }
+
+  window.moverCarrusel=function(dir){irA(current+dir);};
+
+  timer=setInterval(()=>irA(current+1),5500);
+})();
+</script>
+</body>
+</html>
