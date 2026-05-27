@@ -1,6 +1,6 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.20
+  VERSION : 5.21
   FECHA   : 2026-05-26
   CAMBIOS : Filtros en listado de usuarios: búsqueda por texto, rol y estado
             Fix vencimiento automático: vencía turnos futuros con anticipación <14hs
@@ -244,7 +244,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.20</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.21</div>
   </div>
 </div>
 
@@ -2075,12 +2075,39 @@ async function renderInstructoresList(){
   const el=document.getElementById('instructores-list');
   const data=await fbGet('instructores');
   if(!data){el.innerHTML='';return;}
-  el.innerHTML=Object.entries(data).map(([k,i])=>`
-    <div class="toggle-row">
-      <span><strong>${i.nombre}</strong> — ${i.user}</span>
-      ${k==='admin'?'<span style="font-size:11px;color:var(--text3)">PRINCIPAL</span>':`<button onclick="eliminarInstructor('${k}')" style="font-size:11px;padding:3px 10px">QUITAR</button>`}
-    </div>`).join('');
+  const esAdmin=session?.user==='admin'||session?.user==='administrador';
+  el.innerHTML=Object.entries(data).map(([k,i])=>{
+    const enVacaciones=i.vacaciones===true;
+    const esPrincipal=k==='admin';
+    // toggle vacaciones: solo para admin/administrador, no sobre sí mismo, no sobre admin principal
+    const mostrarToggle=esAdmin&&!esPrincipal&&k!==session?.user;
+    const toggleVac=mostrarToggle?`
+      <div onclick="toggleVacacionesAdmin('${k}')" style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none" title="${enVacaciones?'Reactivar disponibilidad':'Poner de vacaciones'}">
+        <span style="font-family:var(--font-mono);font-size:10px;color:${enVacaciones?'var(--amber)':'var(--text3)'};letter-spacing:.06em">${enVacaciones?'🏖 VAC':'DISP'}</span>
+        <div style="width:34px;height:18px;border-radius:9px;background:${enVacaciones?'rgba(240,165,0,.35)':'rgba(57,211,83,.25)'};border:1px solid ${enVacaciones?'rgba(240,165,0,.5)':'rgba(57,211,83,.4)'};position:relative;transition:all .2s">
+          <div style="width:12px;height:12px;border-radius:50%;background:${enVacaciones?'var(--amber)':'var(--green)'};position:absolute;top:2px;left:${enVacaciones?'18px':'2px'};transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.3)"></div>
+        </div>
+      </div>`:
+      (enVacaciones?`<span style="font-family:var(--font-mono);font-size:10px;color:var(--amber)">🏖 VAC</span>`:'');
+    return `<div class="toggle-row">
+      <span><strong>${i.nombre}</strong> — <span style="color:var(--text3)">${i.user}</span>${enVacaciones?` <span style="font-family:var(--font-mono);font-size:10px;color:var(--amber);letter-spacing:.06em">· de vacaciones</span>`:''}</span>
+      <div style="display:flex;align-items:center;gap:10px">
+        ${toggleVac}
+        ${esPrincipal?'<span style="font-size:11px;color:var(--text3)">PRINCIPAL</span>':`<button onclick="eliminarInstructor('${k}')" style="font-size:11px;padding:3px 10px">QUITAR</button>`}
+      </div>
+    </div>`;
+  }).join('');
 }
+
+window.toggleVacacionesAdmin=async function(k){
+  const esAdmin=session?.user==='admin'||session?.user==='administrador';
+  if(!esAdmin)return;
+  const inst=await fbGet('instructores/'+k);
+  if(!inst)return;
+  const nuevo=!(inst.vacaciones===true);
+  await fbUpdate('instructores/'+k,{vacaciones:nuevo});
+  renderInstructoresList();
+};
 
 window.agregarInstructor=async function(){
   const user=val('new-inst-user'),pass=val('new-inst-pass'),nombre=val('new-inst-nombre');
