@@ -1,15 +1,8 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.19
+  VERSION : 5.20
   FECHA   : 2026-05-26
-  CAMBIOS : Auditoría: dropdown filtro por tipo de evento
-            (ingresos exitosos/fallidos, alta turno, cancelación turno,
-            habilitación/deshabilitación avión, registro usuario)
-            ACCION_LABEL ampliado para todos los tipos de acción
-            limpiarFiltrosAuditoria limpia también el nuevo dropdown
-            Disponibilidad: guardado automático por checkbox (sin botón Guardar Semana)
-            Mensaje "DATOS DE SEMANA ACTUALIZADOS" aparece 2.5s tras cada cambio
-            Conflicto con turno aprobado: confirm por slot individual al desmarcar
+  CAMBIOS : Filtros en listado de usuarios: búsqueda por texto, rol y estado
             Fix vencimiento automático: vencía turnos futuros con anticipación <14hs
             Consultas: fechas en formato dd/mm/aaaa
             Consultas: cada fila abre modal para cambiar estado o eliminar
@@ -251,7 +244,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.19</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.20</div>
   </div>
 </div>
 
@@ -449,6 +442,8 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <!-- PANTALLA MI DISPONIBILIDAD -->
   <div id="instructor-disponibilidad" class="screen">
     <h2>◈ Mi Disponibilidad — LV-OAD</h2>
+    <!-- TOGGLE VACACIONES -->
+    <div id="disp-vacaciones-wrap" style="margin-bottom:1rem"></div>
     <p style="font-family:var(--font-mono);font-size:12px;color:var(--text2);margin-bottom:1rem;letter-spacing:.05em">
       Marcá los horarios en los que podés dar vuelo. Solo los slots que marques quedarán disponibles para reserva.<br>
       <span style="color:var(--amber)">⚠ Si desmarcás un slot con turno aprobado, ese turno se cancelará y el alumno recibirá un aviso por mail.</span>
@@ -692,6 +687,19 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
           <div class="field" style="margin:0;flex:1;min-width:140px">
             <label>Buscar usuario</label>
             <input type="text" id="audit-search" placeholder="email o nombre..." oninput="filtrarAuditoria()">
+          </div>
+          <div class="field" style="margin:0;min-width:180px">
+            <label>Tipo de evento</label>
+            <select id="audit-tipo" onchange="filtrarAuditoria()">
+              <option value="">Todos</option>
+              <option value="login_exito">Ingresos exitosos</option>
+              <option value="login_fallo">Ingresos fallidos</option>
+              <option value="alta_turno">Alta de turnos</option>
+              <option value="cancelacion_turno">Cancelación de turnos</option>
+              <option value="avion_habilitado">Habilitación de aviones</option>
+              <option value="avion_deshabilitado">Deshabilitación de aviones</option>
+              <option value="registro">Registro inicial de usuario</option>
+            </select>
           </div>
           <div class="field" style="margin:0;min-width:130px">
             <label>Desde</label>
@@ -1291,9 +1299,20 @@ async function renderSlots(ds,data){
   document.getElementById('selected-day-label').textContent=ds;
   document.getElementById('slots-section').style.display='block';
   // Filtrar por disponibilidad de instructores (solo LV-OAD)
+  // Instructores en vacaciones quedan excluidos
   const dispData=await fbGet('disponibilidad/'+ds);
+  const instData=await fbGet('instructores');
   let slotsConInstructor=new Set();
-  if(dispData) Object.values(dispData).forEach(arr=>{ if(Array.isArray(arr)) arr.forEach(h=>slotsConInstructor.add(h)); });
+  if(dispData&&instData){
+    Object.entries(dispData).forEach(([instKey,arr])=>{
+      // buscar si este instructor está de vacaciones
+      const instObj=Object.values(instData).find(i=>(i.user||'')=== instKey);
+      if(instObj?.vacaciones===true) return; // ignorar
+      if(Array.isArray(arr)) arr.forEach(h=>slotsConInstructor.add(h));
+    });
+  } else if(dispData){
+    Object.values(dispData).forEach(arr=>{ if(Array.isArray(arr)) arr.forEach(h=>slotsConInstructor.add(h)); });
+  }
   const esOAD=(selectedAvion||'LV-OAD')==='LV-OAD';
   const avail=horasParaDia(ds,selectedAvion).filter(h=>okAnticipacion(ds,h)&&(!esOAD||slotsConInstructor.has(h)));
   if(!avail.length){
@@ -1828,7 +1847,7 @@ window.showInstTab=function(tab){
   const dispBtn=document.getElementById('inst-tab-disp');
   const esAdmin=session?.user==='admin'||session?.user==='administrador';
   if(dispBtn){ dispBtn.classList.toggle('active',tab==='disponibilidad'); dispBtn.style.display=(session?.soloUsuarios||esAdmin)?'none':''; }
-  if(tab==='disponibilidad'){ dispSemanaOffset=0; renderDisponibilidad(); }
+  if(tab==='disponibilidad'){ dispSemanaOffset=0; renderDisponibilidad(); renderToggleVacaciones(); }
   const btnRes=document.getElementById('inst-tab-res');
   if(btnRes) btnRes.style.display=session?.soloUsuarios?'none':'';
   if(tab==='config'){
@@ -2238,17 +2257,23 @@ async function cargarAuditoria(){
 
 window.filtrarAuditoria=function(){
   const busq=(document.getElementById('audit-search')?.value||'').toLowerCase();
+  const tipo=document.getElementById('audit-tipo')?.value||'';
   const desde=document.getElementById('audit-desde')?.value||'';
   const hasta=document.getElementById('audit-hasta')?.value||'';
   let lista=_auditoriaCache;
-  if(busq)lista=lista.filter(r=>(r.detalle||'').toLowerCase().includes(busq));
+  if(busq)lista=lista.filter(r=>(r.detalle||'').toLowerCase().includes(busq)||(r.accion||'').toLowerCase().includes(busq));
+  if(tipo){
+    if(tipo==='login_exito')lista=lista.filter(r=>r.accion==='login'&&r.resultado==='exito');
+    else if(tipo==='login_fallo')lista=lista.filter(r=>r.accion==='login'&&r.resultado==='fallo');
+    else lista=lista.filter(r=>r.accion===tipo);
+  }
   if(desde)lista=lista.filter(r=>r.ts>=desde);
   if(hasta)lista=lista.filter(r=>r.ts<=hasta+'T23:59:59');
   _auditPage=0;renderAuditoria(lista);
 };
 
 window.limpiarFiltrosAuditoria=function(){
-  ['audit-search','audit-desde','audit-hasta'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  ['audit-search','audit-tipo','audit-desde','audit-hasta'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   _auditPage=0;renderAuditoria(_auditoriaCache);
 };
 
@@ -2272,7 +2297,7 @@ function renderAuditoria(lista,skipPageReset){
   const totalPages=Math.ceil(total/AUDIT_PER_PAGE);
   const page=Math.min(_auditPage,totalPages-1);
   const slice=lista.slice(page*AUDIT_PER_PAGE,(page+1)*AUDIT_PER_PAGE);
-  const ACCION_LABEL={'login':'Login','registro':'Registro'};
+  const ACCION_LABEL={'login':'Login','registro':'Registro','alta_turno':'Alta turno','cancelacion_turno':'Cancelación turno','avion_habilitado':'Avión habilitado','avion_deshabilitado':'Avión deshabilitado','dia_bloqueado':'Día bloqueado','dia_desbloqueado':'Día desbloqueado'};
   const ROL_ICON={'alumno':'🛩️','instructor':'👨‍✈️','piloto':'✈️','pendiente':'⏳'};
   const paginador=totalPages>1?`
     <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:.75rem;flex-wrap:wrap;font-family:var(--font-mono);font-size:12px">
@@ -2759,6 +2784,50 @@ async function renderDisponibilidad(){
   grid.innerHTML=html;
 }
 
+// ── VACACIONES ─────────────────────────────────────────────────
+async function renderToggleVacaciones(){
+  const wrap=document.getElementById('disp-vacaciones-wrap');
+  if(!wrap)return;
+  const instKey=session?.user;
+  const inst=await fbGet('instructores/'+instKey);
+  const enVacaciones=inst?.vacaciones===true;
+  wrap.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:.75rem 1rem;background:${enVacaciones?'rgba(248,81,73,.07)':'rgba(57,211,83,.07)'};border:1px solid ${enVacaciones?'rgba(248,81,73,.3)':'rgba(57,211,83,.25)'};border-radius:var(--radius)">
+      <div>
+        <span style="font-family:var(--font-mono);font-size:13px;color:${enVacaciones?'var(--red)':'var(--green)'};letter-spacing:.1em">
+          ${enVacaciones?'🏖 ESTOY DE VACACIONES':'✓ ESTOY DISPONIBLE'}
+        </span>
+        <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);margin-top:3px;letter-spacing:.05em">
+          ${enVacaciones?'Tu disponibilidad está suspendida — los alumnos no ven tus horarios':'Tu disponibilidad está activa'}
+        </div>
+      </div>
+      <div onclick="toggleVacaciones()" style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none">
+        <span style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.08em">${enVacaciones?'DE VACACIONES':'DISPONIBLE'}</span>
+        <div style="width:48px;height:24px;border-radius:12px;background:${enVacaciones?'rgba(248,81,73,.4)':'var(--green)'};border:1px solid ${enVacaciones?'rgba(248,81,73,.6)':'var(--green)'};position:relative;transition:all .25s;box-shadow:${enVacaciones?'none':'0 0 10px rgba(57,211,83,.3)'}">
+          <div style="width:18px;height:18px;border-radius:50%;background:#fff;position:absolute;top:2px;left:${enVacaciones?'26px':'2px'};transition:left .25s;box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>
+        </div>
+      </div>
+    </div>`;
+  // Deshabilitar/habilitar la grilla visualmente
+  const grid=document.getElementById('disp-grid');
+  if(grid) grid.style.opacity=enVacaciones?'.35':'1';
+  const nav=document.getElementById('disp-prev')?.closest('div');
+  if(nav) nav.style.pointerEvents=enVacaciones?'none':'';
+}
+
+window.toggleVacaciones=async function(){
+  const instKey=session?.user;
+  const inst=await fbGet('instructores/'+instKey);
+  const actual=inst?.vacaciones===true;
+  const nuevo=!actual;
+  if(nuevo){
+    if(!confirm('¿Activar modo vacaciones? Tu disponibilidad quedará suspendida hasta que lo desactives.'))return;
+  }
+  await fbUpdate('instructores/'+instKey,{vacaciones:nuevo});
+  renderToggleVacaciones();
+  mostrarDispOk(nuevo?'// MODO VACACIONES ACTIVADO':'// DISPONIBILIDAD REACTIVADA');
+};
+
 let _dispOkTimer=null;
 function mostrarDispOk(msg){
   const el=document.getElementById('disp-ok');
@@ -2774,7 +2843,6 @@ window.dispToggle=async function(cb){
   const instKey=session?.user;
   if(!instKey)return;
   if(!_dispEstado[ds]) _dispEstado[ds]=new Set();
-
   // Si se está desmarcando, verificar conflictos con turnos aprobados
   if(!cb.checked){
     const todasReservas=await fbGet('reservas');
@@ -2784,12 +2852,11 @@ window.dispToggle=async function(cb){
     if(conflicto){
       const [rk,r]=conflicto;
       const ok=confirm(`⚠ Hay un turno aprobado en este horario:\n  ${r.fecha} ${r.hora}hs — ${r.nombre}\n\n¿Cancelarlo y quitar tu disponibilidad?`);
-      if(!ok){cb.checked=true;return;} // revertir el tick
+      if(!ok){cb.checked=true;return;}
       await fbUpdate('reservas/'+rk,{estado:'cancelado',obs_cancelacion:'Instructor sin disponibilidad en este horario'});
       mailCancel(r);
     }
   }
-
   // Actualizar estado local y visual
   if(cb.checked) _dispEstado[ds].add(h);
   else _dispEstado[ds].delete(h);
@@ -2799,7 +2866,6 @@ window.dispToggle=async function(cb){
     lbl.style.background=cb.checked?(tieneReserva?'rgba(57,211,83,.18)':'rgba(0,200,212,.12)'):'var(--bg2)';
     lbl.style.borderColor=cb.checked?(tieneReserva?'rgba(57,211,83,.5)':'rgba(0,200,212,.35)'):'var(--border)';
   }
-
   // Guardar en Firebase inmediatamente
   try{
     const arr=[..._dispEstado[ds]].sort();
@@ -2874,7 +2940,7 @@ async function renderAdmDisp(){
   // excluir admin y administrador de la lista (no cargan disponibilidad)
   const instructores=Object.entries(instData)
     .filter(([k])=>k!=='admin'&&k!=='administrador')
-    .map(([k,v])=>({key:k, dispKey:v.user||k, nombre:v.nombre||k}));
+    .map(([k,v])=>({key:k, dispKey:v.user||k, nombre:v.nombre||k, vacaciones:v.vacaciones===true}));
     // dispKey = valor de v.user, que es lo que usa session.user al guardar
 
   if(!instructores.length){
@@ -2938,7 +3004,7 @@ async function renderAdmDisp(){
   html+='<tr>';
   dias.forEach(d=>{
     instructores.forEach((inst,i)=>{
-      html+=`<th style="padding:4px 6px;color:var(--text2);font-weight:500;text-align:center;font-size:10px;border-bottom:1px solid var(--border2);${i===0?'border-left:1px solid var(--border2)':''};white-space:nowrap;max-width:70px;overflow:hidden;text-overflow:ellipsis" title="${inst.nombre} (${inst.dispKey})">${inst.dispKey}</th>`;
+      html+=`<th style="padding:4px 6px;color:${inst.vacaciones?'var(--amber)':'var(--text2)'};font-weight:500;text-align:center;font-size:10px;border-bottom:1px solid var(--border2);${i===0?'border-left:1px solid var(--border2)':''};white-space:nowrap;max-width:70px;overflow:hidden;text-overflow:ellipsis" title="${inst.nombre} (${inst.dispKey})${inst.vacaciones?' — DE VACACIONES':''}">${inst.dispKey}${inst.vacaciones?' 🏖':''}</th>`;
     });
   });
   html+='</tr></thead><tbody>';
