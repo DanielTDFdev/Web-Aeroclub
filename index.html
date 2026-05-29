@@ -3,7 +3,7 @@
   VERSION : 3.1
   FECHA   : 2026-05-29
   CAMBIOS : Widget meteorológico: reemplaza Open-Meteo por METAR/TAF real de SAWE
-            Fuente: aviationweather.gov (NOAA) vía corsproxy.io
+            Fuente: CheckWX Aviation Weather API (CORS nativo, sin proxy)
             Actualización cada 30 min
 -->
 <!DOCTYPE html>
@@ -235,7 +235,7 @@ footer{border-top:1px solid var(--border);padding:1.5rem 2rem;display:flex;align
   <div style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:1.25rem 1.5rem;position:relative;overflow:hidden;margin-bottom:1rem;">
     <div style="position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:.4"></div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:.5rem;">
-      <div style="font-family:var(--font-mono);font-size:10px;color:var(--cyan);letter-spacing:.25em;text-transform:uppercase;">▸ METAR</div>
+      <div style="font-family:var(--font-mono);font-size:10px;color:var(--cyan);letter-spacing:.25em;">▸ METAR</div>
       <div id="metar-ts" style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.06em;"></div>
     </div>
     <div id="metar-loading" style="font-family:var(--font-mono);font-size:12px;color:var(--text3);padding:.25rem 0;">// Cargando METAR...</div>
@@ -247,7 +247,7 @@ footer{border-top:1px solid var(--border);padding:1.5rem 2rem;display:flex;align
   <div style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:1.25rem 1.5rem;position:relative;overflow:hidden;">
     <div style="position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--amber),transparent);opacity:.35"></div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:.5rem;">
-      <div style="font-family:var(--font-mono);font-size:10px;color:var(--amber);letter-spacing:.25em;text-transform:uppercase;">▸ TAF</div>
+      <div style="font-family:var(--font-mono);font-size:10px;color:var(--amber);letter-spacing:.25em;">▸ TAF</div>
       <div id="taf-ts" style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.06em;"></div>
     </div>
     <div id="taf-loading" style="font-family:var(--font-mono);font-size:12px;color:var(--text3);padding:.25rem 0;">// Cargando TAF...</div>
@@ -255,7 +255,7 @@ footer{border-top:1px solid var(--border);padding:1.5rem 2rem;display:flex;align
     <div id="taf-error" style="display:none;font-family:var(--font-mono);font-size:12px;color:#f85149;padding:.25rem 0;">// Sin pronóstico disponible.</div>
   </div>
 
-  <div style="font-family:var(--font-mono);font-size:9px;color:var(--text3);text-align:right;margin-top:.6rem;letter-spacing:.06em;opacity:.7">Fuente: aviationweather.gov · NOAA</div>
+  <div style="font-family:var(--font-mono);font-size:9px;color:var(--text3);text-align:right;margin-top:.6rem;letter-spacing:.06em;opacity:.7">Fuente: CheckWX Aviation Weather</div>
 </section>
 
 <footer>
@@ -286,27 +286,30 @@ footer{border-top:1px solid var(--border);padding:1.5rem 2rem;display:flex;align
   if(localStorage.getItem('arc-theme')==='light')
     document.documentElement.classList.add('light');
 })();
-// ── METAR / TAF ───────────────────────────────────────────────
+// ── METAR / TAF — CheckWX ─────────────────────────────────────
 async function cargarMetarTaf(){
-  const PROXY='https://corsproxy.io/?url=';
-  const BASE='https://aviationweather.gov/api/data/';
-
-  async function fetchRaw(endpoint){
-    const res=await fetch(PROXY+encodeURIComponent(BASE+endpoint));
-    if(!res.ok)throw new Error('HTTP '+res.status);
-    return (await res.text()).trim();
-  }
+  const KEY='05639bfe66b24b929b7b0d1aeb313c91';
+  const BASE='https://api.checkwx.com/';
+  const ICAO='SAWE';
 
   function tsAhora(){
     const now=new Date();
     return '// '+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+' UTC-3';
   }
 
+  async function fetchData(endpoint){
+    const res=await fetch(BASE+endpoint,{headers:{'X-API-Key':KEY}});
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const json=await res.json();
+    if(!json.results||!json.data||!json.data.length)throw new Error('sin datos');
+    return json.data[0];
+  }
+
   // METAR
   try{
-    const txt=await fetchRaw('metar?ids=SAWE&format=raw');
+    const raw=await fetchData('metar/'+ICAO+'/raw');
     const el=document.getElementById('metar-raw');
-    el.textContent=txt||'Sin datos.';
+    el.textContent=raw;
     el.style.display='block';
     document.getElementById('metar-loading').style.display='none';
     document.getElementById('metar-ts').textContent=tsAhora();
@@ -317,9 +320,9 @@ async function cargarMetarTaf(){
 
   // TAF
   try{
-    const txt=await fetchRaw('taf?ids=SAWE&format=raw');
+    const raw=await fetchData('taf/'+ICAO+'/raw');
     const el=document.getElementById('taf-raw');
-    el.textContent=txt||'Sin pronóstico.';
+    el.textContent=raw;
     el.style.display='block';
     document.getElementById('taf-loading').style.display='none';
     document.getElementById('taf-ts').textContent=tsAhora();
