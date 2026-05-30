@@ -1,8 +1,8 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.22
+  VERSION : 5.23
   FECHA   : 2026-05-29
-  CAMBIOS : Widget METAR superpuesto en hero banner (CheckWX API, solo METAR, oculto en mobile)
+  CAMBIOS : Auditoría: registro de aprobación/rechazo de usuario y cambio de rol desde gestión de usuarios
 -->
 <!DOCTYPE html>
 <html lang="es">
@@ -692,6 +692,9 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
               <option value="avion_habilitado">Habilitación de aviones</option>
               <option value="avion_deshabilitado">Deshabilitación de aviones</option>
               <option value="registro">Registro inicial de usuario</option>
+              <option value="aprobacion_usuario">Aprobación de usuario</option>
+              <option value="rechazo_usuario">Rechazo de usuario</option>
+              <option value="cambio_rol">Cambio de rol</option>
             </select>
           </div>
           <div class="field" style="margin:0;min-width:130px">
@@ -2230,13 +2233,19 @@ window.filtrarAlumnosList=function filtrarAlumnosList(){
 window.aprobarUsuario=async function(key){
   const rolSel=document.getElementById('rol-select-'+key)?.value||'alumno';
   if(!confirm('¿Aprobar este usuario como '+rolSel+'?'))return;
+  const alumno=await fbGet('alumnos/'+key);
   await fbUpdate('alumnos/'+key,{estado:'aprobado',rol:rolSel});
+  const detalle=(alumno?.nombre||key)+' ('+(alumno?.email||key)+') — rol asignado: '+rolSel+' — por: '+session.nombre+' ('+session.tipo+')';
+  await registrarAuditoria('aprobacion_usuario',session.rol||session.tipo||'admin','exito',detalle);
   renderAlumnosList();
 };
 
 window.rechazarUsuario=async function(key,email){
   if(!confirm('¿Rechazar y eliminar la cuenta de '+email+'?'))return;
+  const alumno=await fbGet('alumnos/'+key);
   await fbRemove('alumnos/'+key);
+  const detalle=(alumno?.nombre||key)+' ('+email+') — por: '+session.nombre+' ('+session.tipo+')';
+  await registrarAuditoria('rechazo_usuario',session.rol||session.tipo||'admin','exito',detalle);
   renderAlumnosList();
 };
 
@@ -2263,7 +2272,12 @@ window.guardarAlumno=async function(){
   const tel=document.getElementById('edit-al-tel').value.trim();
   const rol=document.getElementById('edit-al-rol').value;
   if(!nombre){showErr('edit-al-err','El nombre no puede estar vacío.');return;}
+  const alumnoActual=await fbGet('alumnos/'+_editAlumnoKey);
   await fbUpdate('alumnos/'+_editAlumnoKey,{nombre,tel,rol});
+  if(alumnoActual&&alumnoActual.rol!==rol){
+    const detalle=nombre+' ('+(alumnoActual.email||_editAlumnoKey)+') — rol cambiado: '+(alumnoActual.rol||'alumno')+' → '+rol+' — por: '+session.nombre+' ('+session.tipo+')';
+    await registrarAuditoria('cambio_rol',session.rol||session.tipo||'admin','exito',detalle);
+  }
   showOk('edit-al-ok','// DATOS ACTUALIZADOS');
   renderAlumnosList();
   setTimeout(()=>cerrarModalAlumno(),1200);
