@@ -1,8 +1,8 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.24
+  VERSION : 5.25
   FECHA   : 2026-05-29
-  CAMBIOS : METAR visible en mobile como bloque debajo del hero
+  CAMBIOS : Nav-brand oculto al loguearse (redundante con hero); METAR mobile bloque debajo del hero
 -->
 <!DOCTYPE html>
 <html lang="es">
@@ -1053,7 +1053,7 @@ window.loginInstructor=async function(){
 };
 
 function setNavUser(nombre,tipo){
-  document.getElementById('nav-brand').textContent='◈ AEROCLUB RÍO GRANDE';
+  document.getElementById('nav-brand').style.display='none';
   document.getElementById('nav-user-area').style.display='flex';
   const icono=tipo==='instructor'?'👨‍✈️':tipo==='piloto'?'✈️':'🛩️';
   document.getElementById('nav-user-name').textContent=icono+' '+nombre;
@@ -1066,6 +1066,7 @@ window.logout=function(){
   const banner=document.getElementById('banner-pendientes');if(banner)banner.style.display='none';
   session=null;selectedDay=null;selectedSlot=null;selectedAvion=null;
   document.getElementById('hero-callsign').textContent='TURNOS';
+  document.getElementById('nav-brand').style.display='';
   document.getElementById('nav-brand').textContent='◈ ACCESO AL SISTEMA';
   document.getElementById('nav-user-area').style.display='none';
   showScreen('login-screen');switchLoginTab('alumno');
