@@ -1,6 +1,6 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.23
+  VERSION : 5.24
   FECHA   : 2026-05-29
   CAMBIOS : Widget METAR superpuesto en hero banner (CheckWX API, solo METAR, oculto en mobile)
 -->
@@ -230,7 +230,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.23</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.24</div>
   </div>
   <div class="hero-metar">
     <div class="hero-metar-box">
@@ -858,10 +858,10 @@ let calMesActual=new Date(); calMesActual.setDate(1);
 
 // ── HELPERS ────────────────────────────────────────────────────
 const EJS_SVC='dcamargo70@gmail.com', EJS_TMPL_CANCEL='template_v4qu4x6', EJS_TMPL_RESET='template_scbsgfg', EJS_KEY='0IoRm88tZQepkHAdK';
-const EJS_SVC2='service_yeb4aqb', EJS_TMPL_REGISTRO='template_s6gk8tf', EJS_KEY2='TzbSjqDNPjTGSGdzN';
+const EJS_SVC2='service_yeb4aqb', EJS_TMPL_REGISTRO='template_s6gk8tf', EJS_TMPL_BIENVENIDA='template_8awr1zd', EJS_KEY2='TzbSjqDNPjTGSGdzN';
 function mailCancel(r){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);emailjs.send(EJS_SVC,EJS_TMPL_CANCEL,{to_email:r.email,alumno_nombre:r.nombre,fecha:r.fecha,hora:r.hora,avion:r.avion||'LV-OAD'}).catch(e=>console.warn(e));}
 function mailReset(a,np){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);emailjs.send(EJS_SVC,EJS_TMPL_RESET,{to_email:a.email,alumno_nombre:a.nombre,nueva_password:np}).catch(e=>console.warn(e));}
-function mailNuevoRegistro(nombre,email){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY2);emailjs.send(EJS_SVC2,EJS_TMPL_REGISTRO,{alumno_nombre:nombre,alumno_email:email,fecha:new Date().toLocaleString('es-AR')}).catch(e=>console.warn('mail-registro:',e));}
+function mailNuevoRegistro(nombre,email){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY2);emailjs.send(EJS_SVC2,EJS_TMPL_REGISTRO,{alumno_nombre:nombre,alumno_email:email,fecha:new Date().toLocaleString('es-AR')}).catch(e=>console.warn('mail-registro:',e));emailjs.send(EJS_SVC2,EJS_TMPL_BIENVENIDA,{alumno_nombre:nombre,alumno_email:email}).catch(e=>console.warn('mail-bienvenida:',e));}
 
 function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');}
 function showErr(id,msg){const e=document.getElementById(id);e.textContent=msg;e.style.display='block';}
