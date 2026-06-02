@@ -1,6 +1,6 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.24
+  VERSION : 5.25
   FECHA   : 2026-05-29
   CAMBIOS : Widget METAR superpuesto en hero banner (CheckWX API, solo METAR, oculto en mobile)
 -->
@@ -50,12 +50,7 @@ body{font-family:var(--font-ui);font-size:15px;color:var(--text);background:var(
 .hero-sub{font-family:var(--font-mono);font-size:12px;color:var(--cyan);letter-spacing:.18em;margin-top:.35rem;opacity:.8;}
 .hero-status{position:absolute;top:1rem;right:1rem;z-index:2;font-family:var(--font-mono);font-size:11px;color:var(--green);letter-spacing:.1em;display:flex;align-items:center;gap:6px;}
 .hero-status::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:blink 2s ease-in-out infinite;}
-.hero-metar{position:absolute;bottom:1.5rem;right:1.5rem;z-index:2;max-width:360px;}
-.hero-metar-box{background:rgba(7,9,13,.68);border:1px solid rgba(0,200,212,.2);border-radius:4px;padding:.45rem .75rem;backdrop-filter:blur(8px);}
-.hero-metar-lbl{font-family:var(--font-mono);font-size:9px;color:var(--cyan);letter-spacing:.22em;margin-bottom:3px;opacity:.85;}
-.hero-metar-raw{font-family:var(--font-mono);font-size:10.5px;color:var(--text);letter-spacing:.04em;line-height:1.5;word-break:break-all;}
-.hero-metar-ts{font-family:var(--font-mono);font-size:8px;color:var(--text3);letter-spacing:.06em;margin-top:4px;text-align:right;}
-@media(max-width:600px){.hero-metar{display:none;}}
+
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
 
 .top-nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:.6rem 1.25rem;display:flex;align-items:center;gap:8px;position:sticky;top:0;z-index:100;}
@@ -230,15 +225,9 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.24</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.25</div>
   </div>
-  <div class="hero-metar">
-    <div class="hero-metar-box">
-      <div class="hero-metar-lbl">▸ METAR · SAWE</div>
-      <div id="hm-metar" class="hero-metar-raw">// Cargando...</div>
-      <div id="hm-ts" class="hero-metar-ts"></div>
-    </div>
-  </div>
+
 </div>
 
 <div class="top-nav">
@@ -917,24 +906,7 @@ window.toggleTheme=function(){
   localStorage.setItem('lvoad-theme',isLight?'light':'dark');
 };
 
-// ── METAR HERO ────────────────────────────────────────────────
-(async function(){
-  const el=document.getElementById('hm-metar');
-  const ts=document.getElementById('hm-ts');
-  if(!el)return;
-  try{
-    const res=await fetch('https://api.checkwx.com/metar/SAWE/raw',{headers:{'X-API-Key':'05639bfe66b24b929b7b0d1aeb313c91'}});
-    if(!res.ok)throw new Error();
-    const j=await res.json();
-    if(!j.results||!j.data||!j.data.length)throw new Error();
-    el.textContent=j.data[0];
-    const now=new Date();
-    ts.textContent='// '+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+' UTC-3';
-  }catch(e){
-    el.textContent='// Sin datos';
-    el.style.color='var(--text3)';
-  }
-})();
+
 
 // ── LOGIN ──────────────────────────────────────────────────────
 window.switchLoginTab=function(tab){
