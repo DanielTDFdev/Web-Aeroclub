@@ -1,8 +1,8 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.25
-  FECHA   : 2026-05-29
-  CAMBIOS : Widget METAR superpuesto en hero banner (CheckWX API, solo METAR, oculto en mobile)
+  VERSION : 5.26
+  FECHA   : 2026-06-02
+  CAMBIOS : Auditoría — nuevo evento aprobación/rechazo de usuario (registro + filtro)
 -->
 <!DOCTYPE html>
 <html lang="es">
@@ -681,6 +681,8 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
               <option value="avion_habilitado">Habilitación de aviones</option>
               <option value="avion_deshabilitado">Deshabilitación de aviones</option>
               <option value="registro">Registro inicial de usuario</option>
+              <option value="usuario_aprobado">Aprobación de usuario</option>
+              <option value="usuario_rechazado">Rechazo de usuario</option>
             </select>
           </div>
           <div class="field" style="margin:0;min-width:130px">
@@ -2205,12 +2207,16 @@ window.filtrarAlumnosList=function filtrarAlumnosList(){
 window.aprobarUsuario=async function(key){
   const rolSel=document.getElementById('rol-select-'+key)?.value||'alumno';
   if(!confirm('¿Aprobar este usuario como '+rolSel+'?'))return;
+  const al=await fbGet('alumnos/'+key);
   await fbUpdate('alumnos/'+key,{estado:'aprobado',rol:rolSel});
+  await registrarAuditoria('usuario_aprobado',session.rol||'instructor','exito',(al?.nombre||key)+' ('+(al?.email||'')+')'+(rolSel?' — rol: '+rolSel:''));
   renderAlumnosList();
 };
 
 window.rechazarUsuario=async function(key,email){
   if(!confirm('¿Rechazar y eliminar la cuenta de '+email+'?'))return;
+  const al=await fbGet('alumnos/'+key);
+  await registrarAuditoria('usuario_rechazado',session.rol||'instructor','exito',(al?.nombre||key)+' ('+email+')');
   await fbRemove('alumnos/'+key);
   renderAlumnosList();
 };
@@ -2311,7 +2317,7 @@ function renderAuditoria(lista,skipPageReset){
   const totalPages=Math.ceil(total/AUDIT_PER_PAGE);
   const page=Math.min(_auditPage,totalPages-1);
   const slice=lista.slice(page*AUDIT_PER_PAGE,(page+1)*AUDIT_PER_PAGE);
-  const ACCION_LABEL={'login':'Login','registro':'Registro','alta_turno':'Alta turno','cancelacion_turno':'Cancelación turno','avion_habilitado':'Avión habilitado','avion_deshabilitado':'Avión deshabilitado','dia_bloqueado':'Día bloqueado','dia_desbloqueado':'Día desbloqueado'};
+  const ACCION_LABEL={'login':'Login','registro':'Registro','alta_turno':'Alta turno','cancelacion_turno':'Cancelación turno','avion_habilitado':'Avión habilitado','avion_deshabilitado':'Avión deshabilitado','dia_bloqueado':'Día bloqueado','dia_desbloqueado':'Día desbloqueado','usuario_aprobado':'Usuario aprobado','usuario_rechazado':'Usuario rechazado'};
   const ROL_ICON={'alumno':'🛩️','instructor':'👨‍✈️','piloto':'✈️','pendiente':'⏳'};
   const paginador=totalPages>1?`
     <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:.75rem;flex-wrap:wrap;font-family:var(--font-mono);font-size:12px">
