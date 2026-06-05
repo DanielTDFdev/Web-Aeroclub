@@ -1,8 +1,8 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.27 
-  FECHA   : 2026-06-02
-  CAMBIOS : Auditoría — corregidos nombres de acción para coincidir con Firebase (aprobacion_usuario, usuario_rechazado)
+  VERSION : 5.28
+  FECHA   : 2026-06-05
+  CAMBIOS : Mis Turnos — historial completo con filtro por estado y orden cronológico invertible
 -->
 <!DOCTYPE html>
 <html lang="es">
@@ -114,6 +114,14 @@ button.danger:hover{background:rgba(248,81,73,.18)}
 .badge-aprobado{background:rgba(57,211,83,.1);color:var(--green);border:1px solid rgba(57,211,83,.3)}
 .badge-cancelado{background:rgba(248,81,73,.1);color:var(--red);border:1px solid rgba(248,81,73,.25)}
 .badge-vencido{background:rgba(120,80,200,.12);color:#a07ef0;border:1px solid rgba(120,80,200,.3)}
+.hist-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:.9rem;}
+.hist-filter-btn{font-family:var(--font-mono);font-size:11px;padding:4px 11px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--bg2);color:var(--text2);cursor:pointer;letter-spacing:.08em;transition:background .15s,color .15s,border-color .15s;}
+.hist-filter-btn:hover{background:var(--bg4);color:var(--text);}
+.hist-filter-btn.active{background:var(--cyan-dim);border-color:var(--cyan);color:var(--cyan);}
+.hist-sort-btn{margin-left:auto;font-family:var(--font-mono);font-size:11px;padding:4px 11px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--bg2);color:var(--text2);cursor:pointer;letter-spacing:.06em;}
+.hist-sort-btn:hover{background:var(--bg4);color:var(--text);}
+.hist-count{font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.1em;margin-left:2px;}
+.reserva-obs-cancel{font-size:11px;color:var(--text3);font-family:var(--font-mono);letter-spacing:.04em;margin-top:3px;opacity:.8;}
 .badge-alumno{background:rgba(0,200,212,.1);color:var(--cyan);border:1px solid rgba(0,200,212,.3)}
 .badge-piloto{background:rgba(240,165,0,.1);color:var(--amber);border:1px solid rgba(240,165,0,.3)}
 
@@ -225,7 +233,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.27</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.28</div>
   </div>
 
 </div>
@@ -313,7 +321,18 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   </div>
   <div id="alumno-mis-turnos" class="screen active">
     <h2>◈ Mis Turnos</h2>
-    <div class="card" id="mis-turnos-list"></div>
+    <div class="card">
+      <div class="hist-toolbar">
+        <button class="hist-filter-btn active" data-f="todos"     onclick="setHistFiltro('todos')">TODOS</button>
+        <button class="hist-filter-btn"         data-f="pendiente" onclick="setHistFiltro('pendiente')">PENDIENTE</button>
+        <button class="hist-filter-btn"         data-f="aprobado"  onclick="setHistFiltro('aprobado')">APROBADO</button>
+        <button class="hist-filter-btn"         data-f="cancelado" onclick="setHistFiltro('cancelado')">CANCELADO</button>
+        <button class="hist-filter-btn"         data-f="vencido"   onclick="setHistFiltro('vencido')">VENCIDO</button>
+        <button class="hist-sort-btn" id="hist-sort-btn" onclick="toggleHistOrden()">↓ MÁS RECIENTE</button>
+      </div>
+      <span class="hist-count" id="hist-count"></span>
+      <div id="mis-turnos-list"></div>
+    </div>
   </div>
   <div id="alumno-pedir-turno" class="screen">
     <h2>◈ Solicitar Turno</h2>
@@ -1423,16 +1442,44 @@ function fmtFechaLinda(fechaStr){
   return DIAS[dt.getDay()]+' '+d+' de '+MESES[m-1]+' de '+y;
 }
 
+// Estado de historial (filtro + orden)
+let _histFiltro='todos';
+let _histOrdenDesc=true;
+
+function setHistFiltro(estado){
+  _histFiltro=estado;
+  document.querySelectorAll('.hist-filter-btn').forEach(b=>b.classList.toggle('active',b.dataset.f===estado));
+  if(window._misTurnosData) renderMisTurnos(window._misTurnosData);
+}
+
+function toggleHistOrden(){
+  _histOrdenDesc=!_histOrdenDesc;
+  const btn=document.getElementById('hist-sort-btn');
+  if(btn) btn.textContent=_histOrdenDesc?'↓ MÁS RECIENTE':'↑ MÁS ANTIGUO';
+  if(window._misTurnosData) renderMisTurnos(window._misTurnosData);
+}
+
 function renderMisTurnos(data){
   const el=document.getElementById('mis-turnos-list');
-  const mis=rArr(data).filter(r=>r.email===session.email).sort((a,b)=>(a.fecha+a.hora).localeCompare(b.fecha+b.hora));
-  if(!mis.length){el.innerHTML='<div class="empty">// SIN TURNOS SOLICITADOS</div>';return;}
+  let mis=rArr(data).filter(r=>r.email===session.email);
+  // filtro por estado
+  if(_histFiltro!=='todos') mis=mis.filter(r=>r.estado===_histFiltro);
+  // orden
+  mis.sort((a,b)=>{
+    const cmp=(a.fecha+a.hora).localeCompare(b.fecha+b.hora);
+    return _histOrdenDesc?-cmp:cmp;
+  });
+  // contador
+  const cntEl=document.getElementById('hist-count');
+  if(cntEl) cntEl.textContent=mis.length?mis.length+' turno'+(mis.length!==1?'s':'')+' encontrado'+(mis.length!==1?'s':'')+'.':'';
+  if(!mis.length){el.innerHTML='<div class="empty">// SIN TURNOS PARA EL FILTRO SELECCIONADO</div>';return;}
   el.innerHTML=mis.map(r=>`
     <div class="reserva-item">
       <div>
         <div class="reserva-fecha">${fmtFechaLinda(r.fecha)} — ${r.horaInicio&&r.horaFin?r.horaInicio+' a '+r.horaFin+' hs':r.hora+' hs'}</div>
         <div class="reserva-avion">✈ ${r.avion||'LV-OAD'}</div>
         ${r.obs?`<div class="reserva-obs">${r.obs}</div>`:''}
+        ${r.obs_cancelacion?`<div class="reserva-obs-cancel">↳ ${r.obs_cancelacion}</div>`:''}
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <span class="badge badge-${r.estado}">${r.estado}</span>
@@ -1738,7 +1785,7 @@ function suscribirReservas(){
     const dataFresh=(await get(child(dbRef(),'reservas'))).val();
     _reservasCache={};
     if(dataFresh)Object.entries(dataFresh).forEach(([k,v])=>{_reservasCache[k]={...v,key:k};});
-    if(session?.tipo==='alumno')renderMisTurnos(dataFresh);
+    if(session?.tipo==='alumno'){window._misTurnosData=dataFresh;renderMisTurnos(dataFresh);}
     if(session?.tipo==='instructor')renderTodasReservas(dataFresh);
     if(selectedDay&&selectedAvion)renderSlots(selectedDay,dataFresh);
   });
