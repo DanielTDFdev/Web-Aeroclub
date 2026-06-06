@@ -1,9 +1,10 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.30
+  VERSION : 5.31
   FECHA   : 2026-06-05
   CAMBIOS : Mis Turnos — historial completo con filtro por estado y orden cronológico invertible
             logout() — reset completo de todos los cachés y estados de UI al cerrar sesión
+            Modal detalle — FECHA muestra día de semana + fecha completa (fmtFechaLinda)
 -->
 <!DOCTYPE html>
 <html lang="es">
@@ -234,7 +235,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.30</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.31</div>
   </div>
 
 </div>
@@ -1727,7 +1728,7 @@ function turnoYaPaso(r){
 window.abrirModal=function(key){
   const r=_reservasCache[key];if(!r)return;
   document.getElementById('md-avion').textContent=r.avion||'LV-OAD';
-  document.getElementById('md-fecha').textContent=r.fecha;
+  document.getElementById('md-fecha').textContent=fmtFechaLinda(r.fecha);
   document.getElementById('md-hora').textContent=r.horaInicio&&r.horaFin
     ?r.horaInicio+' a '+r.horaFin+' hs (exclusivo)'
     :r.hora+' hs';
