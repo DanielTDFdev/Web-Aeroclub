@@ -1,8 +1,9 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.28
+  VERSION : 5.29
   FECHA   : 2026-06-05
   CAMBIOS : Mis Turnos — historial completo con filtro por estado y orden cronológico invertible
+            logout() — reset de caché de historial y estado de filtros al cerrar sesión
 -->
 <!DOCTYPE html>
 <html lang="es">
@@ -233,7 +234,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.28</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.29</div>
   </div>
 
 </div>
@@ -1057,6 +1058,7 @@ window.logout=function(){
   if(_unsubPendientes){_unsubPendientes();_unsubPendientes=null;}
   const banner=document.getElementById('banner-pendientes');if(banner)banner.style.display='none';
   session=null;selectedDay=null;selectedSlot=null;selectedAvion=null;
+  window._misTurnosData=null;_histFiltro='todos';_histOrdenDesc=true;
   document.getElementById('hero-callsign').textContent='TURNOS';
   document.getElementById('nav-brand').textContent='◈ ACCESO AL SISTEMA';
   document.getElementById('nav-user-area').style.display='none';
