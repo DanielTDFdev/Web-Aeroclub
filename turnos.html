@@ -1,6 +1,6 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.31
+  VERSION : 5.32
   FECHA   : 2026-06-05
   CAMBIOS : Mis Turnos — historial completo con filtro por estado y orden cronológico invertible
             logout() — reset completo de todos los cachés y estados de UI al cerrar sesión
@@ -235,7 +235,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.31</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.32</div>
   </div>
 
 </div>
@@ -1735,7 +1735,7 @@ window.abrirModal=function(key){
   document.getElementById('md-nombre').textContent=r.nombre;
   document.getElementById('md-email').textContent=r.email;
   const obsRow=document.getElementById('md-obs-row');
-  const obsTexto=[r.obs?'Obs: '+r.obs:'',r.obs_cancelacion?'Cancelación: '+r.obs_cancelacion:''].filter(Boolean).join(' — ');
+  const obsTexto=[r.obs?r.obs:'',r.obs_cancelacion?'Cancelación: '+r.obs_cancelacion:''].filter(Boolean).join(' — ');
   if(obsTexto){document.getElementById('md-obs').textContent=obsTexto;obsRow.style.display='flex';}
   else{obsRow.style.display='none';}
   document.getElementById('md-estado').innerHTML=`<span class="badge badge-${r.estado}">${r.estado}</span>`;
