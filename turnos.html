@@ -1,8 +1,8 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.41
+  VERSION : 5.42
   FECHA   : 2026-06-10
-  CAMBIOS : Toggle disponibilidad avión movido de HORARIOS a BLOQ.AVIONES
+  CAMBIOS : Vista semanal de reservas (tab SEMANA) con 3 aeronaves diferenciadas por color
   FECHA   : 2026-06-08
   CAMBIOS : Fix EmailJS: reemplaza createInstance (no disponible en SDK v4) por emailjs.init directo en cada función de mail
             logout() — reset completo de todos los cachés y estados de UI al cerrar sesión
@@ -225,6 +225,20 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 .cal-avion-tab:hover{border-color:var(--amber);color:var(--amber);}
 .cal-avion-tab.active{border-color:var(--amber);color:var(--amber2);background:rgba(240,165,0,.08);}
 .cal-avion-tab.all{border-color:var(--cyan);}
+.cal-vista-tabs{display:flex;gap:6px;margin-bottom:.85rem;}
+.cal-vista-tab{font-family:var(--font-mono);font-size:12px;padding:5px 14px;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;background:var(--bg2);color:var(--text3);letter-spacing:.1em;transition:all .15s;}
+.cal-vista-tab.active{border-color:var(--cyan);color:var(--cyan);background:rgba(0,200,212,.07);}
+.cal-semana-nav{display:flex;align-items:center;gap:10px;margin-bottom:.85rem;flex-wrap:wrap;}
+.cal-semana-nav span{font-family:var(--font-mono);font-size:12px;color:var(--cyan);flex:1;text-align:center;letter-spacing:.1em;}
+.cal-block.oad{background:rgba(0,200,212,.15);border:1px solid rgba(0,200,212,.45);color:var(--cyan);}
+.cal-block.art{background:rgba(240,165,0,.18);border:1px solid rgba(240,165,0,.45);color:var(--amber);}
+.cal-block.mph{background:rgba(57,211,83,.15);border:1px solid rgba(57,211,83,.45);color:var(--green);}
+.cal-block.oad.pendiente{background:rgba(0,200,212,.08);border-style:dashed;}
+.cal-block.art.pendiente{background:rgba(240,165,0,.08);border-style:dashed;}
+.cal-block.mph.pendiente{background:rgba(57,211,83,.08);border-style:dashed;}
+.cal-leyenda{display:flex;gap:14px;flex-wrap:wrap;font-family:var(--font-mono);font-size:10px;margin-top:.75rem;}
+.cal-leyenda-item{display:flex;align-items:center;gap:5px;color:var(--text3);}
+.cal-leyenda-dot{width:10px;height:10px;border-radius:2px;}
 .cal-avion-tab.all.active{border-color:var(--cyan);color:var(--cyan);background:rgba(0,200,212,.08);}
 </style>
 <script>if(localStorage.getItem('arc-theme')==='light')document.documentElement.classList.add('light');</script>
@@ -237,7 +251,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.41</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.42</div>
   </div>
 
 </div>
@@ -420,9 +434,31 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <div class="stat"><div class="num" id="stat-total">0</div><div class="lbl">Total</div></div>
     </div>
     <!-- selector avión calendario instructor -->
-    <div class="cal-avion-tabs" id="cal-avion-tabs"></div>
-    <div class="card" style="padding:1rem">
-      <div class="cal-wrap"><div id="cal-semanal"></div></div>
+    <div class="cal-vista-tabs">
+      <button class="cal-vista-tab active" id="vista-tab-lista" onclick="setCalVista('lista')">LISTA</button>
+      <button class="cal-vista-tab" id="vista-tab-semana" onclick="setCalVista('semana')">SEMANA</button>
+    </div>
+    <div id="vista-lista">
+      <div class="cal-avion-tabs" id="cal-avion-tabs"></div>
+      <div class="card" style="padding:1rem">
+        <div class="cal-wrap"><div id="cal-semanal"></div></div>
+      </div>
+    </div>
+    <div id="vista-semana" style="display:none">
+      <div class="cal-semana-nav">
+        <button onclick="semanaNav(-1)" style="font-family:var(--font-mono);font-size:12px;padding:5px 14px">◀ ANT.</button>
+        <span id="semana-rango"></span>
+        <button onclick="semanaNav(+1)" style="font-family:var(--font-mono);font-size:12px;padding:5px 14px">SIG. ▶</button>
+      </div>
+      <div class="card" style="padding:1rem">
+        <div class="cal-wrap"><div id="cal-semana-grid"></div></div>
+        <div class="cal-leyenda">
+          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(0,200,212,.4)"></div>LV-OAD</div>
+          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(240,165,0,.4)"></div>LV-ART</div>
+          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(57,211,83,.4)"></div>LV-MPH</div>
+          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(255,255,255,.15);border:1px dashed rgba(255,255,255,.3)"></div>PENDIENTE</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1636,6 +1672,112 @@ async function renderTodasReservas(data){
   cal.innerHTML=html;
   dibujarLineaHoraActual();
   scrollCalAHoy();
+}
+
+// ── VISTA SEMANA ────────────────────────────────────────────────
+let calVista='lista';
+let semanaOffset=0; // 0=semana actual, -1=anterior, +1=siguiente
+
+function getLunesDeSemana(offset){
+  const hoy=new Date(); hoy.setHours(12,0,0,0);
+  const dow=hoy.getDay(); // 0=dom
+  const diffLunes=dow===0?-6:1-dow;
+  const lunes=new Date(hoy);
+  lunes.setDate(hoy.getDate()+diffLunes+(offset*7));
+  return lunes;
+}
+
+function getDiasSemana(offset){
+  const lunes=getLunesDeSemana(offset);
+  const dias=[];
+  for(let i=0;i<7;i++){
+    const d=new Date(lunes);
+    d.setDate(lunes.getDate()+i);
+    dias.push(d);
+  }
+  return dias;
+}
+
+window.setCalVista=function(vista){
+  calVista=vista;
+  document.getElementById('vista-lista').style.display=vista==='lista'?'block':'none';
+  document.getElementById('vista-semana').style.display=vista==='semana'?'block':'none';
+  document.getElementById('vista-tab-lista').classList.toggle('active',vista==='lista');
+  document.getElementById('vista-tab-semana').classList.toggle('active',vista==='semana');
+  if(vista==='semana'){semanaOffset=0;renderVistaSemana();}
+};
+
+window.semanaNav=function(dir){
+  semanaOffset+=dir;
+  renderVistaSemana();
+};
+
+async function renderVistaSemana(){
+  const dias=getDiasSemana(semanaOffset);
+  const DIAS_NOMBRE=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const hoy=fmtDate(new Date());
+
+  // Rango label
+  const fmt=d=>`${d.getDate()}/${d.getMonth()+1}`;
+  document.getElementById('semana-rango').textContent=
+    `${DIAS_NOMBRE[dias[0].getDay()]} ${fmt(dias[0])}  —  ${DIAS_NOMBRE[dias[6].getDay()]} ${fmt(dias[6])}  ·  ${dias[0].getFullYear()}`;
+
+  const grid=document.getElementById('cal-semana-grid');
+  grid.innerHTML='<div class="cal-empty">// Cargando...</div>';
+
+  const fechas=dias.map(d=>fmtDate(d));
+  const snap=await get(ref(db,'reservas'));
+  const todas=rArr(snap.val());
+  const enSemana=todas.filter(r=>fechas.includes(r.fecha)&&r.estado!=='cancelado');
+
+  // Feriados
+  const años=[...new Set(dias.map(d=>d.getFullYear()))];
+  const feriadosMap={};
+  await Promise.all(años.map(async y=>{const f=await getFeriados(y);Object.assign(feriadosMap,f);}));
+
+  // Horas con turnos en esta semana
+  const horasSet=new Set(enSemana.map(r=>r.hora));
+  if(!horasSet.size){grid.innerHTML='<div class="cal-empty">// SIN RESERVAS ESTA SEMANA</div>';return;}
+  const horas=[...horasSet].sort();
+
+  // Color por aeronave
+  const avColor={'LV-OAD':'oad','LV-ART':'art','LV-MPH':'mph'};
+
+  let html='<table class="cal-table"><thead><tr><th></th>';
+  dias.forEach(d=>{
+    const ds=fmtDate(d), isHoy=ds===hoy;
+    const dow=DIAS_NOMBRE[d.getDay()];
+    const num=`${d.getDate()}/${d.getMonth()+1}`;
+    const feriado=feriadosMap[ds]||'';
+    const feriadoCorto=feriado.length>9?feriado.slice(0,8)+'…':feriado;
+    const feriadoHtml=feriado?`<span class="cal-th-feriado" title="${feriado}">📅 ${feriadoCorto}</span>`:'';
+    const cls=isHoy?'today-col':'';
+    html+=`<th class="${cls}">${dow}<br>${num}${feriadoHtml}</th>`;
+  });
+  html+='</tr></thead><tbody>';
+
+  horas.forEach(hora=>{
+    html+=`<tr><td>${hora}</td>`;
+    dias.forEach(d=>{
+      const ds=fmtDate(d), isHoy=ds===hoy;
+      const cls=isHoy?'today-col':'';
+      const reservas=enSemana.filter(r=>r.fecha===ds&&r.hora===hora);
+      html+=`<td class="${cls}">`;
+      reservas.forEach(r=>{
+        const avKey=(r.avion||'LV-OAD').replace('LV-','').toLowerCase().replace('-','');
+        const colorCls=avColor[r.avion||'LV-OAD']||'oad';
+        const estadoCls=r.estado==='pendiente'?'pendiente':'';
+        const nombre=r.nombre.split(' ')[0];
+        html+=`<div class="cal-block ${colorCls} ${estadoCls}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'} — ${r.estado}">
+          <span style="font-size:9px;opacity:.8">${r.avion||'LV-OAD'}</span><br>${nombre}
+        </div>`;
+      });
+      html+='</td>';
+    });
+    html+='</tr>';
+  });
+  html+='</tbody></table>';
+  grid.innerHTML=html;
 }
 
 function scrollCalAHoy(){
