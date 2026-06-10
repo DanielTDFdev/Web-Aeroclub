@@ -1,8 +1,9 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.46
+  VERSION : 5.47
   FECHA   : 2026-06-10
-  CAMBIOS : Fix: el modal de cambio de clave temporal quedaba dentro de instructor-screen (invisible desde el login, login colgado en "ESPERE", y aparecía al entrar admin). Movido a nivel raíz.
+  CAMBIOS : Nombre de usuario: mínimo pasa de 3 a 4 caracteres (regla 4-10 alfanumérico)
+  CAMBIOS PREVIOS : Fix: el modal de cambio de clave temporal quedaba dentro de instructor-screen (invisible desde el login, login colgado en "ESPERE", y aparecía al entrar admin). Movido a nivel raíz.
   CAMBIOS PREVIOS : Modal obligatorio de cambio de contraseña al ingresar con clave temporal (flag pass_temporal); se limpia el flag al cambiar la clave desde el perfil
   CAMBIOS PREVIOS : Login con email o nombre de usuario (indistinto); username único (3-10 alfanum, case-insensitive) pedido en el registro; usuarios sin username siguen logueando por email; fix: _registrando quedaba trabado si fallaba una validación del registro
   CAMBIOS PREVIOS : Motivo de cancelación obligatorio para instructor/admin (modal), opcional para alumno; motivo incluido en mail
@@ -254,7 +255,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.46</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.47</div>
   </div>
 
 </div>
@@ -293,7 +294,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       </div>
       <div id="tab-registro" style="display:none">
         <div class="field"><label>Nombre completo</label><input type="text" id="reg-nombre" placeholder="Tu nombre"></div>
-        <div class="field"><label>Nombre de usuario</label><input type="text" id="reg-user" placeholder="3-10 letras o números" maxlength="10" autocapitalize="off" autocomplete="off"></div>
+        <div class="field"><label>Nombre de usuario</label><input type="text" id="reg-user" placeholder="4-10 letras o números" maxlength="10" autocapitalize="off" autocomplete="off"></div>
         <div class="field"><label>Email</label><input type="email" id="reg-email" placeholder="tu@email.com"></div>
         <div class="field"><label>Contraseña</label><input type="password" id="reg-pass" placeholder="mínimo 6 caracteres"></div>
         <div class="field"><label>Confirmar contraseña</label><input type="password" id="reg-pass2" placeholder="repetí la contraseña"></div>
@@ -1022,7 +1023,7 @@ window.registrarAlumno=async function(){
     hideEl('reg-err');hideEl('reg-ok');
     const nombre=val('reg-nombre'),username=val('reg-user').toLowerCase(),email=val('reg-email').toLowerCase(),pass=val('reg-pass'),pass2=val('reg-pass2');
     if(!nombre||!username||!email||!pass){showErr('reg-err','Completá todos los campos.');return;}
-    if(!/^[a-z0-9]{3,10}$/.test(username)){showErr('reg-err','El usuario debe tener entre 3 y 10 caracteres, solo letras y números (sin espacios ni símbolos).');return;}
+    if(!/^[a-z0-9]{4,10}$/.test(username)){showErr('reg-err','El usuario debe tener entre 4 y 10 caracteres, solo letras y números (sin espacios ni símbolos).');return;}
     if(!email.includes('@')){showErr('reg-err','Email inválido.');return;}
     if(pass.length<6){showErr('reg-err','Mínimo 6 caracteres.');return;}
     if(pass!==pass2){showErr('reg-err','Las contraseñas no coinciden.');return;}
