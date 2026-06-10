@@ -1,8 +1,9 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.44
+  VERSION : 5.45
   FECHA   : 2026-06-10
-  CAMBIOS : Login con email o nombre de usuario (indistinto); username único (3-10 alfanum, case-insensitive) pedido en el registro; usuarios sin username siguen logueando por email; fix: _registrando quedaba trabado si fallaba una validación del registro
+  CAMBIOS : Modal obligatorio de cambio de contraseña al ingresar con clave temporal (flag pass_temporal); se limpia el flag al cambiar la clave desde el perfil
+  CAMBIOS PREVIOS : Login con email o nombre de usuario (indistinto); username único (3-10 alfanum, case-insensitive) pedido en el registro; usuarios sin username siguen logueando por email; fix: _registrando quedaba trabado si fallaba una validación del registro
   CAMBIOS PREVIOS : Motivo de cancelación obligatorio para instructor/admin (modal), opcional para alumno; motivo incluido en mail
   FECHA   : 2026-06-08
   CAMBIOS : Fix EmailJS: reemplaza createInstance (no disponible en SDK v4) por emailjs.init directo en cada función de mail
@@ -252,7 +253,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.44</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.45</div>
   </div>
 
 </div>
@@ -494,6 +495,22 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <div style="display:flex;gap:8px;margin-top:.85rem;justify-content:flex-end">
         <button id="motivo-cancel-btn-cancelar" style="font-family:var(--font-mono);font-size:12px;padding:7px 16px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);border-radius:var(--radius);cursor:pointer">CANCELAR</button>
         <button id="motivo-cancel-btn-confirmar" class="danger" style="font-family:var(--font-mono);font-size:12px;padding:7px 16px">CONFIRMAR</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-forzar-clave" style="z-index:1200">
+    <div class="modal" style="max-width:380px">
+      <div class="modal-title">◈ Cambiá tu contraseña</div>
+      <p style="font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-bottom:.85rem;letter-spacing:.05em;line-height:1.6">
+        Ingresaste con una contraseña temporal. Por seguridad, definí una contraseña nueva para continuar.
+      </p>
+      <div class="field"><label>Nueva contraseña</label><input type="password" id="fc-pass" placeholder="mínimo 6 caracteres" autocomplete="new-password"></div>
+      <div class="field"><label>Confirmar contraseña</label><input type="password" id="fc-pass2" placeholder="repetí la contraseña" autocomplete="new-password"></div>
+      <div id="fc-err" style="font-family:var(--font-mono);font-size:11px;color:var(--red);margin-top:.2rem;min-height:16px;letter-spacing:.05em"></div>
+      <div style="display:flex;gap:8px;margin-top:.85rem;justify-content:flex-end;flex-wrap:wrap">
+        <button id="fc-btn-volver" style="font-family:var(--font-mono);font-size:12px;padding:7px 16px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);border-radius:var(--radius);cursor:pointer">VOLVER AL LOGIN</button>
+        <button id="fc-btn-guardar" class="primary" style="font-family:var(--font-mono);font-size:12px;padding:7px 16px">GUARDAR Y CONTINUAR</button>
       </div>
     </div>
   </div>
@@ -1047,6 +1064,10 @@ window.loginAlumno=async function(){
       showScreen('pendiente-screen');
       return;
     }
+    if(alumno.pass_temporal){
+      const cambiada=await forzarCambioClave(k);
+      if(!cambiada){showErr('login-err','Para ingresar tenés que cambiar la contraseña temporal.');return;}
+    }
     await registrarAuditoria('login',alumno.rol||'alumno','exito',alumno.nombre+' ('+alumno.email+')');
     const rol=alumno.rol||'alumno';
     session={tipo:'alumno',rol,nombre:alumno.nombre,email:alumno.email,emailKey:k};
@@ -1070,12 +1091,48 @@ window.olvideClave=async function(){
     const k=ek(email), alumno=await fbGet('alumnos/'+k);
     if(!alumno){showErr('olvide-err','No encontramos esa cuenta.');return;}
     const np=genPass();
-    await fbUpdate('alumnos/'+k,{pass:np});
+    await fbUpdate('alumnos/'+k,{pass:np,pass_temporal:true});
     mailReset({...alumno},np);
     showOk('olvide-ok','Contraseña temporal enviada a '+email+'. Revisá el spam.');
   }catch(e){showErr('olvide-err','Error. Intentá de nuevo.');}
   finally{setLoading('btn-olvide',false);}
 };
+
+// Modal obligatorio de cambio de clave tras login con contraseña temporal.
+// Resuelve true si el usuario definió una nueva contraseña, false si eligió volver al login.
+function forzarCambioClave(emailKey){
+  return new Promise(resolve=>{
+    const overlay=document.getElementById('modal-forzar-clave');
+    const i1=document.getElementById('fc-pass'),i2=document.getElementById('fc-pass2'),err=document.getElementById('fc-err');
+    const btnG=document.getElementById('fc-btn-guardar'),btnV=document.getElementById('fc-btn-volver');
+    i1.value='';i2.value='';err.textContent='';
+    overlay.classList.add('open');
+    setTimeout(()=>i1.focus(),100);
+    const guardar=async()=>{
+      const n=i1.value,n2=i2.value;
+      if(n.length<6){err.textContent='⚠ Mínimo 6 caracteres.';return;}
+      if(n!==n2){err.textContent='⚠ Las contraseñas no coinciden.';return;}
+      const alumno=await fbGet('alumnos/'+emailKey);
+      if(alumno&&alumno.pass===n){err.textContent='⚠ Elegí una contraseña distinta a la temporal.';return;}
+      btnG.disabled=true;
+      await fbUpdate('alumnos/'+emailKey,{pass:n,pass_temporal:null});
+      btnG.disabled=false;
+      overlay.classList.remove('open');cleanup();resolve(true);
+    };
+    const volver=()=>{overlay.classList.remove('open');cleanup();resolve(false);};
+    const onKey=e=>{if(e.key==='Enter'){e.preventDefault();guardar();}};
+    btnG.addEventListener('click',guardar);
+    btnV.addEventListener('click',volver);
+    i1.addEventListener('keydown',onKey);
+    i2.addEventListener('keydown',onKey);
+    function cleanup(){
+      btnG.removeEventListener('click',guardar);
+      btnV.removeEventListener('click',volver);
+      i1.removeEventListener('keydown',onKey);
+      i2.removeEventListener('keydown',onKey);
+    }
+  });
+}
 
 window.loginInstructor=async function(){
   hideEl('login-err2');
@@ -2052,7 +2109,7 @@ window.cambiarClave=async function(){
   if(alumno.pass!==actual){showErr('perfil-err','Contraseña actual incorrecta.');return;}
   if(nueva.length<6){showErr('perfil-err','Mínimo 6 caracteres.');return;}
   if(nueva!==nueva2){showErr('perfil-err','Las contraseñas no coinciden.');return;}
-  await fbUpdate('alumnos/'+session.emailKey,{pass:nueva});
+  await fbUpdate('alumnos/'+session.emailKey,{pass:nueva,pass_temporal:null});
   showOk('perfil-ok','// CONTRASEÑA ACTUALIZADA CORRECTAMENTE');
   clearVal('perfil-pass-actual','perfil-pass-nueva','perfil-pass-nueva2');
 };
