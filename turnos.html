@@ -1,8 +1,9 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.45
+  VERSION : 5.46
   FECHA   : 2026-06-10
-  CAMBIOS : Modal obligatorio de cambio de contraseña al ingresar con clave temporal (flag pass_temporal); se limpia el flag al cambiar la clave desde el perfil
+  CAMBIOS : Fix: el modal de cambio de clave temporal quedaba dentro de instructor-screen (invisible desde el login, login colgado en "ESPERE", y aparecía al entrar admin). Movido a nivel raíz.
+  CAMBIOS PREVIOS : Modal obligatorio de cambio de contraseña al ingresar con clave temporal (flag pass_temporal); se limpia el flag al cambiar la clave desde el perfil
   CAMBIOS PREVIOS : Login con email o nombre de usuario (indistinto); username único (3-10 alfanum, case-insensitive) pedido en el registro; usuarios sin username siguen logueando por email; fix: _registrando quedaba trabado si fallaba una validación del registro
   CAMBIOS PREVIOS : Motivo de cancelación obligatorio para instructor/admin (modal), opcional para alumno; motivo incluido en mail
   FECHA   : 2026-06-08
@@ -253,7 +254,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.45</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.46</div>
   </div>
 
 </div>
@@ -498,23 +499,6 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       </div>
     </div>
   </div>
-
-  <div class="modal-overlay" id="modal-forzar-clave" style="z-index:1200">
-    <div class="modal" style="max-width:380px">
-      <div class="modal-title">◈ Cambiá tu contraseña</div>
-      <p style="font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-bottom:.85rem;letter-spacing:.05em;line-height:1.6">
-        Ingresaste con una contraseña temporal. Por seguridad, definí una contraseña nueva para continuar.
-      </p>
-      <div class="field"><label>Nueva contraseña</label><input type="password" id="fc-pass" placeholder="mínimo 6 caracteres" autocomplete="new-password"></div>
-      <div class="field"><label>Confirmar contraseña</label><input type="password" id="fc-pass2" placeholder="repetí la contraseña" autocomplete="new-password"></div>
-      <div id="fc-err" style="font-family:var(--font-mono);font-size:11px;color:var(--red);margin-top:.2rem;min-height:16px;letter-spacing:.05em"></div>
-      <div style="display:flex;gap:8px;margin-top:.85rem;justify-content:flex-end;flex-wrap:wrap">
-        <button id="fc-btn-volver" style="font-family:var(--font-mono);font-size:12px;padding:7px 16px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);border-radius:var(--radius);cursor:pointer">VOLVER AL LOGIN</button>
-        <button id="fc-btn-guardar" class="primary" style="font-family:var(--font-mono);font-size:12px;padding:7px 16px">GUARDAR Y CONTINUAR</button>
-      </div>
-    </div>
-  </div>
-
 
   <div id="instructor-disponibilidad" class="screen">
     <h2>◈ Mi Disponibilidad — LV-OAD</h2>
@@ -877,6 +861,23 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   </div>
 
 </div><!-- /container -->
+
+<!-- Modal de cambio de clave temporal: a nivel raíz para que sea visible sobre cualquier pantalla (incl. login) -->
+<div class="modal-overlay" id="modal-forzar-clave" style="z-index:1200">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-title">◈ Cambiá tu contraseña</div>
+    <p style="font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-bottom:.85rem;letter-spacing:.05em;line-height:1.6">
+      Ingresaste con una contraseña temporal. Por seguridad, definí una contraseña nueva para continuar.
+    </p>
+    <div class="field"><label>Nueva contraseña</label><input type="password" id="fc-pass" placeholder="mínimo 6 caracteres" autocomplete="new-password"></div>
+    <div class="field"><label>Confirmar contraseña</label><input type="password" id="fc-pass2" placeholder="repetí la contraseña" autocomplete="new-password"></div>
+    <div id="fc-err" style="font-family:var(--font-mono);font-size:11px;color:var(--red);margin-top:.2rem;min-height:16px;letter-spacing:.05em"></div>
+    <div style="display:flex;gap:8px;margin-top:.85rem;justify-content:flex-end;flex-wrap:wrap">
+      <button id="fc-btn-volver" style="font-family:var(--font-mono);font-size:12px;padding:7px 16px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);border-radius:var(--radius);cursor:pointer">VOLVER AL LOGIN</button>
+      <button id="fc-btn-guardar" class="primary" style="font-family:var(--font-mono);font-size:12px;padding:7px 16px">GUARDAR Y CONTINUAR</button>
+    </div>
+  </div>
+</div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
