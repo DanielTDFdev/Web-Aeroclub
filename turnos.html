@@ -1,8 +1,9 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.43
+  VERSION : 5.44
   FECHA   : 2026-06-10
-  CAMBIOS : Motivo de cancelación obligatorio para instructor/admin (modal), opcional para alumno; motivo incluido en mail
+  CAMBIOS : Login con email o nombre de usuario (indistinto); username único (3-10 alfanum, case-insensitive) pedido en el registro; usuarios sin username siguen logueando por email; fix: _registrando quedaba trabado si fallaba una validación del registro
+  CAMBIOS PREVIOS : Motivo de cancelación obligatorio para instructor/admin (modal), opcional para alumno; motivo incluido en mail
   FECHA   : 2026-06-08
   CAMBIOS : Fix EmailJS: reemplaza createInstance (no disponible en SDK v4) por emailjs.init directo en cada función de mail
             logout() — reset completo de todos los cachés y estados de UI al cerrar sesión
@@ -251,7 +252,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.43</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.44</div>
   </div>
 
 </div>
@@ -282,7 +283,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <button class="nav-btn"        id="tab-btn-instructor" onclick="switchLoginTab('instructor')">Inst / Admin</button>
       </div>
       <div id="tab-alumno">
-        <div class="field"><label>Email</label><input type="email" id="al-login-email" placeholder="tu@email.com"></div>
+        <div class="field"><label>Email o usuario</label><input type="text" id="al-login-email" placeholder="tu@email.com o tu usuario" autocapitalize="off" autocomplete="username"></div>
         <div class="field"><label>Contraseña</label><input type="password" id="al-login-pass" placeholder="••••••••" autocomplete="new-password"></div>
         <div id="login-err" class="error"></div>
         <button id="btn-login-al" data-label="INGRESAR" class="primary" style="width:100%;margin-top:.5rem" onclick="loginAlumno()">INGRESAR</button>
@@ -290,6 +291,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       </div>
       <div id="tab-registro" style="display:none">
         <div class="field"><label>Nombre completo</label><input type="text" id="reg-nombre" placeholder="Tu nombre"></div>
+        <div class="field"><label>Nombre de usuario</label><input type="text" id="reg-user" placeholder="3-10 letras o números" maxlength="10" autocapitalize="off" autocomplete="off"></div>
         <div class="field"><label>Email</label><input type="email" id="reg-email" placeholder="tu@email.com"></div>
         <div class="field"><label>Contraseña</label><input type="password" id="reg-pass" placeholder="mínimo 6 caracteres"></div>
         <div class="field"><label>Confirmar contraseña</label><input type="password" id="reg-pass2" placeholder="repetí la contraseña"></div>
@@ -997,37 +999,48 @@ let _registrando=false;
 window.registrarAlumno=async function(){
   if(_registrando)return;
   _registrando=true;
-  hideEl('reg-err');hideEl('reg-ok');
-  const nombre=val('reg-nombre'),email=val('reg-email').toLowerCase(),pass=val('reg-pass'),pass2=val('reg-pass2');
-  if(!nombre||!email||!pass){showErr('reg-err','Completá todos los campos.');return;}
-  if(!email.includes('@')){showErr('reg-err','Email inválido.');return;}
-  if(pass.length<6){showErr('reg-err','Mínimo 6 caracteres.');return;}
-  if(pass!==pass2){showErr('reg-err','Las contraseñas no coinciden.');return;}
   setLoading('btn-registrar',true);
   try{
+    hideEl('reg-err');hideEl('reg-ok');
+    const nombre=val('reg-nombre'),username=val('reg-user').toLowerCase(),email=val('reg-email').toLowerCase(),pass=val('reg-pass'),pass2=val('reg-pass2');
+    if(!nombre||!username||!email||!pass){showErr('reg-err','Completá todos los campos.');return;}
+    if(!/^[a-z0-9]{3,10}$/.test(username)){showErr('reg-err','El usuario debe tener entre 3 y 10 caracteres, solo letras y números (sin espacios ni símbolos).');return;}
+    if(!email.includes('@')){showErr('reg-err','Email inválido.');return;}
+    if(pass.length<6){showErr('reg-err','Mínimo 6 caracteres.');return;}
+    if(pass!==pass2){showErr('reg-err','Las contraseñas no coinciden.');return;}
     const k=ek(email);
     if(await fbGet('alumnos/'+k)){showErr('reg-err','Ya existe una cuenta con ese email.');return;}
+    const todos=await fbGet('alumnos')||{};
+    if(Object.values(todos).some(a=>(a.username||'').toLowerCase()===username)){showErr('reg-err','Ese nombre de usuario ya está en uso.');return;}
     // rol por defecto: alumno
-    await fbSet('alumnos/'+k,{nombre,email,pass,rol:'alumno',estado:'pendiente_aprobacion',ts:new Date().toISOString()});
+    await fbSet('alumnos/'+k,{nombre,username,email,pass,rol:'alumno',estado:'pendiente_aprobacion',ts:new Date().toISOString()});
     showOk('reg-ok','¡Cuenta creada! Ya podés ingresar.');
     mailNuevoRegistro(nombre, email);
-    clearVal('reg-nombre','reg-email','reg-pass','reg-pass2');
+    clearVal('reg-nombre','reg-user','reg-email','reg-pass','reg-pass2');
     setTimeout(()=>switchLoginTab('alumno'),1500);
-    registrarAuditoria('registro','pendiente','exito',nombre+' ('+email+')');
+    registrarAuditoria('registro','pendiente','exito',nombre+' ('+email+' / '+username+')');
   }catch(e){showErr('reg-err','Error al crear la cuenta.');console.error(e);}
   finally{_registrando=false;setLoading('btn-registrar',false);}
 };
 
 window.loginAlumno=async function(){
   hideEl('login-err');
-  const email=val('al-login-email').toLowerCase(),pass=val('al-login-pass');
-  if(!email||!pass){showErr('login-err','Completá email y contraseña.');return;}
+  const id=val('al-login-email').toLowerCase(),pass=val('al-login-pass');
+  if(!id||!pass){showErr('login-err','Completá usuario/email y contraseña.');return;}
   setLoading('btn-login-al',true);
   try{
-    const k=ek(email), alumno=await fbGet('alumnos/'+k);
+    let alumno=null,k=null;
+    if(id.includes('@')){
+      k=ek(id); alumno=await fbGet('alumnos/'+k);
+    }else{
+      const todos=await fbGet('alumnos')||{};
+      for(const [key,a] of Object.entries(todos)){
+        if((a.username||'').toLowerCase()===id){alumno=a;k=key;break;}
+      }
+    }
     if(!alumno||alumno.pass!==pass){
-      await registrarAuditoria('login',alumno?alumno.rol||'alumno':'alumno','fallo',!alumno?'Email no encontrado':'Contraseña incorrecta — '+email);
-      showErr('login-err','Email o contraseña incorrectos.');return;
+      await registrarAuditoria('login',alumno?alumno.rol||'alumno':'alumno','fallo',!alumno?'Identificador no encontrado — '+id:'Contraseña incorrecta — '+id);
+      showErr('login-err','Usuario/email o contraseña incorrectos.');return;
     }
     if(alumno.estado==='pendiente_aprobacion'){
       await registrarAuditoria('login','pendiente','exito',alumno.nombre+' ('+alumno.email+')');
