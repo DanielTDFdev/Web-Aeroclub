@@ -1,8 +1,8 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.40
-  FECHA   : 2026-06-09
-  CAMBIOS : Registro: label y placeholder "Nombre y Apellido"
+  VERSION : 5.41
+  FECHA   : 2026-06-10
+  CAMBIOS : Toggle disponibilidad avión movido de HORARIOS a BLOQ.AVIONES
   FECHA   : 2026-06-08
   CAMBIOS : Fix EmailJS: reemplaza createInstance (no disponible en SDK v4) por emailjs.init directo en cada función de mail
             logout() — reset completo de todos los cachés y estados de UI al cerrar sesión
@@ -237,7 +237,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.40</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.41</div>
   </div>
 
 </div>
@@ -275,7 +275,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <div style="text-align:center;margin-top:1rem"><button class="link-btn" onclick="switchLoginTab('olvide')">Olvidé mi contraseña</button></div>
       </div>
       <div id="tab-registro" style="display:none">
-        <div class="field"><label>Nombre y Apellido</label><input type="text" id="reg-nombre" placeholder="Nombre y apellido"></div>
+        <div class="field"><label>Nombre completo</label><input type="text" id="reg-nombre" placeholder="Tu nombre"></div>
         <div class="field"><label>Email</label><input type="email" id="reg-email" placeholder="tu@email.com"></div>
         <div class="field"><label>Contraseña</label><input type="password" id="reg-pass" placeholder="mínimo 6 caracteres"></div>
         <div class="field"><label>Confirmar contraseña</label><input type="password" id="reg-pass2" placeholder="repetí la contraseña"></div>
@@ -484,7 +484,6 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <h3>Horarios por Avión y Día</h3>
         <p style="font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-bottom:.75rem;letter-spacing:.05em">SELECCIONÁ PRIMERO EL AVIÓN, LUEGO EL DÍA</p>
         <div style="display:flex;gap:6px;margin-bottom:.75rem;flex-wrap:wrap" id="cfg-avion-tabs"></div>
-        <div id="avion-toggle-wrap"></div>
         <div style="display:flex;gap:6px;margin-bottom:.75rem;flex-wrap:wrap" id="dow-tabs">
           <button class="nav-btn active" onclick="selectDowTab(1)">LUN</button>
           <button class="nav-btn" onclick="selectDowTab(2)">MAR</button>
@@ -519,6 +518,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <div class="card">
         <h3>Bloquear Días por Avión</h3>
         <div style="display:flex;gap:6px;margin-bottom:.75rem;flex-wrap:wrap" id="cfg-dias-avion-tabs"></div>
+        <div id="avion-toggle-wrap"></div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.85rem;">
           <button onclick="mesAnterior()" style="font-size:13px;padding:5px 14px">◀</button>
           <span id="cal-mes-label" style="font-family:var(--font-mono);font-size:13px;color:var(--amber);letter-spacing:.12em;text-transform:uppercase"></span>
@@ -1961,7 +1961,7 @@ window.showCfgTab=function(tab){
   });
   if(tab==='instructores')renderInstructoresList();
   if(tab==='usuarios')renderAlumnosList();
-  if(tab==='dias'){calMesActual=new Date();calMesActual.setDate(1);buildCfgAvionTabs();renderCalMes();}
+  if(tab==='dias'){calMesActual=new Date();calMesActual.setDate(1);buildCfgAvionTabs();renderToggleAvion(activeDiasAvion);renderCalMes();}
   if(tab==='horarios'){
     buildCfgAvionTabs();renderHorariosConfig();
     const isAdmin=session?.user==='admin'||session?.user==='administrador';
@@ -1977,18 +1977,12 @@ window.showCfgTab=function(tab){
 
 function renderConfig(){renderHorariosConfig();}
 
-function renderHorariosConfig(){
-  const cfg=configs[activeConfigAvion]||DEFAULT_CONFIG_AVION;
-  const horas=cfg.horariosDia[activeDow]||[];
-  const DIAS_NOMBRE={0:'Domingo',1:'Lunes',2:'Martes',3:'Miércoles',4:'Jueves',5:'Viernes',6:'Sábado'};
-  const tabs=document.getElementById('dow-tabs');
-  if(tabs){
-    const DOW_ORDER=[1,2,3,4,5,6,0];
-    tabs.querySelectorAll('button').forEach((btn,i)=>{btn.classList.toggle('active',DOW_ORDER[i]===activeDow);});
-  }
-  const cfgActual=configs[activeConfigAvion]||DEFAULT_CONFIG_AVION;
+function renderToggleAvion(avion){
+  const wrap=document.getElementById('avion-toggle-wrap');
+  if(!wrap)return;
+  const cfgActual=configs[avion]||DEFAULT_CONFIG_AVION;
   const estaActivo=cfgActual.activo!==false;
-  document.getElementById('avion-toggle-wrap').innerHTML=`
+  wrap.innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem .85rem;background:${estaActivo?'rgba(57,211,83,.07)':'rgba(248,81,73,.07)'};border:1px solid ${estaActivo?'rgba(57,211,83,.25)':'rgba(248,81,73,.3)'};border-radius:var(--radius);margin-bottom:.85rem">
       <div>
         <span style="font-family:var(--font-mono);font-size:12px;color:${estaActivo?'var(--green)':'var(--red)'};letter-spacing:.1em">
@@ -2005,6 +1999,20 @@ function renderHorariosConfig(){
         </div>
       </div>
     </div>`;
+}
+
+function renderHorariosConfig(){
+  const cfg=configs[activeConfigAvion]||DEFAULT_CONFIG_AVION;
+  const horas=cfg.horariosDia[activeDow]||[];
+  const DIAS_NOMBRE={0:'Domingo',1:'Lunes',2:'Martes',3:'Miércoles',4:'Jueves',5:'Viernes',6:'Sábado'};
+  const tabs=document.getElementById('dow-tabs');
+  if(tabs){
+    const DOW_ORDER=[1,2,3,4,5,6,0];
+    tabs.querySelectorAll('button').forEach((btn,i)=>{btn.classList.toggle('active',DOW_ORDER[i]===activeDow);});
+  }
+  const cfgActual=configs[activeConfigAvion]||DEFAULT_CONFIG_AVION;
+  const estaActivo=cfgActual.activo!==false;
+  renderToggleAvion(activeConfigAvion);
   document.getElementById('horarios-config').innerHTML=
     '<div style="font-family:var(--font-mono);font-size:11px;color:var(--amber);margin-bottom:.6rem;letter-spacing:.1em">'+DIAS_NOMBRE[activeDow].toUpperCase()+'</div>'+
     '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">'+
@@ -2023,15 +2031,18 @@ window.selectDowTab=function(dow){activeDow=dow;renderHorariosConfig();};
 
 window.toggleActivoAvion=async function(){
   if(session?.soloUsuarios)return;
-  if(!configs[activeConfigAvion])configs[activeConfigAvion]={...DEFAULT_CONFIG_AVION,horariosDia:{...DEFAULT_CONFIG_AVION.horariosDia},diasBloqueados:[],activo:true};
-  const actual=configs[activeConfigAvion].activo!==false;
+  const enDias=document.getElementById('cfg-dias')?.style.display!=='none';
+  const avion=enDias?activeDiasAvion:activeConfigAvion;
+  if(!configs[avion])configs[avion]={...DEFAULT_CONFIG_AVION,horariosDia:{...DEFAULT_CONFIG_AVION.horariosDia},diasBloqueados:[],activo:true};
+  const actual=configs[avion].activo!==false;
   const nuevo=!actual;
-  if(!nuevo&&!confirm('¿Deshabilitar '+activeConfigAvion+'? Los usuarios no podrán verla ni reservarla hasta que la vuelvas a habilitar.'))return;
-  configs[activeConfigAvion].activo=nuevo;
-  await saveConfigAvion(activeConfigAvion);
+  if(!nuevo&&!confirm('¿Deshabilitar '+avion+'? Los usuarios no podrán verla ni reservarla hasta que la vuelvas a habilitar.'))return;
+  configs[avion].activo=nuevo;
+  await saveConfigAvion(avion);
   await registrarAuditoria(nuevo?'avion_habilitado':'avion_deshabilitado',session.rol||'instructor','exito',
-    session.nombre+' — '+activeConfigAvion);
-  renderHorariosConfig();
+    session.nombre+' — '+avion);
+  if(enDias)renderToggleAvion(avion);
+  else renderHorariosConfig();
 };
 
 window.toggleHorario=async function(h,on){
@@ -2061,6 +2072,7 @@ window.selectDiasAvion=function(key){
   document.querySelectorAll('#cfg-dias-avion-tabs button').forEach(b=>{
     b.classList.toggle('active',b.textContent===key);
   });
+  renderToggleAvion(activeDiasAvion);
   renderCalMes();
 };
 
