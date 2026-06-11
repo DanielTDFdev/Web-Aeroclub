@@ -1,6 +1,6 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.49
+  VERSION : 5.50
   FECHA   : 2026-06-10
   CAMBIOS : Auditoría de login registra el identificador usado (email o username)
   FECHA   : 2026-06-10
@@ -249,7 +249,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.49</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.50</div>
   </div>
 
 </div>
@@ -2585,8 +2585,8 @@ window.filtrarAlumnosList=function filtrarAlumnosList(){
           </div>
         </div>
         <div style="display:flex;gap:6px;align-items:center">
-          <span style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">EDITAR</span>
-          <button onclick="event.stopPropagation();eliminarAlumno('${k}','${a.email}')" style="font-size:11px;padding:3px 10px">QUITAR</button>
+          <button onclick="event.stopPropagation();abrirModalAlumno('${k}')" style="font-size:11px;padding:3px 10px">EDITAR</button>
+          <button onclick="event.stopPropagation();eliminarAlumno('${k}','${a.email}')" style="font-size:11px;padding:3px 10px" class="danger">QUITAR</button>
         </div>
       </div>`;
     });
