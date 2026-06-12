@@ -2,7 +2,7 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
-  v2.2  ·  Alineacion de casillas FR/TF/WT corregida
+  v2.4  ·  Firma del PDF mas grande y sin deformar
   ----------------------------------------------------------------------------------
   - Casillas 7 a 19 del formulario OACI de plan de vuelo
   - Persistencia en Firebase Realtime DB (proyecto turnos-lv-oad) via REST
@@ -60,6 +60,15 @@
           ESTELA TURBULENTA (WT) tenian ancho 28pt en RECTS cuando la caja real
           mide 14.2pt -> comb() centraba el caracter ~7pt a la derecha del centro.
           Corregidos los tres RECTS a las coords reales de la caja (14.2x14.2).
+    v2.3  Datos de LVMPH en la flota local corregidos: tipo PA32 -> P32T,
+          vel_crucero N0140 -> N0165, color GREY AND BLUE -> GREY AND WHITE.
+          OJO: esto solo siembra Firebase si /aeronaves esta vacio. Si la flota
+          ya estaba sembrada (lo normal), hay que PATCHear /aeronaves/LVMPH a mano
+          o borrar el nodo para que se re-siembre. Ver nota fuera del archivo.
+    v2.4  Firma del PDF agrandada y proporcionada: el canvas es 600x150 (4:1)
+          pero se estampaba en 175x36 (4.86:1) -> chica y achatada. Ahora el alto
+          y ancho salen del PNG por un unico factor SCALE (0.36), sin deformar.
+          SX/SY_TOP siguen siendo la esquina sup-izq, ajustables a ojo.
 ==================================================================================
 -->
 <html lang="es">
@@ -653,7 +662,7 @@ async function chequearReservaExistente(data){
 const FLOTA = {
   "LVOAD": { tipo:"PA38", estela:"L", equipo_10a:"S", equipo_10b:"C", vel_crucero:"N0090", color_marcas:"WHITE WITH DARK BLUE STRIPES ON THE FUSELAGE" },
   "LVART": { tipo:"P28A", estela:"L", equipo_10a:"S", equipo_10b:"C", vel_crucero:"N0110", color_marcas:"WHITE AND BLUE" },
-  "LVMPH": { tipo:"PA32", estela:"L", equipo_10a:"S", equipo_10b:"C", vel_crucero:"N0140", color_marcas:"GREY AND BLUE" }
+  "LVMPH": { tipo:"P32T", estela:"L", equipo_10a:"S", equipo_10b:"C", vel_crucero:"N0165", color_marcas:"GREY AND WHITE" }
 };
 let flota = {};
 
@@ -800,10 +809,15 @@ async function generarPDF(){
     strike('C14'); strike('C15');                 // sin botes neumáticos
     if(!vU('f19n')) strike('C16');                // sin observaciones
 
-    // firma incrustada en zona PRESENTADO POR (ajustá SX/SY_TOP/SW/SH si hace falta)
+    // firma incrustada en zona PRESENTADO POR
+    // SCALE = unica perilla de tamano (sube/baja esto). SH/SW salen del PNG
+    // (600x150), asi nunca se deforma. SX/SY_TOP = esquina sup-izq; si pisa el
+    // nombre del piloto subi SY_TOP, si se sale de la caja bajalo.
     if(firmado){
       const png=await pdf.embedPng(getFirma());
-      const SX=112, SY_TOP=752, SW=175, SH=36;
+      const SCALE=0.36;                                  // antes ~0.29 y achatada
+      const SW=png.width*SCALE, SH=png.height*SCALE;     // 600x150 -> 216x54
+      const SX=112, SY_TOP=746;
       page.drawImage(png,{x:SX, y:H-SY_TOP-SH, width:SW, height:SH});
     }
 
