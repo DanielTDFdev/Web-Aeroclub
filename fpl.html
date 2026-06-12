@@ -2,7 +2,7 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
-  v1.7  ·  Generación del PDF oficial (pdf-lib) + firma incrustada
+  v1.8  ·  PDF por estampado sobre base con fuentes embebidas (fix render en blanco)
   ----------------------------------------------------------------------------------
   - Casillas 7 a 19 del formulario OACI de plan de vuelo
   - Persistencia en Firebase Realtime DB (proyecto turnos-lv-oad) via REST
@@ -36,6 +36,11 @@
           via pdf-lib en el navegador. Mapea las 99 casillas por nombre de campo,
           aplica la convencion de tachado del item 19 (tildar=no disponible) e
           incrusta la firma. REQUIERE subir el form al repo como FORM_PDF.
+    v1.8  FIX "PDF en blanco": el formulario oficial usaba fuentes NO embebidas
+          (AdobeArabic) -> en blanco en visores sin esa fuente. Solucion: la base
+          (FORM_PDF) ahora es el form con ejemplos borrados + fuentes embebidas, y
+          se ESTAMPAN los valores por coordenadas (RECTS) con fuente propia. Ya no
+          se usa el AcroForm. Render correcto en cualquier visor.
 ==================================================================================
 -->
 <html lang="es">
@@ -182,7 +187,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v1.7</span>
+    <span class="ver">v1.8</span>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
       <div>LOCAL <b id="clkLOC">--:--</b></div>
@@ -720,10 +725,12 @@ function setFirma(dataUrl){
 }
 
 /* ============================ GENERAR PDF (pdf-lib) ============================ */
-/* Llena el formulario oficial argentino editable (AcroForm). Subí ese PDF al repo
-   con este nombre, junto a fpl.html. Mapeo de las 99 casillas verificado contra
-   el formulario real. */
+/* ESTAMPA los valores sobre la base oficial (FORM_PDF). Esa base es el formulario
+   ANAC con los ejemplos borrados y las fuentes EMBEBIDAS (preprocesado), por eso
+   renderiza en cualquier visor. Subila al repo junto a fpl.html con este nombre.
+   RECTS = posicion de cada casilla (x, yTop, ancho, alto) en coords A4 (595x842). */
 const FORM_PDF = 'fpl_form.pdf';
+const RECTS = {ID1:[220.0,201.3,12.0,12.0],ID2:[235.0,201.0,12.0,12.0],ID3:[248.0,201.3,11.3,12.0],ID4:[262.0,201.0,12.0,12.0],ID5:[276.5,201.0,12.0,12.0],ID6:[291.0,201.0,12.0,12.0],ID7:[303.0,201.0,12.0,12.0],FR:[391.3,200.0,28.0,15.3],TF:[497.3,199.3,28.0,14.7],N1:[82.0,232.5,12.0,14.5],N2:[96.5,232.5,12.0,14.5],A1:[191.3,232.3,12.0,14.7],A2:[205.3,232.3,12.0,14.7],A3:[219.3,232.3,12.0,14.7],A4:[234.3,232.3,12.0,14.7],WT:[345.3,233.3,28.7,14.7],E1:[456.0,232.0,8.0,14.0],E2:[464.0,232.0,32.0,14.0],E3:[497.0,232.0,8.0,14.0],E4:[504.9,232.0,8.0,14.0],D1:[121.0,267.3,12.0,12.0],D2:[135.0,267.5,12.0,12.0],D3:[147.0,267.5,12.0,12.0],D4:[163.0,267.5,12.0,12.0],T1:[267.3,267.0,12.0,12.0],T2:[281.0,267.5,12.0,12.0],T3:[295.0,267.5,12.0,12.0],T4:[310.0,267.5,12.0,12.0],S1:[84.5,302.0,12.0,12.0],S2:[99.0,302.0,9.5,12.0],S3:[111.0,302.0,12.0,12.0],S4:[125.0,302.0,12.0,12.0],S5:[140.0,302.0,12.0,12.0],L1:[175.0,302.0,12.0,12.0],L2:[190.0,302.0,12.0,12.0],L3:[204.5,302.0,12.0,12.0],L4:[219.0,302.0,9.5,12.0],L5:[231.0,302.0,12.0,12.0],Route1:[266.0,301.0,298.0,13.0],Route2:[58.0,316.0,506.5,12.0],Route3:[58.0,330.0,507.0,12.0],Route4:[58.0,345.0,507.0,11.0],Route5:[58.0,359.0,463.0,12.0],D5:[113.0,401.0,12.0,12.0],D6:[127.0,401.0,12.0,12.0],D7:[141.0,401.0,12.0,12.0],D8:[155.0,401.0,12.0,12.0],T5:[229.0,401.0,12.0,12.0],T6:[243.0,401.0,12.0,12.0],T7:[257.0,401.0,12.0,12.0],T8:[271.0,401.0,12.0,12.0],D9:[347.0,401.0,12.0,12.0],D10:[361.0,401.0,12.0,12.0],D11:[375.0,401.0,12.0,12.0],D12:[389.0,401.0,12.0,12.0],D13:[463.0,400.5,12.0,12.0],D14:[478.0,400.5,12.0,12.0],D15:[491.3,400.3,12.0,12.0],D16:[505.3,400.3,12.0,12.0],Info1:[71.0,436.0,494.0,12.0],T9:[96.3,542.0,12.0,12.0],T10:[110.0,542.0,12.0,12.0],T11:[124.0,542.0,12.0,12.0],T12:[138.0,542.0,12.0,12.0],P1:[213.3,542.0,12.0,12.0],P2:[227.0,542.0,12.0,12.0],P3:[240.3,542.0,12.0,12.0],C1:[417.0,538.0,19.0,19.0],C2:[461.3,537.3,20.7,20.0],C3:[510.0,538.0,19.0,19.0],C4:[93.0,581.0,19.0,18.0],C5:[139.0,581.0,18.0,18.0],C6:[182.0,581.0,18.0,18.0],C7:[226.0,581.0,20.0,18.0],C8:[272.0,581.0,19.0,18.0],C9:[325.0,581.0,20.0,18.0],C10:[371.0,581.0,20.0,18.0],C11:[417.0,581.0,18.0,18.0],C12:[462.0,581.0,19.0,18.0],C13:[510.0,581.0,19.0,18.0],C14:[79.0,631.0,17.5,19.0],C15:[219.0,631.0,21.5,19.0],C16:[79.0,698.0,17.5,17.0],Markings:[109.0,668.0,456.0,11.0],Remarks:[108.0,702.0,412.0,11.0],Pilot:[108.0,733.0,280.0,11.0],Filed:[58.0,775.0,177.0,24.0]};
 
 async function generarPDF(){
   const {E,A,bad}=validar(); pintarValidacion(E,A,bad);
@@ -732,47 +739,52 @@ async function generarPDF(){
   const u=calcUTC();
   try{
     toast('Generando PDF…');
-    const {PDFDocument}=PDFLib;
-    const tpl=await fetch(FORM_PDF).then(r=>{ if(!r.ok) throw new Error('no se encontró '+FORM_PDF); return r.arrayBuffer(); });
-    const pdf=await PDFDocument.load(tpl);
-    const form=pdf.getForm();
-    const T=(n,v)=>{ try{ form.getTextField(n).setText((v??'').toString()); }catch(e){} };
-    const spread=(names,str)=>{ str=(str||'').toString(); names.forEach((n,i)=>T(n,str[i]||'')); };
-    const sel=(n,v)=>{ try{ form.getDropdown(n).select(v); return; }catch(e){} try{ form.getOptionList(n).select(v); return; }catch(e){} T(n,v); };
-    const chk=(n,on)=>{ try{ const c=form.getCheckBox(n); on?c.check():c.uncheck(); }catch(e){} };
+    const {PDFDocument, StandardFonts, rgb}=PDFLib;
+    const base=await fetch(FORM_PDF).then(r=>{ if(!r.ok) throw new Error('no se encontró '+FORM_PDF); return r.arrayBuffer(); });
+    const pdf=await PDFDocument.load(base);
+    const page=pdf.getPages()[0]; const H=page.getHeight();
+    const font=await pdf.embedFont(StandardFonts.Helvetica);
+    const ink=rgb(0,0,0.55), black=rgb(0,0,0);
 
-    spread(['ID1','ID2','ID3','ID4','ID5','ID6','ID7'], vU('f7'));   // 7
-    sel('FR',$('f8r').value); sel('TF',$('f8t').value);              // 8
-    const num=($('f9n').value||'').trim(); spread(['N1','N2'], num==='1'?'':num); // 9 numero
-    spread(['A1','A2','A3','A4'], vU('f9t')); sel('WT',$('f9w').value);           // 9 tipo/estela
-    const a10=vU('f10a'); T('E1', a10.length>1?a10[a10.length-2]:''); T('E2', a10[a10.length-1]||''); // 10a
-    const b10=vU('f10b'); T('E3', b10[0]||''); T('E4', b10[1]||'');               // 10b
+    const put=(n,str,size)=>{ const r=RECTS[n]; if(!r||str==null||str==='')return; const s=size||Math.min(9.5,r[3]-2);
+      page.drawText(String(str),{x:r[0]+1.5, y:H-r[1]-r[3]+(r[3]-s)/2+0.5, size:s, font, color:ink}); };
+    const comb=(n,ch)=>{ const r=RECTS[n]; if(!r||!ch)return; const s=Math.min(11,r[3]-1); const cw=font.widthOfTextAtSize(ch,s);
+      page.drawText(ch,{x:r[0]+(r[2]-cw)/2, y:H-r[1]-r[3]+(r[3]-s)/2+0.5, size:s, font, color:ink}); };
+    const spread=(names,str)=>{ str=(str||'').toString(); names.forEach((n,i)=>comb(n,str[i]||'')); };
+    const strike=(n)=>{ const r=RECTS[n]; if(!r)return;
+      page.drawLine({start:{x:r[0]+1,y:H-r[1]-r[3]+1}, end:{x:r[0]+r[2]-1,y:H-r[1]-1}, thickness:1.1, color:black});
+      page.drawLine({start:{x:r[0]+1,y:H-r[1]-1}, end:{x:r[0]+r[2]-1,y:H-r[1]-r[3]+1}, thickness:1.1, color:black}); };
+
+    spread(['ID1','ID2','ID3','ID4','ID5','ID6','ID7'], vU('f7'));                  // 7
+    comb('FR',$('f8r').value); comb('TF',$('f8t').value);                          // 8
+    const num=($('f9n').value||'').trim(); spread(['N1','N2'], num==='1'?'':num);   // 9 numero
+    spread(['A1','A2','A3','A4'], vU('f9t')); comb('WT',$('f9w').value);            // 9 tipo/estela
+    const a10=vU('f10a'); comb('E1', a10.length>1?a10[a10.length-2]:''); comb('E2', a10[a10.length-1]||''); // 10a
+    const b10=vU('f10b'); comb('E3', b10[0]||''); comb('E4', b10[1]||'');           // 10b
     spread(['D1','D2','D3','D4'], vU('f13a')); spread(['T1','T2','T3','T4'], u.eobt); // 13
-    spread(['S1','S2','S3','S4','S5'], vU('f15v')); spread(['L1','L2','L3','L4','L5'], vU('f15l')); T('Route1', vU('f15r')); // 15
+    spread(['S1','S2','S3','S4','S5'], vU('f15v')); spread(['L1','L2','L3','L4','L5'], vU('f15l')); put('Route1', vU('f15r')); // 15
     spread(['D5','D6','D7','D8'], vU('f16d')); spread(['T5','T6','T7','T8'], $('f16eet').value);  // 16 destino/eet
     spread(['D9','D10','D11','D12'], vU('f16a1')); spread(['D13','D14','D15','D16'], vU('f16a2')); // 16 altn
-    T('Info1', item18(u.dof));                                       // 18
-    spread(['T9','T10','T11','T12'], $('f19e').value);               // 19 autonomia
-    spread(['P1','P2','P3'], ($('f19p').value||'').padStart(3,'0').slice(-3)); // 19 POB
-    T('Markings', vU('f19a')); T('Pilot', $('f19c').value); T('Remarks', vU('f19n'));
+    put('Info1', item18(u.dof));                                                   // 18
+    spread(['T9','T10','T11','T12'], $('f19e').value);                             // 19 autonomia
+    spread(['P1','P2','P3'], ($('f19p').value||'').padStart(3,'0').slice(-3));     // 19 POB
+    put('Markings', vU('f19a')); put('Pilot', $('f19c').value); put('Remarks', vU('f19n'));
 
-    // item 19 — convencion de tachado: tildado = NO disponible
-    const r=checks('r19'); chk('C1', !r.includes('U')); chk('C2', !r.includes('V')); chk('C3', !r.includes('E'));
-    const s=checks('s19'); const noS=!s; chk('C4',noS); chk('C5',noS||!s.includes('P')); chk('C6',noS||!s.includes('D')); chk('C7',noS||!s.includes('M')); chk('C8',noS||!s.includes('J'));
-    const j=checks('j19'); const noJ=!j; chk('C9',noJ); chk('C10',noJ||!j.includes('L')); chk('C11',noJ||!j.includes('F')); chk('C12',noJ||!j.includes('U')); chk('C13',noJ||!j.includes('V'));
-    chk('C14',true); chk('C15',true);            // sin botes neumáticos
-    chk('C16', !vU('f19n'));                      // sin observaciones -> tachar
+    // item 19 — convencion de tachado: tachar = NO disponible
+    const r=checks('r19'); if(!r.includes('U'))strike('C1'); if(!r.includes('V'))strike('C2'); if(!r.includes('E'))strike('C3');
+    const s=checks('s19'); const noS=!s; if(noS)strike('C4'); if(noS||!s.includes('P'))strike('C5'); if(noS||!s.includes('D'))strike('C6'); if(noS||!s.includes('M'))strike('C7'); if(noS||!s.includes('J'))strike('C8');
+    const j=checks('j19'); const noJ=!j; if(noJ)strike('C9'); if(noJ||!j.includes('L'))strike('C10'); if(noJ||!j.includes('F'))strike('C11'); if(noJ||!j.includes('U'))strike('C12'); if(noJ||!j.includes('V'))strike('C13');
+    strike('C14'); strike('C15');                 // sin botes neumáticos
+    if(!vU('f19n')) strike('C16');                // sin observaciones
 
-    // firma incrustada en zona PRESENTADO POR (coords ajustables)
+    // firma incrustada en zona PRESENTADO POR (ajustá SX/SY_TOP/SW/SH si hace falta)
     if(firmado){
       const png=await pdf.embedPng(getFirma());
-      const page=pdf.getPages()[0]; const ph=page.getHeight();
-      const SX=112, SY_TOP=752, SW=180, SH=42;   // x, dist. desde arriba, ancho, alto
-      page.drawImage(png,{x:SX, y:ph-SY_TOP-SH, width:SW, height:SH});
+      const SX=112, SY_TOP=752, SW=175, SH=36;
+      page.drawImage(png,{x:SX, y:H-SY_TOP-SH, width:SW, height:SH});
     }
-    try{ form.flatten(); }catch(e){ console.warn('flatten:',e.message); }
 
-    const bytes=await pdf.save();
+    const bytes=await pdf.save({useObjectStreams:false});  // false = mejor compatibilidad de visores
     const blob=new Blob([bytes],{type:'application/pdf'});
     const url=URL.createObjectURL(blob);
     const link=document.createElement('a'); link.href=url;
