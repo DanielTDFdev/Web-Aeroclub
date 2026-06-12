@@ -2,7 +2,7 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
-  v1.3  ·  Paso 2 (parcial): selector de aeronaves
+  v1.4  ·  Paso 2 (parcial): selector de aeronaves + zona peligrosa
   ----------------------------------------------------------------------------------
   - Casillas 7 a 19 del formulario OACI de plan de vuelo
   - Persistencia en Firebase Realtime DB (proyecto turnos-lv-oad) via REST
@@ -23,6 +23,8 @@
     v1.3  Selector de aeronaves: lee la flota de Firebase /aeronaves (auto-seed
           la 1ra vez con la flota local de respaldo). Al elegir, completa 7/9/10/15/19A
           (todo editable). Fallback a flota local si Firebase no responde.
+    v1.4  Zona peligrosa: boton para borrar todos los planes en estado 'borrador'
+          (no toca los 'enviado'). Doble toque para confirmar, 4s de ventana.
 ==================================================================================
 -->
 <html lang="es">
@@ -146,6 +148,14 @@
   #toast.warn{border-color:var(--amber);color:var(--amber)}
   #toast.bad{border-color:var(--bad);color:var(--bad)}
   #toast.ok{border-color:var(--ok);color:var(--ok)}
+
+  /* zona peligrosa */
+  .danger{margin-top:26px;border:1px solid #5a1f1f;background:#140707;border-radius:6px;padding:12px 14px}
+  .danger .dz{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--bad);margin-bottom:8px}
+  button.dgr{border-color:#7a2a2a;color:#ff8a8a}
+  button.dgr:hover{background:var(--bad);color:#1a0000;box-shadow:0 0 16px rgba(255,93,93,.4)}
+  button.dgr.armed{background:var(--bad);color:#1a0000;animation:blink 1s infinite}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.55}}
 </style>
 </head>
 <body>
@@ -154,7 +164,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v1.3</span>
+    <span class="ver">v1.4</span>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
       <div>LOCAL <b id="clkLOC">--:--</b></div>
@@ -341,6 +351,12 @@
   <div class="saved">
     <h2>Planes guardados</h2>
     <div id="lista"></div>
+  </div>
+
+  <div class="danger">
+    <div class="dz">Zona peligrosa</div>
+    <button type="button" class="dgr" id="btnBorrarTodo">Borrar borradores</button>
+    <div class="hint" style="color:var(--txt-dim);margin-top:8px">Elimina todos los planes en estado borrador. Tocá una vez para confirmar; tenés 4 segundos.</div>
   </div>
 
 </div>
@@ -612,6 +628,39 @@ function aplicarAeronave(){
   toast('Datos de '+m+' cargados','ok');
 }
 
+/* ============================ BORRAR BORRADORES ============================ */
+let armado=false, armTimer=null;
+function desarmar(){
+  armado=false; clearTimeout(armTimer);
+  const b=$('btnBorrarTodo'); if(b){ b.classList.remove('armed'); b.textContent='Borrar borradores'; }
+}
+async function listarBorradores(){
+  const r=await fetch(`${DB}/fpl.json`); const o=await r.json()||{};
+  return Object.entries(o).filter(([k,p])=>(p.estado||'borrador')==='borrador').map(([k])=>k);
+}
+async function pedirBorrarBorradores(){
+  const btn=$('btnBorrarTodo');
+  if(!armado){
+    let keys;
+    try{ keys=await listarBorradores(); }catch(e){ toast('Error al leer: '+e.message,'bad'); return; }
+    if(!keys.length){ toast('No hay borradores para borrar'); return; }
+    armado=true; btn.classList.add('armed'); btn.textContent='⚠ Confirmar: borrar '+keys.length;
+    clearTimeout(armTimer); armTimer=setTimeout(desarmar,4000);
+    return;
+  }
+  desarmar();
+  let keys;
+  try{ keys=await listarBorradores(); }catch(e){ toast('Error al leer: '+e.message,'bad'); return; }
+  if(!keys.length){ toast('No hay borradores para borrar'); cargarLista(); return; }
+  const patch={}; keys.forEach(k=>patch[k]=null);   // null en PATCH = borra la clave
+  try{
+    const r=await fetch(`${DB}/fpl.json`,{method:'PATCH',
+      headers:{'Content-Type':'application/json'}, body:JSON.stringify(patch)});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    toast(keys.length+' borrador(es) eliminado(s)','ok'); cargarLista();
+  }catch(e){ toast('Error al borrar: '+e.message,'bad'); }
+}
+
 /* ============================ RELOJ ============================ */
 function reloj(){
   const d=new Date();
@@ -625,6 +674,7 @@ $('btnGuardar').onclick=guardar;
 $('btnNuevo').onclick=limpiar;
 $('btnRecargar').onclick=cargarLista;
 $('selAvion').addEventListener('change',aplicarAeronave);
+$('btnBorrarTodo').onclick=pedirBorrarBorradores;
 
 document.querySelectorAll('input,select,textarea').forEach(el=>{
   el.addEventListener('input',()=>{ el.classList.remove('bad'); refrescarPreview(); });
