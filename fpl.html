@@ -2,7 +2,7 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
-  v3.0  ·  Item 18 incluye el código LAD antes del nombre (ALTN/THN TOLHUIN ...)
+  v2.3  ·  Tema dark/light sincronizado con el turnero
   ----------------------------------------------------------------------------------
   - Casillas 7 a 19 del formulario OACI de plan de vuelo
   - Persistencia en Firebase Realtime DB (proyecto turnos-lv-oad) via REST
@@ -60,52 +60,15 @@
           ESTELA TURBULENTA (WT) tenian ancho 28pt en RECTS cuando la caja real
           mide 14.2pt -> comb() centraba el caracter ~7pt a la derecha del centro.
           Corregidos los tres RECTS a las coords reales de la caja (14.2x14.2).
-    v2.3  Datos de LVMPH en la flota local corregidos: tipo PA32 -> P32T,
-          vel_crucero N0140 -> N0165, color GREY AND BLUE -> GREY AND WHITE.
-          OJO: esto solo siembra Firebase si /aeronaves esta vacio. Si la flota
-          ya estaba sembrada (lo normal), hay que PATCHear /aeronaves/LVMPH a mano
-          o borrar el nodo para que se re-siembre. Ver nota fuera del archivo.
-    v2.4  Firma del PDF agrandada y proporcionada: el canvas es 600x150 (4:1)
-          pero se estampaba en 175x36 (4.86:1) -> chica y achatada. Ahora el alto
-          y ancho salen del PNG por un unico factor SCALE (0.36), sin deformar.
-          SX/SY_TOP siguen siendo la esquina sup-izq, ajustables a ojo.
-    v2.5  Firma corrida a la izquierda: SX 112 -> 98.
-    v2.6  Validacion/lookup de aerodromos: lista de referencia AR+CL (515 OACI)
-          en aerodromos.json (mismo repo, ~27KB, cacheable offline). Bajo Salida
-          y Destino/Altn muestra el nombre del aerodromo (confirma que el codigo
-          es el correcto). Si el codigo no figura -> AVISO amarillo no bloqueante
-          (la lista es incompleta: avisa, no rechaza). Requiere subir aerodromos.json
-          al repo junto a fpl.html. Si no carga, todo sigue funcionando sin lookup.
-    v2.7  Lista reconstruida con fuente OFICIAL ANAC para Argentina (693 LAD, de
-          los cuales 124 con OACI) + ICAO de Chile (366) via OurAirports. 1183
-          claves (~62KB). Cada lugar se indexa por su LAD (3 letras, ej. THN) y,
-          si tiene, tambien por su OACI (4 letras, ej. SAWE) -> ambos resuelven.
-          FIX IMPORTANTE: las casillas 13/16 aceptaban SOLO 4 letras y bloqueaban
-          los LAD de 3 letras (THN quedaba como error). Ahora aceptan 3-4 y el
-          readout marca "(LAD)" en los de 3. NOTA: en el CSV de ANAC las columnas
-          latitud/longitud venian invertidas; se guardan corregidas (no se usan
-          aun, son para un futuro mapa). aerodromos.json ahora ?v=2.
-    v2.8  Casilla 19 P/ (personas a bordo) acepta TBN ademas de numero >=1, para
-          cuando no se sabe la cantidad al presentar. En el PDF se estampa TBN tal
-          cual (los numeros siguen con relleno de ceros a 3 digitos). El campo se
-          normaliza a mayusculas al salir.
-    v2.9  Convencion OACI ZZZZ para aerodromos sin indicador (Doc 4444):
-          - Si en casilla 13/16 va un LAD CON OACI publicado -> se estampa el OACI
-            (ej. GRA -> SAWE).
-          - Si va un LAD SIN OACI (ej. THN/Tolhuin) -> se estampa ZZZZ en la casilla
-            y el detalle va al item 18: DEP/ (salida), DEST/ (destino) o ALTN/
-            (alternativas), con NOMBRE + COORDENADAS (formato OACI DDMM[NS]DDDMM[EW]).
-          Aplica tanto al PDF como al mensaje FPL del preview. El readout bajo cada
-          campo ahora muestra como se va a presentar (-> SAWE / -> ZZZZ).
-          aerodromos.json regenerado con OACI asociado (i) y coords (c); swap
-          lat/long del CSV de ANAC corregido. Ahora ?v=3.
-    v3.0  El detalle del item 18 ahora antepone el codigo LAD al nombre:
-          ALTN/THN TOLHUIN 5430S06710W (idem DEP/ y DEST/). Util a nivel domestico
-          para identificar el LAD; no cambia el archivo de datos.
+    v2.3  TEMA dark/light: fpl sigue el tema elegido en turnos.html (misma clave
+          localStorage 'lvoad-theme', misma clase .light en <html>). Script
+          anti-flash en <head> + variante :root.light + toggle propio en el header
+          que escribe la misma clave -> sincronizado en ambas direcciones.
 ==================================================================================
 -->
 <html lang="es">
 <head>
+<script>if(localStorage.getItem('lvoad-theme')==='light')document.documentElement.classList.add('light');</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FPL · Plan de Vuelo</title>
@@ -181,8 +144,6 @@
 
   .hint{font-family:var(--mono);font-size:11px;color:var(--amber);margin-top:3px;letter-spacing:.5px}
   .utc{font-family:var(--mono);color:var(--amber);font-size:13px;margin-top:5px;letter-spacing:1px}
-  .aero{font-family:var(--mono);font-size:11px;margin-top:5px;letter-spacing:.3px;min-height:13px}
-  .aero .ok{color:var(--txt-dim)} .aero .nf{color:var(--amber)} .aero .sep{color:var(--line-hot);margin:0 6px}
 
   .actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px}
   button{font-family:var(--disp);font-weight:700;letter-spacing:2px;text-transform:uppercase;
@@ -242,6 +203,27 @@
   /* pad de firma */
   .sigpad{width:100%;max-width:600px;height:150px;background:#eef3f6;
     border:1px solid var(--line-hot);border-radius:4px;touch-action:none;cursor:crosshair;display:block}
+  /* ===== TEMA CLARO — sigue el toggle de turnos (localStorage 'lvoad-theme') ===== */
+  :root.light{
+    --bg:#e9eef3; --panel:#ffffff; --panel2:#f3f7fa;
+    --line:#cdd8e1; --line-hot:#86b9c3;
+    --cyan:#0c7a8a; --cyan-dim:#7bc4cf; --amber:#a86f00; --amber-dim:#d7b066;
+    --txt:#16242e; --txt-dim:#5a6f7b; --bad:#cc2b2b; --ok:#1c8f55;
+  }
+  :root.light body::after{opacity:0}                               /* sin scanline en claro */
+  :root.light header.bar{box-shadow:0 0 0 1px #d4dde4 inset,0 0 22px rgba(12,122,138,.07)}
+  :root.light input,:root.light select,:root.light textarea{background:#fbfdff;color:#0b5f6b}
+  :root.light input::placeholder{color:#9fb2bc}
+  :root.light .selavion select,:root.light .selavion select option,:root.light .item .rt{color:#0b5f6b}
+  :root.light .preview{background:#fffaf0}
+  :root.light .valbox{background:#fdeaea}
+  :root.light .valbox.onlywarn{background:#fff7e6}
+  :root.light .valbox li.e{color:#c0392b}
+  :root.light .danger{background:#fdeded;border-color:#e6b3b3}
+  :root.light button:hover,:root.light button.pdfbtn:hover,:root.light button.dgr:hover{color:#fff}
+  :root.light button.dgr{color:#b23a3a}
+  :root.light button.ghost:hover{color:var(--txt)}
+  :root.light #toast{box-shadow:0 6px 22px rgba(0,0,0,.18)}
 </style>
 </head>
 <body>
@@ -250,11 +232,12 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v3.0</span>
+    <span class="ver">v2.3</span>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
       <div>LOCAL <b id="clkLOC">--:--</b></div>
     </div>
+    <button id="themeBtn" onclick="toggleTheme()" title="Cambiar tema" style="margin-left:10px;background:transparent;border:1px solid var(--line-hot);color:var(--cyan);font-size:15px;line-height:1;padding:6px 9px;border-radius:5px;cursor:pointer;letter-spacing:0">🌙</button>
   </header>
 
   <div class="preview">
@@ -338,7 +321,6 @@
             <input id="f13hora" type="time"></div>
         </div>
         <div class="utc" id="eobtUTC">EOBT (UTC): ----  ·  DOF: ------</div>
-        <div class="aero" id="aeroSal"></div>
       </div>
     </fieldset>
 
@@ -369,7 +351,6 @@
           <div class="field"><label>Altn 2</label>
             <input id="f16a2" maxlength="4"></div>
         </div>
-        <div class="aero" id="aero16"></div>
       </div>
     </fieldset>
 
@@ -388,7 +369,7 @@
           <div class="field" style="max-width:160px"><label>E/ Autonomía (HHMM)</label>
             <input id="f19e" placeholder="0300" maxlength="4"></div>
           <div class="field" style="max-width:140px"><label>P/ Personas a bordo</label>
-            <input id="f19p" placeholder="2 o TBN"></div>
+            <input id="f19p" placeholder="2"></div>
           <div class="field"><label>R/ Radio emergencia</label>
             <div class="checks">
               <label><input type="checkbox" class="r19" value="U">UHF</label>
@@ -477,6 +458,16 @@ const pad = (n,l=2) => String(n).padStart(l,'0');
 // Fecha de HOY en hora local de Rio Grande (YYYY-MM-DD) para el input date.
 const hoyLocal = () => { const d=new Date(Date.now()-TZ_OFFSET_H*3600*1000);
   return d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate()); };
+// Tema dark/light sincronizado con turnos via localStorage 'lvoad-theme'.
+window.toggleTheme = function(){
+  const isLight = document.documentElement.classList.toggle('light');
+  localStorage.setItem('lvoad-theme', isLight ? 'light' : 'dark');
+  syncThemeIcon();
+};
+function syncThemeIcon(){
+  const b = $('themeBtn');
+  if(b) b.textContent = document.documentElement.classList.contains('light') ? '☀️' : '🌙';
+}
 function toast(msg, kind=''){
   const t=$('toast'); t.textContent=msg; t.className='show '+kind;
   clearTimeout(t._t); t._t=setTimeout(()=>t.className=t.className.replace('show',''),3600);
@@ -500,18 +491,8 @@ function calcUTC(){
 function item18(dof){
   let txt=($('f18').value||'').trim().toUpperCase();
   txt=txt.replace(/DOF\/\d{6}\s*/g,'').trim();
-  // aeródromos sin OACI -> ZZZZ en la casilla y el detalle acá (nombre + coords)
-  const dep=resolveAero(vU('f13a')), des=resolveAero(vU('f16d'));
-  const a1=resolveAero(vU('f16a1')), a2=resolveAero(vU('f16a2'));
-  const alt=[a1,a2].filter(x=>x.zzzz).map(x=>x.i18);
-  // orden segun secuencia OACI: DEP/ DEST/ DOF/ <manual: OPR/...> ALTN/
-  const parts=[];
-  if(dep.zzzz) parts.push('DEP/'+dep.i18);
-  if(des.zzzz) parts.push('DEST/'+des.i18);
-  if(dof)      parts.push('DOF/'+dof);
-  if(txt)      parts.push(txt);
-  if(alt.length) parts.push('ALTN/'+alt.join(' '));
-  return parts.filter(Boolean).join(' ') || '0';
+  const base= dof ? 'DOF/'+dof : '';
+  return (base+(txt?' '+txt:'')).trim() || '0';
 }
 
 /* ===================== AUTO-FORMATO (al salir del campo) ===================== */
@@ -537,9 +518,9 @@ function armarMensaje(){
   const n=($('f9n').value||'1').trim();
   const i9=(n==='1'?'':n)+vU('f9t')+'/'+$('f9w').value;
   const i10=vU('f10a')+'/'+vU('f10b');
-  const i13=resolveAero(vU('f13a')).box+(u?u.eobt:'----');
+  const i13=vU('f13a')+(u?u.eobt:'----');
   const i15=vU('f15v')+vU('f15l')+' '+vU('f15r');
-  const i16=resolveAero(vU('f16d')).box+($('f16eet').value||'')+' '+resolveAero(vU('f16a1')).box+(v('f16a2')?' '+resolveAero(vU('f16a2')).box:'');
+  const i16=vU('f16d')+($('f16eet').value||'')+' '+vU('f16a1')+(v('f16a2')?' '+vU('f16a2'):'');
   const i18=item18(u?u.dof:'');
   const msg=
 `(FPL-${vU('f7')}-${$('f8r').value}${$('f8t').value}
@@ -562,7 +543,6 @@ function refrescarPreview(){
   $('fplMsg').textContent=msg;
   $('fplSup').textContent=sup;
   $('eobtUTC').textContent = u ? `EOBT (UTC): ${u.eobt} Z  ·  DOF: ${u.dof}` : 'EOBT (UTC): ----  ·  DOF: ------';
-  pintarNombres();
 }
 
 /* ============================ VALIDACION ============================ */
@@ -577,7 +557,7 @@ function validar(){
   need('f10a', v('f10a').length>=1, '10a · Equipo COM/NAV requerido (usá N si no tiene)');
   need('f10b', v('f10b').length>=1, '10b · Vigilancia requerida (usá N si no tiene)');
   // 13
-  need('f13a', /^[A-Z]{3,4}$/.test(vU('f13a')), '13 · Aeródromo de salida: 3-4 letras OACI/LAD (ej. SAWE o THN)');
+  need('f13a', /^[A-Z]{4}$/.test(vU('f13a')), '13 · Aeródromo de salida: 4 letras OACI (ej. SAWE)');
   need('f13fecha', !!v('f13fecha'), '13 · Falta la fecha de salida');
   need('f13hora', !!v('f13hora'), '13 · Falta la hora de despegue');
   // 15
@@ -585,23 +565,17 @@ function validar(){
   need('f15l', /^(F\d{3}|A\d{3}|VFR|[SM]\d{4})$/.test(vU('f15l')), '15 · Nivel inválido (ej. A055, F095 o VFR)');
   need('f15r', v('f15r').length>=1, '15 · Ruta requerida (DCT, LOCAL o ruta)');
   // 16
-  need('f16d', /^[A-Z]{3,4}$/.test(vU('f16d')), '16 · Destino: 3-4 letras OACI/LAD (ej. SAWH o THN)');
+  need('f16d', /^[A-Z]{4}$/.test(vU('f16d')), '16 · Destino: 4 letras OACI (ej. SAWH)');
   need('f16eet', /^\d{4}$/.test(v('f16eet')) && (+v('f16eet').slice(2))<60, '16 · EET total inválido (HHMM, ej. 0040)');
-  if(v('f16a1') && !/^[A-Z]{3,4}$/.test(vU('f16a1'))){ E.push('16 · Alternativa 1: 3-4 letras OACI/LAD'); bad.push('f16a1'); }
-  if(v('f16a2') && !/^[A-Z]{3,4}$/.test(vU('f16a2'))){ E.push('16 · Alternativa 2: 3-4 letras OACI/LAD'); bad.push('f16a2'); }
+  if(v('f16a1') && !/^[A-Z]{4}$/.test(vU('f16a1'))){ E.push('16 · Alternativa 1: 4 letras OACI'); bad.push('f16a1'); }
+  if(v('f16a2') && !/^[A-Z]{4}$/.test(vU('f16a2'))){ E.push('16 · Alternativa 2: 4 letras OACI'); bad.push('f16a2'); }
   // 19
   need('f19e', /^\d{4}$/.test(v('f19e')) && (+v('f19e').slice(2))<60, '19 · Autonomía E/ inválida (HHMM, ej. 0300)');
-  need('f19p', vU('f19p')==='TBN' || (/^\d{1,3}$/.test(v('f19p')) && (+v('f19p'))>=1), '19 · Personas a bordo P/: número ≥ 1 o TBN (si aún no se sabe)');
+  need('f19p', /^\d{1,3}$/.test(v('f19p')) && (+v('f19p'))>=1, '19 · Personas a bordo P/ requerido (≥ 1)');
   need('f19a', v('f19a').length>=1, '19 · Color y marcas A/ requerido');
   need('f19c', v('f19c').length>=1, '19 · Comandante C/ requerido (firma el plan)');
 
   // ---- AVISOS (no bloquean) ----
-  if(AERO_OK){
-    const chk=(id,etq)=>{ const c=vU(id); if(/^[A-Z]{3,4}$/.test(c) && !AERO[c]) A.push(etq+' · '+c+' no figura en la lista de referencia (LAD AR + ICAO AR/CL) — verificá el código'); };
-    chk('f13a','13 Salida'); chk('f16d','16 Destino');
-    if(v('f16a1')) chk('f16a1','16 Altn 1');
-    if(v('f16a2')) chk('f16a2','16 Altn 2');
-  }
   const esLocal = !!vU('f13a') && vU('f13a')===vU('f16d');
   if(!esLocal && !v('f16a1')) A.push('16 · Sin aeródromo alternativo (recomendado en vuelo no local)');
   if(/^\d{4}$/.test(v('f19e')) && /^\d{4}$/.test(v('f16eet'))){
@@ -710,75 +684,13 @@ async function chequearReservaExistente(data){
   return;
 }
 
-/* ============================ AERODROMOS (referencia OACI) ============================ */
-/* Lista de referencia AR + CL (OACI 4 letras) servida desde el mismo repo.
-   Sirve para CONFIRMAR el codigo mostrando el nombre y para AVISAR (no bloquear)
-   si el codigo no figura. La lista es incompleta a proposito: por eso avisa, no
-   rechaza. Regenerar con scripts/gen_aerodromos.* cuando haga falta actualizar. */
-const AERO = {}; let AERO_OK = false;
-
-async function cargarAerodromos(){
-  try{
-    const r = await fetch('aerodromos.json?v=3');
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    Object.assign(AERO, await r.json());
-    AERO_OK = true;
-  }catch(e){
-    console.warn('No se pudo cargar aerodromos.json (sigo sin lookup de nombres).', e);
-  }
-  pintarNombres();
-}
-
-// Resuelve un codigo de casilla 13/16 a su forma OFICIAL de formulario:
-//  - OACI 4 letras            -> va tal cual
-//  - LAD con OACI publicado   -> va el OACI
-//  - LAD sin OACI (o 3 letras desconocido) -> ZZZZ + dato para item 18 (nombre + coords)
-// Devuelve {box, zzzz, i18}
-function resolveAero(val){
-  const c=(val||'').toUpperCase();
-  if(!c) return {box:'', zzzz:false, i18:''};
-  if(/^[A-Z]{4}$/.test(c)) return {box:c, zzzz:false, i18:''};
-  if(!AERO_OK) return {box:c, zzzz:false, i18:''};            // sin lista, no decidimos ZZZZ
-  const a = AERO[c];
-  if(a && a.i) return {box:a.i, zzzz:false, i18:''};          // LAD con OACI -> usar OACI
-  const nombre = a ? a.n : '';                                // nombre del aeródromo
-  const coords = (a && a.c) ? ' '+a.c : '';
-  // formato: <LAD> <NOMBRE> <COORDS>  (ej. THN TOLHUIN 5430S06710W)
-  return {box:'ZZZZ', zzzz:true, i18:((c+' '+nombre).trim()+coords).trim()};
-}
-
-// devuelve {found, label} o null si el codigo aun no tiene formato OACI/LAD
-function aeroInfo(id){
-  const c = vU(id);
-  if(!/^[A-Z]{3,4}$/.test(c)) return null;
-  if(!AERO_OK) return null;                 // si no cargo la lista, no opinamos
-  const a = AERO[c];
-  const isLAD = c.length===3;
-  const kind = isLAD ? ' (LAD)' : '';       // 3 letras = Lugar Apto Declarado
-  let suf='';
-  if(a && isLAD) suf = a.i ? ' → '+a.i : ' → ZZZZ (ítem 18)';  // cómo se presentará
-  return a ? {found:true,  label:c+kind+' · '+(a.n||a.m)+suf}
-           : {found:false, label:c+kind+' · no está en la lista (verificá)'};
-}
-
-function pintarNombres(){
-  const span = i => i ? `<span class="${i.found?'ok':'nf'}">${i.label}</span>` : '';
-  const sal = aeroInfo('f13a');
-  $('aeroSal').innerHTML = span(sal);
-  const partes = [];
-  const d  = aeroInfo('f16d');  if(d)  partes.push(span(d));
-  const a1 = aeroInfo('f16a1'); if(a1) partes.push('ALTN ' + span(a1));
-  const a2 = aeroInfo('f16a2'); if(a2) partes.push('ALTN ' + span(a2));
-  $('aero16').innerHTML = partes.join('<span class="sep">·</span>');
-}
-
 /* ============================ FLOTA / AERONAVES ============================ */
 /* Flota local de respaldo. Si /aeronaves esta vacio en Firebase, se siembra
    con esto. Si Firebase responde con datos, esos mandan (futura ABM editara alli). */
 const FLOTA = {
   "LVOAD": { tipo:"PA38", estela:"L", equipo_10a:"S", equipo_10b:"C", vel_crucero:"N0090", color_marcas:"WHITE WITH DARK BLUE STRIPES ON THE FUSELAGE" },
   "LVART": { tipo:"P28A", estela:"L", equipo_10a:"S", equipo_10b:"C", vel_crucero:"N0110", color_marcas:"WHITE AND BLUE" },
-  "LVMPH": { tipo:"P32T", estela:"L", equipo_10a:"S", equipo_10b:"C", vel_crucero:"N0165", color_marcas:"GREY AND WHITE" }
+  "LVMPH": { tipo:"PA32", estela:"L", equipo_10a:"S", equipo_10b:"C", vel_crucero:"N0140", color_marcas:"GREY AND BLUE" }
 };
 let flota = {};
 
@@ -909,13 +821,13 @@ async function generarPDF(){
     spread(['A1','A2','A3','A4'], vU('f9t')); comb('WT',$('f9w').value);            // 9 tipo/estela
     const a10=vU('f10a'); comb('E1', a10.length>1?a10[a10.length-2]:''); comb('E2', a10[a10.length-1]||''); // 10a
     const b10=vU('f10b'); comb('E3', b10[0]||''); comb('E4', b10[1]||'');           // 10b
-    spread(['D1','D2','D3','D4'], resolveAero(vU('f13a')).box); spread(['T1','T2','T3','T4'], u.eobt); // 13
+    spread(['D1','D2','D3','D4'], vU('f13a')); spread(['T1','T2','T3','T4'], u.eobt); // 13
     spread(['S1','S2','S3','S4','S5'], vU('f15v')); spread(['L1','L2','L3','L4','L5'], vU('f15l')); put('Route1', vU('f15r')); // 15
-    spread(['D5','D6','D7','D8'], resolveAero(vU('f16d')).box); spread(['T5','T6','T7','T8'], $('f16eet').value);  // 16 destino/eet
-    spread(['D9','D10','D11','D12'], resolveAero(vU('f16a1')).box); spread(['D13','D14','D15','D16'], resolveAero(vU('f16a2')).box); // 16 altn
+    spread(['D5','D6','D7','D8'], vU('f16d')); spread(['T5','T6','T7','T8'], $('f16eet').value);  // 16 destino/eet
+    spread(['D9','D10','D11','D12'], vU('f16a1')); spread(['D13','D14','D15','D16'], vU('f16a2')); // 16 altn
     put('Info1', item18(u.dof));                                                   // 18
     spread(['T9','T10','T11','T12'], $('f19e').value);                             // 19 autonomia
-    spread(['P1','P2','P3'], vU('f19p')==='TBN' ? 'TBN' : ($('f19p').value||'').padStart(3,'0').slice(-3)); // 19 POB
+    spread(['P1','P2','P3'], ($('f19p').value||'').padStart(3,'0').slice(-3));     // 19 POB
     put('Markings', vU('f19a')); put('Pilot', $('f19c').value); put('Remarks', vU('f19n'));
 
     // item 19 — convencion de tachado: tachar = NO disponible
@@ -925,15 +837,10 @@ async function generarPDF(){
     strike('C14'); strike('C15');                 // sin botes neumáticos
     if(!vU('f19n')) strike('C16');                // sin observaciones
 
-    // firma incrustada en zona PRESENTADO POR
-    // SCALE = unica perilla de tamano (sube/baja esto). SH/SW salen del PNG
-    // (600x150), asi nunca se deforma. SX/SY_TOP = esquina sup-izq; si pisa el
-    // nombre del piloto subi SY_TOP, si se sale de la caja bajalo.
+    // firma incrustada en zona PRESENTADO POR (ajustá SX/SY_TOP/SW/SH si hace falta)
     if(firmado){
       const png=await pdf.embedPng(getFirma());
-      const SCALE=0.36;                                  // antes ~0.29 y achatada
-      const SW=png.width*SCALE, SH=png.height*SCALE;     // 600x150 -> 216x54
-      const SX=98, SY_TOP=746;
+      const SX=112, SY_TOP=752, SW=175, SH=36;
       page.drawImage(png,{x:SX, y:H-SY_TOP-SH, width:SW, height:SH});
     }
 
@@ -974,12 +881,13 @@ $('f15v').addEventListener('blur',()=>{ fmtVel(); refrescarPreview(); });
 $('f15l').addEventListener('blur',()=>{ fmtNivel(); refrescarPreview(); });
 $('f16eet').addEventListener('blur',()=>{ fmtHHMM('f16eet'); refrescarPreview(); });
 $('f19e').addEventListener('blur',()=>{ fmtHHMM('f19e'); refrescarPreview(); });
-['f7','f9t','f10a','f10b','f13a','f15r','f16d','f16a1','f16a2','f19a','f19p']
+['f7','f9t','f10a','f10b','f13a','f15r','f16d','f16a1','f16a2','f19a']
   .forEach(id=>$(id).addEventListener('blur',()=>{ upper(id); refrescarPreview(); }));
 
 setChecks('r19','E');
+syncThemeIcon();
 if(!$('f13fecha').value) $('f13fecha').value=hoyLocal();
-refrescarPreview(); cargarFlota(); cargarAerodromos(); cargarLista(); reloj(); setInterval(reloj,1000);
+refrescarPreview(); cargarFlota(); cargarLista(); reloj(); setInterval(reloj,1000);
 </script>
 </body>
 </html>
