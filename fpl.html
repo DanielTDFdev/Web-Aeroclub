@@ -2,7 +2,7 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
-  v1.4  ·  Paso 2 (parcial): selector de aeronaves + zona peligrosa
+  v1.5  ·  Paso 2 (parcial): borradores por usuario + defaults
   ----------------------------------------------------------------------------------
   - Casillas 7 a 19 del formulario OACI de plan de vuelo
   - Persistencia en Firebase Realtime DB (proyecto turnos-lv-oad) via REST
@@ -25,6 +25,10 @@
           (todo editable). Fallback a flota local si Firebase no responde.
     v1.4  Zona peligrosa: boton para borrar todos los planes en estado 'borrador'
           (no toca los 'enviado'). Doble toque para confirmar, 4s de ventana.
+    v1.5  Borradores POR USUARIO: los FPL viven en /fpl/{USUARIO}/{pushKey}.
+          USUARIO es placeholder ('demo') hasta integrar el login de turnos.
+          Defaults: R/ solo ELT (flota sin VHF), salida = SAWE.
+          Quitado el aviso "R/ sin VHF" (no aplica a esta flota).
 ==================================================================================
 -->
 <html lang="es">
@@ -164,7 +168,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v1.4</span>
+    <span class="ver">v1.5</span>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
       <div>LOCAL <b id="clkLOC">--:--</b></div>
@@ -245,7 +249,7 @@
       <div class="body">
         <div class="row">
           <div class="field"><label>Aeródromo (OACI)</label>
-            <input id="f13a" placeholder="SAWE" maxlength="4"></div>
+            <input id="f13a" placeholder="SAWE" value="SAWE" maxlength="4"></div>
           <div class="field"><label>Fecha (local)</label>
             <input id="f13fecha" type="date"></div>
           <div class="field"><label>Hora despegue (LOCAL)</label>
@@ -304,7 +308,7 @@
           <div class="field"><label>R/ Radio emergencia</label>
             <div class="checks">
               <label><input type="checkbox" class="r19" value="U">UHF</label>
-              <label><input type="checkbox" class="r19" value="V" checked>VHF</label>
+              <label><input type="checkbox" class="r19" value="V">VHF</label>
               <label><input type="checkbox" class="r19" value="E" checked>ELT</label>
             </div></div>
         </div>
@@ -349,14 +353,14 @@
   </form>
 
   <div class="saved">
-    <h2>Planes guardados</h2>
+    <h2>Mis planes</h2>
     <div id="lista"></div>
   </div>
 
   <div class="danger">
     <div class="dz">Zona peligrosa</div>
-    <button type="button" class="dgr" id="btnBorrarTodo">Borrar borradores</button>
-    <div class="hint" style="color:var(--txt-dim);margin-top:8px">Elimina todos los planes en estado borrador. Tocá una vez para confirmar; tenés 4 segundos.</div>
+    <button type="button" class="dgr" id="btnBorrarTodo">Borrar mis borradores</button>
+    <div class="hint" style="color:var(--txt-dim);margin-top:8px">Elimina todos tus planes en estado borrador. Tocá una vez para confirmar; tenés 4 segundos.</div>
   </div>
 
 </div>
@@ -366,6 +370,9 @@
 /* ============================ CONFIG ============================ */
 const DB = "https://turnos-lv-oad-default-rtdb.firebaseio.com"; // proyecto turnos-lv-oad
 const TZ_OFFSET_H = 3; // Rio Grande UTC-3 (sin DST). UTC = local + 3h
+// Usuario actual: en el prototipo no hay login -> placeholder 'demo'.
+// Al integrar en turnos, asignar aqui el emailKey de la sesion (ver /alumnos/{emailKey}).
+let   USUARIO = 'demo';
 let   editKey = null;
 
 /* ============================ HELPERS ============================ */
@@ -480,7 +487,6 @@ function validar(){
 
   // ---- AVISOS (no bloquean) ----
   const esLocal = !!vU('f13a') && vU('f13a')===vU('f16d');
-  if(!checks('r19').includes('V')) A.push('19 · R/ sin VHF — confirmá que es intencional');
   if(!esLocal && !v('f16a1')) A.push('16 · Sin aeródromo alternativo (recomendado en vuelo no local)');
   if(/^\d{4}$/.test(v('f19e')) && /^\d{4}$/.test(v('f16eet'))){
     const min=s=>(+s.slice(0,2))*60+(+s.slice(2));
@@ -525,7 +531,7 @@ async function guardar(){
   };
   try{
     await chequearReservaExistente(data);
-    const url = editKey ? `${DB}/fpl/${editKey}.json` : `${DB}/fpl.json`;
+    const url = editKey ? `${DB}/fpl/${USUARIO}/${editKey}.json` : `${DB}/fpl/${USUARIO}.json`;
     const r = await fetch(url, {method: editKey?'PATCH':'POST',
       headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
     if(!r.ok) throw new Error('HTTP '+r.status);
@@ -537,7 +543,7 @@ async function guardar(){
 async function cargarLista(){
   const cont=$('lista'); cont.innerHTML='<div class="hint" style="padding:6px">Cargando…</div>';
   try{
-    const r=await fetch(`${DB}/fpl.json`); const o=await r.json()||{};
+    const r=await fetch(`${DB}/fpl/${USUARIO}.json`); const o=await r.json()||{};
     const items=Object.entries(o).sort((a,b)=>(b[1].fecha_creacion||'').localeCompare(a[1].fecha_creacion||''));
     if(!items.length){ cont.innerHTML='<div class="hint" style="padding:6px">No hay planes guardados todavía.</div>'; return; }
     cont.innerHTML='';
@@ -572,8 +578,8 @@ function cargarEnForm(key,p){
 function limpiar(){
   editKey=null; $('fpl').reset();
   $('f9n').value='1'; $('f10a').value='S'; $('f10b').value='C';
-  $('f18').value='OPR/AEROCLUB RIO GRANDE';
-  setChecks('r19','VE'); setChecks('s19',''); setChecks('j19','');
+  $('f18').value='OPR/AEROCLUB RIO GRANDE'; $('f13a').value='SAWE';
+  setChecks('r19','E'); setChecks('s19',''); setChecks('j19','');
   pintarValidacion([],[],[]);
   refrescarPreview(); toast('Formulario limpio');
 }
@@ -632,10 +638,10 @@ function aplicarAeronave(){
 let armado=false, armTimer=null;
 function desarmar(){
   armado=false; clearTimeout(armTimer);
-  const b=$('btnBorrarTodo'); if(b){ b.classList.remove('armed'); b.textContent='Borrar borradores'; }
+  const b=$('btnBorrarTodo'); if(b){ b.classList.remove('armed'); b.textContent='Borrar mis borradores'; }
 }
 async function listarBorradores(){
-  const r=await fetch(`${DB}/fpl.json`); const o=await r.json()||{};
+  const r=await fetch(`${DB}/fpl/${USUARIO}.json`); const o=await r.json()||{};
   return Object.entries(o).filter(([k,p])=>(p.estado||'borrador')==='borrador').map(([k])=>k);
 }
 async function pedirBorrarBorradores(){
@@ -654,7 +660,7 @@ async function pedirBorrarBorradores(){
   if(!keys.length){ toast('No hay borradores para borrar'); cargarLista(); return; }
   const patch={}; keys.forEach(k=>patch[k]=null);   // null en PATCH = borra la clave
   try{
-    const r=await fetch(`${DB}/fpl.json`,{method:'PATCH',
+    const r=await fetch(`${DB}/fpl/${USUARIO}.json`,{method:'PATCH',
       headers:{'Content-Type':'application/json'}, body:JSON.stringify(patch)});
     if(!r.ok) throw new Error('HTTP '+r.status);
     toast(keys.length+' borrador(es) eliminado(s)','ok'); cargarLista();
@@ -688,7 +694,7 @@ $('f19e').addEventListener('blur',()=>{ fmtHHMM('f19e'); refrescarPreview(); });
 ['f7','f9t','f10a','f10b','f13a','f15r','f16d','f16a1','f16a2','f19a']
   .forEach(id=>$(id).addEventListener('blur',()=>{ upper(id); refrescarPreview(); }));
 
-setChecks('r19','VE');
+setChecks('r19','E');
 refrescarPreview(); cargarFlota(); cargarLista(); reloj(); setInterval(reloj,1000);
 </script>
 </body>
