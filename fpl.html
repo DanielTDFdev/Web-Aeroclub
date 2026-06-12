@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<!--
+==================================================================================
+  PLAN DE VUELO (FPL) — Prototipo standalone
+  v1.0  ·  Paso 1: captura + persistencia + preview de formato OACI
+  ----------------------------------------------------------------------------------
+  - Casillas 7 a 19 del formulario OACI de plan de vuelo
+  - Persistencia en Firebase Realtime DB (proyecto turnos-lv-oad) vía REST
+  - Hora cargada en LOCAL (Río Grande UTC-3) -> convierte y muestra UTC (casilla 13)
+  - DOF (casilla 18) calculado en UTC (maneja cambio de día)
+  - Campos del avión editables a mano (el selector /aeronaves se cablea en paso 2)
+  - Comandante (19 C/) es campo explícito, separado de quien arma el plan
+  - Chequeo blando de reserva existente: stub marcado, se cablea con schema /reservas
+  - SIN PDF ni envío por mail todavía (pasos 3 y 4)
+  CHANGELOG:
+    v1.0  primera versión del prototipo de carga
+==================================================================================
+-->
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FPL · Plan de Vuelo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#070b11; --panel:#0d141d; --panel2:#111a25;
+    --line:#1c2b3a; --line-hot:#1f5a66;
+    --cyan:#22d3ee; --cyan-dim:#0e7d8c; --amber:#ffb300; --amber-dim:#7a5600;
+    --txt:#cfe6ee; --txt-dim:#6f8b96; --bad:#ff5d5d; --ok:#36e08a;
+    --mono:'Share Tech Mono',monospace; --disp:'Rajdhani',sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--disp)}
+  /* scanline atmosphere */
+  body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:50;
+    background:repeating-linear-gradient(0deg,rgba(0,0,0,0) 0px,rgba(0,0,0,0) 2px,rgba(0,0,0,.18) 3px,rgba(0,0,0,0) 4px);
+    mix-blend-mode:multiply;opacity:.5}
+  .wrap{max-width:1080px;margin:0 auto;padding:18px 16px 80px}
+
+  header.bar{display:flex;align-items:center;gap:14px;border:1px solid var(--line-hot);
+    background:linear-gradient(180deg,var(--panel2),var(--panel));
+    padding:12px 16px;border-radius:6px;margin-bottom:18px;
+    box-shadow:0 0 0 1px #000 inset,0 0 22px rgba(34,211,238,.07)}
+  header.bar .dot{width:11px;height:11px;border-radius:50%;background:var(--cyan);
+    box-shadow:0 0 10px var(--cyan);animation:pulse 2.4s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  header.bar h1{font-size:22px;letter-spacing:3px;font-weight:700;margin:0;text-transform:uppercase}
+  header.bar h1 small{color:var(--amber);letter-spacing:2px}
+  header.bar .clk{margin-left:auto;font-family:var(--mono);color:var(--cyan);font-size:14px;text-align:right;line-height:1.3}
+  header.bar .clk b{color:var(--amber)}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:760px){.grid{grid-template-columns:1fr}}
+
+  fieldset{border:1px solid var(--line);background:var(--panel);border-radius:6px;margin:0 0 14px;padding:0}
+  fieldset>legend{margin-left:10px;padding:2px 10px;font-weight:700;letter-spacing:2px;
+    text-transform:uppercase;font-size:12px;color:var(--cyan);
+    border:1px solid var(--line-hot);border-radius:4px;background:var(--bg)}
+  fieldset .body{padding:12px 14px}
+  .span2{grid-column:1 / -1}
+
+  label{display:block;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;
+    color:var(--txt-dim);margin:0 0 4px}
+  .field{margin-bottom:11px}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .row>.field{flex:1;min-width:90px}
+
+  input,select,textarea{width:100%;background:#060a0f;color:var(--cyan);
+    border:1px solid var(--line);border-radius:4px;padding:8px 9px;
+    font-family:var(--mono);font-size:14px;letter-spacing:1px;outline:none}
+  input:focus,select:focus,textarea:focus{border-color:var(--cyan);
+    box-shadow:0 0 0 1px var(--cyan-dim),0 0 12px rgba(34,211,238,.25)}
+  input::placeholder{color:#39505b}
+  textarea{resize:vertical;min-height:54px}
+  select{cursor:pointer}
+
+  .checks{display:flex;gap:14px;flex-wrap:wrap;padding-top:2px}
+  .checks label{display:flex;align-items:center;gap:6px;color:var(--txt);
+    font-family:var(--mono);font-size:13px;letter-spacing:1px;text-transform:none;margin:0;cursor:pointer}
+  .checks input{width:auto}
+
+  .hint{font-family:var(--mono);font-size:11px;color:var(--amber);margin-top:3px;letter-spacing:.5px}
+  .utc{font-family:var(--mono);color:var(--amber);font-size:13px;margin-top:5px;letter-spacing:1px}
+
+  .actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px}
+  button{font-family:var(--disp);font-weight:700;letter-spacing:2px;text-transform:uppercase;
+    border:1px solid var(--cyan);background:transparent;color:var(--cyan);
+    padding:11px 20px;border-radius:5px;cursor:pointer;font-size:13px;transition:.15s}
+  button:hover{background:var(--cyan);color:#04141a;box-shadow:0 0 16px rgba(34,211,238,.4)}
+  button.ghost{border-color:var(--line-hot);color:var(--txt-dim)}
+  button.ghost:hover{background:var(--panel2);color:var(--txt);box-shadow:none}
+
+  /* live FPL message preview */
+  .preview{border:1px solid var(--amber-dim);background:#0a0700;border-radius:6px;
+    padding:12px 14px;margin-bottom:14px}
+  .preview .ttl{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--amber);margin-bottom:6px}
+  .preview pre{font-family:var(--mono);color:var(--amber);font-size:14px;
+    white-space:pre-wrap;word-break:break-word;margin:0;line-height:1.5}
+  .preview .sup{color:var(--txt-dim);border-top:1px dashed var(--amber-dim);margin-top:8px;padding-top:8px;font-size:13px}
+
+  /* saved list */
+  .saved h2{font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--cyan);
+    border-bottom:1px solid var(--line);padding-bottom:6px;margin:24px 0 10px}
+  .item{border:1px solid var(--line);background:var(--panel);border-radius:5px;
+    padding:10px 12px;margin-bottom:8px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:.12s}
+  .item:hover{border-color:var(--cyan);box-shadow:0 0 12px rgba(34,211,238,.12)}
+  .item .rt{font-family:var(--mono);color:var(--cyan);font-size:15px;flex:1}
+  .item .meta{font-family:var(--mono);color:var(--txt-dim);font-size:12px;text-align:right}
+  .item .tag{font-family:var(--mono);font-size:11px;padding:2px 7px;border-radius:3px;letter-spacing:1px}
+  .tag.borrador{color:var(--amber);border:1px solid var(--amber-dim)}
+  .tag.enviado{color:var(--ok);border:1px solid #1c5c3c}
+
+  #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(80px);
+    background:var(--panel2);border:1px solid var(--cyan);color:var(--cyan);
+    font-family:var(--mono);padding:11px 20px;border-radius:6px;letter-spacing:1px;
+    z-index:99;transition:.3s;box-shadow:0 0 22px rgba(0,0,0,.6);max-width:90vw;text-align:center}
+  #toast.show{transform:translateX(-50%) translateY(0)}
+  #toast.warn{border-color:var(--amber);color:var(--amber)}
+  #toast.bad{border-color:var(--bad);color:var(--bad)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="bar">
+    <span class="dot"></span>
+    <h1>Plan de Vuelo <small>/ FPL</small></h1>
+    <div class="clk">
+      <div id="clkUTC">--:-- Z</div>
+      <div>LOCAL <b id="clkLOC">--:--</b></div>
+    </div>
+  </header>
+
+  <!-- ===================== PREVIEW EN FORMATO OACI ===================== -->
+  <div class="preview">
+    <div class="ttl">Mensaje FPL — formato OACI (vista previa en vivo)</div>
+    <pre id="fplMsg">(FPL- …)</pre>
+    <pre class="sup" id="fplSup">—</pre>
+  </div>
+
+  <form id="fpl" autocomplete="off">
+  <div class="grid">
+
+    <!-- AERONAVE : 7 / 9 / 10 -->
+    <fieldset class="span2">
+      <legend>Aeronave · 7 · 9 · 10</legend>
+      <div class="body">
+        <div class="row">
+          <div class="field"><label>7 · Matrícula / ID</label>
+            <input id="f7" placeholder="LVOAD" maxlength="7"></div>
+          <div class="field" style="max-width:90px"><label>9 · Nº</label>
+            <input id="f9n" value="1" maxlength="2"></div>
+          <div class="field"><label>9 · Tipo (OACI)</label>
+            <input id="f9t" placeholder="C172" maxlength="4"></div>
+          <div class="field" style="max-width:130px"><label>9 · Estela</label>
+            <select id="f9w">
+              <option value="L">L · Ligera</option>
+              <option value="M">M · Media</option>
+              <option value="H">H · Pesada</option>
+              <option value="J">J · Super</option>
+            </select></div>
+        </div>
+        <div class="row">
+          <div class="field"><label>10a · Equipo COM/NAV/aprox</label>
+            <input id="f10a" placeholder="SV" value="S"></div>
+          <div class="field"><label>10b · Vigilancia (SSR/ADS-B)</label>
+            <input id="f10b" placeholder="C" value="N"></div>
+        </div>
+        <div class="hint">Campos del avión editables a mano (en el paso 2 los trae el selector /aeronaves).</div>
+      </div>
+    </fieldset>
+
+    <!-- VUELO : 8 -->
+    <fieldset>
+      <legend>Reglas de vuelo · 8</legend>
+      <div class="body">
+        <div class="row">
+          <div class="field"><label>Reglas</label>
+            <select id="f8r">
+              <option value="V">V · VFR</option>
+              <option value="I">I · IFR</option>
+              <option value="Y">Y · IFR primero</option>
+              <option value="Z">Z · VFR primero</option>
+            </select></div>
+          <div class="field"><label>Tipo de vuelo</label>
+            <select id="f8t">
+              <option value="G">G · Aviación general</option>
+              <option value="S">S · Regular</option>
+              <option value="N">N · No regular</option>
+              <option value="M">M · Militar</option>
+              <option value="X">X · Otro</option>
+            </select></div>
+        </div>
+      </div>
+    </fieldset>
+
+    <!-- SALIDA : 13 -->
+    <fieldset>
+      <legend>Salida · 13</legend>
+      <div class="body">
+        <div class="row">
+          <div class="field"><label>Aeródromo (OACI)</label>
+            <input id="f13a" placeholder="SAWE" maxlength="4"></div>
+          <div class="field"><label>Fecha (local)</label>
+            <input id="f13fecha" type="date"></div>
+          <div class="field"><label>Hora despegue (LOCAL)</label>
+            <input id="f13hora" type="time"></div>
+        </div>
+        <div class="utc" id="eobtUTC">EOBT (UTC): ----  ·  DOF: ------</div>
+      </div>
+    </fieldset>
+
+    <!-- RUTA : 15 -->
+    <fieldset>
+      <legend>Crucero y ruta · 15</legend>
+      <div class="body">
+        <div class="row">
+          <div class="field"><label>Velocidad</label>
+            <input id="f15v" placeholder="N0090"></div>
+          <div class="field"><label>Nivel</label>
+            <input id="f15l" placeholder="A055"></div>
+        </div>
+        <div class="field"><label>Ruta</label>
+          <input id="f15r" placeholder="DCT"></div>
+      </div>
+    </fieldset>
+
+    <!-- DESTINO : 16 -->
+    <fieldset>
+      <legend>Destino y alternativas · 16</legend>
+      <div class="body">
+        <div class="row">
+          <div class="field"><label>Destino (OACI)</label>
+            <input id="f16d" placeholder="SAWH" maxlength="4"></div>
+          <div class="field" style="max-width:120px"><label>EET (HHMM)</label>
+            <input id="f16eet" placeholder="0040" maxlength="4"></div>
+          <div class="field"><label>Altn 1</label>
+            <input id="f16a1" placeholder="SAWG" maxlength="4"></div>
+          <div class="field"><label>Altn 2</label>
+            <input id="f16a2" maxlength="4"></div>
+        </div>
+      </div>
+    </fieldset>
+
+    <!-- OTROS : 18 -->
+    <fieldset>
+      <legend>Otra información · 18</legend>
+      <div class="body">
+        <div class="field"><label>Texto (DOF/ se agrega solo)</label>
+          <textarea id="f18" placeholder="RMK/ ..."></textarea></div>
+      </div>
+    </fieldset>
+
+    <!-- SUPLEMENTARIA : 19 -->
+    <fieldset class="span2">
+      <legend>Información suplementaria · 19 (no se transmite)</legend>
+      <div class="body">
+        <div class="row">
+          <div class="field" style="max-width:160px"><label>E/ Autonomía (HHMM)</label>
+            <input id="f19e" placeholder="0300" maxlength="4"></div>
+          <div class="field" style="max-width:140px"><label>P/ Personas a bordo</label>
+            <input id="f19p" placeholder="2"></div>
+          <div class="field"><label>R/ Radio emergencia</label>
+            <div class="checks">
+              <label><input type="checkbox" class="r19" value="U">UHF</label>
+              <label><input type="checkbox" class="r19" value="V" checked>VHF</label>
+              <label><input type="checkbox" class="r19" value="E" checked>ELT</label>
+            </div></div>
+        </div>
+        <div class="row">
+          <div class="field"><label>S/ Equipo supervivencia</label>
+            <div class="checks">
+              <label><input type="checkbox" class="s19" value="P">Polar</label>
+              <label><input type="checkbox" class="s19" value="D">Desierto</label>
+              <label><input type="checkbox" class="s19" value="M">Marítimo</label>
+              <label><input type="checkbox" class="s19" value="J">Jungla</label>
+            </div></div>
+          <div class="field"><label>J/ Chalecos</label>
+            <div class="checks">
+              <label><input type="checkbox" class="j19" value="L">Luz</label>
+              <label><input type="checkbox" class="j19" value="F">Fluor</label>
+              <label><input type="checkbox" class="j19" value="U">UHF</label>
+              <label><input type="checkbox" class="j19" value="V">VHF</label>
+            </div></div>
+        </div>
+        <div class="row">
+          <div class="field"><label>A/ Color y marcas</label>
+            <input id="f19a" placeholder="WHITE BLUE"></div>
+          <div class="field"><label>C/ Comandante (firma el plan)</label>
+            <input id="f19c" placeholder="Apellido, Nombre"></div>
+        </div>
+        <div class="field"><label>N/ Observaciones</label>
+          <input id="f19n"></div>
+        <div class="hint">El comandante (C/) puede ser distinto de quien carga el plan (p. ej. instructor en vuelo de instrucción).</div>
+      </div>
+    </fieldset>
+
+  </div>
+
+  <div class="actions">
+    <button type="button" id="btnGuardar">Guardar borrador</button>
+    <button type="button" class="ghost" id="btnNuevo">Limpiar</button>
+    <button type="button" class="ghost" id="btnRecargar">Refrescar lista</button>
+  </div>
+  </form>
+
+  <div class="saved">
+    <h2>Planes guardados</h2>
+    <div id="lista"></div>
+  </div>
+
+</div>
+<div id="toast"></div>
+
+<script>
+/* ============================ CONFIG ============================ */
+const DB = "https://turnos-lv-oad-default-rtdb.firebaseio.com"; // proyecto turnos-lv-oad
+const TZ_OFFSET_H = 3; // Río Grande UTC-3 (sin DST). UTC = local + 3h
+let   editKey = null;  // pushKey del plan que se está editando, o null si es nuevo
+
+/* ============================ HELPERS ============================ */
+const $ = id => document.getElementById(id);
+const pad = (n,l=2) => String(n).padStart(l,'0');
+function toast(msg, kind=''){
+  const t=$('toast'); t.textContent=msg; t.className='show '+kind;
+  clearTimeout(t._t); t._t=setTimeout(()=>t.className=t.className.replace('show',''),3200);
+}
+function checks(cls){ return [...document.querySelectorAll('.'+cls)].filter(c=>c.checked).map(c=>c.value).join(''); }
+function setChecks(cls,val){ document.querySelectorAll('.'+cls).forEach(c=>c.checked=(val||'').includes(c.value)); }
+
+/* Local (UTC-3) -> { eobt:"HHMM", dof:"YYMMDD" } en UTC. Maneja cambio de día. */
+function calcUTC(){
+  const f=$('f13fecha').value, h=$('f13hora').value;
+  if(!f||!h) return null;
+  const [Y,M,D]=f.split('-').map(Number);
+  const [hh,mm]=h.split(':').map(Number);
+  const d=new Date(Date.UTC(Y, M-1, D, hh+TZ_OFFSET_H, mm)); // normaliza rollover
+  return {
+    eobt: pad(d.getUTCHours())+pad(d.getUTCMinutes()),
+    dof:  pad(d.getUTCFullYear()%100)+pad(d.getUTCMonth()+1)+pad(d.getUTCDate())
+  };
+}
+
+/* Arma item 18 con DOF/ adelante (sin duplicar si el usuario ya lo puso) */
+function item18(dof){
+  let txt=($('f18').value||'').trim().toUpperCase();
+  txt=txt.replace(/DOF\/\d{6}\s*/g,'').trim();      // saca DOF previos
+  const base= dof ? 'DOF/'+dof : '';
+  return (base+(txt?' '+txt:'')).trim() || '0';
+}
+
+/* ===================== ENSAMBLADO DEL MENSAJE FPL ===================== */
+function armarMensaje(){
+  const u=calcUTC();
+  // item 9: número (se omite si es 1) + tipo + / + estela
+  const n=($('f9n').value||'1').trim();
+  const i9=(n==='1'?'':n)+($('f9t').value||'').toUpperCase()+'/'+$('f9w').value;
+  const i10=($('f10a').value||'').toUpperCase()+'/'+($('f10b').value||'').toUpperCase();
+  const i13=($('f13a').value||'').toUpperCase()+(u?u.eobt:'----');
+  const i15=($('f15v').value||'').toUpperCase()+($('f15l').value||'').toUpperCase()+' '+($('f15r').value||'').toUpperCase();
+  const i16=($('f16d').value||'').toUpperCase()+($('f16eet').value||'')
+            +' '+($('f16a1').value||'').toUpperCase()+(($('f16a2').value)?' '+$('f16a2').value.toUpperCase():'');
+  const i18=item18(u?u.dof:'');
+
+  const msg=
+`(FPL-${($('f7').value||'').toUpperCase()}-${$('f8r').value}${$('f8t').value}
+-${i9}-${i10}
+-${i13}
+-${i15}
+-${i16}
+-${i18})`;
+
+  // suplementaria (19)
+  let sup='-E/'+($('f19e').value||'----')+' P/'+($('f19p').value||'-');
+  const r=checks('r19'); if(r) sup+=' R/'+r;
+  const s=checks('s19'); if(s) sup+=' S/'+s;
+  const j=checks('j19'); if(j) sup+=' J/'+j;
+  if($('f19a').value) sup+=' A/'+$('f19a').value.toUpperCase();
+  if($('f19c').value) sup+=' C/'+$('f19c').value.toUpperCase();
+  if($('f19n').value) sup+=' N/'+$('f19n').value.toUpperCase();
+
+  return {msg, sup, u};
+}
+
+function refrescarPreview(){
+  const {msg,sup,u}=armarMensaje();
+  $('fplMsg').textContent=msg;
+  $('fplSup').textContent=sup;
+  $('eobtUTC').textContent = u ? `EOBT (UTC): ${u.eobt} Z  ·  DOF: ${u.dof}` : 'EOBT (UTC): ----  ·  DOF: ------';
+}
+
+/* ============================ FIREBASE (REST) ============================ */
+async function guardar(){
+  const u=calcUTC();
+  if(!$('f7').value || !$('f13a').value || !$('f16d').value || !u){
+    toast('Faltan datos: matrícula, salida, fecha/hora y destino', 'bad'); return;
+  }
+  const data={
+    matricula:$('f7').value.toUpperCase(),
+    numero:$('f9n').value, tipo:$('f9t').value.toUpperCase(), estela:$('f9w').value,
+    equipo_10a:$('f10a').value.toUpperCase(), equipo_10b:$('f10b').value.toUpperCase(),
+    reglas:$('f8r').value, tipo_vuelo:$('f8t').value,
+    salida:$('f13a').value.toUpperCase(), eobt:u.eobt,
+    fecha_local:$('f13fecha').value, hora_local:$('f13hora').value,
+    vel_crucero:$('f15v').value.toUpperCase(), nivel:$('f15l').value.toUpperCase(), ruta:$('f15r').value.toUpperCase(),
+    destino:$('f16d').value.toUpperCase(), eet:$('f16eet').value,
+    altn:$('f16a1').value.toUpperCase(), altn2:$('f16a2').value.toUpperCase(),
+    otros_18:item18(u.dof),
+    endurance:$('f19e').value, pob:$('f19p').value,
+    radio_emerg:checks('r19'), equipo_superv:checks('s19'), chalecos:checks('j19'),
+    color_marcas:$('f19a').value.toUpperCase(), piloto:$('f19c').value, obs_19:$('f19n').value,
+    estado:'borrador', fecha_creacion:new Date().toISOString()
+  };
+  try{
+    await chequearReservaExistente(data);  // aviso blando, no bloquea
+    const url = editKey ? `${DB}/fpl/${editKey}.json` : `${DB}/fpl.json`;
+    const r = await fetch(url, {method: editKey?'PATCH':'POST',
+      headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    toast(editKey?'Plan actualizado':'Plan guardado', 'ok'!=='ok'?'':'');
+    editKey=null; cargarLista();
+  }catch(e){ console.error(e); toast('Error al guardar: '+e.message, 'bad'); }
+}
+
+async function cargarLista(){
+  const cont=$('lista'); cont.innerHTML='<div class="hint" style="padding:6px">Cargando…</div>';
+  try{
+    const r=await fetch(`${DB}/fpl.json`); const o=await r.json()||{};
+    const items=Object.entries(o).sort((a,b)=>(b[1].fecha_creacion||'').localeCompare(a[1].fecha_creacion||''));
+    if(!items.length){ cont.innerHTML='<div class="hint" style="padding:6px">No hay planes guardados todavía.</div>'; return; }
+    cont.innerHTML='';
+    for(const [key,p] of items){
+      const div=document.createElement('div'); div.className='item';
+      div.innerHTML=`<span class="rt">${p.matricula||'?'} · ${p.salida||'????'} → ${p.destino||'????'}</span>
+        <span class="meta">${p.fecha_local||''} ${p.hora_local||''} loc<br>EOBT ${p.eobt||'----'}Z</span>
+        <span class="tag ${p.estado||'borrador'}">${(p.estado||'borrador').toUpperCase()}</span>`;
+      div.onclick=()=>cargarEnForm(key,p);
+      cont.appendChild(div);
+    }
+  }catch(e){ cont.innerHTML='<div class="hint" style="padding:6px">Error al leer: '+e.message+'</div>'; }
+}
+
+function cargarEnForm(key,p){
+  editKey=key;
+  $('f7').value=p.matricula||''; $('f9n').value=p.numero||'1'; $('f9t').value=p.tipo||''; $('f9w').value=p.estela||'L';
+  $('f10a').value=p.equipo_10a||''; $('f10b').value=p.equipo_10b||'';
+  $('f8r').value=p.reglas||'V'; $('f8t').value=p.tipo_vuelo||'G';
+  $('f13a').value=p.salida||''; $('f13fecha').value=p.fecha_local||''; $('f13hora').value=p.hora_local||'';
+  $('f15v').value=p.vel_crucero||''; $('f15l').value=p.nivel||''; $('f15r').value=p.ruta||'';
+  $('f16d').value=p.destino||''; $('f16eet').value=p.eet||''; $('f16a1').value=p.altn||''; $('f16a2').value=p.altn2||'';
+  $('f18').value=(p.otros_18||'').replace(/DOF\/\d{6}\s*/g,'').trim();
+  $('f19e').value=p.endurance||''; $('f19p').value=p.pob||''; $('f19a').value=p.color_marcas||'';
+  $('f19c').value=p.piloto||''; $('f19n').value=p.obs_19||'';
+  setChecks('r19',p.radio_emerg); setChecks('s19',p.equipo_superv); setChecks('j19',p.chalecos);
+  refrescarPreview(); window.scrollTo({top:0,behavior:'smooth'});
+  toast('Editando plan existente', 'warn');
+}
+
+function limpiar(){
+  editKey=null; $('fpl').reset();
+  $('f9n').value='1'; $('f10a').value='S'; $('f10b').value='N';
+  setChecks('r19','VE'); setChecks('s19',''); setChecks('j19','');
+  refrescarPreview(); toast('Formulario limpio');
+}
+
+/* --- STUB: chequeo blando de reserva existente -----------------------------
+   Se cablea cuando confirmemos el schema exacto de /reservas (campos de fecha,
+   hora y avión). Por ahora solo deja el gancho; NO bloquea el guardado. -------*/
+async function chequearReservaExistente(data){
+  // TODO paso 2: GET /reservas.json, buscar coincidencia avión+fecha+hora -> toast warn.
+  return;
+}
+
+/* ============================ RELOJ ============================ */
+function reloj(){
+  const d=new Date();
+  $('clkUTC').textContent=pad(d.getUTCHours())+':'+pad(d.getUTCMinutes())+' Z';
+  const loc=new Date(d.getTime()-TZ_OFFSET_H*3600*1000); // hora local Río Grande
+  $('clkLOC').textContent=pad(loc.getUTCHours())+':'+pad(loc.getUTCMinutes());
+}
+
+/* ============================ INIT ============================ */
+$('btnGuardar').onclick=guardar;
+$('btnNuevo').onclick=limpiar;
+$('btnRecargar').onclick=cargarLista;
+document.querySelectorAll('input,select,textarea').forEach(el=>{
+  el.addEventListener('input',refrescarPreview);
+  el.addEventListener('change',refrescarPreview);
+});
+setChecks('r19','VE');
+refrescarPreview(); cargarLista(); reloj(); setInterval(reloj,1000);
+</script>
+</body>
+</html>
