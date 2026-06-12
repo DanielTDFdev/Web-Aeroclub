@@ -2,7 +2,7 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
-  v3.1  ·  Tema dark/light sincronizado con el turnero (sobre v3.0)
+  v3.2  ·  Boton volver al turnero (mismo nombre v3.1 = tema)
   ----------------------------------------------------------------------------------
   - Casillas 7 a 19 del formulario OACI de plan de vuelo
   - Persistencia en Firebase Realtime DB (proyecto turnos-lv-oad) via REST
@@ -107,6 +107,8 @@
           anti-flash en <head> + variante :root.light + toggle propio en el header
           que escribe la misma clave -> sincronizado en ambas direcciones.
           (Reinyectado sobre v3.0 tras un merge: v3.0 de oficina + tema de la otra rama.)
+    v3.2  Boton "← TURNERO" en el header que vuelve a turnos.html sin cerrar sesion
+          (turnos ahora persiste la sesion en sessionStorage y la restaura al volver).
 ==================================================================================
 -->
 <html lang="es">
@@ -277,7 +279,8 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v3.1</span>
+    <span class="ver">v3.2</span>
+    <a href="turnos.html" title="Volver al turnero (sin cerrar sesión)" style="font-family:var(--mono);font-size:12px;color:var(--cyan);text-decoration:none;border:1px solid var(--line-hot);border-radius:5px;padding:5px 11px;letter-spacing:1px;transition:.15s" onmouseover="this.style.background='var(--cyan)';this.style.color='#04141a'" onmouseout="this.style.background='transparent';this.style.color='var(--cyan)'">← TURNERO</a>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
       <div>LOCAL <b id="clkLOC">--:--</b></div>
