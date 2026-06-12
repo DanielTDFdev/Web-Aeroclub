@@ -2,7 +2,7 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
-  v2.7  ·  LAD argentinos (ANAC) + ICAO AR/CL; acepta codigos de 3 letras
+  v2.8  ·  Personas a bordo acepta TBN (to be notified)
   ----------------------------------------------------------------------------------
   - Casillas 7 a 19 del formulario OACI de plan de vuelo
   - Persistencia en Firebase Realtime DB (proyecto turnos-lv-oad) via REST
@@ -85,6 +85,10 @@
           readout marca "(LAD)" en los de 3. NOTA: en el CSV de ANAC las columnas
           latitud/longitud venian invertidas; se guardan corregidas (no se usan
           aun, son para un futuro mapa). aerodromos.json ahora ?v=2.
+    v2.8  Casilla 19 P/ (personas a bordo) acepta TBN ademas de numero >=1, para
+          cuando no se sabe la cantidad al presentar. En el PDF se estampa TBN tal
+          cual (los numeros siguen con relleno de ceros a 3 digitos). El campo se
+          normaliza a mayusculas al salir.
 ==================================================================================
 -->
 <html lang="es">
@@ -233,7 +237,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v2.7</span>
+    <span class="ver">v2.8</span>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
       <div>LOCAL <b id="clkLOC">--:--</b></div>
@@ -371,7 +375,7 @@
           <div class="field" style="max-width:160px"><label>E/ Autonomía (HHMM)</label>
             <input id="f19e" placeholder="0300" maxlength="4"></div>
           <div class="field" style="max-width:140px"><label>P/ Personas a bordo</label>
-            <input id="f19p" placeholder="2"></div>
+            <input id="f19p" placeholder="2 o TBN"></div>
           <div class="field"><label>R/ Radio emergencia</label>
             <div class="checks">
               <label><input type="checkbox" class="r19" value="U">UHF</label>
@@ -564,7 +568,7 @@ function validar(){
   if(v('f16a2') && !/^[A-Z]{3,4}$/.test(vU('f16a2'))){ E.push('16 · Alternativa 2: 3-4 letras OACI/LAD'); bad.push('f16a2'); }
   // 19
   need('f19e', /^\d{4}$/.test(v('f19e')) && (+v('f19e').slice(2))<60, '19 · Autonomía E/ inválida (HHMM, ej. 0300)');
-  need('f19p', /^\d{1,3}$/.test(v('f19p')) && (+v('f19p'))>=1, '19 · Personas a bordo P/ requerido (≥ 1)');
+  need('f19p', vU('f19p')==='TBN' || (/^\d{1,3}$/.test(v('f19p')) && (+v('f19p'))>=1), '19 · Personas a bordo P/: número ≥ 1 o TBN (si aún no se sabe)');
   need('f19a', v('f19a').length>=1, '19 · Color y marcas A/ requerido');
   need('f19c', v('f19c').length>=1, '19 · Comandante C/ requerido (firma el plan)');
 
@@ -867,7 +871,7 @@ async function generarPDF(){
     spread(['D9','D10','D11','D12'], vU('f16a1')); spread(['D13','D14','D15','D16'], vU('f16a2')); // 16 altn
     put('Info1', item18(u.dof));                                                   // 18
     spread(['T9','T10','T11','T12'], $('f19e').value);                             // 19 autonomia
-    spread(['P1','P2','P3'], ($('f19p').value||'').padStart(3,'0').slice(-3));     // 19 POB
+    spread(['P1','P2','P3'], vU('f19p')==='TBN' ? 'TBN' : ($('f19p').value||'').padStart(3,'0').slice(-3)); // 19 POB
     put('Markings', vU('f19a')); put('Pilot', $('f19c').value); put('Remarks', vU('f19n'));
 
     // item 19 — convencion de tachado: tachar = NO disponible
@@ -926,7 +930,7 @@ $('f15v').addEventListener('blur',()=>{ fmtVel(); refrescarPreview(); });
 $('f15l').addEventListener('blur',()=>{ fmtNivel(); refrescarPreview(); });
 $('f16eet').addEventListener('blur',()=>{ fmtHHMM('f16eet'); refrescarPreview(); });
 $('f19e').addEventListener('blur',()=>{ fmtHHMM('f19e'); refrescarPreview(); });
-['f7','f9t','f10a','f10b','f13a','f15r','f16d','f16a1','f16a2','f19a']
+['f7','f9t','f10a','f10b','f13a','f15r','f16d','f16a1','f16a2','f19a','f19p']
   .forEach(id=>$(id).addEventListener('blur',()=>{ upper(id); refrescarPreview(); }));
 
 setChecks('r19','E');
