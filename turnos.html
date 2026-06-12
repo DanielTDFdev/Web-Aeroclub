@@ -241,7 +241,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 .cal-leyenda-dot{width:10px;height:10px;border-radius:2px;}
 .cal-avion-tab.all.active{border-color:var(--cyan);color:var(--cyan);background:rgba(0,200,212,.08);}
 </style>
-<script>if(localStorage.getItem('arc-theme')==='light')document.documentElement.classList.add('light');</script>
+<script>if(localStorage.getItem('lvoad-theme')==='light')document.documentElement.classList.add('light');</script>
 </head>
 <body>
 
@@ -1101,6 +1101,7 @@ window.loginAlumno=async function(){
     await registrarAuditoria('login',alumno.rol||'alumno','exito',alumno.nombre+' ('+id+')');
     const rol=alumno.rol||'alumno';
     session={tipo:'alumno',rol,nombre:alumno.nombre,email:alumno.email,emailKey:k};
+    guardarSesion();
     setNavUser(alumno.nombre,rol);
     await loadConfig();
     showScreen('alumno-screen');
@@ -1188,6 +1189,7 @@ window.loginInstructor=async function(){
     // administrador tiene acceso completo (excepto Zona Peligrosa y edición de horarios)
     const soloUsuarios=found.soloUsuarios===true&&found.user!=='admin'&&found.user!=='administrador';
     session={tipo:'instructor',nombre:found.nombre,user:found.user,soloUsuarios};
+    guardarSesion();
     setNavUser(found.nombre,'instructor');
     await loadConfig();
     buildCalAvionTabs();
@@ -1217,6 +1219,7 @@ window.logout=function(){
   if(_unsubPendientes){_unsubPendientes();_unsubPendientes=null;}
   const banner=document.getElementById('banner-pendientes');if(banner)banner.style.display='none';
   session=null;selectedDay=null;selectedSlot=null;selectedAvion=null;selectedSlotFin=null;
+  try{sessionStorage.removeItem('lvoad-session');}catch(e){}
   // reset cachés de datos
   _reservasCache={};
   _alumnosCache=null;
@@ -3048,12 +3051,50 @@ window.cancelarRestore=function(){
   _restoreData=null;
   document.getElementById('restore-preview').style.display='none';
 };
+function guardarSesion(){
+  try{ if(session) sessionStorage.setItem('lvoad-session',JSON.stringify(session)); }catch(e){}
+}
+// Restaura la sesión persistida al recargar/volver (p.ej. al regresar desde fpl.html),
+// replicando el bootstrap del login. Si algo falla, limpia y cae al login.
+async function restoreSession(){
+  let s=null;
+  try{ s=JSON.parse(sessionStorage.getItem('lvoad-session')||'null'); }catch(e){ s=null; }
+  if(!s||!s.tipo) return false;
+  try{
+    session=s;
+    if(s.tipo==='instructor'){
+      setNavUser(s.nombre,'instructor');
+      await loadConfig();
+      buildCalAvionTabs();
+      showScreen('instructor-screen');
+      if(s.soloUsuarios){showInstTab('config');showCfgTab('usuarios');}
+      else{showInstTab('reservas');suscribirReservas();}
+      suscribirPendientes();
+      const u=document.getElementById('inst-perfil-user'); if(u)u.value=s.user||'';
+      const nl=document.getElementById('inst-perfil-user-label'); if(nl)nl.value=s.nombre||'';
+    }else{
+      setNavUser(s.nombre,s.rol);
+      await loadConfig();
+      showScreen('alumno-screen');
+      initAvionSelector();
+      showAlumnoTab('mis-turnos');
+      suscribirReservas();
+    }
+    startSessionTimeout();
+    return true;
+  }catch(e){
+    console.error('No se pudo restaurar la sesión:',e);
+    session=null;
+    try{sessionStorage.removeItem('lvoad-session');}catch(_){}
+    return false;
+  }
+}
 (async()=>{
   if(!await fbGet('instructores/administrador')){
     await fbSet('instructores/administrador',{user:'administrador',pass:'Aer0club',nombre:'Administrador',soloUsuarios:true});
   }
+  if(!await restoreSession()) switchLoginTab('alumno');
 })();
-switchLoginTab('alumno');
 
 
 // ── DISPONIBILIDAD DE INSTRUCTORES ────────────────────────────
