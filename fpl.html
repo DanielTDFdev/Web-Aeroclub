@@ -2,7 +2,7 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
-  v2.9  ·  LAD sin OACI -> ZZZZ + DEP/DEST/ALTN/ con coords en item 18
+  v3.0  ·  Item 18 incluye el código LAD antes del nombre (ALTN/THN TOLHUIN ...)
   ----------------------------------------------------------------------------------
   - Casillas 7 a 19 del formulario OACI de plan de vuelo
   - Persistencia en Firebase Realtime DB (proyecto turnos-lv-oad) via REST
@@ -99,6 +99,9 @@
           campo ahora muestra como se va a presentar (-> SAWE / -> ZZZZ).
           aerodromos.json regenerado con OACI asociado (i) y coords (c); swap
           lat/long del CSV de ANAC corregido. Ahora ?v=3.
+    v3.0  El detalle del item 18 ahora antepone el codigo LAD al nombre:
+          ALTN/THN TOLHUIN 5430S06710W (idem DEP/ y DEST/). Util a nivel domestico
+          para identificar el LAD; no cambia el archivo de datos.
 ==================================================================================
 -->
 <html lang="es">
@@ -247,7 +250,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v2.9</span>
+    <span class="ver">v3.0</span>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
       <div>LOCAL <b id="clkLOC">--:--</b></div>
@@ -738,9 +741,10 @@ function resolveAero(val){
   if(!AERO_OK) return {box:c, zzzz:false, i18:''};            // sin lista, no decidimos ZZZZ
   const a = AERO[c];
   if(a && a.i) return {box:a.i, zzzz:false, i18:''};          // LAD con OACI -> usar OACI
-  const nombre = a ? a.n : c;                                 // ZZZZ: nombre (o el propio codigo)
+  const nombre = a ? a.n : '';                                // nombre del aeródromo
   const coords = (a && a.c) ? ' '+a.c : '';
-  return {box:'ZZZZ', zzzz:true, i18:(nombre+coords).trim()};
+  // formato: <LAD> <NOMBRE> <COORDS>  (ej. THN TOLHUIN 5430S06710W)
+  return {box:'ZZZZ', zzzz:true, i18:((c+' '+nombre).trim()+coords).trim()};
 }
 
 // devuelve {found, label} o null si el codigo aun no tiene formato OACI/LAD
