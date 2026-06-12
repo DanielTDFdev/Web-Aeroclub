@@ -2,7 +2,7 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
-  v2.8  ·  Personas a bordo acepta TBN (to be notified)
+  v2.9  ·  LAD sin OACI -> ZZZZ + DEP/DEST/ALTN/ con coords en item 18
   ----------------------------------------------------------------------------------
   - Casillas 7 a 19 del formulario OACI de plan de vuelo
   - Persistencia en Firebase Realtime DB (proyecto turnos-lv-oad) via REST
@@ -89,6 +89,16 @@
           cuando no se sabe la cantidad al presentar. En el PDF se estampa TBN tal
           cual (los numeros siguen con relleno de ceros a 3 digitos). El campo se
           normaliza a mayusculas al salir.
+    v2.9  Convencion OACI ZZZZ para aerodromos sin indicador (Doc 4444):
+          - Si en casilla 13/16 va un LAD CON OACI publicado -> se estampa el OACI
+            (ej. GRA -> SAWE).
+          - Si va un LAD SIN OACI (ej. THN/Tolhuin) -> se estampa ZZZZ en la casilla
+            y el detalle va al item 18: DEP/ (salida), DEST/ (destino) o ALTN/
+            (alternativas), con NOMBRE + COORDENADAS (formato OACI DDMM[NS]DDDMM[EW]).
+          Aplica tanto al PDF como al mensaje FPL del preview. El readout bajo cada
+          campo ahora muestra como se va a presentar (-> SAWE / -> ZZZZ).
+          aerodromos.json regenerado con OACI asociado (i) y coords (c); swap
+          lat/long del CSV de ANAC corregido. Ahora ?v=3.
 ==================================================================================
 -->
 <html lang="es">
@@ -237,7 +247,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v2.8</span>
+    <span class="ver">v2.9</span>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
       <div>LOCAL <b id="clkLOC">--:--</b></div>
@@ -487,8 +497,18 @@ function calcUTC(){
 function item18(dof){
   let txt=($('f18').value||'').trim().toUpperCase();
   txt=txt.replace(/DOF\/\d{6}\s*/g,'').trim();
-  const base= dof ? 'DOF/'+dof : '';
-  return (base+(txt?' '+txt:'')).trim() || '0';
+  // aeródromos sin OACI -> ZZZZ en la casilla y el detalle acá (nombre + coords)
+  const dep=resolveAero(vU('f13a')), des=resolveAero(vU('f16d'));
+  const a1=resolveAero(vU('f16a1')), a2=resolveAero(vU('f16a2'));
+  const alt=[a1,a2].filter(x=>x.zzzz).map(x=>x.i18);
+  // orden segun secuencia OACI: DEP/ DEST/ DOF/ <manual: OPR/...> ALTN/
+  const parts=[];
+  if(dep.zzzz) parts.push('DEP/'+dep.i18);
+  if(des.zzzz) parts.push('DEST/'+des.i18);
+  if(dof)      parts.push('DOF/'+dof);
+  if(txt)      parts.push(txt);
+  if(alt.length) parts.push('ALTN/'+alt.join(' '));
+  return parts.filter(Boolean).join(' ') || '0';
 }
 
 /* ===================== AUTO-FORMATO (al salir del campo) ===================== */
@@ -514,9 +534,9 @@ function armarMensaje(){
   const n=($('f9n').value||'1').trim();
   const i9=(n==='1'?'':n)+vU('f9t')+'/'+$('f9w').value;
   const i10=vU('f10a')+'/'+vU('f10b');
-  const i13=vU('f13a')+(u?u.eobt:'----');
+  const i13=resolveAero(vU('f13a')).box+(u?u.eobt:'----');
   const i15=vU('f15v')+vU('f15l')+' '+vU('f15r');
-  const i16=vU('f16d')+($('f16eet').value||'')+' '+vU('f16a1')+(v('f16a2')?' '+vU('f16a2'):'');
+  const i16=resolveAero(vU('f16d')).box+($('f16eet').value||'')+' '+resolveAero(vU('f16a1')).box+(v('f16a2')?' '+resolveAero(vU('f16a2')).box:'');
   const i18=item18(u?u.dof:'');
   const msg=
 `(FPL-${vU('f7')}-${$('f8r').value}${$('f8t').value}
@@ -696,7 +716,7 @@ const AERO = {}; let AERO_OK = false;
 
 async function cargarAerodromos(){
   try{
-    const r = await fetch('aerodromos.json?v=2');
+    const r = await fetch('aerodromos.json?v=3');
     if(!r.ok) throw new Error('HTTP '+r.status);
     Object.assign(AERO, await r.json());
     AERO_OK = true;
@@ -706,14 +726,34 @@ async function cargarAerodromos(){
   pintarNombres();
 }
 
+// Resuelve un codigo de casilla 13/16 a su forma OFICIAL de formulario:
+//  - OACI 4 letras            -> va tal cual
+//  - LAD con OACI publicado   -> va el OACI
+//  - LAD sin OACI (o 3 letras desconocido) -> ZZZZ + dato para item 18 (nombre + coords)
+// Devuelve {box, zzzz, i18}
+function resolveAero(val){
+  const c=(val||'').toUpperCase();
+  if(!c) return {box:'', zzzz:false, i18:''};
+  if(/^[A-Z]{4}$/.test(c)) return {box:c, zzzz:false, i18:''};
+  if(!AERO_OK) return {box:c, zzzz:false, i18:''};            // sin lista, no decidimos ZZZZ
+  const a = AERO[c];
+  if(a && a.i) return {box:a.i, zzzz:false, i18:''};          // LAD con OACI -> usar OACI
+  const nombre = a ? a.n : c;                                 // ZZZZ: nombre (o el propio codigo)
+  const coords = (a && a.c) ? ' '+a.c : '';
+  return {box:'ZZZZ', zzzz:true, i18:(nombre+coords).trim()};
+}
+
 // devuelve {found, label} o null si el codigo aun no tiene formato OACI/LAD
 function aeroInfo(id){
   const c = vU(id);
   if(!/^[A-Z]{3,4}$/.test(c)) return null;
   if(!AERO_OK) return null;                 // si no cargo la lista, no opinamos
   const a = AERO[c];
-  const kind = c.length===3 ? ' (LAD)' : '';   // 3 letras = Lugar Apto Declarado
-  return a ? {found:true,  label:c+kind+' · '+(a.n||a.m)}
+  const isLAD = c.length===3;
+  const kind = isLAD ? ' (LAD)' : '';       // 3 letras = Lugar Apto Declarado
+  let suf='';
+  if(a && isLAD) suf = a.i ? ' → '+a.i : ' → ZZZZ (ítem 18)';  // cómo se presentará
+  return a ? {found:true,  label:c+kind+' · '+(a.n||a.m)+suf}
            : {found:false, label:c+kind+' · no está en la lista (verificá)'};
 }
 
@@ -865,10 +905,10 @@ async function generarPDF(){
     spread(['A1','A2','A3','A4'], vU('f9t')); comb('WT',$('f9w').value);            // 9 tipo/estela
     const a10=vU('f10a'); comb('E1', a10.length>1?a10[a10.length-2]:''); comb('E2', a10[a10.length-1]||''); // 10a
     const b10=vU('f10b'); comb('E3', b10[0]||''); comb('E4', b10[1]||'');           // 10b
-    spread(['D1','D2','D3','D4'], vU('f13a')); spread(['T1','T2','T3','T4'], u.eobt); // 13
+    spread(['D1','D2','D3','D4'], resolveAero(vU('f13a')).box); spread(['T1','T2','T3','T4'], u.eobt); // 13
     spread(['S1','S2','S3','S4','S5'], vU('f15v')); spread(['L1','L2','L3','L4','L5'], vU('f15l')); put('Route1', vU('f15r')); // 15
-    spread(['D5','D6','D7','D8'], vU('f16d')); spread(['T5','T6','T7','T8'], $('f16eet').value);  // 16 destino/eet
-    spread(['D9','D10','D11','D12'], vU('f16a1')); spread(['D13','D14','D15','D16'], vU('f16a2')); // 16 altn
+    spread(['D5','D6','D7','D8'], resolveAero(vU('f16d')).box); spread(['T5','T6','T7','T8'], $('f16eet').value);  // 16 destino/eet
+    spread(['D9','D10','D11','D12'], resolveAero(vU('f16a1')).box); spread(['D13','D14','D15','D16'], resolveAero(vU('f16a2')).box); // 16 altn
     put('Info1', item18(u.dof));                                                   // 18
     spread(['T9','T10','T11','T12'], $('f19e').value);                             // 19 autonomia
     spread(['P1','P2','P3'], vU('f19p')==='TBN' ? 'TBN' : ($('f19p').value||'').padStart(3,'0').slice(-3)); // 19 POB
