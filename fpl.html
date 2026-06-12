@@ -2,7 +2,7 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
-  v2.5  ·  Firma corrida un poco a la izquierda
+  v2.6  ·  Validacion online de aerodromos (AR+CL) por nombre + aviso
   ----------------------------------------------------------------------------------
   - Casillas 7 a 19 del formulario OACI de plan de vuelo
   - Persistencia en Firebase Realtime DB (proyecto turnos-lv-oad) via REST
@@ -70,6 +70,12 @@
           y ancho salen del PNG por un unico factor SCALE (0.36), sin deformar.
           SX/SY_TOP siguen siendo la esquina sup-izq, ajustables a ojo.
     v2.5  Firma corrida a la izquierda: SX 112 -> 98.
+    v2.6  Validacion/lookup de aerodromos: lista de referencia AR+CL (515 OACI)
+          en aerodromos.json (mismo repo, ~27KB, cacheable offline). Bajo Salida
+          y Destino/Altn muestra el nombre del aerodromo (confirma que el codigo
+          es el correcto). Si el codigo no figura -> AVISO amarillo no bloqueante
+          (la lista es incompleta: avisa, no rechaza). Requiere subir aerodromos.json
+          al repo junto a fpl.html. Si no carga, todo sigue funcionando sin lookup.
 ==================================================================================
 -->
 <html lang="es">
@@ -149,6 +155,8 @@
 
   .hint{font-family:var(--mono);font-size:11px;color:var(--amber);margin-top:3px;letter-spacing:.5px}
   .utc{font-family:var(--mono);color:var(--amber);font-size:13px;margin-top:5px;letter-spacing:1px}
+  .aero{font-family:var(--mono);font-size:11px;margin-top:5px;letter-spacing:.3px;min-height:13px}
+  .aero .ok{color:var(--txt-dim)} .aero .nf{color:var(--amber)} .aero .sep{color:var(--line-hot);margin:0 6px}
 
   .actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px}
   button{font-family:var(--disp);font-weight:700;letter-spacing:2px;text-transform:uppercase;
@@ -216,7 +224,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v2.2</span>
+    <span class="ver">v2.6</span>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
       <div>LOCAL <b id="clkLOC">--:--</b></div>
@@ -304,6 +312,7 @@
             <input id="f13hora" type="time"></div>
         </div>
         <div class="utc" id="eobtUTC">EOBT (UTC): ----  ·  DOF: ------</div>
+        <div class="aero" id="aeroSal"></div>
       </div>
     </fieldset>
 
@@ -334,6 +343,7 @@
           <div class="field"><label>Altn 2</label>
             <input id="f16a2" maxlength="4"></div>
         </div>
+        <div class="aero" id="aero16"></div>
       </div>
     </fieldset>
 
@@ -516,6 +526,7 @@ function refrescarPreview(){
   $('fplMsg').textContent=msg;
   $('fplSup').textContent=sup;
   $('eobtUTC').textContent = u ? `EOBT (UTC): ${u.eobt} Z  ·  DOF: ${u.dof}` : 'EOBT (UTC): ----  ·  DOF: ------';
+  pintarNombres();
 }
 
 /* ============================ VALIDACION ============================ */
@@ -549,6 +560,12 @@ function validar(){
   need('f19c', v('f19c').length>=1, '19 · Comandante C/ requerido (firma el plan)');
 
   // ---- AVISOS (no bloquean) ----
+  if(AERO_OK){
+    const chk=(id,etq)=>{ const c=vU(id); if(/^[A-Z]{4}$/.test(c) && !AERO[c]) A.push(etq+' · '+c+' no figura en la lista de referencia (AR+CL) — verificá el código OACI'); };
+    chk('f13a','13 Salida'); chk('f16d','16 Destino');
+    if(v('f16a1')) chk('f16a1','16 Altn 1');
+    if(v('f16a2')) chk('f16a2','16 Altn 2');
+  }
   const esLocal = !!vU('f13a') && vU('f13a')===vU('f16d');
   if(!esLocal && !v('f16a1')) A.push('16 · Sin aeródromo alternativo (recomendado en vuelo no local)');
   if(/^\d{4}$/.test(v('f19e')) && /^\d{4}$/.test(v('f16eet'))){
@@ -655,6 +672,46 @@ function limpiar(){
 async function chequearReservaExistente(data){
   // TODO: GET /reservas.json, buscar coincidencia avión+fecha+hora -> toast warn.
   return;
+}
+
+/* ============================ AERODROMOS (referencia OACI) ============================ */
+/* Lista de referencia AR + CL (OACI 4 letras) servida desde el mismo repo.
+   Sirve para CONFIRMAR el codigo mostrando el nombre y para AVISAR (no bloquear)
+   si el codigo no figura. La lista es incompleta a proposito: por eso avisa, no
+   rechaza. Regenerar con scripts/gen_aerodromos.* cuando haga falta actualizar. */
+const AERO = {}; let AERO_OK = false;
+
+async function cargarAerodromos(){
+  try{
+    const r = await fetch('aerodromos.json?v=1');
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    Object.assign(AERO, await r.json());
+    AERO_OK = true;
+  }catch(e){
+    console.warn('No se pudo cargar aerodromos.json (sigo sin lookup de nombres).', e);
+  }
+  pintarNombres();
+}
+
+// devuelve {found, label} o null si el codigo aun no tiene formato OACI
+function aeroInfo(id){
+  const c = vU(id);
+  if(!/^[A-Z]{4}$/.test(c)) return null;
+  if(!AERO_OK) return null;                 // si no cargo la lista, no opinamos
+  const a = AERO[c];
+  return a ? {found:true,  label:c+' · '+(a.m||a.n)}
+           : {found:false, label:c+' · no está en la lista (verificá)'};
+}
+
+function pintarNombres(){
+  const span = i => i ? `<span class="${i.found?'ok':'nf'}">${i.label}</span>` : '';
+  const sal = aeroInfo('f13a');
+  $('aeroSal').innerHTML = span(sal);
+  const partes = [];
+  const d  = aeroInfo('f16d');  if(d)  partes.push(span(d));
+  const a1 = aeroInfo('f16a1'); if(a1) partes.push('ALTN ' + span(a1));
+  const a2 = aeroInfo('f16a2'); if(a2) partes.push('ALTN ' + span(a2));
+  $('aero16').innerHTML = partes.join('<span class="sep">·</span>');
 }
 
 /* ============================ FLOTA / AERONAVES ============================ */
@@ -864,7 +921,7 @@ $('f19e').addEventListener('blur',()=>{ fmtHHMM('f19e'); refrescarPreview(); });
 
 setChecks('r19','E');
 if(!$('f13fecha').value) $('f13fecha').value=hoyLocal();
-refrescarPreview(); cargarFlota(); cargarLista(); reloj(); setInterval(reloj,1000);
+refrescarPreview(); cargarFlota(); cargarAerodromos(); cargarLista(); reloj(); setInterval(reloj,1000);
 </script>
 </body>
 </html>
