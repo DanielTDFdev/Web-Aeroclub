@@ -2,7 +2,7 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
-  v1.5  ·  Paso 2 (parcial): borradores por usuario + defaults
+  v1.6  ·  Firma a mano alzada (canvas)
   ----------------------------------------------------------------------------------
   - Casillas 7 a 19 del formulario OACI de plan de vuelo
   - Persistencia en Firebase Realtime DB (proyecto turnos-lv-oad) via REST
@@ -29,6 +29,9 @@
           USUARIO es placeholder ('demo') hasta integrar el login de turnos.
           Defaults: R/ solo ELT (flota sin VHF), salida = SAWE.
           Quitado el aviso "R/ sin VHF" (no aplica a esta flota).
+    v1.6  Firma a mano alzada: pad de canvas (dedo en mobile o mouse), se guarda
+          como PNG (base64) en el campo 'firma' del FPL. La incrustacion en el PDF
+          se hara cuando se decida el enfoque del PDF (estampar vs generar limpio).
 ==================================================================================
 -->
 <html lang="es">
@@ -160,6 +163,10 @@
   button.dgr:hover{background:var(--bad);color:#1a0000;box-shadow:0 0 16px rgba(255,93,93,.4)}
   button.dgr.armed{background:var(--bad);color:#1a0000;animation:blink 1s infinite}
   @keyframes blink{0%,100%{opacity:1}50%{opacity:.55}}
+
+  /* pad de firma */
+  .sigpad{width:100%;max-width:600px;height:150px;background:#eef3f6;
+    border:1px solid var(--line-hot);border-radius:4px;touch-action:none;cursor:crosshair;display:block}
 </style>
 </head>
 <body>
@@ -168,7 +175,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v1.5</span>
+    <span class="ver">v1.6</span>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
       <div>LOCAL <b id="clkLOC">--:--</b></div>
@@ -337,6 +344,17 @@
         <div class="field"><label>N/ Observaciones</label>
           <input id="f19n"></div>
         <div class="hint">El comandante (C/) puede ser distinto de quien carga el plan (p. ej. instructor en vuelo de instrucción).</div>
+      </div>
+    </fieldset>
+
+    <fieldset class="span2">
+      <legend>Firma del comandante · a mano alzada</legend>
+      <div class="body">
+        <label>Firmá con el dedo (celular) o el mouse. Se incrustará en el PDF al generarlo.</label>
+        <canvas id="sigPad" width="600" height="150" class="sigpad"></canvas>
+        <div class="actions" style="margin-top:8px">
+          <button type="button" class="ghost" id="btnBorrarFirma">Borrar firma</button>
+        </div>
       </div>
     </fieldset>
 
@@ -527,6 +545,7 @@ async function guardar(){
     endurance:$('f19e').value, pob:$('f19p').value,
     radio_emerg:checks('r19'), equipo_superv:checks('s19'), chalecos:checks('j19'),
     color_marcas:vU('f19a'), piloto:$('f19c').value, obs_19:$('f19n').value,
+    firma:getFirma(),
     estado:'borrador', fecha_creacion:new Date().toISOString()
   };
   try{
@@ -570,6 +589,7 @@ function cargarEnForm(key,p){
   $('f19e').value=p.endurance||''; $('f19p').value=p.pob||''; $('f19a').value=p.color_marcas||'';
   $('f19c').value=p.piloto||''; $('f19n').value=p.obs_19||'';
   setChecks('r19',p.radio_emerg); setChecks('s19',p.equipo_superv); setChecks('j19',p.chalecos);
+  setFirma(p.firma||'');
   pintarValidacion([],[],[]);
   refrescarPreview(); window.scrollTo({top:0,behavior:'smooth'});
   toast('Editando plan existente', 'warn');
@@ -580,6 +600,7 @@ function limpiar(){
   $('f9n').value='1'; $('f10a').value='S'; $('f10b').value='C';
   $('f18').value='OPR/AEROCLUB RIO GRANDE'; $('f13a').value='SAWE';
   setChecks('r19','E'); setChecks('s19',''); setChecks('j19','');
+  borrarFirma();
   pintarValidacion([],[],[]);
   refrescarPreview(); toast('Formulario limpio');
 }
@@ -667,6 +688,29 @@ async function pedirBorrarBorradores(){
   }catch(e){ toast('Error al borrar: '+e.message,'bad'); }
 }
 
+/* ============================ FIRMA (canvas) ============================ */
+let firmado=false, sigCtx=null;
+function initFirma(){
+  const cv=$('sigPad'); sigCtx=cv.getContext('2d');
+  sigCtx.lineWidth=2.2; sigCtx.lineCap='round'; sigCtx.lineJoin='round'; sigCtx.strokeStyle='#0b0f14';
+  let dibujando=false, lx=0, ly=0;
+  const pos=e=>{ const r=cv.getBoundingClientRect(); const t=e.touches?e.touches[0]:e;
+    return { x:(t.clientX-r.left)*(cv.width/r.width), y:(t.clientY-r.top)*(cv.height/r.height) }; };
+  const start=e=>{ e.preventDefault(); dibujando=true; const p=pos(e); lx=p.x; ly=p.y; };
+  const move=e=>{ if(!dibujando) return; e.preventDefault(); const p=pos(e);
+    sigCtx.beginPath(); sigCtx.moveTo(lx,ly); sigCtx.lineTo(p.x,p.y); sigCtx.stroke();
+    lx=p.x; ly=p.y; firmado=true; };
+  const end=()=>{ dibujando=false; };
+  cv.addEventListener('mousedown',start); cv.addEventListener('mousemove',move); window.addEventListener('mouseup',end);
+  cv.addEventListener('touchstart',start,{passive:false}); cv.addEventListener('touchmove',move,{passive:false}); cv.addEventListener('touchend',end);
+}
+function borrarFirma(){ if(!sigCtx) return; const cv=$('sigPad'); sigCtx.clearRect(0,0,cv.width,cv.height); firmado=false; }
+function getFirma(){ return firmado ? $('sigPad').toDataURL('image/png') : ''; }
+function setFirma(dataUrl){
+  if(!sigCtx) return; const cv=$('sigPad'); sigCtx.clearRect(0,0,cv.width,cv.height); firmado=false;
+  if(dataUrl){ const img=new Image(); img.onload=()=>{ sigCtx.drawImage(img,0,0,cv.width,cv.height); firmado=true; }; img.src=dataUrl; }
+}
+
 /* ============================ RELOJ ============================ */
 function reloj(){
   const d=new Date();
@@ -681,6 +725,8 @@ $('btnNuevo').onclick=limpiar;
 $('btnRecargar').onclick=cargarLista;
 $('selAvion').addEventListener('change',aplicarAeronave);
 $('btnBorrarTodo').onclick=pedirBorrarBorradores;
+$('btnBorrarFirma').onclick=borrarFirma;
+initFirma();
 
 document.querySelectorAll('input,select,textarea').forEach(el=>{
   el.addEventListener('input',()=>{ el.classList.remove('bad'); refrescarPreview(); });
