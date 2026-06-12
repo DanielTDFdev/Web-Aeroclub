@@ -2,7 +2,7 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
-  v1.2  ·  Paso 1 + validacion + valores por defecto
+  v1.3  ·  Paso 2 (parcial): selector de aeronaves
   ----------------------------------------------------------------------------------
   - Casillas 7 a 19 del formulario OACI de plan de vuelo
   - Persistencia en Firebase Realtime DB (proyecto turnos-lv-oad) via REST
@@ -20,6 +20,9 @@
           Avisos: R/ sin VHF, vuelo no local sin alternativa, autonomia <= EET.
     v1.2  Valores por defecto (editables): 18 -> OPR/AEROCLUB RIO GRANDE, 10b -> C.
           Version visible en el header.
+    v1.3  Selector de aeronaves: lee la flota de Firebase /aeronaves (auto-seed
+          la 1ra vez con la flota local de respaldo). Al elegir, completa 7/9/10/15/19A
+          (todo editable). Fallback a flota local si Firebase no responde.
 ==================================================================================
 -->
 <html lang="es">
@@ -68,6 +71,10 @@
     border:1px solid var(--line-hot);border-radius:4px;background:var(--bg)}
   fieldset .body{padding:12px 14px}
   .span2{grid-column:1 / -1}
+  /* selector de aeronave (plantilla) */
+  .selavion{border-color:var(--cyan-dim);box-shadow:0 0 18px rgba(34,211,238,.08)}
+  .selavion select{max-width:300px;font-size:16px;color:var(--cyan)}
+  .selavion label{color:var(--txt-dim)}
 
   label{display:block;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;
     color:var(--txt-dim);margin:0 0 4px}
@@ -147,7 +154,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v1.2</span>
+    <span class="ver">v1.3</span>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
       <div>LOCAL <b id="clkLOC">--:--</b></div>
@@ -161,6 +168,15 @@
   </div>
 
   <form id="fpl" autocomplete="off">
+
+  <fieldset class="selavion">
+    <legend>Aeronave · plantilla</legend>
+    <div class="body">
+      <label>Elegí la aeronave: se completan matrícula, tipo, estela, equipo, velocidad y color (editables)</label>
+      <select id="selAvion"><option value="">— Cargando flota —</option></select>
+    </div>
+  </fieldset>
+
   <div class="grid">
 
     <fieldset class="span2">
@@ -187,7 +203,7 @@
           <div class="field"><label>10b · Vigilancia (SSR/ADS-B)</label>
             <input id="f10b" placeholder="C" value="C"></div>
         </div>
-        <div class="hint">Campos del avión editables a mano (en el paso 2 los trae el selector /aeronaves).</div>
+        <div class="hint">Se completan al elegir la aeronave arriba. Editables si necesitás ajustar algo puntual.</div>
       </div>
     </fieldset>
 
@@ -552,6 +568,50 @@ async function chequearReservaExistente(data){
   return;
 }
 
+/* ============================ FLOTA / AERONAVES ============================ */
+/* Flota local de respaldo. Si /aeronaves esta vacio en Firebase, se siembra
+   con esto. Si Firebase responde con datos, esos mandan (futura ABM editara alli). */
+const FLOTA = {
+  "LVOAD": { tipo:"PA38", estela:"L", equipo_10a:"S", equipo_10b:"C", vel_crucero:"N0090", color_marcas:"WHITE WITH DARK BLUE STRIPES ON THE FUSELAGE" },
+  "LVART": { tipo:"P28A", estela:"L", equipo_10a:"S", equipo_10b:"C", vel_crucero:"N0110", color_marcas:"WHITE AND BLUE" },
+  "LVMPH": { tipo:"PA32", estela:"L", equipo_10a:"S", equipo_10b:"C", vel_crucero:"N0140", color_marcas:"GREY AND BLUE" }
+};
+let flota = {};
+
+async function cargarFlota(){
+  try{
+    const r=await fetch(`${DB}/aeronaves.json`);
+    let data=await r.json();
+    if(!data || !Object.keys(data).length){
+      await fetch(`${DB}/aeronaves.json`,{method:'PATCH',
+        headers:{'Content-Type':'application/json'}, body:JSON.stringify(FLOTA)});
+      data=FLOTA;
+    }
+    flota=data;
+  }catch(e){
+    console.warn('No se pudo leer /aeronaves, uso flota local.', e);
+    flota=FLOTA;
+  }
+  const sel=$('selAvion');
+  sel.innerHTML='<option value="">— Elegí aeronave —</option>'+
+    Object.keys(flota).sort().map(m=>`<option value="${m}">${m}</option>`).join('');
+}
+
+function aplicarAeronave(){
+  const m=$('selAvion').value; if(!m||!flota[m]) return;
+  const a=flota[m];
+  $('f7').value=m;
+  $('f9t').value=a.tipo||'';
+  $('f9w').value=a.estela||'L';
+  $('f10a').value=a.equipo_10a||'S';
+  $('f10b').value=a.equipo_10b||'C';
+  $('f15v').value=a.vel_crucero||'';
+  $('f19a').value=a.color_marcas||'';
+  document.querySelectorAll('.bad').forEach(el=>el.classList.remove('bad'));
+  refrescarPreview();
+  toast('Datos de '+m+' cargados','ok');
+}
+
 /* ============================ RELOJ ============================ */
 function reloj(){
   const d=new Date();
@@ -564,6 +624,7 @@ function reloj(){
 $('btnGuardar').onclick=guardar;
 $('btnNuevo').onclick=limpiar;
 $('btnRecargar').onclick=cargarLista;
+$('selAvion').addEventListener('change',aplicarAeronave);
 
 document.querySelectorAll('input,select,textarea').forEach(el=>{
   el.addEventListener('input',()=>{ el.classList.remove('bad'); refrescarPreview(); });
@@ -578,7 +639,7 @@ $('f19e').addEventListener('blur',()=>{ fmtHHMM('f19e'); refrescarPreview(); });
   .forEach(id=>$(id).addEventListener('blur',()=>{ upper(id); refrescarPreview(); }));
 
 setChecks('r19','VE');
-refrescarPreview(); cargarLista(); reloj(); setInterval(reloj,1000);
+refrescarPreview(); cargarFlota(); cargarLista(); reloj(); setInterval(reloj,1000);
 </script>
 </body>
 </html>
