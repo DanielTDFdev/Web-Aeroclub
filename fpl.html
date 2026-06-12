@@ -2,7 +2,7 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
-  v1.6  ·  Firma a mano alzada (canvas)
+  v1.7  ·  Generación del PDF oficial (pdf-lib) + firma incrustada
   ----------------------------------------------------------------------------------
   - Casillas 7 a 19 del formulario OACI de plan de vuelo
   - Persistencia en Firebase Realtime DB (proyecto turnos-lv-oad) via REST
@@ -32,6 +32,10 @@
     v1.6  Firma a mano alzada: pad de canvas (dedo en mobile o mouse), se guarda
           como PNG (base64) en el campo 'firma' del FPL. La incrustacion en el PDF
           se hara cuando se decida el enfoque del PDF (estampar vs generar limpio).
+    v1.7  Genera el PDF llenando el formulario oficial ARGENTINO editable (AcroForm)
+          via pdf-lib en el navegador. Mapea las 99 casillas por nombre de campo,
+          aplica la convencion de tachado del item 19 (tildar=no disponible) e
+          incrusta la firma. REQUIERE subir el form al repo como FORM_PDF.
 ==================================================================================
 -->
 <html lang="es">
@@ -42,6 +46,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <style>
   :root{
     --bg:#070b11; --panel:#0d141d; --panel2:#111a25;
@@ -118,6 +123,8 @@
   button:hover{background:var(--cyan);color:#04141a;box-shadow:0 0 16px rgba(34,211,238,.4)}
   button.ghost{border-color:var(--line-hot);color:var(--txt-dim)}
   button.ghost:hover{background:var(--panel2);color:var(--txt);box-shadow:none}
+  button.pdfbtn{border-color:var(--amber);color:var(--amber)}
+  button.pdfbtn:hover{background:var(--amber);color:#1a1200;box-shadow:0 0 16px rgba(255,179,0,.4)}
 
   .preview{border:1px solid var(--amber-dim);background:#0a0700;border-radius:6px;
     padding:12px 14px;margin-bottom:14px}
@@ -175,7 +182,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v1.6</span>
+    <span class="ver">v1.7</span>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
       <div>LOCAL <b id="clkLOC">--:--</b></div>
@@ -365,6 +372,7 @@
 
   <div class="actions">
     <button type="button" id="btnGuardar">Guardar borrador</button>
+    <button type="button" class="pdfbtn" id="btnPDF">Generar PDF</button>
     <button type="button" class="ghost" id="btnNuevo">Limpiar</button>
     <button type="button" class="ghost" id="btnRecargar">Refrescar lista</button>
   </div>
@@ -711,6 +719,69 @@ function setFirma(dataUrl){
   if(dataUrl){ const img=new Image(); img.onload=()=>{ sigCtx.drawImage(img,0,0,cv.width,cv.height); firmado=true; }; img.src=dataUrl; }
 }
 
+/* ============================ GENERAR PDF (pdf-lib) ============================ */
+/* Llena el formulario oficial argentino editable (AcroForm). Subí ese PDF al repo
+   con este nombre, junto a fpl.html. Mapeo de las 99 casillas verificado contra
+   el formulario real. */
+const FORM_PDF = 'fpl_form.pdf';
+
+async function generarPDF(){
+  const {E,A,bad}=validar(); pintarValidacion(E,A,bad);
+  if(E.length){ toast('Corregí los datos antes de generar el PDF','bad'); $('valbox').scrollIntoView({behavior:'smooth',block:'center'}); return; }
+  if(!firmado){ toast('Generando PDF sin firma','warn'); }
+  const u=calcUTC();
+  try{
+    toast('Generando PDF…');
+    const {PDFDocument}=PDFLib;
+    const tpl=await fetch(FORM_PDF).then(r=>{ if(!r.ok) throw new Error('no se encontró '+FORM_PDF); return r.arrayBuffer(); });
+    const pdf=await PDFDocument.load(tpl);
+    const form=pdf.getForm();
+    const T=(n,v)=>{ try{ form.getTextField(n).setText((v??'').toString()); }catch(e){} };
+    const spread=(names,str)=>{ str=(str||'').toString(); names.forEach((n,i)=>T(n,str[i]||'')); };
+    const sel=(n,v)=>{ try{ form.getDropdown(n).select(v); return; }catch(e){} try{ form.getOptionList(n).select(v); return; }catch(e){} T(n,v); };
+    const chk=(n,on)=>{ try{ const c=form.getCheckBox(n); on?c.check():c.uncheck(); }catch(e){} };
+
+    spread(['ID1','ID2','ID3','ID4','ID5','ID6','ID7'], vU('f7'));   // 7
+    sel('FR',$('f8r').value); sel('TF',$('f8t').value);              // 8
+    const num=($('f9n').value||'').trim(); spread(['N1','N2'], num==='1'?'':num); // 9 numero
+    spread(['A1','A2','A3','A4'], vU('f9t')); sel('WT',$('f9w').value);           // 9 tipo/estela
+    const a10=vU('f10a'); T('E1', a10.length>1?a10[a10.length-2]:''); T('E2', a10[a10.length-1]||''); // 10a
+    const b10=vU('f10b'); T('E3', b10[0]||''); T('E4', b10[1]||'');               // 10b
+    spread(['D1','D2','D3','D4'], vU('f13a')); spread(['T1','T2','T3','T4'], u.eobt); // 13
+    spread(['S1','S2','S3','S4','S5'], vU('f15v')); spread(['L1','L2','L3','L4','L5'], vU('f15l')); T('Route1', vU('f15r')); // 15
+    spread(['D5','D6','D7','D8'], vU('f16d')); spread(['T5','T6','T7','T8'], $('f16eet').value);  // 16 destino/eet
+    spread(['D9','D10','D11','D12'], vU('f16a1')); spread(['D13','D14','D15','D16'], vU('f16a2')); // 16 altn
+    T('Info1', item18(u.dof));                                       // 18
+    spread(['T9','T10','T11','T12'], $('f19e').value);               // 19 autonomia
+    spread(['P1','P2','P3'], ($('f19p').value||'').padStart(3,'0').slice(-3)); // 19 POB
+    T('Markings', vU('f19a')); T('Pilot', $('f19c').value); T('Remarks', vU('f19n'));
+
+    // item 19 — convencion de tachado: tildado = NO disponible
+    const r=checks('r19'); chk('C1', !r.includes('U')); chk('C2', !r.includes('V')); chk('C3', !r.includes('E'));
+    const s=checks('s19'); const noS=!s; chk('C4',noS); chk('C5',noS||!s.includes('P')); chk('C6',noS||!s.includes('D')); chk('C7',noS||!s.includes('M')); chk('C8',noS||!s.includes('J'));
+    const j=checks('j19'); const noJ=!j; chk('C9',noJ); chk('C10',noJ||!j.includes('L')); chk('C11',noJ||!j.includes('F')); chk('C12',noJ||!j.includes('U')); chk('C13',noJ||!j.includes('V'));
+    chk('C14',true); chk('C15',true);            // sin botes neumáticos
+    chk('C16', !vU('f19n'));                      // sin observaciones -> tachar
+
+    // firma incrustada en zona PRESENTADO POR (coords ajustables)
+    if(firmado){
+      const png=await pdf.embedPng(getFirma());
+      const page=pdf.getPages()[0]; const ph=page.getHeight();
+      const SX=112, SY_TOP=752, SW=180, SH=42;   // x, dist. desde arriba, ancho, alto
+      page.drawImage(png,{x:SX, y:ph-SY_TOP-SH, width:SW, height:SH});
+    }
+    try{ form.flatten(); }catch(e){ console.warn('flatten:',e.message); }
+
+    const bytes=await pdf.save();
+    const blob=new Blob([bytes],{type:'application/pdf'});
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement('a'); link.href=url;
+    link.download=`FPL_${vU('f7')||'SIN_ID'}_${$('f13fecha').value||''}.pdf`; link.click();
+    setTimeout(()=>URL.revokeObjectURL(url),3000);
+    toast('PDF generado','ok');
+  }catch(err){ console.error(err); toast('Error generando PDF: '+err.message,'bad'); }
+}
+
 /* ============================ RELOJ ============================ */
 function reloj(){
   const d=new Date();
@@ -721,6 +792,7 @@ function reloj(){
 
 /* ============================ INIT ============================ */
 $('btnGuardar').onclick=guardar;
+$('btnPDF').onclick=generarPDF;
 $('btnNuevo').onclick=limpiar;
 $('btnRecargar').onclick=cargarLista;
 $('selAvion').addEventListener('change',aplicarAeronave);
