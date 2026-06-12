@@ -2,7 +2,7 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
-  v2.6  ·  Validacion online de aerodromos (AR+CL) por nombre + aviso
+  v2.7  ·  LAD argentinos (ANAC) + ICAO AR/CL; acepta codigos de 3 letras
   ----------------------------------------------------------------------------------
   - Casillas 7 a 19 del formulario OACI de plan de vuelo
   - Persistencia en Firebase Realtime DB (proyecto turnos-lv-oad) via REST
@@ -76,6 +76,15 @@
           es el correcto). Si el codigo no figura -> AVISO amarillo no bloqueante
           (la lista es incompleta: avisa, no rechaza). Requiere subir aerodromos.json
           al repo junto a fpl.html. Si no carga, todo sigue funcionando sin lookup.
+    v2.7  Lista reconstruida con fuente OFICIAL ANAC para Argentina (693 LAD, de
+          los cuales 124 con OACI) + ICAO de Chile (366) via OurAirports. 1183
+          claves (~62KB). Cada lugar se indexa por su LAD (3 letras, ej. THN) y,
+          si tiene, tambien por su OACI (4 letras, ej. SAWE) -> ambos resuelven.
+          FIX IMPORTANTE: las casillas 13/16 aceptaban SOLO 4 letras y bloqueaban
+          los LAD de 3 letras (THN quedaba como error). Ahora aceptan 3-4 y el
+          readout marca "(LAD)" en los de 3. NOTA: en el CSV de ANAC las columnas
+          latitud/longitud venian invertidas; se guardan corregidas (no se usan
+          aun, son para un futuro mapa). aerodromos.json ahora ?v=2.
 ==================================================================================
 -->
 <html lang="es">
@@ -224,7 +233,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v2.6</span>
+    <span class="ver">v2.7</span>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
       <div>LOCAL <b id="clkLOC">--:--</b></div>
@@ -541,7 +550,7 @@ function validar(){
   need('f10a', v('f10a').length>=1, '10a · Equipo COM/NAV requerido (usá N si no tiene)');
   need('f10b', v('f10b').length>=1, '10b · Vigilancia requerida (usá N si no tiene)');
   // 13
-  need('f13a', /^[A-Z]{4}$/.test(vU('f13a')), '13 · Aeródromo de salida: 4 letras OACI (ej. SAWE)');
+  need('f13a', /^[A-Z]{3,4}$/.test(vU('f13a')), '13 · Aeródromo de salida: 3-4 letras OACI/LAD (ej. SAWE o THN)');
   need('f13fecha', !!v('f13fecha'), '13 · Falta la fecha de salida');
   need('f13hora', !!v('f13hora'), '13 · Falta la hora de despegue');
   // 15
@@ -549,10 +558,10 @@ function validar(){
   need('f15l', /^(F\d{3}|A\d{3}|VFR|[SM]\d{4})$/.test(vU('f15l')), '15 · Nivel inválido (ej. A055, F095 o VFR)');
   need('f15r', v('f15r').length>=1, '15 · Ruta requerida (DCT, LOCAL o ruta)');
   // 16
-  need('f16d', /^[A-Z]{4}$/.test(vU('f16d')), '16 · Destino: 4 letras OACI (ej. SAWH)');
+  need('f16d', /^[A-Z]{3,4}$/.test(vU('f16d')), '16 · Destino: 3-4 letras OACI/LAD (ej. SAWH o THN)');
   need('f16eet', /^\d{4}$/.test(v('f16eet')) && (+v('f16eet').slice(2))<60, '16 · EET total inválido (HHMM, ej. 0040)');
-  if(v('f16a1') && !/^[A-Z]{4}$/.test(vU('f16a1'))){ E.push('16 · Alternativa 1: 4 letras OACI'); bad.push('f16a1'); }
-  if(v('f16a2') && !/^[A-Z]{4}$/.test(vU('f16a2'))){ E.push('16 · Alternativa 2: 4 letras OACI'); bad.push('f16a2'); }
+  if(v('f16a1') && !/^[A-Z]{3,4}$/.test(vU('f16a1'))){ E.push('16 · Alternativa 1: 3-4 letras OACI/LAD'); bad.push('f16a1'); }
+  if(v('f16a2') && !/^[A-Z]{3,4}$/.test(vU('f16a2'))){ E.push('16 · Alternativa 2: 3-4 letras OACI/LAD'); bad.push('f16a2'); }
   // 19
   need('f19e', /^\d{4}$/.test(v('f19e')) && (+v('f19e').slice(2))<60, '19 · Autonomía E/ inválida (HHMM, ej. 0300)');
   need('f19p', /^\d{1,3}$/.test(v('f19p')) && (+v('f19p'))>=1, '19 · Personas a bordo P/ requerido (≥ 1)');
@@ -561,7 +570,7 @@ function validar(){
 
   // ---- AVISOS (no bloquean) ----
   if(AERO_OK){
-    const chk=(id,etq)=>{ const c=vU(id); if(/^[A-Z]{4}$/.test(c) && !AERO[c]) A.push(etq+' · '+c+' no figura en la lista de referencia (AR+CL) — verificá el código OACI'); };
+    const chk=(id,etq)=>{ const c=vU(id); if(/^[A-Z]{3,4}$/.test(c) && !AERO[c]) A.push(etq+' · '+c+' no figura en la lista de referencia (LAD AR + ICAO AR/CL) — verificá el código'); };
     chk('f13a','13 Salida'); chk('f16d','16 Destino');
     if(v('f16a1')) chk('f16a1','16 Altn 1');
     if(v('f16a2')) chk('f16a2','16 Altn 2');
@@ -683,7 +692,7 @@ const AERO = {}; let AERO_OK = false;
 
 async function cargarAerodromos(){
   try{
-    const r = await fetch('aerodromos.json?v=1');
+    const r = await fetch('aerodromos.json?v=2');
     if(!r.ok) throw new Error('HTTP '+r.status);
     Object.assign(AERO, await r.json());
     AERO_OK = true;
@@ -693,14 +702,15 @@ async function cargarAerodromos(){
   pintarNombres();
 }
 
-// devuelve {found, label} o null si el codigo aun no tiene formato OACI
+// devuelve {found, label} o null si el codigo aun no tiene formato OACI/LAD
 function aeroInfo(id){
   const c = vU(id);
-  if(!/^[A-Z]{4}$/.test(c)) return null;
+  if(!/^[A-Z]{3,4}$/.test(c)) return null;
   if(!AERO_OK) return null;                 // si no cargo la lista, no opinamos
   const a = AERO[c];
-  return a ? {found:true,  label:c+' · '+(a.m||a.n)}
-           : {found:false, label:c+' · no está en la lista (verificá)'};
+  const kind = c.length===3 ? ' (LAD)' : '';   // 3 letras = Lugar Apto Declarado
+  return a ? {found:true,  label:c+kind+' · '+(a.n||a.m)}
+           : {found:false, label:c+kind+' · no está en la lista (verificá)'};
 }
 
 function pintarNombres(){
