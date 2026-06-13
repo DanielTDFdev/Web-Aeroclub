@@ -2,7 +2,7 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
-  v3.2  ·  Boton volver al turnero (mismo nombre v3.1 = tema)
+  v3.3  ·  Auto-ajuste de texto en campos libres (comandante no se corta)
   ----------------------------------------------------------------------------------
   - Casillas 7 a 19 del formulario OACI de plan de vuelo
   - Persistencia en Firebase Realtime DB (proyecto turnos-lv-oad) via REST
@@ -109,6 +109,9 @@
           (Reinyectado sobre v3.0 tras un merge: v3.0 de oficina + tema de la otra rama.)
     v3.2  Boton "← TURNERO" en el header que vuelve a turnos.html sin cerrar sesion
           (turnos ahora persiste la sesion en sessionStorage y la restaura al volver).
+    v3.3  FIX comandante (y campos libres) cortado: put() ahora achica el tamano de
+          fuente si el texto no entra en el ancho de la caja (piso 5pt). Aplica a
+          Pilot, Remarks, Markings, Route1, Info1. Antes podia recortar/desbordar.
 ==================================================================================
 -->
 <html lang="es">
@@ -279,7 +282,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v3.2</span>
+    <span class="ver">v3.3</span>
     <a href="turnos.html" title="Volver al turnero (sin cerrar sesión)" style="font-family:var(--mono);font-size:12px;color:var(--cyan);text-decoration:none;border:1px solid var(--line-hot);border-radius:5px;padding:5px 11px;letter-spacing:1px;transition:.15s" onmouseover="this.style.background='var(--cyan)';this.style.color='#04141a'" onmouseout="this.style.background='transparent';this.style.color='var(--cyan)'">← TURNERO</a>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
@@ -935,8 +938,11 @@ async function generarPDF(){
     const font=await pdf.embedFont(StandardFonts.Helvetica);
     const ink=rgb(0,0,0.55), black=rgb(0,0,0);
 
-    const put=(n,str,size)=>{ const r=RECTS[n]; if(!r||str==null||str==='')return; const s=size||Math.min(9.5,r[3]-2);
-      page.drawText(String(str).toUpperCase(),{x:r[0]+1.5, y:H-r[1]-r[3]+(r[3]-s)/2+0.5, size:s, font, color:ink}); };
+    const put=(n,str,size)=>{ const r=RECTS[n]; if(!r||str==null||str==='')return; str=String(str).toUpperCase();
+      let s=size||Math.min(9.5,r[3]-2);
+      const maxw=r[2]-3, tw=font.widthOfTextAtSize(str,s);           // achicar si no entra en el ancho de la caja
+      if(tw>maxw){ s=Math.max(5, s*maxw/tw); }
+      page.drawText(str,{x:r[0]+1.5, y:H-r[1]-r[3]+(r[3]-s)/2+0.5, size:s, font, color:ink}); };
     const comb=(n,ch)=>{ const r=RECTS[n]; if(!r||!ch)return; ch=String(ch).toUpperCase(); const s=Math.min(11,r[3]-1); const cw=font.widthOfTextAtSize(ch,s);
       page.drawText(ch,{x:r[0]+(r[2]-cw)/2, y:H-r[1]-r[3]+(r[3]-s)/2+0.5, size:s, font, color:ink}); };
     const spread=(names,str)=>{ str=(str||'').toString(); names.forEach((n,i)=>comb(n,str[i]||'')); };
