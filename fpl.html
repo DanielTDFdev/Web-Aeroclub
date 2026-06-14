@@ -2,7 +2,7 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
-  v3.3  ·  Auto-ajuste de texto en campos libres (comandante no se corta)
+  v3.4  ·  Icono de avion junto al selector de aeronave
   ----------------------------------------------------------------------------------
   - Casillas 7 a 19 del formulario OACI de plan de vuelo
   - Persistencia en Firebase Realtime DB (proyecto turnos-lv-oad) via REST
@@ -112,6 +112,8 @@
     v3.3  FIX comandante (y campos libres) cortado: put() ahora achica el tamano de
           fuente si el texto no entra en el ancho de la caja (piso 5pt). Aplica a
           Pilot, Remarks, Markings, Route1, Info1. Antes podia recortar/desbordar.
+    v3.4  Detalle visual: icono de avion (SVG inline, color cyan) a la izquierda del
+          selector de aeronave en la seccion AERONAVE / PLANTILLA. Solo estetico.
 ==================================================================================
 -->
 <html lang="es">
@@ -166,6 +168,8 @@
   .selavion{border-color:var(--cyan-dim);box-shadow:0 0 18px rgba(34,211,238,.08)}
   .selavion select{max-width:300px;font-size:16px;color:var(--cyan)}
   .selavion label{color:var(--txt-dim)}
+  .selavion-row{display:flex;align-items:center;gap:9px}
+  .selavion-row .plane-ico{flex:0 0 auto;color:var(--cyan);filter:drop-shadow(0 0 4px rgba(34,211,238,.45))}
 
   label{display:block;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;
     color:var(--txt-dim);margin:0 0 4px}
@@ -282,7 +286,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v3.3</span>
+    <span class="ver">v3.4</span>
     <a href="turnos.html" title="Volver al turnero (sin cerrar sesión)" style="font-family:var(--mono);font-size:12px;color:var(--cyan);text-decoration:none;border:1px solid var(--line-hot);border-radius:5px;padding:5px 11px;letter-spacing:1px;transition:.15s" onmouseover="this.style.background='var(--cyan)';this.style.color='#04141a'" onmouseout="this.style.background='transparent';this.style.color='var(--cyan)'">← TURNERO</a>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
@@ -303,7 +307,10 @@
     <legend>Aeronave · plantilla</legend>
     <div class="body">
       <label>Elegí la aeronave: se completan matrícula, tipo, estela, equipo, velocidad y color (editables)</label>
-      <select id="selAvion"><option value="">— Cargando flota —</option></select>
+      <div class="selavion-row">
+        <svg class="plane-ico" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L11 19v-5.5z"/></svg>
+        <select id="selAvion"><option value="">— Cargando flota —</option></select>
+      </div>
     </div>
   </fieldset>
 
