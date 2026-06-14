@@ -2,7 +2,7 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
-  v3.4  ·  Icono de avion junto al selector de aeronave
+  v3.6  ·  Datos ARO/AIS de SAWE corregidos (tel + email reales)
   ----------------------------------------------------------------------------------
   - Casillas 7 a 19 del formulario OACI de plan de vuelo
   - Persistencia en Firebase Realtime DB (proyecto turnos-lv-oad) via REST
@@ -114,6 +114,14 @@
           Pilot, Remarks, Markings, Route1, Info1. Antes podia recortar/desbordar.
     v3.4  Detalle visual: icono de avion (SVG inline, color cyan) a la izquierda del
           selector de aeronave en la seccion AERONAVE / PLANTILLA. Solo estetico.
+    v3.5  Contactos del aerodromo: boton bajo Salida (13) que despliega ARO/AIS, Jefe
+          de aerodromo y PSA (tel + email) del OACI de salida, con copiar al clic.
+          Datos embebidos (fuente yovuelo.com.ar). Al DESCARGAR el PDF se copia al
+          portapapeles el email ARO/AIS del origen y se avisa; si no hay (ej. SAWE)
+          avisa y muestra el telefono. Telefonos fiables, emails best-effort.
+    v3.6  Correccion de datos SAWE (Rio Grande): ARO/AIS tel (02964) 431340 y email
+          acgde@eana.com.ar (codigo gde = Grande). Corrige el typo de la fuente y
+          completa el email que faltaba. Ahora la copia al descargar funciona para SAWE.
 ==================================================================================
 -->
 <html lang="es">
@@ -170,6 +178,25 @@
   .selavion label{color:var(--txt-dim)}
   .selavion-row{display:flex;align-items:center;gap:9px}
   .selavion-row .plane-ico{flex:0 0 auto;color:var(--cyan);filter:drop-shadow(0 0 4px rgba(34,211,238,.45))}
+  /* contactos del aeródromo */
+  .btn-contactos{margin-top:8px;font-family:var(--mono);font-size:12px;letter-spacing:.4px;
+    background:transparent;border:1px solid var(--line-hot);color:var(--cyan);border-radius:5px;
+    padding:6px 11px;cursor:pointer;transition:.15s;text-transform:none;font-weight:400}
+  .btn-contactos:hover{background:var(--cyan);color:var(--bg)}
+  .contactos-panel{margin-top:9px;border:1px solid var(--line);border-radius:6px;padding:10px 12px;
+    background:var(--panel2);font-family:var(--mono);font-size:12px;letter-spacing:.3px}
+  .contactos-panel h4{margin:0 0 8px;color:var(--amber);font-size:11px;letter-spacing:1px;
+    text-transform:uppercase;font-weight:700}
+  .cgrupo{margin-bottom:9px} .cgrupo:last-child{margin-bottom:0}
+  .cgrupo .ctit{color:var(--cyan);font-size:10px;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px}
+  .cdato{display:flex;align-items:center;gap:8px;color:var(--txt);padding:2px 0}
+  .cdato .lbl{color:var(--txt-dim);min-width:30px}
+  .cdato .val{flex:1;word-break:break-all}
+  .ccopy{flex:0 0 auto;background:transparent;border:1px solid var(--line-hot);color:var(--cyan);
+    border-radius:4px;font-size:10px;padding:2px 8px;cursor:pointer;font-family:var(--mono);
+    letter-spacing:.5px;transition:.12s}
+  .ccopy:hover{background:var(--cyan);color:var(--bg)}
+  .cnone{color:var(--amber);opacity:.85}
 
   label{display:block;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;
     color:var(--txt-dim);margin:0 0 4px}
@@ -286,7 +313,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v3.4</span>
+    <span class="ver">v3.6</span>
     <a href="turnos.html" title="Volver al turnero (sin cerrar sesión)" style="font-family:var(--mono);font-size:12px;color:var(--cyan);text-decoration:none;border:1px solid var(--line-hot);border-radius:5px;padding:5px 11px;letter-spacing:1px;transition:.15s" onmouseover="this.style.background='var(--cyan)';this.style.color='#04141a'" onmouseout="this.style.background='transparent';this.style.color='var(--cyan)'">← TURNERO</a>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
@@ -380,6 +407,8 @@
         </div>
         <div class="utc" id="eobtUTC">EOBT (UTC): ----  ·  DOF: ------</div>
         <div class="aero" id="aeroSal"></div>
+        <button type="button" class="btn-contactos" id="btnContactos" hidden>📞 Contactos del aeródromo de salida</button>
+        <div class="contactos-panel" id="contactosPanel" hidden></div>
       </div>
     </fieldset>
 
@@ -816,6 +845,7 @@ function pintarNombres(){
   const span = i => i ? `<span class="${i.found?'ok':'nf'}">${i.label}</span>` : '';
   const sal = aeroInfo('f13a');
   $('aeroSal').innerHTML = span(sal);
+  renderContactos();
   const partes = [];
   const d  = aeroInfo('f16d');  if(d)  partes.push(span(d));
   const a1 = aeroInfo('f16a1'); if(a1) partes.push('ALTN ' + span(a1));
@@ -931,6 +961,51 @@ function setFirma(dataUrl){
 const FORM_PDF = 'fpl_base.pdf?v=21';
 const RECTS = {ID1:[220.0,201.3,12.0,12.0],ID2:[235.0,201.0,12.0,12.0],ID3:[248.0,201.3,11.3,12.0],ID4:[262.0,201.0,12.0,12.0],ID5:[276.5,201.0,12.0,12.0],ID6:[291.0,201.0,12.0,12.0],ID7:[303.0,201.0,12.0,12.0],FR:[390.6,200.4,14.2,14.2],TF:[496.7,199.6,14.2,14.2],N1:[82.0,232.5,12.0,14.5],N2:[96.5,232.5,12.0,14.5],A1:[191.3,232.3,12.0,14.7],A2:[205.3,232.3,12.0,14.7],A3:[219.3,232.3,12.0,14.7],A4:[234.3,232.3,12.0,14.7],WT:[345.8,232.5,14.2,14.2],E1:[456.0,232.0,8.0,14.0],E2:[464.0,232.0,32.0,14.0],E3:[497.0,232.0,8.0,14.0],E4:[504.9,232.0,8.0,14.0],D1:[121.0,267.3,12.0,12.0],D2:[135.0,267.5,12.0,12.0],D3:[147.0,267.5,12.0,12.0],D4:[163.0,267.5,12.0,12.0],T1:[267.3,267.0,12.0,12.0],T2:[281.0,267.5,12.0,12.0],T3:[295.0,267.5,12.0,12.0],T4:[310.0,267.5,12.0,12.0],S1:[84.5,302.0,12.0,12.0],S2:[99.0,302.0,9.5,12.0],S3:[111.0,302.0,12.0,12.0],S4:[125.0,302.0,12.0,12.0],S5:[140.0,302.0,12.0,12.0],L1:[175.0,302.0,12.0,12.0],L2:[190.0,302.0,12.0,12.0],L3:[204.5,302.0,12.0,12.0],L4:[219.0,302.0,9.5,12.0],L5:[231.0,302.0,12.0,12.0],Route1:[266.0,301.0,298.0,13.0],Route2:[58.0,316.0,506.5,12.0],Route3:[58.0,330.0,507.0,12.0],Route4:[58.0,345.0,507.0,11.0],Route5:[58.0,359.0,463.0,12.0],D5:[113.0,401.0,12.0,12.0],D6:[127.0,401.0,12.0,12.0],D7:[141.0,401.0,12.0,12.0],D8:[155.0,401.0,12.0,12.0],T5:[229.0,401.0,12.0,12.0],T6:[243.0,401.0,12.0,12.0],T7:[257.0,401.0,12.0,12.0],T8:[271.0,401.0,12.0,12.0],D9:[347.0,401.0,12.0,12.0],D10:[361.0,401.0,12.0,12.0],D11:[375.0,401.0,12.0,12.0],D12:[389.0,401.0,12.0,12.0],D13:[463.0,400.5,12.0,12.0],D14:[478.0,400.5,12.0,12.0],D15:[491.3,400.3,12.0,12.0],D16:[505.3,400.3,12.0,12.0],Info1:[71.0,436.0,494.0,12.0],T9:[96.3,542.0,12.0,12.0],T10:[110.0,542.0,12.0,12.0],T11:[124.0,542.0,12.0,12.0],T12:[138.0,542.0,12.0,12.0],P1:[213.3,542.0,12.0,12.0],P2:[227.0,542.0,12.0,12.0],P3:[240.3,542.0,12.0,12.0],C1:[417.0,538.0,19.0,19.0],C2:[461.3,537.3,20.7,20.0],C3:[510.0,538.0,19.0,19.0],C4:[93.0,581.0,19.0,18.0],C5:[139.0,581.0,18.0,18.0],C6:[182.0,581.0,18.0,18.0],C7:[226.0,581.0,20.0,18.0],C8:[272.0,581.0,19.0,18.0],C9:[325.0,581.0,20.0,18.0],C10:[371.0,581.0,20.0,18.0],C11:[417.0,581.0,18.0,18.0],C12:[462.0,581.0,19.0,18.0],C13:[510.0,581.0,19.0,18.0],C14:[79.0,631.0,17.5,19.0],C15:[219.0,631.0,21.5,19.0],C16:[79.0,698.0,17.5,17.0],Markings:[109.0,668.0,456.0,11.0],Remarks:[108.0,702.0,412.0,11.0],Pilot:[108.0,733.0,280.0,11.0],Filed:[58.0,775.0,177.0,24.0]};
 
+/* ===== CONTACTOS AERÓDROMO (ARO/AIS · Jefe · PSA) — fuente yovuelo.com.ar =====
+   CONTACTOS[OACI] = [ [telARO,emailARO], [telJefe,emailJefe], [telPSA,emailPSA] ]
+   Teléfonos fiables; emails best-effort (verificar contra AIP/ANAC). */
+const CONTACTOS={"SAAC":[["(0345)4252319",null],["(+549 3454)280019",null],[null,null]],"SAAG":[[null,null],["(+549 3446)348261",null],[null,null]],"SAAJ":[["(0236)2433385",null],[null,null],[null,null]],"SAAP":[["(0343)4261914","acpar@eana.com.ar"],["(+549 3435)193446","ydpar@anac.gob.ar"],["(0343)436-5393","uopar@psa.gov.ar"]],"SAAR":[["(0341)155038804","acros@eana.com.ar"],["(+54 341)4807482","ydros@anac.gob.ar"],["(0341)480-7480","uoros@psa.gob.ar"]],"SAAV":[["(0342)4995065",null],["(+549 342)6100257",null],["(0342)499-5059",null]],"SABE":[["(011)4514-1513","acaer@eana.com.ar"],["(+549 11)31436782","ydaer@anac.gob.ar"],["(54-11)4514-1541",null]],"SACE":[["(0351)4666057",null],[null,null],[null,null]],"SACF":[["(0351)4335350",null],[null,null],[null,null]],"SACO":[["(0351)4751404","accba@eana.com.ar"],["(+549 351)2733556","ydcba@anac.gob.ar"],["(0351)475-3883","fdgcba@psa.gob.ar"]],"SADF":[["(011)4580-0261",null],["(+549 11)55766659",null],["(54-11)4714-8148","fdgsanfernando@psa.gov.ar"]],"SADJ":[[null,null],["(+549 11)31993283",null],[null,null]],"SADM":[["(011)46279402","acmor@eana.com.ar"],["(+54 11)46292012","ydmor@anac.gob.ar"],[null,null]],"SADP":[["(011)60064271",null],["(+549 11)66210047",null],["(54-11)4758-3212","metro_terminalsur@psa.gob.ar"]],"SAEF":[["(011)44802344",null],[null,null],[null,null]],"SAEZ":[["(011)44802330","aceze@eana.com.ar"],["(+54 11)44802245","ydeze@anac.gob.ar"],["(54-11)4480-0117","fboezeiza@psa.gob.ar; uoeze@psa.gov.ar"]],"SAFR":[["(0349)215565217",null],[null,null],[null,null]],"SAFS":[["(0349)3426002",null],[null,null],[null,null]],"SAME":[["(0261)4487486",null],["(+549 261)6830962",null],["(0261)415-8897",null]],"SAMF":[["(0261)4488840",null],[null,null],[null,null]],"SAMM":[["(0260)4471265",null],["(+549 260)4698175",null],["(0260)447-2123",null]],"SAMR":[["(0260)4430703",null],["(+549 261)3443608",null],["(0260)444-5974",null]],"SANC":[["(0383)4453686","accat@eana.com.ar"],["(+549 383)4360801","ydcat@anac.gob.ar"],["(0383)445-1078",null]],"SANE":[["(0385)4340710","acsde@eana.com.ar"],["(+549 385)4712203","ydsde@anac.gob.ar"],["(0385)434-0678","uosde@psa.gov.ar"]],"SANL":[["(0380)4439211","aclar@eana.com.ar"],["(+549 380)4641419","ydlar@anac.gob.ar"],["(0380)445-4797","uolar@psa.gov.ar"]],"SANR":[["(011)28296023",null],["(+549 385)4714793",null],["(03858)427-271",null]],"SANT":[["(0381)4260756","actuc@eana.com.ar"],["(+549 381)6336027","ydtuc@anac.gob.ar"],["(0381)426-1122","uotuc@psa.gov.ar"]],"SANU":[["(0264)4250400","acjua@eana.com.ar"],["(+549 264)4369293","ydjua@anac.gob.ar"],["(0264)425-1464","uojua@psa.gov.ar"]],"SAOC":[["(0358)4970883",null],["(+549 358)4828627",null],["(0358)497-0766",null]],"SAOD":[["(0354)4420151",null],[null,null],[null,null]],"SAOR":[["(0265)715643973",null],["(+549 2657)643973",null],[null,null]],"SAOS":[["(0351)152921338",null],["(+549 266)4574624",null],[null,null]],"SAOU":[["(0266)4423047",null],["(+549 260)4498391",null],["(0266)442-0904",null]],"SARC":[["(0379)4458844","accrr@eana.com.ar"],["(+549 379)4963405","ydcrr@anac.gob.ar"],["(0379)445-8340","uocrr@psa.gov.ar"]],"SARE":[["(0362)4487758",null],["(+549 3624)737006",null],["(0362)443-6531",null]],"SARF":[["(0370)4454448","acfsa@eana.com.ar"],["(+549 3704)343791","ydfsa@anac.gob.ar"],["(0370)445-2043","uofsa@psa.gov.ar"]],"SARI":[["(03757)420595","acigu@eana.com.ar"],["(+549 3757)449042","ydigu@anac.gob.ar"],["(03757)420-618","uoigu@psa.gov.ar"]],"SARL":[["(0377)2425528",null],["(+549 377)2634618",null],["(03772)425-800",null]],"SARP":[["(0376)4451903","acpos@eana.com.ar"],["(+549 3764)767345","ydpos@anac.gob.ar"],["(0376)459-7195","uopos@psa.gov.ar"]],"SARR":[["(0362)4440939",null],[null,null],[null,null]],"SASA":[["(0387)155993682","acsal@eana.com.ar"],["(+549 387)5616129","ydsal@anac.gob.ar"],["(0387)437-5112","uosal@psa.gov.ar"]],"SASJ":[["(0388)4911102","acjuj@eana.com.ar"],["(+549 388)5072657","ydjuj@anac.gob.ar"],["(0388)491-1110","uojuj@psa.gov.ar"]],"SATG":[["(0377)7427112",null],["(+549 3777)519033",null],[null,null]],"SATR":[["(011)60067345",null],["(+549 3482)15537547",null],[null,null]],"SAVC":[["(02970)4549439","accrv@eana.com.ar"],["(+549 2976)239933","ydcrv@anac.gob.ar"],["(0297)454-8510",null]],"SAVE":[["(0294)5451354","acesq@eana.com.ar"],["(+549 2945)516373","ydesq@anac.gob.ar"],["(02945)456-667","uoesq@psa.gov.ar"]],"SAVF":[["(0297)5374678",null],[null,null],[null,null]],"SAVT":[["(0280)4421009","actre@eana.com.ar"],["(+549 297)5049334","ydtre@anac.gob.ar"],["(0280)442-0196","uotre@psa.gov.ar"]],"SAVV":[["(0292)0424416","acvie@eana.com.ar"],["(+549 11)38985231","ydvie@anac.gob.ar"],["(02920)429-230","uovie@psa.gov.ar"]],"SAVY":[["(0280)4475938",null],["(+549 2804)592860",null],["(02804)474-931",null]],"SAWB":[[null,null],["0810-2220330",null],[null,null]],"SAWC":[["(0290)2493702",null],["(+549 11)38985232",null],["(02902)495-392",null]],"SAWE":[["(02964) 431340","acgde@eana.com.ar"],["(+549 2964)403299","ydgra@anac.gob.ar"],["(02964)432-437","uogra@psa.gov.ar"]],"SAWG":[["(011)23048723","acgal@eana.com.ar"],["(+549 11)38985220","ydgal@anac.gob.ar"],["(02966)442-031",null]],"SAWH":[["(2901)434390","acusu@eana.com.ar"],["(+549 2901)409216","ydusu@anac.gob.ar"],["(02901)435-909","uousu@psa.gov.ar"]],"SAWT":[["02966231446",null],[null,null],[null,null]],"SAWU":[["02966323651",null],[null,null],[null,null]],"SAZB":[["(0291)4860300","acbca@eana.com.ar"],["(+549 11)30747303","ydbca@anac.gob.ar"],["(0291)486-1118",null]],"SAZF":[["(0228)4445554",null],[null,null],[null,null]],"SAZG":[["(0230)2427501",null],["(+549 2302)412835",null],[null,null]],"SAZM":[["(0223)5015359","acmdp@eana.com.ar"],["(+54 223)4783990","ydmdp@anac.gob.ar"],["(0223)470-2309","uomdp@psa.gov.ar"]],"SAZN":[["(0299)4440104","acneu@eana.com.ar"],["(+549 11)22692125","ydneu@anac.gob.ar"],["(0299)467-1684","uoneu@psa.gov.ar"]],"SAZO":[["(0226)215496577",null],[null,null],[null,null]],"SAZR":[["(0295)4433814",null],["(+549 2954)511275",null],["(02954)456-602",null]],"SAZS":[["(0294)4405030",null],["(+549 294)4415610",null],["(0294)440-5071",null]],"SAZT":[["(0249)4440043",null],["(+549 249)4621917",null],[null,null]],"SAZV":[["(0255)15521295",null],["(+54 2255)454647",null],[null,null]],"SAZY":[["(0297)2428398",null],["(+549 294)4205470",null],["(02972)412-370",null]]};
+
+function contactoDe(id){
+  const raw=vU(id);
+  let oaci = /^[A-Z]{4}$/.test(raw) ? raw : resolveAero(raw).box;
+  if(oaci==='ZZZZ' || !/^[A-Z]{4}$/.test(oaci)) oaci='';
+  return {oaci, data: oaci ? (CONTACTOS[oaci]||null) : null};
+}
+async function copiar(txt){
+  if(!txt) return false;
+  try{ await navigator.clipboard.writeText(txt); return true; }
+  catch(e){
+    try{ const ta=document.createElement('textarea'); ta.value=txt; ta.style.position='fixed';
+         ta.style.opacity='0'; document.body.appendChild(ta); ta.select();
+         document.execCommand('copy'); document.body.removeChild(ta); return true; }
+    catch(_){ return false; }
+  }
+}
+function renderContactos(){
+  const panel=$('contactosPanel'), btn=$('btnContactos'); if(!panel||!btn) return;
+  const {oaci,data}=contactoDe('f13a');
+  if(!oaci){ panel.innerHTML=''; panel.hidden=true; btn.hidden=true; return; }
+  btn.hidden=false;
+  if(!data){ panel.innerHTML='<div class="cnone">Sin contactos publicados para '+oaci+'.</div>'; return; }
+  const grupos=[['ARO/AIS',data[0]],['Jefe de aeródromo',data[1]],['PSA',data[2]]];
+  let html='<h4>Contactos · '+oaci+'</h4>';
+  for(const [tit,d] of grupos){
+    const tel=d&&d[0], mail=d&&d[1];
+    if(!tel && !mail) continue;
+    html+='<div class="cgrupo"><div class="ctit">'+tit+'</div>';
+    if(tel)  html+='<div class="cdato"><span class="lbl">Tel</span><span class="val">'+tel+'</span><button type="button" class="ccopy" data-c="'+tel.replace(/"/g,'&quot;')+'">copiar</button></div>';
+    if(mail) html+='<div class="cdato"><span class="lbl">Mail</span><span class="val">'+mail+'</span><button type="button" class="ccopy" data-c="'+mail.replace(/"/g,'&quot;')+'">copiar</button></div>';
+    else if(tit==='ARO/AIS') html+='<div class="cdato"><span class="lbl">Mail</span><span class="val cnone">sin email ARO/AIS publicado</span></div>';
+    html+='</div>';
+  }
+  panel.innerHTML=html;
+  panel.querySelectorAll('.ccopy').forEach(b=>b.onclick=async()=>{
+    const ok=await copiar(b.dataset.c);
+    toast(ok?('Copiado: '+b.dataset.c):'No se pudo copiar', ok?'ok':'bad');
+  });
+}
+
 async function generarPDF(){
   const {E,A,bad}=validar(); pintarValidacion(E,A,bad);
   if(E.length){ toast('Corregí los datos antes de generar el PDF','bad'); $('valbox').scrollIntoView({behavior:'smooth',block:'center'}); return; }
@@ -997,7 +1072,13 @@ async function generarPDF(){
     const link=document.createElement('a'); link.href=url;
     link.download=`FPL_${vU('f7')||'SIN_ID'}_${$('f13fecha').value||''}.pdf`; link.click();
     setTimeout(()=>URL.revokeObjectURL(url),3000);
-    toast('PDF generado','ok');
+    // copiar email ARO/AIS del aeródromo de SALIDA para enviar el plan
+    const _c=contactoDe('f13a'); const _mail=_c.data&&_c.data[0]&&_c.data[0][1];
+    if(_mail){ const ok=await copiar(_mail);
+      toast(ok?('PDF generado · email ARO/AIS '+_c.oaci+' copiado: '+_mail)
+              :('PDF generado · email ARO/AIS '+_c.oaci+': '+_mail), ok?'ok':'warn'); }
+    else { const _tel=_c.data&&_c.data[0]&&_c.data[0][0];
+      toast('PDF generado · '+(_c.oaci||'origen')+' sin email ARO/AIS publicado'+(_tel?(' · tel '+_tel):''),'warn'); }
   }catch(err){ console.error(err); toast('Error generando PDF: '+err.message,'bad'); }
 }
 
@@ -1012,6 +1093,7 @@ function reloj(){
 /* ============================ INIT ============================ */
 $('btnGuardar').onclick=guardar;
 $('btnPDF').onclick=generarPDF;
+$('btnContactos').onclick=()=>{ const p=$('contactosPanel'); p.hidden=!p.hidden; };
 $('btnNuevo').onclick=limpiar;
 $('btnRecargar').onclick=cargarLista;
 $('selAvion').addEventListener('change',aplicarAeronave);
