@@ -1,0 +1,1042 @@
+{
+  "_fuente": "yovuelo.com.ar (fpl.php / telefonosYD / emailsYD / telefonosPSA / emailsPSA)",
+  "_nota": "Telefonos por OACI = fiables. Emails = mapeo best-effort decodificando el codigo de 3 letras; los no decodificados quedan en emails_sin_mapear.",
+  "_alertas": {
+    "_resuelto_SAWE": "ARO/AIS SAWE corregido por el operador: (02964) 431340 / acgde@eana.com.ar"
+  },
+  "by_icao": {
+    "SAAC": {
+      "aro_ais": {
+        "tel": "(0345)4252319",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 3454)280019",
+        "email": null
+      },
+      "psa": {
+        "tel": null,
+        "email": null
+      }
+    },
+    "SAAG": {
+      "aro_ais": {
+        "tel": null,
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 3446)348261",
+        "email": null
+      },
+      "psa": {
+        "tel": null,
+        "email": null
+      }
+    },
+    "SAAJ": {
+      "aro_ais": {
+        "tel": "(0236)2433385",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": null,
+        "email": null
+      },
+      "psa": {
+        "tel": null,
+        "email": null
+      }
+    },
+    "SAAP": {
+      "aro_ais": {
+        "tel": "(0343)4261914",
+        "email": "acpar@eana.com.ar"
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 3435)193446",
+        "email": "ydpar@anac.gob.ar"
+      },
+      "psa": {
+        "tel": "(0343)436-5393",
+        "email": "uopar@psa.gov.ar"
+      }
+    },
+    "SAAR": {
+      "aro_ais": {
+        "tel": "(0341)155038804",
+        "email": "acros@eana.com.ar"
+      },
+      "jefe_aerodromo": {
+        "tel": "(+54 341)4807482",
+        "email": "ydros@anac.gob.ar"
+      },
+      "psa": {
+        "tel": "(0341)480-7480",
+        "email": "uoros@psa.gob.ar"
+      }
+    },
+    "SAAV": {
+      "aro_ais": {
+        "tel": "(0342)4995065",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 342)6100257",
+        "email": null
+      },
+      "psa": {
+        "tel": "(0342)499-5059",
+        "email": null
+      }
+    },
+    "SABE": {
+      "aro_ais": {
+        "tel": "(011)4514-1513",
+        "email": "acaer@eana.com.ar"
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 11)31436782",
+        "email": "ydaer@anac.gob.ar"
+      },
+      "psa": {
+        "tel": "(54-11)4514-1541",
+        "email": null
+      }
+    },
+    "SACE": {
+      "aro_ais": {
+        "tel": "(0351)4666057",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": null,
+        "email": null
+      },
+      "psa": {
+        "tel": null,
+        "email": null
+      }
+    },
+    "SACF": {
+      "aro_ais": {
+        "tel": "(0351)4335350",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": null,
+        "email": null
+      },
+      "psa": {
+        "tel": null,
+        "email": null
+      }
+    },
+    "SACO": {
+      "aro_ais": {
+        "tel": "(0351)4751404",
+        "email": "accba@eana.com.ar"
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 351)2733556",
+        "email": "ydcba@anac.gob.ar"
+      },
+      "psa": {
+        "tel": "(0351)475-3883",
+        "email": "fdgcba@psa.gob.ar"
+      }
+    },
+    "SADF": {
+      "aro_ais": {
+        "tel": "(011)4580-0261",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 11)55766659",
+        "email": null
+      },
+      "psa": {
+        "tel": "(54-11)4714-8148",
+        "email": "fdgsanfernando@psa.gov.ar"
+      }
+    },
+    "SADJ": {
+      "aro_ais": {
+        "tel": null,
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 11)31993283",
+        "email": null
+      },
+      "psa": {
+        "tel": null,
+        "email": null
+      }
+    },
+    "SADM": {
+      "aro_ais": {
+        "tel": "(011)46279402",
+        "email": "acmor@eana.com.ar"
+      },
+      "jefe_aerodromo": {
+        "tel": "(+54 11)46292012",
+        "email": "ydmor@anac.gob.ar"
+      },
+      "psa": {
+        "tel": null,
+        "email": null
+      }
+    },
+    "SADP": {
+      "aro_ais": {
+        "tel": "(011)60064271",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 11)66210047",
+        "email": null
+      },
+      "psa": {
+        "tel": "(54-11)4758-3212",
+        "email": "metro_terminalsur@psa.gob.ar"
+      }
+    },
+    "SAEF": {
+      "aro_ais": {
+        "tel": "(011)44802344",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": null,
+        "email": null
+      },
+      "psa": {
+        "tel": null,
+        "email": null
+      }
+    },
+    "SAEZ": {
+      "aro_ais": {
+        "tel": "(011)44802330",
+        "email": "aceze@eana.com.ar"
+      },
+      "jefe_aerodromo": {
+        "tel": "(+54 11)44802245",
+        "email": "ydeze@anac.gob.ar"
+      },
+      "psa": {
+        "tel": "(54-11)4480-0117",
+        "email": "fboezeiza@psa.gob.ar; uoeze@psa.gov.ar"
+      }
+    },
+    "SAFR": {
+      "aro_ais": {
+        "tel": "(0349)215565217",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": null,
+        "email": null
+      },
+      "psa": {
+        "tel": null,
+        "email": null
+      }
+    },
+    "SAFS": {
+      "aro_ais": {
+        "tel": "(0349)3426002",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": null,
+        "email": null
+      },
+      "psa": {
+        "tel": null,
+        "email": null
+      }
+    },
+    "SAME": {
+      "aro_ais": {
+        "tel": "(0261)4487486",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 261)6830962",
+        "email": null
+      },
+      "psa": {
+        "tel": "(0261)415-8897",
+        "email": null
+      }
+    },
+    "SAMF": {
+      "aro_ais": {
+        "tel": "(0261)4488840",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": null,
+        "email": null
+      },
+      "psa": {
+        "tel": null,
+        "email": null
+      }
+    },
+    "SAMM": {
+      "aro_ais": {
+        "tel": "(0260)4471265",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 260)4698175",
+        "email": null
+      },
+      "psa": {
+        "tel": "(0260)447-2123",
+        "email": null
+      }
+    },
+    "SAMR": {
+      "aro_ais": {
+        "tel": "(0260)4430703",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 261)3443608",
+        "email": null
+      },
+      "psa": {
+        "tel": "(0260)444-5974",
+        "email": null
+      }
+    },
+    "SANC": {
+      "aro_ais": {
+        "tel": "(0383)4453686",
+        "email": "accat@eana.com.ar"
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 383)4360801",
+        "email": "ydcat@anac.gob.ar"
+      },
+      "psa": {
+        "tel": "(0383)445-1078",
+        "email": null
+      }
+    },
+    "SANE": {
+      "aro_ais": {
+        "tel": "(0385)4340710",
+        "email": "acsde@eana.com.ar"
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 385)4712203",
+        "email": "ydsde@anac.gob.ar"
+      },
+      "psa": {
+        "tel": "(0385)434-0678",
+        "email": "uosde@psa.gov.ar"
+      }
+    },
+    "SANL": {
+      "aro_ais": {
+        "tel": "(0380)4439211",
+        "email": "aclar@eana.com.ar"
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 380)4641419",
+        "email": "ydlar@anac.gob.ar"
+      },
+      "psa": {
+        "tel": "(0380)445-4797",
+        "email": "uolar@psa.gov.ar"
+      }
+    },
+    "SANR": {
+      "aro_ais": {
+        "tel": "(011)28296023",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 385)4714793",
+        "email": null
+      },
+      "psa": {
+        "tel": "(03858)427-271",
+        "email": null
+      }
+    },
+    "SANT": {
+      "aro_ais": {
+        "tel": "(0381)4260756",
+        "email": "actuc@eana.com.ar"
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 381)6336027",
+        "email": "ydtuc@anac.gob.ar"
+      },
+      "psa": {
+        "tel": "(0381)426-1122",
+        "email": "uotuc@psa.gov.ar"
+      }
+    },
+    "SANU": {
+      "aro_ais": {
+        "tel": "(0264)4250400",
+        "email": "acjua@eana.com.ar"
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 264)4369293",
+        "email": "ydjua@anac.gob.ar"
+      },
+      "psa": {
+        "tel": "(0264)425-1464",
+        "email": "uojua@psa.gov.ar"
+      }
+    },
+    "SAOC": {
+      "aro_ais": {
+        "tel": "(0358)4970883",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 358)4828627",
+        "email": null
+      },
+      "psa": {
+        "tel": "(0358)497-0766",
+        "email": null
+      }
+    },
+    "SAOD": {
+      "aro_ais": {
+        "tel": "(0354)4420151",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": null,
+        "email": null
+      },
+      "psa": {
+        "tel": null,
+        "email": null
+      }
+    },
+    "SAOR": {
+      "aro_ais": {
+        "tel": "(0265)715643973",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 2657)643973",
+        "email": null
+      },
+      "psa": {
+        "tel": null,
+        "email": null
+      }
+    },
+    "SAOS": {
+      "aro_ais": {
+        "tel": "(0351)152921338",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 266)4574624",
+        "email": null
+      },
+      "psa": {
+        "tel": null,
+        "email": null
+      }
+    },
+    "SAOU": {
+      "aro_ais": {
+        "tel": "(0266)4423047",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 260)4498391",
+        "email": null
+      },
+      "psa": {
+        "tel": "(0266)442-0904",
+        "email": null
+      }
+    },
+    "SARC": {
+      "aro_ais": {
+        "tel": "(0379)4458844",
+        "email": "accrr@eana.com.ar"
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 379)4963405",
+        "email": "ydcrr@anac.gob.ar"
+      },
+      "psa": {
+        "tel": "(0379)445-8340",
+        "email": "uocrr@psa.gov.ar"
+      }
+    },
+    "SARE": {
+      "aro_ais": {
+        "tel": "(0362)4487758",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 3624)737006",
+        "email": null
+      },
+      "psa": {
+        "tel": "(0362)443-6531",
+        "email": null
+      }
+    },
+    "SARF": {
+      "aro_ais": {
+        "tel": "(0370)4454448",
+        "email": "acfsa@eana.com.ar"
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 3704)343791",
+        "email": "ydfsa@anac.gob.ar"
+      },
+      "psa": {
+        "tel": "(0370)445-2043",
+        "email": "uofsa@psa.gov.ar"
+      }
+    },
+    "SARI": {
+      "aro_ais": {
+        "tel": "(03757)420595",
+        "email": "acigu@eana.com.ar"
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 3757)449042",
+        "email": "ydigu@anac.gob.ar"
+      },
+      "psa": {
+        "tel": "(03757)420-618",
+        "email": "uoigu@psa.gov.ar"
+      }
+    },
+    "SARL": {
+      "aro_ais": {
+        "tel": "(0377)2425528",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 377)2634618",
+        "email": null
+      },
+      "psa": {
+        "tel": "(03772)425-800",
+        "email": null
+      }
+    },
+    "SARP": {
+      "aro_ais": {
+        "tel": "(0376)4451903",
+        "email": "acpos@eana.com.ar"
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 3764)767345",
+        "email": "ydpos@anac.gob.ar"
+      },
+      "psa": {
+        "tel": "(0376)459-7195",
+        "email": "uopos@psa.gov.ar"
+      }
+    },
+    "SARR": {
+      "aro_ais": {
+        "tel": "(0362)4440939",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": null,
+        "email": null
+      },
+      "psa": {
+        "tel": null,
+        "email": null
+      }
+    },
+    "SASA": {
+      "aro_ais": {
+        "tel": "(0387)155993682",
+        "email": "acsal@eana.com.ar"
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 387)5616129",
+        "email": "ydsal@anac.gob.ar"
+      },
+      "psa": {
+        "tel": "(0387)437-5112",
+        "email": "uosal@psa.gov.ar"
+      }
+    },
+    "SASJ": {
+      "aro_ais": {
+        "tel": "(0388)4911102",
+        "email": "acjuj@eana.com.ar"
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 388)5072657",
+        "email": "ydjuj@anac.gob.ar"
+      },
+      "psa": {
+        "tel": "(0388)491-1110",
+        "email": "uojuj@psa.gov.ar"
+      }
+    },
+    "SATG": {
+      "aro_ais": {
+        "tel": "(0377)7427112",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 3777)519033",
+        "email": null
+      },
+      "psa": {
+        "tel": null,
+        "email": null
+      }
+    },
+    "SATR": {
+      "aro_ais": {
+        "tel": "(011)60067345",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 3482)15537547",
+        "email": null
+      },
+      "psa": {
+        "tel": null,
+        "email": null
+      }
+    },
+    "SAVC": {
+      "aro_ais": {
+        "tel": "(02970)4549439",
+        "email": "accrv@eana.com.ar"
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 2976)239933",
+        "email": "ydcrv@anac.gob.ar"
+      },
+      "psa": {
+        "tel": "(0297)454-8510",
+        "email": null
+      }
+    },
+    "SAVE": {
+      "aro_ais": {
+        "tel": "(0294)5451354",
+        "email": "acesq@eana.com.ar"
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 2945)516373",
+        "email": "ydesq@anac.gob.ar"
+      },
+      "psa": {
+        "tel": "(02945)456-667",
+        "email": "uoesq@psa.gov.ar"
+      }
+    },
+    "SAVF": {
+      "aro_ais": {
+        "tel": "(0297)5374678",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": null,
+        "email": null
+      },
+      "psa": {
+        "tel": null,
+        "email": null
+      }
+    },
+    "SAVT": {
+      "aro_ais": {
+        "tel": "(0280)4421009",
+        "email": "actre@eana.com.ar"
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 297)5049334",
+        "email": "ydtre@anac.gob.ar"
+      },
+      "psa": {
+        "tel": "(0280)442-0196",
+        "email": "uotre@psa.gov.ar"
+      }
+    },
+    "SAVV": {
+      "aro_ais": {
+        "tel": "(0292)0424416",
+        "email": "acvie@eana.com.ar"
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 11)38985231",
+        "email": "ydvie@anac.gob.ar"
+      },
+      "psa": {
+        "tel": "(02920)429-230",
+        "email": "uovie@psa.gov.ar"
+      }
+    },
+    "SAVY": {
+      "aro_ais": {
+        "tel": "(0280)4475938",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 2804)592860",
+        "email": null
+      },
+      "psa": {
+        "tel": "(02804)474-931",
+        "email": null
+      }
+    },
+    "SAWB": {
+      "aro_ais": {
+        "tel": null,
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": "0810-2220330",
+        "email": null
+      },
+      "psa": {
+        "tel": null,
+        "email": null
+      }
+    },
+    "SAWC": {
+      "aro_ais": {
+        "tel": "(0290)2493702",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 11)38985232",
+        "email": null
+      },
+      "psa": {
+        "tel": "(02902)495-392",
+        "email": null
+      }
+    },
+    "SAWE": {
+      "aro_ais": {
+        "tel": "(02964) 431340",
+        "email": "acgde@eana.com.ar"
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 2964)403299",
+        "email": "ydgra@anac.gob.ar"
+      },
+      "psa": {
+        "tel": "(02964)432-437",
+        "email": "uogra@psa.gov.ar"
+      }
+    },
+    "SAWG": {
+      "aro_ais": {
+        "tel": "(011)23048723",
+        "email": "acgal@eana.com.ar"
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 11)38985220",
+        "email": "ydgal@anac.gob.ar"
+      },
+      "psa": {
+        "tel": "(02966)442-031",
+        "email": null
+      }
+    },
+    "SAWH": {
+      "aro_ais": {
+        "tel": "(2901)434390",
+        "email": "acusu@eana.com.ar"
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 2901)409216",
+        "email": "ydusu@anac.gob.ar"
+      },
+      "psa": {
+        "tel": "(02901)435-909",
+        "email": "uousu@psa.gov.ar"
+      }
+    },
+    "SAWT": {
+      "aro_ais": {
+        "tel": "02966231446",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": null,
+        "email": null
+      },
+      "psa": {
+        "tel": null,
+        "email": null
+      }
+    },
+    "SAWU": {
+      "aro_ais": {
+        "tel": "02966323651",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": null,
+        "email": null
+      },
+      "psa": {
+        "tel": null,
+        "email": null
+      }
+    },
+    "SAZB": {
+      "aro_ais": {
+        "tel": "(0291)4860300",
+        "email": "acbca@eana.com.ar"
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 11)30747303",
+        "email": "ydbca@anac.gob.ar"
+      },
+      "psa": {
+        "tel": "(0291)486-1118",
+        "email": null
+      }
+    },
+    "SAZF": {
+      "aro_ais": {
+        "tel": "(0228)4445554",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": null,
+        "email": null
+      },
+      "psa": {
+        "tel": null,
+        "email": null
+      }
+    },
+    "SAZG": {
+      "aro_ais": {
+        "tel": "(0230)2427501",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 2302)412835",
+        "email": null
+      },
+      "psa": {
+        "tel": null,
+        "email": null
+      }
+    },
+    "SAZM": {
+      "aro_ais": {
+        "tel": "(0223)5015359",
+        "email": "acmdp@eana.com.ar"
+      },
+      "jefe_aerodromo": {
+        "tel": "(+54 223)4783990",
+        "email": "ydmdp@anac.gob.ar"
+      },
+      "psa": {
+        "tel": "(0223)470-2309",
+        "email": "uomdp@psa.gov.ar"
+      }
+    },
+    "SAZN": {
+      "aro_ais": {
+        "tel": "(0299)4440104",
+        "email": "acneu@eana.com.ar"
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 11)22692125",
+        "email": "ydneu@anac.gob.ar"
+      },
+      "psa": {
+        "tel": "(0299)467-1684",
+        "email": "uoneu@psa.gov.ar"
+      }
+    },
+    "SAZO": {
+      "aro_ais": {
+        "tel": "(0226)215496577",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": null,
+        "email": null
+      },
+      "psa": {
+        "tel": null,
+        "email": null
+      }
+    },
+    "SAZR": {
+      "aro_ais": {
+        "tel": "(0295)4433814",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 2954)511275",
+        "email": null
+      },
+      "psa": {
+        "tel": "(02954)456-602",
+        "email": null
+      }
+    },
+    "SAZS": {
+      "aro_ais": {
+        "tel": "(0294)4405030",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 294)4415610",
+        "email": null
+      },
+      "psa": {
+        "tel": "(0294)440-5071",
+        "email": null
+      }
+    },
+    "SAZT": {
+      "aro_ais": {
+        "tel": "(0249)4440043",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 249)4621917",
+        "email": null
+      },
+      "psa": {
+        "tel": null,
+        "email": null
+      }
+    },
+    "SAZV": {
+      "aro_ais": {
+        "tel": "(0255)15521295",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": "(+54 2255)454647",
+        "email": null
+      },
+      "psa": {
+        "tel": null,
+        "email": null
+      }
+    },
+    "SAZY": {
+      "aro_ais": {
+        "tel": "(0297)2428398",
+        "email": null
+      },
+      "jefe_aerodromo": {
+        "tel": "(+549 294)4205470",
+        "email": null
+      },
+      "psa": {
+        "tel": "(02972)412-370",
+        "email": null
+      }
+    }
+  },
+  "emails_sin_mapear": {
+    "aro_ais": [
+      "acdia@eana.com.ar",
+      "aceno@eana.com.ar",
+      "acdil@eana.com.ar",
+      "acfdo@eana.com.ar",
+      "acpal@eana.com.ar",
+      "acdoz@eana.com.ar",
+      "acryd@eana.com.ar",
+      "acsis@eana.com.ar",
+      "aclib@eana.com.ar",
+      "acgoy@eana.com.ar",
+      "acrta@eana.com.ar",
+      "acdry@eana.com.ar",
+      "acsvo@eana.com.ar",
+      "acosa@eana.com.ar",
+      "actrh@eana.com.ar",
+      "acrcu@eana.com.ar",
+      "acsrc@eana.com.ar",
+      "acuis@eana.com.ar",
+      "aceca@eana.com.ar",
+      "acchp@eana.com.ar",
+      "acbar@eana.com.ar",
+      "acsra@eana.com.ar",
+      "acmlg@eana.com.ar"
+    ],
+    "jefe_aerodromo": [
+      "yddia@anac.gob.ar",
+      "ydgua@anac.gob.ar",
+      "ydsvo@anac.gob.ar",
+      "ydfdo@anac.gob.ar",
+      "ydeno@anac.gob.ar",
+      "ydpal@anac.gob.ar",
+      "ydgpi@anac.gob.ar",
+      "ydosa@anac.gob.ar",
+      "ydbar@anac.gob.ar",
+      "yddil@anac.gob.ar",
+      "ydges@anac.gob.ar",
+      "ydchp@anac.gob.ar",
+      "ydsis@anac.gob.ar",
+      "ydlib@anac.gob.ar",
+      "ydgoy@anac.gob.ar",
+      "ydrta@anac.gob.ar",
+      "yddoz@anac.gob.ar",
+      "ydmlg@anac.gob.ar",
+      "ydsra@anac.gob.ar",
+      "ydtrh@anac.gob.ar",
+      "ydtrc@anac.gob.ar",
+      "ydryd@anac.gob.ar",
+      "ydsrc@anac.gob.ar",
+      "yduis@anac.gob.ar",
+      "yddry@anac.gob.ar",
+      "ydmbi@anac.gob.ar",
+      "ydeca@anac.gob.ar"
+    ],
+    "psa_otros": [
+      "uospcnd@psa.gob.ar",
+      "uoepa@psa.gob.ar",
+      "uomdp@psa.gob.ar",
+      "uodoz@psa.gob.ar",
+      "uosis@psa.gob.ar",
+      "uolib@psa.gob.ar",
+      "uocrv@psa.gob.ar",
+      "uodry@psa.gob.ar",
+      "uotuc@psa.gob.ar",
+      "uosvo@psa.gob.ar",
+      "uoosa@psa.gob.ar",
+      "uolar@psa.gob.ar",
+      "uotrh@psa.gob.ar",
+      "turnorgl@psa.gob.ar",
+      "uorcu@psa.gob.ar",
+      "uocaf@psa.gob.ar",
+      "uocat@psa.gob.ar",
+      "uochp@psa.gob.ar",
+      "uobar@psa.gob.ar",
+      "turnobca@psa.gob.ar",
+      "uosra@psa.gob.ar",
+      "uomlg@psa.gob.ar",
+      "uosprcq@psa.gob.ar"
+    ]
+  }
+}
