@@ -1,6 +1,10 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.51
+  VERSION : 5.52
+  FECHA   : 2026-06-15
+  CAMBIOS : Seguimiento de turnos por instructor (aprobados/cancelados, pasados y futuros).
+            Atribucion explicita aprobado_por/cancelado_por en cada accion. Admin/administrador
+            pueden ver la actividad de cada instructor mediante selector. Auditoria de aprobacion de turno.
   FECHA   : 2026-06-11
   CAMBIOS : Vista admin de disponibilidad de instructores: selector por instructor activo +
             grilla de 30 días desde hoy con paginación de a 30 días (reemplaza vista semanal)
@@ -251,7 +255,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.51</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.52</div>
   </div>
 
 </div>
@@ -424,6 +428,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   </div>
   <div class="tab-bar">
     <button class="nav-btn active" id="inst-tab-res"   onclick="showInstTab('reservas')">Reservas</button>
+    <button class="nav-btn"        id="inst-tab-seg"   onclick="showInstTab('seguimiento')">Seguimiento</button>
     <button class="nav-btn"        id="inst-tab-disp"  onclick="showInstTab('disponibilidad')">Mi Disponibilidad</button>
     <button class="nav-btn"        id="inst-tab-cfg"   onclick="showInstTab('config')">Configuración</button>
     <button class="nav-btn"        id="inst-tab-perfil" onclick="showInstTab('perfil')">Mi Perfil</button>
@@ -461,6 +466,32 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
           <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(255,255,255,.15);border:1px dashed rgba(255,255,255,.3)"></div>PENDIENTE</div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- SEGUIMIENTO DE TURNOS -->
+  <div id="instructor-seguimiento" class="screen">
+    <h2>◈ Seguimiento de Turnos</h2>
+    <div id="seg-instructor-wrap" style="display:none;margin-bottom:1rem">
+      <div class="field" style="max-width:340px;margin:0">
+        <label>Instructor</label>
+        <select id="seg-instructor" onchange="renderSeguimiento()" style="width:100%;padding:9px 12px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:var(--font-mono);font-size:13px">
+          <option value="">— Todos los instructores —</option>
+        </select>
+      </div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat"><div class="num" id="seg-stat-aprob" style="color:var(--green)">0</div><div class="lbl">Aprobados</div></div>
+      <div class="stat"><div class="num" id="seg-stat-cancel" style="color:var(--red)">0</div><div class="lbl">Cancelados</div></div>
+      <div class="stat"><div class="num" id="seg-stat-fut">0</div><div class="lbl">Próximos</div></div>
+    </div>
+    <div class="cal-vista-tabs">
+      <button class="cal-vista-tab active" id="seg-per-todos"   onclick="setSegPeriodo('todos')">TODOS</button>
+      <button class="cal-vista-tab"        id="seg-per-futuros" onclick="setSegPeriodo('futuros')">PRÓXIMOS</button>
+      <button class="cal-vista-tab"        id="seg-per-pasados" onclick="setSegPeriodo('pasados')">PASADOS</button>
+    </div>
+    <div class="card" style="padding:1rem">
+      <div id="seg-resultado"><div class="empty">// Cargando movimientos...</div></div>
     </div>
   </div>
 
@@ -784,6 +815,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
               <option value="login_exito">Ingresos exitosos</option>
               <option value="login_fallo">Ingresos fallidos</option>
               <option value="alta_turno">Alta de turnos</option>
+              <option value="aprobacion_turno">Aprobación de turnos</option>
               <option value="cancelacion_turno">Cancelación de turnos</option>
               <option value="avion_habilitado">Habilitación de aviones</option>
               <option value="avion_deshabilitado">Deshabilitación de aviones</option>
@@ -2054,13 +2086,13 @@ window.abrirModal=function(key){
   actions.innerHTML='';
   if(r.estado==='pendiente'){
     const ba=document.createElement('button');ba.className='primary';ba.textContent='APROBAR TURNO';
-    ba.onclick=async()=>{if(!confirm('¿Aprobar el turno de '+r.nombre+'?'))return;await fbUpdate('reservas/'+key,{estado:'aprobado',instructor:session.nombre});cerrarModal();};
+    ba.onclick=async()=>{if(!confirm('¿Aprobar el turno de '+r.nombre+'?'))return;await fbUpdate('reservas/'+key,{estado:'aprobado',instructor:session.nombre,aprobado_por:session.nombre});await registrarAuditoria('aprobacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(r.avion||'LV-OAD')+' — '+r.fecha+' '+r.hora+' hs — alumno: '+r.nombre);cerrarModal();};
     const bc=document.createElement('button');bc.className='danger';bc.textContent='CANCELAR TURNO';
-    bc.onclick=async()=>{if(!confirm('¿Cancelar el turno de '+r.nombre+'?'))return;const motivo=await pedirMotivoCancelacion(true);if(motivo===null)return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre};upd.obs_cancelacion='Cancelado por el instructor — '+motivo;await fbUpdate('reservas/'+key,upd);await registrarAuditoria('cancelacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — '+motivo);if(!turnoYaPaso(rv))mailCancel(rv,motivo);}cerrarModal();};
+    bc.onclick=async()=>{if(!confirm('¿Cancelar el turno de '+r.nombre+'?'))return;const motivo=await pedirMotivoCancelacion(true);if(motivo===null)return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre,cancelado_por:session.nombre};upd.obs_cancelacion='Cancelado por el instructor — '+motivo;await fbUpdate('reservas/'+key,upd);await registrarAuditoria('cancelacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — '+motivo);if(!turnoYaPaso(rv))mailCancel(rv,motivo);}cerrarModal();};
     actions.appendChild(ba);actions.appendChild(bc);
   } else if(r.estado==='aprobado'){
     const bc=document.createElement('button');bc.className='danger';bc.textContent='CANCELAR TURNO';
-    bc.onclick=async()=>{if(!confirm('¿Cancelar el turno de '+r.nombre+'?'))return;const motivo=await pedirMotivoCancelacion(true);if(motivo===null)return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre};upd.obs_cancelacion='Cancelado por el instructor — '+motivo;await fbUpdate('reservas/'+key,upd);await registrarAuditoria('cancelacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — '+motivo);if(!turnoYaPaso(rv))mailCancel(rv,motivo);}cerrarModal();};
+    bc.onclick=async()=>{if(!confirm('¿Cancelar el turno de '+r.nombre+'?'))return;const motivo=await pedirMotivoCancelacion(true);if(motivo===null)return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre,cancelado_por:session.nombre};upd.obs_cancelacion='Cancelado por el instructor — '+motivo;await fbUpdate('reservas/'+key,upd);await registrarAuditoria('cancelacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — '+motivo);if(!turnoYaPaso(rv))mailCancel(rv,motivo);}cerrarModal();};
     actions.appendChild(bc);
   }
   document.getElementById('modal-turno').classList.add('open');
@@ -2182,6 +2214,8 @@ window.showInstTab=function(tab){
   if(dispEl) dispEl.classList.toggle('active',tab==='disponibilidad');
   const perfilEl=document.getElementById('instructor-perfil');
   if(perfilEl) perfilEl.classList.toggle('active',tab==='perfil');
+  const segEl=document.getElementById('instructor-seguimiento');
+  if(segEl) segEl.classList.toggle('active',tab==='seguimiento');
   if(tab==='perfil'){
     hideEl('inst-perfil-err');hideEl('inst-perfil-ok');hideEl('inst-perfil-nombre-ok');
   }
@@ -2192,6 +2226,9 @@ window.showInstTab=function(tab){
   const dispBtn=document.getElementById('inst-tab-disp');
   const esAdmin=session?.user==='admin'||session?.user==='administrador';
   if(dispBtn){ dispBtn.classList.toggle('active',tab==='disponibilidad'); dispBtn.style.display=(session?.soloUsuarios||esAdmin)?'none':''; }
+  const segBtn=document.getElementById('inst-tab-seg');
+  if(segBtn){ segBtn.classList.toggle('active',tab==='seguimiento'); segBtn.style.display=session?.soloUsuarios?'none':''; }
+  if(tab==='seguimiento'){ renderSeguimiento(); }
   if(tab==='disponibilidad'){ dispSemanaOffset=0; renderDisponibilidad(); renderToggleVacaciones(); }
   const btnRes=document.getElementById('inst-tab-res');
   if(btnRes) btnRes.style.display=session?.soloUsuarios?'none':'';
@@ -2215,6 +2252,115 @@ window.showInstTab=function(tab){
       }
     });
   }
+};
+
+// ── SEGUIMIENTO DE TURNOS (por instructor) ─────────────────────
+let _segPeriodo='todos';
+
+window.setSegPeriodo=function(p){
+  _segPeriodo=p;
+  ['todos','futuros','pasados'].forEach(x=>{
+    const b=document.getElementById('seg-per-'+x);
+    if(b)b.classList.toggle('active',x===p);
+  });
+  renderSeguimiento();
+};
+
+// Devuelve el nombre de quien APROBÓ el turno (o null). Compatibilidad con registros viejos.
+function segAprobadorDe(r){
+  if(r.aprobado_por) return r.aprobado_por;
+  // registro viejo: aprobado (o vencido) por un instructor, sin haber sido cancelado por instructor
+  if((r.estado==='aprobado'||r.estado==='vencido') && r.instructor && !r.cancelado_por) return r.instructor;
+  return null;
+}
+// Devuelve el nombre de quien CANCELÓ el turno (solo cancelaciones de instructor, no del usuario).
+function segCanceladorDe(r){
+  if(r.cancelado_por) return r.cancelado_por;
+  if(r.estado==='cancelado' && r.instructor){
+    const oc=r.obs_cancelacion||'';
+    if(oc.startsWith('Cancelado por el instructor')) return r.instructor;
+    if(oc==='Instructor sin disponibilidad en este horario') return r.instructor;
+  }
+  return null;
+}
+
+async function poblarSelectorSeg(){
+  const sel=document.getElementById('seg-instructor');
+  if(!sel)return;
+  const cur=sel.value;
+  const data=await fbGet('instructores');
+  const nombres=[...new Set(rArr(data).map(i=>i.nombre).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  sel.innerHTML='<option value="">— Todos los instructores —</option>'+nombres.map(n=>`<option value="${n}">${n}</option>`).join('');
+  sel.value=cur;
+}
+
+window.renderSeguimiento=async function(){
+  const cont=document.getElementById('seg-resultado');
+  if(!cont)return;
+  cont.innerHTML='<div class="empty">// Cargando movimientos...</div>';
+  const esAdminTotal=session?.user==='admin'||session?.user==='administrador';
+  const wrap=document.getElementById('seg-instructor-wrap');
+  let target='';
+  if(esAdminTotal){
+    if(wrap)wrap.style.display='block';
+    await poblarSelectorSeg();
+    target=document.getElementById('seg-instructor')?.value||'';   // '' = todos
+  } else {
+    if(wrap)wrap.style.display='none';
+    target=session?.nombre||'';
+  }
+
+  const data=await fbGet('reservas');
+  const lista=rArr(data);
+
+  // Una reserva puede generar hasta dos filas: una por aprobación y otra por cancelación.
+  const filas=[];
+  lista.forEach(r=>{
+    const apr=segAprobadorDe(r);
+    const can=segCanceladorDe(r);
+    if(apr && (!target||apr===target)) filas.push({...r,_accion:'aprobado',_actor:apr});
+    if(can && (!target||can===target)) filas.push({...r,_accion:'cancelado',_actor:can});
+  });
+
+  // Stats sobre el universo completo (antes de filtrar por período)
+  const nApr=filas.filter(f=>f._accion==='aprobado').length;
+  const nCan=filas.filter(f=>f._accion==='cancelado').length;
+  const nFut=filas.filter(f=>!turnoYaPaso(f)).length;
+  const elA=document.getElementById('seg-stat-aprob');  if(elA)elA.textContent=nApr;
+  const elC=document.getElementById('seg-stat-cancel'); if(elC)elC.textContent=nCan;
+  const elF=document.getElementById('seg-stat-fut');    if(elF)elF.textContent=nFut;
+
+  // Filtro de período
+  let fil=filas;
+  if(_segPeriodo==='futuros') fil=fil.filter(f=>!turnoYaPaso(f));
+  else if(_segPeriodo==='pasados') fil=fil.filter(f=>turnoYaPaso(f));
+
+  fil.sort((a,b)=>b.fecha.localeCompare(a.fecha)||(b.hora||'').localeCompare(a.hora||''));
+
+  if(!fil.length){cont.innerHTML='<div class="empty">// Sin movimientos para este criterio.</div>';return;}
+
+  const mostrarActor = esAdminTotal && !target;   // en modo "Todos" mostramos quién hizo la acción
+  const th=(t)=>`<th style="text-align:left;padding:6px 8px;color:var(--text3);font-weight:500;letter-spacing:.08em">${t}</th>`;
+  cont.innerHTML=`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:12px;min-width:600px">
+    <thead><tr style="border-bottom:1px solid var(--border2)">
+      ${th('ACCIÓN')}${th('FECHA')}${th('HORA')}${th('AVIÓN')}${th('ALUMNO')}${mostrarActor?th('INSTRUCTOR'):''}${th('ESTADO ACTUAL')}
+    </tr></thead><tbody>
+    ${fil.map(f=>{
+      const esAprob=f._accion==='aprobado';
+      const chip=esAprob
+        ? '<span style="font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;padding:2px 8px;border-radius:var(--radius);background:rgba(57,211,83,.1);color:var(--green);border:1px solid rgba(57,211,83,.3)">APROBÓ</span>'
+        : '<span style="font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;padding:2px 8px;border-radius:var(--radius);background:rgba(248,81,73,.1);color:var(--red);border:1px solid rgba(248,81,73,.25)">CANCELÓ</span>';
+      return `<tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="abrirModal('${f.key}')">
+        <td style="padding:7px 8px">${chip}</td>
+        <td style="padding:7px 8px;color:var(--amber)">${cqToDisplay(f.fecha)}</td>
+        <td style="padding:7px 8px;color:var(--text)">${f.horaInicio&&f.horaFin?f.horaInicio+'–'+f.horaFin:(f.hora||'')} hs</td>
+        <td style="padding:7px 8px;color:var(--cyan)">${f.avion||'LV-OAD'}</td>
+        <td style="padding:7px 8px;color:var(--text)">${f.nombre||'—'}</td>
+        ${mostrarActor?`<td style="padding:7px 8px;color:var(--text2)">${f._actor}</td>`:''}
+        <td style="padding:7px 8px"><span class="badge badge-${f.estado}">${f.estado}</span></td>
+      </tr>`;
+    }).join('')}
+    </tbody></table></div>`;
 };
 
 function buildCfgAvionTabs(){
@@ -2720,7 +2866,7 @@ function renderAuditoria(lista,skipPageReset){
   const totalPages=Math.ceil(total/AUDIT_PER_PAGE);
   const page=Math.min(_auditPage,totalPages-1);
   const slice=lista.slice(page*AUDIT_PER_PAGE,(page+1)*AUDIT_PER_PAGE);
-  const ACCION_LABEL={'login':'Login','registro':'Registro','alta_turno':'Alta turno','cancelacion_turno':'Cancelación turno','avion_habilitado':'Avión habilitado','avion_deshabilitado':'Avión deshabilitado','dia_bloqueado':'Día bloqueado','dia_desbloqueado':'Día desbloqueado','aprobacion_usuario':'Usuario aprobado','usuario_rechazado':'Usuario rechazado'};
+  const ACCION_LABEL={'login':'Login','registro':'Registro','alta_turno':'Alta turno','aprobacion_turno':'Aprobación turno','cancelacion_turno':'Cancelación turno','avion_habilitado':'Avión habilitado','avion_deshabilitado':'Avión deshabilitado','dia_bloqueado':'Día bloqueado','dia_desbloqueado':'Día desbloqueado','aprobacion_usuario':'Usuario aprobado','usuario_rechazado':'Usuario rechazado'};
   const ROL_ICON={'alumno':'🛩️','instructor':'👨‍✈️','piloto':'✈️','pendiente':'⏳'};
   const paginador=totalPages>1?`
     <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:.75rem;flex-wrap:wrap;font-family:var(--font-mono);font-size:12px">
@@ -2935,7 +3081,11 @@ window.guardarCqReserva=async function(){
   if(!_mcqKey)return;
   hideEl('mcq-ok');hideEl('mcq-err');
   const nuevoEstado=document.getElementById('mcq-estado').value;
-  await fbUpdate('reservas/'+_mcqKey,{estado:nuevoEstado});
+  const updEstado={estado:nuevoEstado};
+  if(nuevoEstado==='aprobado') updEstado.aprobado_por=session.nombre;
+  if(nuevoEstado==='cancelado') updEstado.cancelado_por=session.nombre;
+  if(nuevoEstado==='aprobado'||nuevoEstado==='cancelado') updEstado.instructor=session.nombre;
+  await fbUpdate('reservas/'+_mcqKey,updEstado);
   // actualizar en caché local para que la tabla refleje el cambio
   const idx=_cqResultados.findIndex(x=>x.key===_mcqKey);
   if(idx>=0)_cqResultados[idx].estado=nuevoEstado;
@@ -3314,7 +3464,7 @@ window.dispToggle=async function(cb){
       const [rk,r]=conflicto;
       const ok=confirm(`⚠ Hay un turno aprobado en este horario:\n  ${r.fecha} ${r.hora}hs — ${r.nombre}\n\n¿Cancelarlo y quitar tu disponibilidad?`);
       if(!ok){cb.checked=true;return;}
-      await fbUpdate('reservas/'+rk,{estado:'cancelado',obs_cancelacion:'Instructor sin disponibilidad en este horario'});
+      await fbUpdate('reservas/'+rk,{estado:'cancelado',instructor:session.nombre,cancelado_por:session.nombre,obs_cancelacion:'Instructor sin disponibilidad en este horario'});
       mailCancel(r);
     }
   }
