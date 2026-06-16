@@ -2,7 +2,7 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
-  v3.6  ·  Datos ARO/AIS de SAWE corregidos (tel + email reales)
+  v3.7  ·  Contactos del aeródromo de llegada (destino, casilla 16), igual que salida
   ----------------------------------------------------------------------------------
   - Casillas 7 a 19 del formulario OACI de plan de vuelo
   - Persistencia en Firebase Realtime DB (proyecto turnos-lv-oad) via REST
@@ -122,6 +122,8 @@
     v3.6  Correccion de datos SAWE (Rio Grande): ARO/AIS tel (02964) 431340 y email
           acgde@eana.com.ar (codigo gde = Grande). Corrige el typo de la fuente y
           completa el email que faltaba. Ahora la copia al descargar funciona para SAWE.
+    v3.7  Contactos del aerodromo de llegada: boton bajo Destino (16) que despliega
+          ARO/AIS, Jefe de aerodromo y PSA del OACI de destino, igual que el de salida.
 ==================================================================================
 -->
 <html lang="es">
@@ -313,7 +315,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v3.6</span>
+    <span class="ver">v3.7</span>
     <a href="turnos.html" title="Volver al turnero (sin cerrar sesión)" style="font-family:var(--mono);font-size:12px;color:var(--cyan);text-decoration:none;border:1px solid var(--line-hot);border-radius:5px;padding:5px 11px;letter-spacing:1px;transition:.15s" onmouseover="this.style.background='var(--cyan)';this.style.color='#04141a'" onmouseout="this.style.background='transparent';this.style.color='var(--cyan)'">← TURNERO</a>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
@@ -440,6 +442,8 @@
             <input id="f16a2" maxlength="4"></div>
         </div>
         <div class="aero" id="aero16"></div>
+        <button type="button" class="btn-contactos" id="btnContactosDest" hidden>📞 Contactos del aeródromo de llegada</button>
+        <div class="contactos-panel" id="contactosPanelDest" hidden></div>
       </div>
     </fieldset>
 
@@ -982,9 +986,9 @@ async function copiar(txt){
     catch(_){ return false; }
   }
 }
-function renderContactos(){
-  const panel=$('contactosPanel'), btn=$('btnContactos'); if(!panel||!btn) return;
-  const {oaci,data}=contactoDe('f13a');
+function renderContactosCampo(campo, btnId, panelId){
+  const panel=$(panelId), btn=$(btnId); if(!panel||!btn) return;
+  const {oaci,data}=contactoDe(campo);
   if(!oaci){ panel.innerHTML=''; panel.hidden=true; btn.hidden=true; return; }
   btn.hidden=false;
   if(!data){ panel.innerHTML='<div class="cnone">Sin contactos publicados para '+oaci+'.</div>'; return; }
@@ -1004,6 +1008,10 @@ function renderContactos(){
     const ok=await copiar(b.dataset.c);
     toast(ok?('Copiado: '+b.dataset.c):'No se pudo copiar', ok?'ok':'bad');
   });
+}
+function renderContactos(){
+  renderContactosCampo('f13a','btnContactos','contactosPanel');
+  renderContactosCampo('f16d','btnContactosDest','contactosPanelDest');
 }
 
 async function generarPDF(){
@@ -1094,6 +1102,7 @@ function reloj(){
 $('btnGuardar').onclick=guardar;
 $('btnPDF').onclick=generarPDF;
 $('btnContactos').onclick=()=>{ const p=$('contactosPanel'); p.hidden=!p.hidden; };
+$('btnContactosDest').onclick=()=>{ const p=$('contactosPanelDest'); p.hidden=!p.hidden; };
 $('btnNuevo').onclick=limpiar;
 $('btnRecargar').onclick=cargarLista;
 $('selAvion').addEventListener('change',aplicarAeronave);
