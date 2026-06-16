@@ -1,5 +1,11 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.57
+  FECHA   : 2026-06-16
+  CAMBIOS : Modal de turno aprobado: boton LIBERAR TURNO (solo turnos futuros). Devuelve
+            el turno a estado pendiente y limpia instructor/aprobado_por, sin cancelarlo,
+            para que otro instructor pueda tomarlo. El alumno conserva su reserva.
+            Queda registrado en auditoria como liberacion_turno.
   VERSION : 5.56
   FECHA   : 2026-06-15
   CAMBIOS : Auditoria: boton de borrado por fila (solo usuario admin) para eliminar
@@ -271,7 +277,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.56</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.57</div>
   </div>
 
 </div>
@@ -2109,8 +2115,12 @@ window.abrirModal=function(key){
     bc.onclick=async()=>{if(!confirm('¿Cancelar el turno de '+r.nombre+'?'))return;const motivo=await pedirMotivoCancelacion(true);if(motivo===null)return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre,cancelado_por:session.nombre};upd.obs_cancelacion='Cancelado por el instructor — '+motivo;await fbUpdate('reservas/'+key,upd);await registrarAuditoria('cancelacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — '+motivo);if(!turnoYaPaso(rv))mailCancel(rv,motivo);}cerrarModal();};
     actions.appendChild(ba);actions.appendChild(bc);
   } else if(r.estado==='aprobado'){
+    const bl=document.createElement('button');bl.textContent='LIBERAR TURNO';
+    bl.style.cssText='background:rgba(240,165,0,.1);color:var(--amber);border-color:var(--amber)';
+    bl.onclick=async()=>{if(!confirm('¿Liberar este turno?\n\nVolverá a estado PENDIENTE y quedará disponible para que otro instructor lo tome. El alumno conserva su reserva.'))return;const rv=await fbGet('reservas/'+key);if(rv){await fbUpdate('reservas/'+key,{estado:'pendiente',instructor:null,aprobado_por:null});await registrarAuditoria('liberacion_turno',session.rol||'instructor','exito',(session.nombre||session.user)+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — liberado por '+(rv.aprobado_por||rv.instructor||'?'));}cerrarModal();};
     const bc=document.createElement('button');bc.className='danger';bc.textContent='CANCELAR TURNO';
     bc.onclick=async()=>{if(!confirm('¿Cancelar el turno de '+r.nombre+'?'))return;const motivo=await pedirMotivoCancelacion(true);if(motivo===null)return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre,cancelado_por:session.nombre};upd.obs_cancelacion='Cancelado por el instructor — '+motivo;await fbUpdate('reservas/'+key,upd);await registrarAuditoria('cancelacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — '+motivo);if(!turnoYaPaso(rv))mailCancel(rv,motivo);}cerrarModal();};
+    if(!turnoYaPaso(r)) actions.appendChild(bl);
     actions.appendChild(bc);
   }
   document.getElementById('modal-turno').classList.add('open');
