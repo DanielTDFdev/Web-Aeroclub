@@ -1,5 +1,10 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.53
+  FECHA   : 2026-06-15
+  CAMBIOS : EmailJS unificado en la cuenta del club (service_8yqlptz, una sola key/init).
+            Templates registro/bienvenida repuntados a la cuenta nueva. Mail de confirmacion
+            de turno al aprobar (template Confirma Turno).
   VERSION : 5.52
   FECHA   : 2026-06-15
   CAMBIOS : Seguimiento de turnos por instructor (aprobados/cancelados, pasados y futuros).
@@ -255,7 +260,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.52</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.53</div>
   </div>
 
 </div>
@@ -1004,12 +1009,14 @@ let calAvionFiltro='todos';       // filtro en calendario instructor
 let calMesActual=new Date(); calMesActual.setDate(1);
 
 // ── HELPERS ────────────────────────────────────────────────────
-const EJS_SVC='dcamargo70@gmail.com', EJS_TMPL_CANCEL='template_v4qu4x6', EJS_TMPL_RESET='template_scbsgfg', EJS_KEY='0IoRm88tZQepkHAdK';
-const EJS_SVC2='service_yeb4aqb', EJS_TMPL_REGISTRO='template_s6gk8tf', EJS_TMPL_BIENVENIDA='template_8awr1zd', EJS_KEY2='TzbSjqDNPjTGSGdzN';
+// EmailJS unificado: una sola cuenta (correo del club) — service_8yqlptz
+const EJS_SVC='service_8yqlptz', EJS_KEY='0IoRm88tZQepkHAdK';
+const EJS_TMPL_CANCEL='template_v4qu4x6', EJS_TMPL_RESET='template_scbsgfg', EJS_TMPL_REGISTRO='template_wg7simn', EJS_TMPL_BIENVENIDA='template_q69sjhp', EJS_TMPL_CONFIRMA='template_4nsseoo';
 // Instancias separadas por cuenta para evitar sobreescritura del init global
 function mailCancel(r,motivo=''){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);emailjs.send(EJS_SVC,EJS_TMPL_CANCEL,{to_email:r.email,alumno_nombre:r.nombre,fecha:r.fecha,hora:r.hora,avion:r.avion||'LV-OAD',motivo:motivo||'Sin especificar'}).catch(e=>console.warn(e));}
 function mailReset(a,np){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);emailjs.send(EJS_SVC,EJS_TMPL_RESET,{to_email:a.email,alumno_nombre:a.nombre,nueva_password:np}).catch(e=>console.warn(e));}
-function mailNuevoRegistro(nombre,email){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY2);emailjs.send(EJS_SVC2,EJS_TMPL_REGISTRO,{alumno_nombre:nombre,alumno_email:email,email:email,fecha:new Date().toLocaleString('es-AR')}).catch(e=>console.warn('mail-registro:',e));emailjs.send(EJS_SVC2,EJS_TMPL_BIENVENIDA,{alumno_nombre:nombre,alumno_email:email}).catch(e=>console.warn('mail-bienvenida:',e));}
+function mailNuevoRegistro(nombre,email){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);emailjs.send(EJS_SVC,EJS_TMPL_REGISTRO,{alumno_nombre:nombre,alumno_email:email,email:email,fecha:new Date().toLocaleString('es-AR')}).catch(e=>console.warn('mail-registro:',e));emailjs.send(EJS_SVC,EJS_TMPL_BIENVENIDA,{alumno_nombre:nombre,alumno_email:email}).catch(e=>console.warn('mail-bienvenida:',e));}
+function mailAprob(r){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);emailjs.send(EJS_SVC,EJS_TMPL_CONFIRMA,{to_email:r.email,alumno_nombre:r.nombre,fecha:r.fecha,hora:r.hora,avion:r.avion||'LV-OAD',instructor:session?.nombre||''}).catch(e=>console.warn('mail-aprob:',e));}
 
 function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');}
 function showErr(id,msg){const e=document.getElementById(id);e.textContent=msg;e.style.display='block';}
@@ -2086,7 +2093,7 @@ window.abrirModal=function(key){
   actions.innerHTML='';
   if(r.estado==='pendiente'){
     const ba=document.createElement('button');ba.className='primary';ba.textContent='APROBAR TURNO';
-    ba.onclick=async()=>{if(!confirm('¿Aprobar el turno de '+r.nombre+'?'))return;await fbUpdate('reservas/'+key,{estado:'aprobado',instructor:session.nombre,aprobado_por:session.nombre});await registrarAuditoria('aprobacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(r.avion||'LV-OAD')+' — '+r.fecha+' '+r.hora+' hs — alumno: '+r.nombre);cerrarModal();};
+    ba.onclick=async()=>{if(!confirm('¿Aprobar el turno de '+r.nombre+'?'))return;await fbUpdate('reservas/'+key,{estado:'aprobado',instructor:session.nombre,aprobado_por:session.nombre});await registrarAuditoria('aprobacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(r.avion||'LV-OAD')+' — '+r.fecha+' '+r.hora+' hs — alumno: '+r.nombre);mailAprob(r);cerrarModal();};
     const bc=document.createElement('button');bc.className='danger';bc.textContent='CANCELAR TURNO';
     bc.onclick=async()=>{if(!confirm('¿Cancelar el turno de '+r.nombre+'?'))return;const motivo=await pedirMotivoCancelacion(true);if(motivo===null)return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre,cancelado_por:session.nombre};upd.obs_cancelacion='Cancelado por el instructor — '+motivo;await fbUpdate('reservas/'+key,upd);await registrarAuditoria('cancelacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — '+motivo);if(!turnoYaPaso(rv))mailCancel(rv,motivo);}cerrarModal();};
     actions.appendChild(ba);actions.appendChild(bc);
