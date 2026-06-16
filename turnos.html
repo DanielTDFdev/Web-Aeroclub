@@ -1,5 +1,8 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.55
+  FECHA   : 2026-06-15
+  CAMBIOS : Mail de cancelacion: misma mejora de fecha larga y hora con rango.
   VERSION : 5.54
   FECHA   : 2026-06-15
   CAMBIOS : Mail de confirmacion: fecha en formato largo (Jueves 12 de junio de 2026) y
@@ -264,7 +267,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.54</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.55</div>
   </div>
 
 </div>
@@ -1017,7 +1020,7 @@ let calMesActual=new Date(); calMesActual.setDate(1);
 const EJS_SVC='service_8yqlptz', EJS_KEY='0IoRm88tZQepkHAdK';
 const EJS_TMPL_CANCEL='template_v4qu4x6', EJS_TMPL_RESET='template_scbsgfg', EJS_TMPL_REGISTRO='template_wg7simn', EJS_TMPL_BIENVENIDA='template_q69sjhp', EJS_TMPL_CONFIRMA='template_4nsseoo';
 // Instancias separadas por cuenta para evitar sobreescritura del init global
-function mailCancel(r,motivo=''){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);emailjs.send(EJS_SVC,EJS_TMPL_CANCEL,{to_email:r.email,alumno_nombre:r.nombre,fecha:r.fecha,hora:r.hora,avion:r.avion||'LV-OAD',motivo:motivo||'Sin especificar'}).catch(e=>console.warn(e));}
+function mailCancel(r,motivo=''){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);const horaTxt=r.horaInicio&&r.horaFin?r.horaInicio+' a '+r.horaFin:(r.hora||'');emailjs.send(EJS_SVC,EJS_TMPL_CANCEL,{to_email:r.email,alumno_nombre:r.nombre,fecha:fmtFechaLinda(r.fecha),hora:horaTxt,avion:r.avion||'LV-OAD',motivo:motivo||'Sin especificar'}).catch(e=>console.warn(e));}
 function mailReset(a,np){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);emailjs.send(EJS_SVC,EJS_TMPL_RESET,{to_email:a.email,alumno_nombre:a.nombre,nueva_password:np}).catch(e=>console.warn(e));}
 function mailNuevoRegistro(nombre,email){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);emailjs.send(EJS_SVC,EJS_TMPL_REGISTRO,{alumno_nombre:nombre,alumno_email:email,email:email,fecha:new Date().toLocaleString('es-AR')}).catch(e=>console.warn('mail-registro:',e));emailjs.send(EJS_SVC,EJS_TMPL_BIENVENIDA,{alumno_nombre:nombre,alumno_email:email}).catch(e=>console.warn('mail-bienvenida:',e));}
 function mailAprob(r){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);const horaTxt=r.horaInicio&&r.horaFin?r.horaInicio+' a '+r.horaFin:(r.hora||'');emailjs.send(EJS_SVC,EJS_TMPL_CONFIRMA,{to_email:r.email,alumno_nombre:r.nombre,fecha:fmtFechaLinda(r.fecha),hora:horaTxt,avion:r.avion||'LV-OAD',instructor:session?.nombre||''}).catch(e=>console.warn('mail-aprob:',e));}
