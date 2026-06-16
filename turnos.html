@@ -1,5 +1,15 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.61
+  FECHA   : 2026-06-16
+  CAMBIOS : LV-OAD: el piloto reserva igual que el alumno (un solo slot de 1 hora, sin
+            selector de rango). LV-OAD es avion escuela: el alumno tiene prioridad y el
+            instructor mantiene control estricto via aprobacion/cancelacion.
+  VERSION : 5.60
+  FECHA   : 2026-06-16
+  CAMBIOS : LV-OAD siempre queda pendiente de aprobacion por instructor, incluso si lo
+            reserva un piloto. El auto-aprobado de piloto solo aplica a las demas
+            aeronaves. Mensajes de confirmacion/exito ajustados acorde al estado real.
   VERSION : 5.59
   FECHA   : 2026-06-16
   CAMBIOS : Turno aprobado: solo el instructor que aprobo, admin o administrador pueden
@@ -285,7 +295,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.59</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.61</div>
   </div>
 
 </div>
@@ -1580,7 +1590,7 @@ function selectSlot(h){
   selectedSlotFin=null;
   get(ref(db,'reservas')).then(s=>renderSlots(selectedDay,s.val()));
   const rol=session?.rol||'alumno';
-  if(rol==='piloto'){
+  if(rol==='piloto' && (selectedAvion||'LV-OAD')!=='LV-OAD'){
     get(ref(db,'reservas')).then(snap=>{
       const taken=slotsTomados(selectedDay,selectedAvion,snap.val());
       const horas=horasParaDia(selectedDay,selectedAvion);
@@ -1604,7 +1614,7 @@ function selectSlot(h){
   } else {
     document.getElementById('slot-fin-wrap').innerHTML='';
     document.getElementById('confirm-label').textContent=selectedAvion+' — '+selectedDay+' a las '+h+' hs';
-    document.getElementById('confirm-nota').textContent='▸ Requerirá aprobación del instructor. Se confirma con 45 min de anticipación mínima.';
+    document.getElementById('confirm-nota').textContent='▸ Requerirá aprobación del instructor.';
   }
   document.getElementById('slot-confirm').style.display='block';
   hideEl('turno-err');hideEl('turno-ok');
@@ -1622,7 +1632,8 @@ window.actualizarLabelRango=function(){
     ?selectedAvion+' — '+selectedDay+' a las '+selectedSlot+' hs (1 slot)'
     :selectedAvion+' — '+selectedDay+' de '+selectedSlot+' a '+selectedSlotFin+' hs ('+count+' slots)';
   document.getElementById('confirm-label').textContent=label;
-  document.getElementById('confirm-nota').textContent='▸ Se aprobará automáticamente al confirmar.';
+  const esOADlbl=(selectedAvion||'LV-OAD')==='LV-OAD';
+  document.getElementById('confirm-nota').textContent=esOADlbl?'▸ Requerirá aprobación del instructor.':'▸ Se aprobará automáticamente al confirmar.';
 };
 
 window.cancelarSeleccion=function(){
@@ -1644,9 +1655,10 @@ window.confirmarTurno=async function(){
   const obs=val('al-obs');
   const rol=session.rol||'alumno';
   const esPiloto=rol==='piloto';
-  const estado=esPiloto?'aprobado':'pendiente';
+  const esOAD=(selectedAvion||'LV-OAD')==='LV-OAD';
+  const estado=(esPiloto&&!esOAD)?'aprobado':'pendiente';
   const horas=horasParaDia(selectedDay,selectedAvion);
-  const esRango=esPiloto&&selectedSlotFin&&selectedSlotFin!==selectedSlot;
+  const esRango=esPiloto&&!esOAD&&selectedSlotFin&&selectedSlotFin!==selectedSlot;
   await fbPush('reservas',{
     nombre:session.nombre,
     email:session.email,
@@ -1662,7 +1674,7 @@ window.confirmarTurno=async function(){
   const labelAudit=(esRango?selectedSlot+' a '+selectedSlotFin+' hs':selectedSlot+' hs');
   await registrarAuditoria('alta_turno',session.rol||'alumno','exito',
     session.nombre+' — '+selectedAvion+' — '+selectedDay+' '+labelAudit);
-  if(esPiloto){
+  if(estado==='aprobado'){
     const label=esRango?selectedSlot+' a '+selectedSlotFin+' hs':selectedSlot+' hs';
     showOk('turno-ok','// TURNO CONFIRMADO — '+selectedAvion+' '+selectedDay+' '+label);
   } else {
