@@ -1,5 +1,9 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.58
+  FECHA   : 2026-06-16
+  CAMBIOS : Liberar turno ahora envia mail al alumno avisando que el turno volvio a
+            revision (template_41kdlo3). Vars: alumno_nombre, avion, fecha, hora.
   VERSION : 5.57
   FECHA   : 2026-06-16
   CAMBIOS : Modal de turno aprobado: boton LIBERAR TURNO (solo turnos futuros). Devuelve
@@ -277,7 +281,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.57</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.58</div>
   </div>
 
 </div>
@@ -1028,12 +1032,13 @@ let calMesActual=new Date(); calMesActual.setDate(1);
 // ── HELPERS ────────────────────────────────────────────────────
 // EmailJS unificado: una sola cuenta (correo del club) — service_8yqlptz
 const EJS_SVC='service_8yqlptz', EJS_KEY='0IoRm88tZQepkHAdK';
-const EJS_TMPL_CANCEL='template_v4qu4x6', EJS_TMPL_RESET='template_scbsgfg', EJS_TMPL_REGISTRO='template_wg7simn', EJS_TMPL_BIENVENIDA='template_q69sjhp', EJS_TMPL_CONFIRMA='template_4nsseoo';
+const EJS_TMPL_CANCEL='template_v4qu4x6', EJS_TMPL_RESET='template_scbsgfg', EJS_TMPL_REGISTRO='template_wg7simn', EJS_TMPL_BIENVENIDA='template_q69sjhp', EJS_TMPL_CONFIRMA='template_4nsseoo', EJS_TMPL_LIBERA='template_41kdlo3';
 // Instancias separadas por cuenta para evitar sobreescritura del init global
 function mailCancel(r,motivo=''){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);const horaTxt=r.horaInicio&&r.horaFin?r.horaInicio+' a '+r.horaFin:(r.hora||'');emailjs.send(EJS_SVC,EJS_TMPL_CANCEL,{to_email:r.email,alumno_nombre:r.nombre,fecha:fmtFechaLinda(r.fecha),hora:horaTxt,avion:r.avion||'LV-OAD',motivo:motivo||'Sin especificar'}).catch(e=>console.warn(e));}
 function mailReset(a,np){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);emailjs.send(EJS_SVC,EJS_TMPL_RESET,{to_email:a.email,alumno_nombre:a.nombre,nueva_password:np}).catch(e=>console.warn(e));}
 function mailNuevoRegistro(nombre,email){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);emailjs.send(EJS_SVC,EJS_TMPL_REGISTRO,{alumno_nombre:nombre,alumno_email:email,email:email,fecha:new Date().toLocaleString('es-AR')}).catch(e=>console.warn('mail-registro:',e));emailjs.send(EJS_SVC,EJS_TMPL_BIENVENIDA,{alumno_nombre:nombre,alumno_email:email}).catch(e=>console.warn('mail-bienvenida:',e));}
 function mailAprob(r){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);const horaTxt=r.horaInicio&&r.horaFin?r.horaInicio+' a '+r.horaFin:(r.hora||'');emailjs.send(EJS_SVC,EJS_TMPL_CONFIRMA,{to_email:r.email,alumno_nombre:r.nombre,fecha:fmtFechaLinda(r.fecha),hora:horaTxt,avion:r.avion||'LV-OAD',instructor:session?.nombre||''}).catch(e=>console.warn('mail-aprob:',e));}
+function mailLiberacion(r){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);const horaTxt=r.horaInicio&&r.horaFin?r.horaInicio+' a '+r.horaFin:(r.hora||'');emailjs.send(EJS_SVC,EJS_TMPL_LIBERA,{to_email:r.email,alumno_nombre:r.nombre,fecha:fmtFechaLinda(r.fecha),hora:horaTxt,avion:r.avion||'LV-OAD'}).catch(e=>console.warn('mail-libera:',e));}
 
 function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');}
 function showErr(id,msg){const e=document.getElementById(id);e.textContent=msg;e.style.display='block';}
@@ -2117,7 +2122,7 @@ window.abrirModal=function(key){
   } else if(r.estado==='aprobado'){
     const bl=document.createElement('button');bl.textContent='LIBERAR TURNO';
     bl.style.cssText='background:rgba(240,165,0,.1);color:var(--amber);border-color:var(--amber)';
-    bl.onclick=async()=>{if(!confirm('¿Liberar este turno?\n\nVolverá a estado PENDIENTE y quedará disponible para que otro instructor lo tome. El alumno conserva su reserva.'))return;const rv=await fbGet('reservas/'+key);if(rv){await fbUpdate('reservas/'+key,{estado:'pendiente',instructor:null,aprobado_por:null});await registrarAuditoria('liberacion_turno',session.rol||'instructor','exito',(session.nombre||session.user)+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — liberado por '+(rv.aprobado_por||rv.instructor||'?'));}cerrarModal();};
+    bl.onclick=async()=>{if(!confirm('¿Liberar este turno?\n\nVolverá a estado PENDIENTE y quedará disponible para que otro instructor lo tome. El alumno conserva su reserva y recibirá un aviso por mail.'))return;const rv=await fbGet('reservas/'+key);if(rv){await fbUpdate('reservas/'+key,{estado:'pendiente',instructor:null,aprobado_por:null});await registrarAuditoria('liberacion_turno',session.rol||'instructor','exito',(session.nombre||session.user)+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — liberado por '+(rv.aprobado_por||rv.instructor||'?'));mailLiberacion(rv);}cerrarModal();};
     const bc=document.createElement('button');bc.className='danger';bc.textContent='CANCELAR TURNO';
     bc.onclick=async()=>{if(!confirm('¿Cancelar el turno de '+r.nombre+'?'))return;const motivo=await pedirMotivoCancelacion(true);if(motivo===null)return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre,cancelado_por:session.nombre};upd.obs_cancelacion='Cancelado por el instructor — '+motivo;await fbUpdate('reservas/'+key,upd);await registrarAuditoria('cancelacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — '+motivo);if(!turnoYaPaso(rv))mailCancel(rv,motivo);}cerrarModal();};
     if(!turnoYaPaso(r)) actions.appendChild(bl);
