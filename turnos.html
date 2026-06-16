@@ -1,5 +1,9 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.62
+  FECHA   : 2026-06-16
+  CAMBIOS : Seguimiento: solapa PROXIMOS ahora ordena del turno mas proximo al mas lejano
+            (ascendente). PASADOS y TODOS siguen descendentes (mas reciente primero).
   VERSION : 5.61
   FECHA   : 2026-06-16
   CAMBIOS : LV-OAD: el piloto reserva igual que el alumno (un solo slot de 1 hora, sin
@@ -295,7 +299,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.61</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.62</div>
   </div>
 
 </div>
@@ -2394,7 +2398,10 @@ window.renderSeguimiento=async function(){
   if(_segPeriodo==='futuros') fil=fil.filter(f=>!turnoYaPaso(f));
   else if(_segPeriodo==='pasados') fil=fil.filter(f=>turnoYaPaso(f));
 
-  fil.sort((a,b)=>b.fecha.localeCompare(a.fecha)||(b.hora||'').localeCompare(a.hora||''));
+  if(_segPeriodo==='futuros')
+    fil.sort((a,b)=>a.fecha.localeCompare(b.fecha)||(a.hora||'').localeCompare(b.hora||''));
+  else
+    fil.sort((a,b)=>b.fecha.localeCompare(a.fecha)||(b.hora||'').localeCompare(a.hora||''));
 
   if(!fil.length){cont.innerHTML='<div class="empty">// Sin movimientos para este criterio.</div>';return;}
 
