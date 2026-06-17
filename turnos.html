@@ -1,5 +1,10 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.72
+  FECHA   : 2026-06-17
+  CAMBIOS : El banner de turnos pendientes ahora PERSISTE mientras haya pendientes (se quito el
+            boton de cerrar). VER TURNOS solo navega a Reservas, ya no oculta el cartel. Solo
+            desaparece cuando no quedan turnos pendientes.
   VERSION : 5.71
   FECHA   : 2026-06-17
   CAMBIOS : Banner llamativo (pulsante, ambar) de TURNOS PENDIENTES en la pantalla de instructor.
@@ -355,7 +360,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.71</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.72</div>
   </div>
 
 </div>
@@ -531,7 +536,6 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
     <span style="font-size:24px;line-height:1">⏳</span>
     <span id="banner-turnos-pend-txt" style="font-family:var(--font-mono);font-size:14px;color:var(--amber2);letter-spacing:.06em;flex:1;min-width:180px;font-weight:600"></span>
     <button onclick="irAPendientes()" style="font-family:var(--font-mono);font-size:12px;letter-spacing:.1em;padding:8px 18px;border-color:var(--amber);color:var(--amber2);background:rgba(240,165,0,.15);white-space:nowrap;font-weight:600">VER TURNOS →</button>
-    <button onclick="cerrarBannerTurnos()" style="font-size:14px;padding:2px 8px;border:none;background:none;color:var(--amber);opacity:.6" title="Cerrar">✕</button>
   </div>
   <div class="tab-bar">
     <button class="nav-btn active" id="inst-tab-res"   onclick="showInstTab('reservas')">Reservas</button>
@@ -1477,7 +1481,6 @@ window.logout=function(){
   if(_unsubPendientes){_unsubPendientes();_unsubPendientes=null;}
   const banner=document.getElementById('banner-pendientes');if(banner)banner.style.display='none';
   const bturnos=document.getElementById('banner-turnos-pend');if(bturnos)bturnos.style.display='none';
-  _bannerTurnosCerrado=false;_lastPendCount=-1;
   session=null;selectedDay=null;selectedSlot=null;selectedAvion=null;selectedSlotFin=null;
   try{sessionStorage.removeItem('lvoad-session');}catch(e){}
   // reset cachés de datos
@@ -2004,10 +2007,8 @@ window.setCalFiltroAvion=function(key){
   get(ref(db,'reservas')).then(s=>renderTodasReservas(s.val()));
 };
 
-// Estado del banner llamativo de turnos pendientes
-let _bannerTurnosCerrado=false, _lastPendCount=-1;
-window.cerrarBannerTurnos=function(){_bannerTurnosCerrado=true;const b=document.getElementById('banner-turnos-pend');if(b)b.style.display='none';};
-window.irAPendientes=function(){_bannerTurnosCerrado=true;const b=document.getElementById('banner-turnos-pend');if(b)b.style.display='none';showInstTab('reservas');setCalVista('lista');const w=document.querySelector('.cal-wrap');if(w)w.scrollIntoView({behavior:'smooth',block:'start'});};
+// Banner de turnos pendientes: persiste mientras haya pendientes. VER TURNOS solo navega, no lo oculta.
+window.irAPendientes=function(){showInstTab('reservas');setCalVista('lista');const w=document.querySelector('.cal-wrap');if(w)w.scrollIntoView({behavior:'smooth',block:'start'});};
 
 async function renderTodasReservas(data){
   const todas=rArr(data);
@@ -2018,9 +2019,7 @@ async function renderTodasReservas(data){
   // Banner llamativo: si hay pendientes, alertar. Si llega uno nuevo, vuelve a mostrarse aunque lo hayan cerrado.
   const bt=document.getElementById('banner-turnos-pend'), btx=document.getElementById('banner-turnos-pend-txt');
   if(bt&&btx){
-    if(nPend>_lastPendCount && _lastPendCount!==-1) _bannerTurnosCerrado=false;
-    _lastPendCount=nPend;
-    if(nPend>0 && !_bannerTurnosCerrado){
+    if(nPend>0){
       btx.textContent=nPend===1?'HAY 1 TURNO PENDIENTE DE APROBACIÓN':'HAY '+nPend+' TURNOS PENDIENTES DE APROBACIÓN';
       bt.style.display='flex';
     } else { bt.style.display='none'; }
