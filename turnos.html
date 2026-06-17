@@ -1,5 +1,15 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.70
+  FECHA   : 2026-06-17
+  CAMBIOS : Cambio de clave forzado por admin (pass_temporal) extendido a TODOS:
+            - Modal editar alumno: campo "Resetear contraseña" + check "Exigir cambio en el
+              proximo ingreso".
+            - Modal editar instructor: check "Exigir cambio en el proximo ingreso" (ya tenia
+              campo de clave).
+            - El login de instructor ahora respeta pass_temporal (antes solo alumnos).
+            - forzarCambioClave generalizado (alumnos e instructores) y sincroniza la nueva
+              clave con Firebase Auth si hay sesion de Auth activa (best-effort).
   VERSION : 5.69
   FECHA   : 2026-06-17
   CAMBIOS : Al crear un instructor (Config -> Instructores) ahora se exige contraseña de minimo
@@ -338,7 +348,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.69</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.70</div>
   </div>
 
 </div>
@@ -813,6 +823,14 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
           </div>
           <input type="hidden" id="edit-al-estado-login" value="normal">
         </div>
+        <div class="field">
+          <label>Resetear contraseña <span style="font-size:10px;color:var(--text3)">(opcional — dejar vacío para no cambiar)</span></label>
+          <input type="text" id="edit-al-newpass" placeholder="nueva clave temporal (mín. 6)" autocomplete="off">
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;font-family:var(--font-mono);font-size:12px;color:var(--text2);margin-bottom:.85rem">
+          <input type="checkbox" id="edit-al-forzar" style="accent-color:var(--cyan)">
+          Exigir cambio de contraseña en el próximo ingreso
+        </label>
         <div id="edit-al-err" class="error"></div>
         <div id="edit-al-ok" class="success-msg"></div>
         <div class="modal-actions">
@@ -839,6 +857,10 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <label>Nueva contraseña <span style="font-size:10px;color:var(--text3)">(dejar vacío para no cambiar)</span></label>
       <input type="text" id="edit-inst-pass" placeholder="Nueva contraseña" autocomplete="off">
     </div>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;font-family:var(--font-mono);font-size:12px;color:var(--text2);margin-bottom:.85rem">
+      <input type="checkbox" id="edit-inst-forzar" style="accent-color:var(--cyan)">
+      Exigir cambio de contraseña en el próximo ingreso
+    </label>
     <div id="edit-inst-err" class="error"></div>
     <div id="edit-inst-ok" class="success-msg"></div>
     <div class="modal-actions">
@@ -1040,7 +1062,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getDatabase, ref, set, get, update, remove, push, onValue, child }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword }
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updatePassword }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const firebaseConfig={
@@ -1292,7 +1314,7 @@ window.loginAlumno=async function(){
       return;
     }
     if(alumno.pass_temporal){
-      const cambiada=await forzarCambioClave(k);
+      const cambiada=await forzarCambioClave('alumnos/'+k);
       if(!cambiada){showErr('login-err','Para ingresar tenés que cambiar la contraseña temporal.');return;}
     }
     await registrarAuditoria('login',alumno.rol||'alumno','exito',alumno.nombre+' ('+id+')');
@@ -1328,7 +1350,7 @@ window.olvideClave=async function(){
 
 // Modal obligatorio de cambio de clave tras login con contraseña temporal.
 // Resuelve true si el usuario definió una nueva contraseña, false si eligió volver al login.
-function forzarCambioClave(emailKey){
+function forzarCambioClave(dbPath){
   return new Promise(resolve=>{
     const overlay=document.getElementById('modal-forzar-clave');
     const i1=document.getElementById('fc-pass'),i2=document.getElementById('fc-pass2'),err=document.getElementById('fc-err');
@@ -1340,10 +1362,12 @@ function forzarCambioClave(emailKey){
       const n=i1.value,n2=i2.value;
       if(n.length<6){err.textContent='⚠ Mínimo 6 caracteres.';return;}
       if(n!==n2){err.textContent='⚠ Las contraseñas no coinciden.';return;}
-      const alumno=await fbGet('alumnos/'+emailKey);
-      if(alumno&&alumno.pass===n){err.textContent='⚠ Elegí una contraseña distinta a la temporal.';return;}
+      const rec=await fbGet(dbPath);
+      if(rec&&rec.pass===n){err.textContent='⚠ Elegí una contraseña distinta a la temporal.';return;}
       btnG.disabled=true;
-      await fbUpdate('alumnos/'+emailKey,{pass:n,pass_temporal:null});
+      await fbUpdate(dbPath,{pass:n,pass_temporal:null});
+      // Sincronizar con Firebase Auth si hay sesión de Auth activa (best-effort; el plano es la red de seguridad).
+      try{ if(auth.currentUser) await updatePassword(auth.currentUser,n); }catch(e){ console.warn('Auth updatePassword pendiente —',e?.code||e); }
       btnG.disabled=false;
       overlay.classList.remove('open');cleanup();resolve(true);
     };
@@ -1399,6 +1423,11 @@ window.loginInstructor=async function(){
     if(!found || !okLogin){
       await registrarAuditoria('login','instructor','fallo','Usuario o contraseña incorrectos — '+user);
       showErr('login-err2','Usuario o contraseña incorrectos.');return;
+    }
+    // Cambio de clave forzado por admin (pass_temporal). No aplica al acceso de emergencia admin.
+    if(found.pass_temporal && found.user!=='admin'){
+      const cambiada=await forzarCambioClave('instructores/'+found.key);
+      if(!cambiada){showErr('login-err2','Para ingresar tenés que cambiar la contraseña temporal.');return;}
     }
     await registrarAuditoria('login','instructor','exito',found.nombre+' ('+found.user+')');
     // administrador tiene acceso completo (excepto Zona Peligrosa y edición de horarios)
@@ -2859,6 +2888,7 @@ window.abrirModalInst=function(key){
     document.getElementById('edit-inst-user').value=i.user||key;
     document.getElementById('edit-inst-nombre').value=i.nombre||'';
     document.getElementById('edit-inst-pass').value='';
+    document.getElementById('edit-inst-forzar').checked=false;
     hideEl('edit-inst-err');hideEl('edit-inst-ok');
     document.getElementById('modal-inst').classList.add('open');
   });
@@ -2873,10 +2903,13 @@ window.guardarInstructor=async function(){
   hideEl('edit-inst-err');hideEl('edit-inst-ok');
   const nombre=document.getElementById('edit-inst-nombre').value.trim();
   const pass=document.getElementById('edit-inst-pass').value.trim();
+  const forzar=document.getElementById('edit-inst-forzar').checked;
   if(!nombre){showErr('edit-inst-err','El nombre no puede estar vacío.');return;}
   if(pass&&pass.length<6){showErr('edit-inst-err','La contraseña debe tener al menos 6 caracteres.');return;}
   const updates={nombre};
   if(pass) updates.pass=pass;
+  if(forzar) updates.pass_temporal=true;
+  else if(pass) updates.pass_temporal=null;  // clave nueva definitiva, sin forzar cambio
   await fbUpdate('instructores/'+_editInstKey,updates);
   showOk('edit-inst-ok','// DATOS ACTUALIZADOS');
   renderInstructoresList();
@@ -3008,6 +3041,8 @@ window.abrirModalAlumno=function(key){
     document.getElementById('edit-al-tel').value=a.tel||'';
     document.getElementById('edit-al-rol').value=a.rol||'alumno';
     document.getElementById('edit-al-estado-login').value=a.estado_login||'normal';
+    document.getElementById('edit-al-newpass').value='';
+    document.getElementById('edit-al-forzar').checked=false;
     renderEstadoLoginToggle();
     hideEl('edit-al-err');hideEl('edit-al-ok');
     document.getElementById('modal-alumno').classList.add('open');
@@ -3038,8 +3073,15 @@ window.guardarAlumno=async function(){
   const tel=document.getElementById('edit-al-tel').value.trim();
   const rol=document.getElementById('edit-al-rol').value;
   const estado_login=document.getElementById('edit-al-estado-login').value;
+  const newpass=document.getElementById('edit-al-newpass').value.trim();
+  const forzar=document.getElementById('edit-al-forzar').checked;
   if(!nombre){showErr('edit-al-err','El nombre no puede estar vacío.');return;}
-  await fbUpdate('alumnos/'+_editAlumnoKey,{nombre,tel,rol,estado_login});
+  if(newpass && newpass.length<6){showErr('edit-al-err','La nueva contraseña debe tener al menos 6 caracteres.');return;}
+  const upd={nombre,tel,rol,estado_login};
+  if(newpass) upd.pass=newpass;
+  if(forzar) upd.pass_temporal=true;
+  else if(newpass) upd.pass_temporal=null;  // clave nueva definitiva, sin forzar cambio
+  await fbUpdate('alumnos/'+_editAlumnoKey,upd);
   showOk('edit-al-ok','// DATOS ACTUALIZADOS');
   renderAlumnosList();
   setTimeout(()=>cerrarModalAlumno(),1200);
