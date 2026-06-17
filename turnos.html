@@ -1,5 +1,13 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.67
+  FECHA   : 2026-06-17
+  CAMBIOS : Firebase Auth en modo sombra (Fase 1 de seguridad). El login de alumno verifica
+            primero contra Firebase Auth y cae a la password plana como red de seguridad;
+            si la cuenta aun no esta en Auth y la password plana coincide, se crea sola
+            (migracion perezosa, authMigrado:true). El registro tambien crea la cuenta de Auth.
+            NO se tocan reglas ni instructores todavia; nadie puede quedar bloqueado.
+            REQUISITO: habilitar el proveedor Email/Password en la consola de Firebase.
   VERSION : 5.66
   FECHA   : 2026-06-17
   CAMBIOS : Calendario de reservas (vista LISTA): la linea de hora actual (punto + hora) ahora
@@ -316,7 +324,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.66</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.67</div>
   </div>
 
 </div>
@@ -1018,6 +1026,8 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getDatabase, ref, set, get, update, remove, push, onValue, child }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const firebaseConfig={
   apiKey:"AIzaSyATPSaoOV_wKLaJR_dc1jgTzEF2L5p0tHk",
@@ -1030,6 +1040,28 @@ const firebaseConfig={
 };
 
 const app=initializeApp(firebaseConfig), db=getDatabase(app);
+const auth=getAuth(app);
+// ── FIREBASE AUTH (modo sombra durante la migración) ───────────
+// Mientras migramos, la password en texto plano sigue siendo la red de seguridad:
+// el login intenta primero Auth y si falla cae al chequeo plano. Nadie queda bloqueado.
+// authMigrado:true en el registro indica que ya existe la cuenta en Firebase Auth.
+// Crea (o reusa) la cuenta de Auth para un alumno ya verificado por password plano.
+async function authMigrarAlumno(emailKey, email, pass){
+  try{
+    await createUserWithEmailAndPassword(auth, email, pass);
+    await fbUpdate('alumnos/'+emailKey,{authMigrado:true});
+    return true;
+  }catch(e){
+    if(e?.code==='auth/email-already-in-use'){
+      // La cuenta ya existe en Auth: confirmamos que la password coincide y marcamos migrado.
+      try{ await signInWithEmailAndPassword(auth,email,pass); await fbUpdate('alumnos/'+emailKey,{authMigrado:true}); return true; }
+      catch(_){ return false; }
+    }
+    // Proveedor no habilitado, sin red, password <6, etc.: seguimos con password plano.
+    console.warn('Auth: migración pendiente para',email,'—',e?.code||e);
+    return false;
+  }
+}
 const dbRef=()=>ref(db);
 async function fbGet(p){const s=await get(child(dbRef(),p));return s.exists()?s.val():null;}
 async function fbSet(p,v){await set(ref(db,p),v);}
@@ -1172,6 +1204,8 @@ window.registrarAlumno=async function(){
     if(Object.values(todos).some(a=>(a.username||'').toLowerCase()===username)){showErr('reg-err','Ese nombre de usuario ya está en uso.');return;}
     // rol por defecto: alumno
     await fbSet('alumnos/'+k,{nombre,username,email,pass,rol:'alumno',estado:'pendiente_aprobacion',ts:new Date().toISOString()});
+    // Crear también la cuenta en Firebase Auth (no bloquea el registro si el proveedor aún no está habilitado).
+    authMigrarAlumno(k,email,pass);
     showOk('reg-ok','¡Cuenta creada! Ya podés ingresar.');
     mailNuevoRegistro(nombre, email);
     clearVal('reg-nombre','reg-user','reg-email','reg-pass','reg-pass2');
@@ -1196,8 +1230,23 @@ window.loginAlumno=async function(){
         if((a.username||'').toLowerCase()===id){alumno=a;k=key;break;}
       }
     }
-    if(!alumno||alumno.pass!==pass){
-      await registrarAuditoria('login',alumno?alumno.rol||'alumno':'alumno','fallo',!alumno?'Identificador no encontrado — '+id:'Contraseña incorrecta — '+id);
+    if(!alumno){
+      await registrarAuditoria('login','alumno','fallo','Identificador no encontrado — '+id);
+      showErr('login-err','Usuario/email o contraseña incorrectos.');return;
+    }
+    // Verificación: primero Firebase Auth (si ya está migrado), con fallback a password plano.
+    // Si el alumno aún no está migrado y la password plana coincide, se crea su cuenta de Auth (perezosa).
+    let okLogin=false;
+    if(alumno.authMigrado){
+      try{ await signInWithEmailAndPassword(auth,alumno.email,pass); okLogin=true; }
+      catch(_){ okLogin=false; }
+    }
+    if(!okLogin && alumno.pass!=null && alumno.pass===pass){
+      okLogin=true;
+      if(!alumno.authMigrado) await authMigrarAlumno(k,alumno.email,pass);
+    }
+    if(!okLogin){
+      await registrarAuditoria('login',alumno.rol||'alumno','fallo','Contraseña incorrecta — '+id);
       showErr('login-err','Usuario/email o contraseña incorrectos.');return;
     }
     if(alumno.estado_login==='suspendido'){
