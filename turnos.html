@@ -1,5 +1,10 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.63
+  FECHA   : 2026-06-16
+  CAMBIOS : Usuario: campo estado_login (normal/suspendido) editable en modal de usuario.
+            Ausente o normal = ingreso normal; suspendido bloquea el login y muestra aviso
+            de contactar a administracion. Queda registrado en auditoria.
   VERSION : 5.62
   FECHA   : 2026-06-16
   CAMBIOS : Seguimiento: solapa PROXIMOS ahora ordena del turno mas proximo al mas lejano
@@ -299,7 +304,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.62</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.63</div>
   </div>
 
 </div>
@@ -761,6 +766,13 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
             <option value="piloto">Piloto — todos los aviones (aprobación automática)</option>
           </select>
         </div>
+        <div class="field">
+          <label>Estado de login</label>
+          <select id="edit-al-estado-login">
+            <option value="normal">Normal — puede ingresar</option>
+            <option value="suspendido">Suspendido — no puede ingresar</option>
+          </select>
+        </div>
         <div id="edit-al-err" class="error"></div>
         <div id="edit-al-ok" class="success-msg"></div>
         <div class="modal-actions">
@@ -1167,6 +1179,11 @@ window.loginAlumno=async function(){
     if(!alumno||alumno.pass!==pass){
       await registrarAuditoria('login',alumno?alumno.rol||'alumno':'alumno','fallo',!alumno?'Identificador no encontrado — '+id:'Contraseña incorrecta — '+id);
       showErr('login-err','Usuario/email o contraseña incorrectos.');return;
+    }
+    if(alumno.estado_login==='suspendido'){
+      await registrarAuditoria('login',alumno.rol||'alumno','bloqueado','Acceso suspendido — '+id);
+      showErr('login-err','⚠ Tu acceso está suspendido. Comunicate con administración.');
+      return;
     }
     if(alumno.estado==='pendiente_aprobacion'){
       await registrarAuditoria('login','pendiente','exito',alumno.nombre+' ('+id+')');
@@ -2846,6 +2863,7 @@ window.abrirModalAlumno=function(key){
     document.getElementById('edit-al-nombre').value=a.nombre||'';
     document.getElementById('edit-al-tel').value=a.tel||'';
     document.getElementById('edit-al-rol').value=a.rol||'alumno';
+    document.getElementById('edit-al-estado-login').value=a.estado_login||'normal';
     hideEl('edit-al-err');hideEl('edit-al-ok');
     document.getElementById('modal-alumno').classList.add('open');
   });
@@ -2858,8 +2876,9 @@ window.guardarAlumno=async function(){
   const nombre=document.getElementById('edit-al-nombre').value.trim();
   const tel=document.getElementById('edit-al-tel').value.trim();
   const rol=document.getElementById('edit-al-rol').value;
+  const estado_login=document.getElementById('edit-al-estado-login').value;
   if(!nombre){showErr('edit-al-err','El nombre no puede estar vacío.');return;}
-  await fbUpdate('alumnos/'+_editAlumnoKey,{nombre,tel,rol});
+  await fbUpdate('alumnos/'+_editAlumnoKey,{nombre,tel,rol,estado_login});
   showOk('edit-al-ok','// DATOS ACTUALIZADOS');
   renderAlumnosList();
   setTimeout(()=>cerrarModalAlumno(),1200);
