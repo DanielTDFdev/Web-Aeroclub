@@ -1,5 +1,11 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.71
+  FECHA   : 2026-06-17
+  CAMBIOS : Banner llamativo (pulsante, ambar) de TURNOS PENDIENTES en la pantalla de instructor.
+            Aparece al ingresar si hay turnos pendientes de aprobacion, en cualquier solapa.
+            Boton VER TURNOS (va a Reservas/LISTA) y cierre. Si llega un pendiente nuevo, vuelve
+            a mostrarse aunque lo hayan cerrado. Se actualiza en tiempo real.
   VERSION : 5.70
   FECHA   : 2026-06-17
   CAMBIOS : Cambio de clave forzado por admin (pass_temporal) extendido a TODOS:
@@ -153,6 +159,7 @@ body{font-family:var(--font-ui);font-size:15px;color:var(--text);background:var(
 .hero-status::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:blink 2s ease-in-out infinite;}
 
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes pulseTurnos{0%,100%{box-shadow:0 0 12px rgba(240,165,0,.22)}50%{box-shadow:0 0 28px rgba(240,165,0,.55)}}
 
 .top-nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:.6rem 1.25rem;display:flex;align-items:center;gap:8px;position:sticky;top:0;z-index:100;}
 .nav-brand{font-family:var(--font-mono);font-size:13px;color:var(--amber);letter-spacing:.1em;margin-right:auto;}
@@ -348,7 +355,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.70</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.71</div>
   </div>
 
 </div>
@@ -518,6 +525,13 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
     <span id="banner-pendientes-txt" style="font-family:var(--font-mono);font-size:12px;color:var(--amber);letter-spacing:.08em;flex:1;min-width:160px"></span>
     <button onclick="showInstTab('config');showCfgTab('usuarios');" style="font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;padding:5px 14px;border-color:var(--amber);color:var(--amber);background:rgba(240,165,0,.1);white-space:nowrap">VER USUARIOS →</button>
     <button onclick="document.getElementById('banner-pendientes').style.display='none'" style="font-size:14px;padding:2px 8px;border:none;background:none;color:var(--amber);opacity:.6" title="Cerrar">✕</button>
+  </div>
+  <!-- BANNER LLAMATIVO: TURNOS PENDIENTES DE APROBACIÓN -->
+  <div id="banner-turnos-pend" style="display:none;margin-bottom:1rem;padding:1rem 1.2rem;background:linear-gradient(135deg,rgba(240,165,0,.20),rgba(240,165,0,.06));border:1px solid var(--amber);border-left:4px solid var(--amber);border-radius:var(--radius);align-items:center;gap:14px;flex-wrap:wrap;box-shadow:0 0 18px rgba(240,165,0,.25);animation:pulseTurnos 1.8s ease-in-out infinite;">
+    <span style="font-size:24px;line-height:1">⏳</span>
+    <span id="banner-turnos-pend-txt" style="font-family:var(--font-mono);font-size:14px;color:var(--amber2);letter-spacing:.06em;flex:1;min-width:180px;font-weight:600"></span>
+    <button onclick="irAPendientes()" style="font-family:var(--font-mono);font-size:12px;letter-spacing:.1em;padding:8px 18px;border-color:var(--amber);color:var(--amber2);background:rgba(240,165,0,.15);white-space:nowrap;font-weight:600">VER TURNOS →</button>
+    <button onclick="cerrarBannerTurnos()" style="font-size:14px;padding:2px 8px;border:none;background:none;color:var(--amber);opacity:.6" title="Cerrar">✕</button>
   </div>
   <div class="tab-bar">
     <button class="nav-btn active" id="inst-tab-res"   onclick="showInstTab('reservas')">Reservas</button>
@@ -1462,6 +1476,8 @@ window.logout=function(){
   if(unsubReservas){unsubReservas();unsubReservas=null;}
   if(_unsubPendientes){_unsubPendientes();_unsubPendientes=null;}
   const banner=document.getElementById('banner-pendientes');if(banner)banner.style.display='none';
+  const bturnos=document.getElementById('banner-turnos-pend');if(bturnos)bturnos.style.display='none';
+  _bannerTurnosCerrado=false;_lastPendCount=-1;
   session=null;selectedDay=null;selectedSlot=null;selectedAvion=null;selectedSlotFin=null;
   try{sessionStorage.removeItem('lvoad-session');}catch(e){}
   // reset cachés de datos
@@ -1988,11 +2004,27 @@ window.setCalFiltroAvion=function(key){
   get(ref(db,'reservas')).then(s=>renderTodasReservas(s.val()));
 };
 
+// Estado del banner llamativo de turnos pendientes
+let _bannerTurnosCerrado=false, _lastPendCount=-1;
+window.cerrarBannerTurnos=function(){_bannerTurnosCerrado=true;const b=document.getElementById('banner-turnos-pend');if(b)b.style.display='none';};
+window.irAPendientes=function(){_bannerTurnosCerrado=true;const b=document.getElementById('banner-turnos-pend');if(b)b.style.display='none';showInstTab('reservas');setCalVista('lista');const w=document.querySelector('.cal-wrap');if(w)w.scrollIntoView({behavior:'smooth',block:'start'});};
+
 async function renderTodasReservas(data){
   const todas=rArr(data);
-  document.getElementById('stat-pending').textContent=todas.filter(r=>r.estado==='pendiente').length;
+  const nPend=todas.filter(r=>r.estado==='pendiente').length;
+  document.getElementById('stat-pending').textContent=nPend;
   document.getElementById('stat-approved').textContent=todas.filter(r=>r.estado==='aprobado').length;
   document.getElementById('stat-total').textContent=todas.length;
+  // Banner llamativo: si hay pendientes, alertar. Si llega uno nuevo, vuelve a mostrarse aunque lo hayan cerrado.
+  const bt=document.getElementById('banner-turnos-pend'), btx=document.getElementById('banner-turnos-pend-txt');
+  if(bt&&btx){
+    if(nPend>_lastPendCount && _lastPendCount!==-1) _bannerTurnosCerrado=false;
+    _lastPendCount=nPend;
+    if(nPend>0 && !_bannerTurnosCerrado){
+      btx.textContent=nPend===1?'HAY 1 TURNO PENDIENTE DE APROBACIÓN':'HAY '+nPend+' TURNOS PENDIENTES DE APROBACIÓN';
+      bt.style.display='flex';
+    } else { bt.style.display='none'; }
+  }
 
   const cal=document.getElementById('cal-semanal');
   const hoy=fmtDate(new Date());
