@@ -1,5 +1,14 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.68
+  FECHA   : 2026-06-17
+  CAMBIOS : (1) Consultas: admin/administrador ya no pueden poner un turno en "Aprobado" a mano
+            (opcion deshabilitada + bloqueo al guardar). Cierra el segundo camino de aprobacion;
+            ahora SOLO instructores aprueban, por cualquier via.
+            (2) Firebase Auth Fase 2: login de instructores en modo sombra. Se verifica primero
+            contra Auth (email sintetico usuario@instructores.aeroclubriogrande.com.ar) y cae a
+            password plano + migracion perezosa. admin/administrador quedan en password plano
+            (acceso administrativo/emergencia), no se migran.
   VERSION : 5.67
   FECHA   : 2026-06-17
   CAMBIOS : Firebase Auth en modo sombra (Fase 1 de seguridad). El login de alumno verifica
@@ -324,7 +333,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.67</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.68</div>
   </div>
 
 </div>
@@ -1062,6 +1071,24 @@ async function authMigrarAlumno(emailKey, email, pass){
     return false;
   }
 }
+// Email sintético para instructores (no tienen email real). Subdominio dedicado para evitar
+// colisión con un alumno que use @aeroclubriogrande.com.ar. Estos buzones no reciben correo.
+function authEmailInstructor(user){ return user+'@instructores.aeroclubriogrande.com.ar'; }
+// Crea (o reusa) la cuenta de Auth para un instructor ya verificado por password plano.
+async function authMigrarInstructor(instKey, email, pass){
+  try{
+    await createUserWithEmailAndPassword(auth, email, pass);
+    await fbUpdate('instructores/'+instKey,{authMigrado:true});
+    return true;
+  }catch(e){
+    if(e?.code==='auth/email-already-in-use'){
+      try{ await signInWithEmailAndPassword(auth,email,pass); await fbUpdate('instructores/'+instKey,{authMigrado:true}); return true; }
+      catch(_){ return false; }
+    }
+    console.warn('Auth: migración instructor pendiente para',email,'—',e?.code||e);
+    return false;
+  }
+}
 const dbRef=()=>ref(db);
 async function fbGet(p){const s=await get(child(dbRef(),p));return s.exists()?s.val():null;}
 async function fbSet(p,v){await set(ref(db,p),v);}
@@ -1337,17 +1364,35 @@ window.loginInstructor=async function(){
   setLoading('btn-login-inst',true);
   try{
     const data=await fbGet('instructores');
+    // Buscar por usuario (sin comparar password todavía)
     let found=null;
-    if(data)for(const[k,i]of Object.entries(data))if(i.user.toLowerCase()===user.toLowerCase()&&i.pass===pass){found={...i,key:k};break;}
-    if(!found){
-      // admin siempre accesible con clave fija (acceso de emergencia)
-      if(user==='admin'&&pass==='admin123'){
-        if(!await fbGet('instructores/admin'))await fbSet('instructores/admin',{user:'admin',pass:'admin123',nombre:'Instructor'});
-        found={user:'admin',pass:'admin123',nombre:'Instructor',key:'admin'};
+    if(data)for(const[k,i]of Object.entries(data))if((i.user||'').toLowerCase()===user.toLowerCase()){found={...i,key:k};break;}
+
+    // Verificación de password: Auth primero (si ya está migrado), fallback a plano + migración perezosa.
+    // admin/administrador quedan en password plano (acceso administrativo/emergencia), no se migran.
+    let okLogin=false;
+    if(found && found.user!=='admin' && found.user!=='administrador'){
+      const instEmail=authEmailInstructor(found.user);
+      if(found.authMigrado){
+        try{ await signInWithEmailAndPassword(auth,instEmail,pass); okLogin=true; }catch(_){ okLogin=false; }
       }
+      if(!okLogin && found.pass!=null && found.pass===pass){
+        okLogin=true;
+        if(!found.authMigrado) await authMigrarInstructor(found.key,instEmail,pass);
+      }
+    } else if(found){
+      okLogin = found.pass===pass;
     }
-    if(!found){
-      await registrarAuditoria('login','instructor','fallo','Usuario no encontrado — '+user);
+
+    // admin siempre accesible con clave fija (acceso de emergencia)
+    if(!okLogin && user==='admin' && pass==='admin123'){
+      if(!await fbGet('instructores/admin'))await fbSet('instructores/admin',{user:'admin',pass:'admin123',nombre:'Instructor'});
+      found={user:'admin',pass:'admin123',nombre:'Instructor',key:'admin'};
+      okLogin=true;
+    }
+
+    if(!found || !okLogin){
+      await registrarAuditoria('login','instructor','fallo','Usuario o contraseña incorrectos — '+user);
       showErr('login-err2','Usuario o contraseña incorrectos.');return;
     }
     await registrarAuditoria('login','instructor','exito',found.nombre+' ('+found.user+')');
@@ -3273,6 +3318,9 @@ window.abrirModalCqReserva=function(key){
   document.getElementById('mcq-usuario').textContent=r.nombre+' — '+r.email;
   document.getElementById('mcq-fechahora').textContent=cqToDisplay(r.fecha)+' — '+(r.hora||'')+'hs — '+(r.avion||'LV-OAD');
   document.getElementById('mcq-estado').value=r.estado||'pendiente';
+  // Solo instructores pueden aprobar: deshabilitar la opción "Aprobado" para admin/administrador.
+  const optAprob=document.querySelector('#mcq-estado option[value="aprobado"]');
+  if(optAprob) optAprob.disabled=!esInstructorReal();
   hideEl('mcq-ok');hideEl('mcq-err');
   document.getElementById('modal-cq-reserva').classList.add('open');
 };
@@ -3288,6 +3336,9 @@ window.guardarCqReserva=async function(){
   if(!_mcqKey)return;
   hideEl('mcq-ok');hideEl('mcq-err');
   const nuevoEstado=document.getElementById('mcq-estado').value;
+  if(nuevoEstado==='aprobado' && !esInstructorReal()){
+    const e=document.getElementById('mcq-err');e.textContent='⚠ Solo un instructor puede aprobar turnos.';e.style.color='var(--red)';e.style.display='block';return;
+  }
   const updEstado={estado:nuevoEstado};
   if(nuevoEstado==='aprobado') updEstado.aprobado_por=session.nombre;
   if(nuevoEstado==='cancelado') updEstado.cancelado_por=session.nombre;
