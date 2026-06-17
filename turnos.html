@@ -1,5 +1,10 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.73
+  FECHA   : 2026-06-17
+  CAMBIOS : Seguimiento de turnos agrupado por dia (encabezado por fecha en espanol largo,
+            ej. "Jueves 18 de junio de 2026"). Se quito la columna FECHA de cada fila por
+            quedar redundante con el encabezado del dia.
   VERSION : 5.72
   FECHA   : 2026-06-17
   CAMBIOS : El banner de turnos pendientes ahora PERSISTE mientras haya pendientes (se quito el
@@ -360,7 +365,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.72</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.73</div>
   </div>
 
 </div>
@@ -2627,25 +2632,33 @@ window.renderSeguimiento=async function(){
 
   const mostrarActor = esAdminTotal && !target;   // en modo "Todos" mostramos quién hizo la acción
   const th=(t)=>`<th style="text-align:left;padding:6px 8px;color:var(--text3);font-weight:500;letter-spacing:.08em">${t}</th>`;
-  cont.innerHTML=`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:12px;min-width:600px">
-    <thead><tr style="border-bottom:1px solid var(--border2)">
-      ${th('ACCIÓN')}${th('FECHA')}${th('HORA')}${th('AVIÓN')}${th('ALUMNO')}${mostrarActor?th('INSTRUCTOR'):''}${th('ESTADO ACTUAL')}
-    </tr></thead><tbody>
-    ${fil.map(f=>{
-      const esAprob=f._accion==='aprobado';
-      const chip=esAprob
-        ? '<span style="font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;padding:2px 8px;border-radius:var(--radius);background:rgba(57,211,83,.1);color:var(--green);border:1px solid rgba(57,211,83,.3)">APROBÓ</span>'
-        : '<span style="font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;padding:2px 8px;border-radius:var(--radius);background:rgba(248,81,73,.1);color:var(--red);border:1px solid rgba(248,81,73,.25)">CANCELÓ</span>';
-      return `<tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="abrirModal('${f.key}')">
+  // Agrupado por día: encabezado por fecha; la fecha va en el encabezado, no en cada fila.
+  const nCols = mostrarActor ? 6 : 5;
+  let _segLastF=null;
+  const filasHtml = fil.map(f=>{
+    let header='';
+    if(f.fecha!==_segLastF){
+      _segLastF=f.fecha;
+      header=`<tr><td colspan="${nCols}" style="padding:14px 8px 6px;color:var(--cyan);font-weight:700;letter-spacing:.08em;text-transform:uppercase;border-bottom:1px solid var(--cyan);background:rgba(0,200,212,.07)">▸ ${fmtFechaLinda(f.fecha)}</td></tr>`;
+    }
+    const esAprob=f._accion==='aprobado';
+    const chip=esAprob
+      ? '<span style="font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;padding:2px 8px;border-radius:var(--radius);background:rgba(57,211,83,.1);color:var(--green);border:1px solid rgba(57,211,83,.3)">APROBÓ</span>'
+      : '<span style="font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;padding:2px 8px;border-radius:var(--radius);background:rgba(248,81,73,.1);color:var(--red);border:1px solid rgba(248,81,73,.25)">CANCELÓ</span>';
+    return header + `<tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="abrirModal('${f.key}')">
         <td style="padding:7px 8px">${chip}</td>
-        <td style="padding:7px 8px;color:var(--amber)">${cqToDisplay(f.fecha)}</td>
         <td style="padding:7px 8px;color:var(--text)">${f.horaInicio&&f.horaFin?f.horaInicio+'–'+f.horaFin:(f.hora||'')} hs</td>
         <td style="padding:7px 8px;color:var(--cyan)">${f.avion||'LV-OAD'}</td>
         <td style="padding:7px 8px;color:var(--text)">${f.nombre||'—'}</td>
         ${mostrarActor?`<td style="padding:7px 8px;color:var(--text2)">${f._actor}</td>`:''}
         <td style="padding:7px 8px"><span class="badge badge-${f.estado}">${f.estado}</span></td>
       </tr>`;
-    }).join('')}
+  }).join('');
+  cont.innerHTML=`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:12px;min-width:540px">
+    <thead><tr style="border-bottom:1px solid var(--border2)">
+      ${th('ACCIÓN')}${th('HORA')}${th('AVIÓN')}${th('ALUMNO')}${mostrarActor?th('INSTRUCTOR'):''}${th('ESTADO ACTUAL')}
+    </tr></thead><tbody>
+    ${filasHtml}
     </tbody></table></div>`;
 };
 
