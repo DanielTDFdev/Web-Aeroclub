@@ -1,6 +1,8 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.63
+  VERSION : 5.64
+  FECHA   : 2026-06-17
+  CAMBIOS : Estado de login en modal de usuario ahora es un toggle visual (switch), no un select.
   FECHA   : 2026-06-16
   CAMBIOS : Usuario: campo estado_login (normal/suspendido) editable en modal de usuario.
             Ausente o normal = ingreso normal; suspendido bloquea el login y muestra aviso
@@ -304,7 +306,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.63</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.64</div>
   </div>
 
 </div>
@@ -768,10 +770,13 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         </div>
         <div class="field">
           <label>Estado de login</label>
-          <select id="edit-al-estado-login">
-            <option value="normal">Normal — puede ingresar</option>
-            <option value="suspendido">Suspendido — no puede ingresar</option>
-          </select>
+          <div id="edit-al-estado-login-toggle" onclick="toggleEstadoLoginModal()" style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;padding:8px 0">
+            <span id="edit-al-estado-login-label" style="font-family:var(--font-mono);font-size:12px;letter-spacing:.06em"></span>
+            <div id="edit-al-estado-login-track" style="width:38px;height:20px;border-radius:10px;position:relative;transition:all .2s">
+              <div id="edit-al-estado-login-thumb" style="width:14px;height:14px;border-radius:50%;background:#fff;position:absolute;top:2px;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.3)"></div>
+            </div>
+          </div>
+          <input type="hidden" id="edit-al-estado-login" value="normal">
         </div>
         <div id="edit-al-err" class="error"></div>
         <div id="edit-al-ok" class="success-msg"></div>
@@ -2864,9 +2869,26 @@ window.abrirModalAlumno=function(key){
     document.getElementById('edit-al-tel').value=a.tel||'';
     document.getElementById('edit-al-rol').value=a.rol||'alumno';
     document.getElementById('edit-al-estado-login').value=a.estado_login||'normal';
+    renderEstadoLoginToggle();
     hideEl('edit-al-err');hideEl('edit-al-ok');
     document.getElementById('modal-alumno').classList.add('open');
   });
+};
+
+function renderEstadoLoginToggle(){
+  const suspendido=document.getElementById('edit-al-estado-login').value==='suspendido';
+  document.getElementById('edit-al-estado-login-label').textContent=suspendido?'SUSPENDIDO':'NORMAL';
+  document.getElementById('edit-al-estado-login-label').style.color=suspendido?'var(--red)':'var(--green)';
+  document.getElementById('edit-al-estado-login-track').style.background=suspendido?'rgba(248,81,73,.3)':'rgba(57,211,83,.25)';
+  document.getElementById('edit-al-estado-login-track').style.border=suspendido?'1px solid rgba(248,81,73,.5)':'1px solid rgba(57,211,83,.4)';
+  document.getElementById('edit-al-estado-login-thumb').style.left=suspendido?'20px':'2px';
+  document.getElementById('edit-al-estado-login-thumb').style.background=suspendido?'var(--red)':'var(--green)';
+}
+
+window.toggleEstadoLoginModal=function(){
+  const campo=document.getElementById('edit-al-estado-login');
+  campo.value=campo.value==='suspendido'?'normal':'suspendido';
+  renderEstadoLoginToggle();
 };
 
 window.cerrarModalAlumno=function(){document.getElementById('modal-alumno').classList.remove('open');_editAlumnoKey=null;};
