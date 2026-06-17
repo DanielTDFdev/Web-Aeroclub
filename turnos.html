@@ -1,5 +1,10 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.65
+  FECHA   : 2026-06-17
+  CAMBIOS : Solo los instructores reales pueden APROBAR turnos. admin y administrador ya no
+            ven el boton APROBAR (solo una nota); conservan la opcion de CANCELAR. Evita
+            aprobaciones accidentales desde cuentas administrativas.
   VERSION : 5.64
   FECHA   : 2026-06-17
   CAMBIOS : Estado de login en modal de usuario ahora es un toggle visual (switch), no un select.
@@ -306,7 +311,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.64</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.65</div>
   </div>
 
 </div>
@@ -1104,6 +1109,8 @@ function ok1h(ds,h){const[y,m,d]=ds.split('-').map(Number);const[hh,mm]=h.split(
 function okAnticipacion(ds,h){return(session?.rol==='piloto')?ok1h(ds,h):ok12h(ds,h);}
 function esAdminRO(){return session?.user==='administrador';}  // acceso completo pero solo lectura en horarios
 function esAdminROHorarios(){return session?.user==='administrador';}  // solo lectura en checkboxes de horarios (no en toggle avión)
+// Instructor "real": sesión de instructor que NO sea admin ni administrador. Solo estos pueden APROBAR turnos.
+function esInstructorReal(){return session?.tipo==='instructor'&&session?.user!=='admin'&&session?.user!=='administrador';}
 function rArr(data){if(!data)return[];return Object.entries(data).map(([k,v])=>({...v,key:k}));}
 
 function horasParaDia(dateStr, avionKey){
@@ -2156,11 +2163,19 @@ window.abrirModal=function(key){
   const actions=document.getElementById('md-actions');
   actions.innerHTML='';
   if(r.estado==='pendiente'){
-    const ba=document.createElement('button');ba.className='primary';ba.textContent='APROBAR TURNO';
-    ba.onclick=async()=>{if(!confirm('¿Aprobar el turno de '+r.nombre+'?'))return;await fbUpdate('reservas/'+key,{estado:'aprobado',instructor:session.nombre,aprobado_por:session.nombre});await registrarAuditoria('aprobacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(r.avion||'LV-OAD')+' — '+r.fecha+' '+r.hora+' hs — alumno: '+r.nombre);mailAprob(r);cerrarModal();};
+    if(esInstructorReal()){
+      const ba=document.createElement('button');ba.className='primary';ba.textContent='APROBAR TURNO';
+      ba.onclick=async()=>{if(!confirm('¿Aprobar el turno de '+r.nombre+'?'))return;await fbUpdate('reservas/'+key,{estado:'aprobado',instructor:session.nombre,aprobado_por:session.nombre});await registrarAuditoria('aprobacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(r.avion||'LV-OAD')+' — '+r.fecha+' '+r.hora+' hs — alumno: '+r.nombre);mailAprob(r);cerrarModal();};
+      actions.appendChild(ba);
+    } else {
+      const nota=document.createElement('div');
+      nota.style.cssText='font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.04em;line-height:1.5;width:100%';
+      nota.textContent='Solo un instructor puede aprobar turnos. Como administrador podés cancelarlo, pero no aprobarlo.';
+      actions.appendChild(nota);
+    }
     const bc=document.createElement('button');bc.className='danger';bc.textContent='CANCELAR TURNO';
     bc.onclick=async()=>{if(!confirm('¿Cancelar el turno de '+r.nombre+'?'))return;const motivo=await pedirMotivoCancelacion(true);if(motivo===null)return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre,cancelado_por:session.nombre};upd.obs_cancelacion='Cancelado por el instructor — '+motivo;await fbUpdate('reservas/'+key,upd);await registrarAuditoria('cancelacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — '+motivo);if(!turnoYaPaso(rv))mailCancel(rv,motivo);}cerrarModal();};
-    actions.appendChild(ba);actions.appendChild(bc);
+    actions.appendChild(bc);
   } else if(r.estado==='aprobado'){
     const aprobador=r.aprobado_por||r.instructor||'';
     const esAdminGlobal=session?.user==='admin'||session?.user==='administrador';
