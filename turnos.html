@@ -1,5 +1,10 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.66
+  FECHA   : 2026-06-17
+  CAMBIOS : Calendario de reservas (vista LISTA): la linea de hora actual (punto + hora) ahora
+            queda fija (sticky) al hacer scroll lateral, pegada al borde visible. Nuevo boton
+            HOY que recentra la grilla en el dia de hoy con scroll suave.
   VERSION : 5.65
   FECHA   : 2026-06-17
   CAMBIOS : Solo los instructores reales pueden APROBAR turnos. admin y administrador ya no
@@ -238,7 +243,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 
 /* CALENDARIO SEMANAL */
 .cal-wrap{overflow-x:auto;margin-top:.5rem;position:relative;}
-.cal-now-line{position:absolute;left:0;right:0;height:2px;background:var(--red);pointer-events:none;z-index:10;transition:top .5s ease;}
+.cal-now-line{position:absolute;left:0;height:2px;background:var(--red);pointer-events:none;z-index:10;transition:top .5s ease;}
 .cal-now-line::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:8px;height:8px;border-radius:50%;background:var(--red);box-shadow:0 0 8px rgba(248,81,73,.7);}
 .cal-now-line::after{content:attr(data-hora);position:absolute;left:12px;top:50%;transform:translateY(-50%);font-family:var(--font-mono);font-size:10px;color:var(--red);letter-spacing:.08em;background:var(--bg);padding:0 4px;}
 .cal-table{width:100%;border-collapse:collapse;min-width:1400px;}
@@ -311,7 +316,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.65</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.66</div>
   </div>
 
 </div>
@@ -502,7 +507,10 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <button class="cal-vista-tab" id="vista-tab-semana" onclick="setCalVista('semana')">SEMANA</button>
     </div>
     <div id="vista-lista">
-      <div class="cal-avion-tabs" id="cal-avion-tabs"></div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:.85rem">
+        <div class="cal-avion-tabs" id="cal-avion-tabs" style="flex:1;margin-bottom:0"></div>
+        <button id="btn-hoy-cal" onclick="centrarHoy()" title="Centrar la grilla en el día de hoy" style="font-family:var(--font-mono);font-size:12px;padding:5px 16px;border:1px solid var(--cyan);color:var(--cyan);background:rgba(0,200,212,.08);border-radius:var(--radius);cursor:pointer;letter-spacing:.12em;white-space:nowrap">◎ HOY</button>
+      </div>
       <div class="card" style="padding:1rem">
         <div class="cal-wrap"><div id="cal-semanal"></div></div>
       </div>
@@ -2037,7 +2045,7 @@ async function renderVistaSemana(){
   grid.innerHTML=html;
 }
 
-function scrollCalAHoy(){
+function scrollCalAHoy(behavior){
   const wrap=document.querySelector('.cal-wrap');
   if(!wrap)return;
   const todayTh=wrap.querySelector('th.today-col');
@@ -2046,8 +2054,11 @@ function scrollCalAHoy(){
   const wrapRect=wrap.getBoundingClientRect();
   const thRect=todayTh.getBoundingClientRect();
   const scrollLeft=wrap.scrollLeft+(thRect.left-wrapRect.left)-(wrapRect.width/2)+(thRect.width/2);
-  wrap.scrollTo({left:Math.max(0,scrollLeft),behavior:'instant'});
+  wrap.scrollTo({left:Math.max(0,scrollLeft),behavior:behavior||'instant'});
 }
+
+// Botón HOY: recentra la grilla de reservas en el día de hoy (scroll suave).
+window.centrarHoy=function(){ scrollCalAHoy('smooth'); };
 
 // ── LÍNEA HORA ACTUAL EN CALENDARIO ────────────────────────────
 function dibujarLineaHoraActual(){
@@ -2111,8 +2122,21 @@ function dibujarLineaHoraActual(){
   const linea=document.createElement('div');
   linea.className='cal-now-line';
   linea.style.top=posY+'px';
+  // Pin horizontal: la línea ocupa solo el ancho visible y se reposiciona con el scrollLeft,
+  // de modo que el punto y la hora queden fijos (sticky) al hacer scroll lateral.
+  linea.style.left=wrap.scrollLeft+'px';
+  linea.style.width=wrap.clientWidth+'px';
   linea.setAttribute('data-hora',String(horaActual).padStart(2,'0')+':'+String(minActual).padStart(2,'0'));
   wrap.appendChild(linea);
+
+  // Bind único: al scrollear horizontalmente, mantener la línea pegada al área visible.
+  if(!wrap._nowLineScrollBound){
+    wrap.addEventListener('scroll',()=>{
+      const l=wrap.querySelector('.cal-now-line');
+      if(l){l.style.left=wrap.scrollLeft+'px';l.style.width=wrap.clientWidth+'px';}
+    },{passive:true});
+    wrap._nowLineScrollBound=true;
+  }
 }
 
 // actualizar la línea cada minuto
