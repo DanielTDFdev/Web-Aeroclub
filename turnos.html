@@ -1,5 +1,10 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.69
+  FECHA   : 2026-06-17
+  CAMBIOS : Al crear un instructor (Config -> Instructores) ahora se exige contraseña de minimo
+            6 caracteres, igual que el registro de alumnos. Evita crear cuentas que despues no
+            puedan migrar a Firebase Auth (Auth exige minimo 6).
   VERSION : 5.68
   FECHA   : 2026-06-17
   CAMBIOS : (1) Consultas: admin/administrador ya no pueden poner un turno en "Aprobado" a mano
@@ -333,7 +338,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.68</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.69</div>
   </div>
 
 </div>
@@ -2836,6 +2841,7 @@ window.toggleVacacionesAdmin=async function(k){
 window.agregarInstructor=async function(){
   const user=val('new-inst-user'),pass=val('new-inst-pass'),nombre=val('new-inst-nombre');
   if(!user||!pass||!nombre)return;
+  if(pass.length<6){alert('La contraseña debe tener al menos 6 caracteres.');return;}
   if(await fbGet('instructores/'+user)){alert('Ese usuario ya existe.');return;}
   await fbSet('instructores/'+user,{user,pass,nombre});
   clearVal('new-inst-user','new-inst-pass','new-inst-nombre');
