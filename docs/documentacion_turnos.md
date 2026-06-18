@@ -1,7 +1,7 @@
 # Documentación técnica — Sistema de Turnos (turnos.html)
 
 **Aeroclub Río Grande (SAWE) — Tierra del Fuego, Argentina**
-Versión documentada: **turnos.html v5.70** · Fecha: 2026-06-17
+Versión documentada: **turnos.html v5.73** · Fecha: 2026-06-17
 
 > Documento de referencia: describe qué hace cada parte del sistema. Mantener actualizado cuando se agreguen funciones.
 
@@ -16,7 +16,8 @@ Aplicación web de página única (SPA) en un solo archivo HTML, para reservar l
 - **Hosting:** GitHub Pages (`danieltdfdev/Web-Aeroclub`), servido vía Cloudflare (CDN + DNS) en `aeroclubriogrande.com.ar`.
 - **Backend:** Firebase Realtime Database, SDK v10.12.0 (módulos `firebase-app`, `firebase-database`, `firebase-auth`) importados por CDN.
 - **Email:** EmailJS SDK v4 (CDN).
-- **Despliegue:** subir el archivo a GitHub → **purgar la caché de Cloudflare (Purge Everything)** siempre, o los cambios no se ven en producción → verificar la versión en pantalla.
+- **Despliegue:** subir el archivo a GitHub → verificar la versión en pantalla. (`Purge Everything` en Cloudflare sigue siendo buena práctica para assets cacheados en el borde.)
+- **Caché del navegador (clave):** Cloudflare **no cachea HTML en el borde** por defecto, así que purgar nunca afectó al `turnos.html` — el problema de "no se ve el cambio" era la **caché del navegador de cada usuario**. Resuelto (2026-06-17) con una **Cache Rule** que matchea `.html` con *Browser TTL: Bypass cache*, lo que agrega `no-store` a la respuesta del HTML. Ahora cada visita trae el HTML fresco y los deploys se ven al instante en todos los navegadores, sin depender de purgas ni recargas forzadas.
 - **Verificación de despliegue:** la versión visible en el `.hero-sub` ("RESERVA DE AERONAVES vX.XX") debe coincidir con la subida.
 
 ## 3. Modelo de datos (Firebase Realtime Database)
@@ -140,8 +141,8 @@ Modo **sombra**: Auth corre en paralelo, la clave plana es la red de seguridad y
   - *Pedir Turno*: selector de avión (pilotos), grilla de días (`renderDaysGrid`, con feriados), slots disponibles (`renderSlots`, filtrados por disponibilidad de instructor en LV-OAD), confirmación.
   - *Mi Perfil*: datos personales (`guardarDatosPerfil`) y cambio de contraseña (`cambiarClave`).
 - **Instructor** — pestañas (`showInstTab`):
-  - *Reservas*: estadísticas + calendario (vista LISTA de 21 días y vista SEMANA).
-  - *Seguimiento*: aprobaciones/cancelaciones por instructor (`renderSeguimiento`), con selector de instructor para admin.
+  - *Reservas*: estadísticas + calendario (vista LISTA de 21 días y vista SEMANA). **Banner de turnos pendientes** (v5.71/v5.72): cartel ámbar pulsante a nivel de pantalla que avisa "HAY N TURNOS PENDIENTES DE APROBACIÓN"; aparece al ingresar y en tiempo real, **persiste mientras haya pendientes** (sin botón de cerrar), el botón VER TURNOS lleva a Reservas/LISTA (`irAPendientes`), y desaparece solo cuando no quedan pendientes.
+  - *Seguimiento*: aprobaciones/cancelaciones por instructor (`renderSeguimiento`), **agrupadas por día** con encabezado de fecha en español largo (v5.73); selector de instructor para admin.
   - *Mi Disponibilidad*: grilla semanal de slots de LV-OAD + toggle de vacaciones.
   - *Configuración*: subpestañas (§10).
   - *Mi Perfil*: nombre y contraseña del instructor.
@@ -222,11 +223,12 @@ Servicio **unificado** en la cuenta del club: `service_8yqlptz`, una sola key/`i
 
 ### Reserva (lado instructor) / calendario
 - `renderTodasReservas`, `buildCalAvionTabs`, `setCalFiltroAvion`, `setCalVista`, `semanaNav`, `renderVistaSemana`, `scrollCalAHoy`, `centrarHoy`, `dibujarLineaHoraActual`.
+- `irAPendientes` — botón del banner de turnos pendientes: lleva a Reservas/LISTA (el banner persiste hasta que no queden pendientes).
 - `abrirModal`/`cerrarModal` — modal de detalle del turno (aprobar/cancelar/liberar).
 - `vencerTurnosPendientes` — vencimiento perezoso. `suscribirReservas`/`suscribirPendientes` — listeners.
 
 ### Seguimiento
-- `renderSeguimiento`, `setSegPeriodo`, `poblarSelectorSeg`, `segAprobadorDe`, `segCanceladorDe`.
+- `renderSeguimiento` — lista de aprobaciones/cancelaciones **agrupada por día** (encabezado de fecha en español largo, sin columna FECHA por fila). `setSegPeriodo`, `poblarSelectorSeg`, `segAprobadorDe`, `segCanceladorDe`.
 
 ### Configuración
 - `loadConfig`, `saveConfigAvion`, `renderConfig`, `showInstTab`, `showCfgTab`, `buildCfgAvionTabs`.
@@ -254,7 +256,8 @@ Servicio **unificado** en la cuenta del club: `service_8yqlptz`, una sola key/`i
 
 ## 18. Estado actual y trabajo pendiente
 
-- **Seguridad / Auth:** Fases 1 y 2 hechas (modo sombra). Se dejó **decantar la migración** (los usuarios migran al entrar). Próximo paso de desarrollo: Fase 3 (flujos de contraseña a Auth), que destraba endurecer reglas (Fase 5) y sacar el texto plano (Fase 6). Las 3 cuentas de instructor que tenían clave <6 (`fherlein`, `scarrizo`, `sdelarminat`) **ya fueron reseteadas a 6+** (2026-06-17), así que migran normal en su próximo login; no quedan cuentas con clave corta pendientes.
+- **Seguridad / Auth:** Fases 1 y 2 hechas (modo sombra). Se dejó **decantar la migración** (los usuarios migran al entrar). Próximo paso de desarrollo: Fase 3 (flujos de contraseña a Auth), que destraba endurecer reglas (Fase 5) y sacar el texto plano (Fase 6). Las 3 cuentas de instructor que tenían clave <6 (`fherlein`, `scarrizo`, `sdelarminat`) **ya fueron reseteadas a 6+** (2026-06-17); no quedan claves cortas pendientes.
+- **Caché que frenaba la migración (resuelto 2026-06-17):** varios usuarios entraban pero no aparecían en Auth porque su navegador servía una **copia vieja cacheada** del `turnos.html` (sin el código de migración) — no era un bug de la app (se verificó el código). Se resolvió con la Cache Rule `no-store` (ver §2): ahora cada navegador carga el HTML fresco, corre el código actual y se dispara la migración perezosa. Los ya pegados a una copia vieja se destraban con una recarga forzada o cuando su caché vence. La decantación continúa con esto resuelto.
 - **Feature en diseño — auto-vencimiento de pendientes:** un turno pendiente debería autorizarse o cancelarse **X horas antes del vuelo**; si ningún instructor lo confirma, cae solo, se libera el slot y **se le avisa al alumno**. Decisiones tomadas: X relativo al horario del vuelo, conviene **X<12h** (p. ej. 6h) para que siempre haya ventana de decisión; el aviso proactivo con nadie online **sí requiere un proceso programado** (cron). Borde a manejar: reservas creadas ya dentro de la ventana de X horas. Implementación sugerida: GitHub Actions con cron (gratis) o Firebase Cloud Functions; resolver el envío de mail server-side (EmailJS browser no aplica directo).
 - **Backlog de features:** disponibilidad para LV-ART/LV-MPH; bitácora de horas de vuelo; asistencia/no-show; estado de mantenimiento de aeronaves; lista de espera; recordatorios; dashboard para la comisión; aviso al instructor de nuevas solicitudes.
 
@@ -263,4 +266,4 @@ Servicio **unificado** en la cuenta del club: `service_8yqlptz`, una sola key/`i
 - **Reglas de Firebase abiertas** y **passwords en texto plano** (en proceso de resolución vía Auth). La `apiKey`/URL son públicas por diseño; la seguridad depende de Auth + reglas, no de ocultarlas.
 - **Sin proceso de servidor:** todo corre en el navegador; los barridos (vencimiento) son perezosos. Tareas garantizadas con nadie online requieren cron (ver §18).
 - **Sin queries SQL:** todo el filtrado es del lado del cliente.
-- **Caché de Cloudflare:** hay que purgarla en cada despliegue.
+- **Caché:** Cloudflare no cachea HTML en el borde; la staleness era por caché del navegador, resuelta con la Cache Rule `no-store` sobre `.html` (§2). Con eso los deploys se propagan al instante; igual conviene verificar la versión en pantalla tras subir.
