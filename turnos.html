@@ -1,5 +1,10 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.74
+  FECHA   : 2026-06-18
+  CAMBIOS : Auditoria: el filtro "Tipo de evento" ahora incluye Liberacion de turnos,
+            Bloqueo y Desbloqueo de dias (faltaban). ACCION_LABEL mapea liberacion_turno
+            a "Liberacion turno" (antes mostraba el texto crudo).
   VERSION : 5.73
   FECHA   : 2026-06-17
   CAMBIOS : Seguimiento de turnos agrupado por dia (encabezado por fecha en espanol largo,
@@ -365,7 +370,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.73</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.74</div>
   </div>
 
 </div>
@@ -958,8 +963,11 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
               <option value="alta_turno">Alta de turnos</option>
               <option value="aprobacion_turno">Aprobación de turnos</option>
               <option value="cancelacion_turno">Cancelación de turnos</option>
+              <option value="liberacion_turno">Liberación de turnos</option>
               <option value="avion_habilitado">Habilitación de aviones</option>
               <option value="avion_deshabilitado">Deshabilitación de aviones</option>
+              <option value="dia_bloqueado">Bloqueo de días</option>
+              <option value="dia_desbloqueado">Desbloqueo de días</option>
               <option value="registro">Registro inicial de usuario</option>
               <option value="aprobacion_usuario">Aprobación de usuario</option>
               <option value="usuario_rechazado">Rechazo de usuario</option>
@@ -3198,7 +3206,7 @@ function renderAuditoria(lista,skipPageReset){
   const totalPages=Math.ceil(total/AUDIT_PER_PAGE);
   const page=Math.min(_auditPage,totalPages-1);
   const slice=lista.slice(page*AUDIT_PER_PAGE,(page+1)*AUDIT_PER_PAGE);
-  const ACCION_LABEL={'login':'Login','registro':'Registro','alta_turno':'Alta turno','aprobacion_turno':'Aprobación turno','cancelacion_turno':'Cancelación turno','avion_habilitado':'Avión habilitado','avion_deshabilitado':'Avión deshabilitado','dia_bloqueado':'Día bloqueado','dia_desbloqueado':'Día desbloqueado','aprobacion_usuario':'Usuario aprobado','usuario_rechazado':'Usuario rechazado'};
+  const ACCION_LABEL={'login':'Login','registro':'Registro','alta_turno':'Alta turno','aprobacion_turno':'Aprobación turno','cancelacion_turno':'Cancelación turno','liberacion_turno':'Liberación turno','avion_habilitado':'Avión habilitado','avion_deshabilitado':'Avión deshabilitado','dia_bloqueado':'Día bloqueado','dia_desbloqueado':'Día desbloqueado','aprobacion_usuario':'Usuario aprobado','usuario_rechazado':'Usuario rechazado'};
   const ROL_ICON={'alumno':'🛩️','instructor':'👨‍✈️','piloto':'✈️','pendiente':'⏳'};
   const esAdmin=session?.user==='admin';
   const paginador=totalPages>1?`
