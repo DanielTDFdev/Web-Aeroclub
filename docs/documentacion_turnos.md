@@ -1,9 +1,10 @@
 # Documentación técnica — Sistema de Turnos (turnos.html)
 
 **Aeroclub Río Grande (SAWE) — Tierra del Fuego, Argentina**
-Versión documentada: **turnos.html v5.73** · Fecha: 2026-06-17
+Versión documentada: **turnos.html v5.77** · Fecha: 2026-06-19
 
 > Documento de referencia: describe qué hace cada parte del sistema. Mantener actualizado cuando se agreguen funciones.
+> El sistema incluye además un proceso server-side (GitHub Actions) para el recordatorio automático a instructores — ver §20.
 
 ---
 
@@ -38,6 +39,8 @@ Clave = email con `.`→`_` y `@`→`__at__` (función `ek()`).
 ### `/instructores/{user}`
 Clave = nombre de usuario.
 - `user`, `nombre`, `pass`
+- `email` — mail real del instructor; lo usa el recordatorio automático (§20). Editable por el admin (modal de instructor) o por el propio instructor (Mi Perfil). Las cuentas sin email se saltean en el recordatorio y se marcan con "⚠ sin mail" en la lista.
+- `cel` — celular de contacto (opcional, informativo)
 - `vacaciones` — `true` suspende su disponibilidad sin borrar datos
 - `soloUsuarios` — `true` restringe el acceso a la gestión de usuarios (lo usa `administrador`)
 - `pass_temporal`, `authMigrado` — igual que en alumnos
@@ -54,6 +57,8 @@ Clave = nombre de usuario.
 - `aprobado_por` — nombre de quien aprobó (para Seguimiento)
 - `cancelado_por` — nombre de quien canceló
 - `obs_cancelacion` — motivo de cancelación
+- `recordatorio_inst_enviado` — `true` si el recordatorio automático al instructor ya se envió para este turno (evita reenvíos). Lo escribe el cron (§20). Se limpia al liberar el turno.
+- `recordatorio_inst_ts` — timestamp ISO del envío del recordatorio.
 - `ts` — fecha de solicitud (ISO)
 
 ### `/config/{avionKey}`
@@ -157,7 +162,7 @@ Modo **sombra**: Auth corre en paralelo, la clave plana es la red de seguridad y
 
 - **Horarios**: por avión y día de semana (`renderHorariosConfig`, `toggleHorario`, `marcarTodas`); toggle de avión activo/inactivo (`toggleActivoAvion`). administrador = solo lectura. Incluye vista de disponibilidad de instructores (solo admin, solo lectura): selector por instructor + grilla de 30 días paginada (`renderAdmDisp`).
 - **Bloq.Aviones**: calendario mensual por avión para bloquear días (`renderCalMes`, `toggleBloqueoDia`); muestra feriados.
-- **Instructores**: alta (`agregarInstructor`, exige clave ≥6), edición (`abrirModalInst`/`guardarInstructor`, con check de cambio forzado), baja, y toggle de vacaciones por instructor para admin (`toggleVacacionesAdmin`).
+- **Instructores**: alta (`agregarInstructor`, exige clave ≥6), edición (`abrirModalInst`/`guardarInstructor`, con check de cambio forzado), baja, y toggle de vacaciones por instructor para admin (`toggleVacacionesAdmin`). El alta y la edición incluyen **email** (para el recordatorio, §20) y **celular**; la lista marca "⚠ sin mail" a quienes no tengan email. El propio instructor también puede cargar/editar su email y celular desde Mi Perfil (`guardarNombreInstructor`).
 - **Usuarios**: lista con filtros (texto/rol/estado); aprobar (`aprobarUsuario`, asigna rol) o rechazar (`rechazarUsuario`) pendientes; editar (`abrirModalAlumno`/`guardarAlumno`: nombre, tel, rol, estado_login, reseteo de clave + cambio forzado); eliminar.
 - **Consultas**: búsqueda de turnos por usuario/fechas/avión/estado (`ejecutarConsulta`), estadísticas, exportar CSV (`exportarCSV`), y edición de reserva (`abrirModalCqReserva`/`guardarCqReserva`, solo admin; la opción "Aprobado" está deshabilitada para no-instructores).
 - **Auditoría**: tabla paginada con filtros (`cargarAuditoria`/`filtrarAuditoria`/`renderAuditoria`); borrado por fila solo para `admin` (`borrarAuditoria`).
@@ -170,13 +175,18 @@ Modo **sombra**: Auth corre en paralelo, la clave plana es la red de seguridad y
 
 ## 12. Auditoría
 
-Registro de eventos (`registrarAuditoria`): login (éxito/fallo/bloqueado), registro, alta/aprobación/cancelación/liberación de turnos, habilitar/deshabilitar avión, bloquear/desbloquear día, aprobación/rechazo de usuario. Patrón fetch-al-abrir (no tiempo real). Filtros por tipo, texto y fecha.
+Registro de eventos (`registrarAuditoria`): login (éxito/fallo/bloqueado), registro, alta/aprobación/cancelación/liberación de turnos, habilitar/deshabilitar avión, bloquear/desbloquear día, aprobación/rechazo de usuario. Patrón fetch-al-abrir (no tiempo real). Filtros por tipo, texto y fecha. El desplegable "Tipo de evento" incluye liberación de turnos y bloqueo/desbloqueo de días (v5.74); el mapa `ACCION_LABEL` traduce `liberacion_turno` a etiqueta legible.
 
 ## 13. Email (EmailJS)
 
-Servicio **unificado** en la cuenta del club: `service_8yqlptz`, una sola key/`init()`. Templates: cancelación (`mailCancel`), reset (`mailReset`), registro + bienvenida (`mailNuevoRegistro`), confirmación de turno (`mailAprob`), liberar turno (`mailLiberacion`).
+**Dos cuentas de EmailJS en juego:**
 
-> **CRÍTICO:** `emailjs.createInstance()` NO existe en SDK v4 — usar `emailjs.init(key)` directo antes de cada `send()`. Pendiente menor: verificar que el template "Confirma Turno" use `{{to_email}}` en *To Email* y `{{hora}}` como variable.
+1. **Cuenta del club** (`service_8yqlptz`, una sola key/`init()`) — la usa la app web (navegador) para sus templates: cancelación (`mailCancel`), reset (`mailReset`), registro + bienvenida (`mailNuevoRegistro`), confirmación de turno (`mailAprob`), liberar turno (`mailLiberacion`). Está en el **límite de 6 templates** del plan gratuito.
+
+2. **Cuenta vieja de Gmail** (`dcamargo70@gmail.com`; `service_yeb4aqb`, public key `TzbSjqDNPjTGSGdzN`) — hospeda el template **"Recordatorio Instructor"** (`template_8awr1zd`) que usa el cron server-side (§20), porque la cuenta del club ya no tenía cupo de templates. El recordatorio le llega al instructor **desde dcamargo70@gmail.com** (default email de esa cuenta). Vars del template: `instructor_email` (To), `instructor_nombre`, `alumno_nombre`, `turno_hora`, `matricula_avion`, `name` (From Name), `email` (Reply-To = mail del club).
+
+> **CRÍTICO (navegador):** `emailjs.createInstance()` NO existe en SDK v4 — usar `emailjs.init(key)` directo antes de cada `send()`.
+> **CRÍTICO (server-side):** para enviar desde el cron (no-browser) hay que usar la **API REST** de EmailJS con la **private key** (accessToken) y tener habilitada en esa cuenta la opción "API for non-browser applications". Ver §20.
 
 ## 14. Integraciones externas
 
@@ -258,12 +268,49 @@ Servicio **unificado** en la cuenta del club: `service_8yqlptz`, una sola key/`i
 
 - **Seguridad / Auth:** Fases 1 y 2 hechas (modo sombra). Se dejó **decantar la migración** (los usuarios migran al entrar). Próximo paso de desarrollo: Fase 3 (flujos de contraseña a Auth), que destraba endurecer reglas (Fase 5) y sacar el texto plano (Fase 6). Las 3 cuentas de instructor que tenían clave <6 (`fherlein`, `scarrizo`, `sdelarminat`) **ya fueron reseteadas a 6+** (2026-06-17); no quedan claves cortas pendientes.
 - **Caché que frenaba la migración (resuelto 2026-06-17):** varios usuarios entraban pero no aparecían en Auth porque su navegador servía una **copia vieja cacheada** del `turnos.html` (sin el código de migración) — no era un bug de la app (se verificó el código). Se resolvió con la Cache Rule `no-store` (ver §2): ahora cada navegador carga el HTML fresco, corre el código actual y se dispara la migración perezosa. Los ya pegados a una copia vieja se destraban con una recarga forzada o cuando su caché vence. La decantación continúa con esto resuelto.
-- **Feature en diseño — auto-vencimiento de pendientes:** un turno pendiente debería autorizarse o cancelarse **X horas antes del vuelo**; si ningún instructor lo confirma, cae solo, se libera el slot y **se le avisa al alumno**. Decisiones tomadas: X relativo al horario del vuelo, conviene **X<12h** (p. ej. 6h) para que siempre haya ventana de decisión; el aviso proactivo con nadie online **sí requiere un proceso programado** (cron). Borde a manejar: reservas creadas ya dentro de la ventana de X horas. Implementación sugerida: GitHub Actions con cron (gratis) o Firebase Cloud Functions; resolver el envío de mail server-side (EmailJS browser no aplica directo).
-- **Backlog de features:** disponibilidad para LV-ART/LV-MPH; bitácora de horas de vuelo; asistencia/no-show; estado de mantenimiento de aeronaves; lista de espera; recordatorios; dashboard para la comisión; aviso al instructor de nuevas solicitudes.
+- **Recordatorio automático a instructores (HECHO, 2026-06-19):** implementado como proceso server-side (GitHub Actions cron). Avisa al instructor por mail 12 h antes del turno. Ver §20. Esto dejó montada toda la infraestructura de cron + envío server-side de mail.
+- **Feature en diseño — auto-vencimiento de pendientes:** un turno pendiente debería autorizarse o cancelarse **X horas antes del vuelo**; si ningún instructor lo confirma, cae solo, se libera el slot y **se le avisa al alumno**. Decisiones tomadas: X relativo al horario del vuelo, conviene **X<12h** (p. ej. 6h) para que siempre haya ventana de decisión; el aviso proactivo con nadie online requiere un proceso programado (cron). Borde a manejar: reservas creadas ya dentro de la ventana de X horas. **Ahora es mucho más fácil:** puede reusar la misma infraestructura del recordatorio (§20) — el cron de GitHub Actions, la lectura por REST y el envío server-side por EmailJS ya están resueltos. Sería agregar la lógica de vencimiento al mismo (o un segundo) workflow.
+- **Backlog de features:** disponibilidad para LV-ART/LV-MPH; bitácora de horas de vuelo; asistencia/no-show; estado de mantenimiento de aeronaves; lista de espera; dashboard para la comisión; aviso al instructor de nuevas solicitudes.
 
 ## 19. Limitaciones conocidas
 
 - **Reglas de Firebase abiertas** y **passwords en texto plano** (en proceso de resolución vía Auth). La `apiKey`/URL son públicas por diseño; la seguridad depende de Auth + reglas, no de ocultarlas.
-- **Sin proceso de servidor:** todo corre en el navegador; los barridos (vencimiento) son perezosos. Tareas garantizadas con nadie online requieren cron (ver §18).
-- **Sin queries SQL:** todo el filtrado es del lado del cliente.
-- **Caché:** Cloudflare no cachea HTML en el borde; la staleness era por caché del navegador, resuelta con la Cache Rule `no-store` sobre `.html` (§2). Con eso los deploys se propagan al instante; igual conviene verificar la versión en pantalla tras subir.
+- **Proceso de servidor:** la app web corre íntegramente en el navegador y los barridos de vencimiento siguen siendo **perezosos** (client-side). La **excepción** es el recordatorio automático a instructores, que sí es un proceso server-side programado (GitHub Actions cron, §20). Tareas garantizadas sin nadie online se resuelven por esa vía.
+- **Sin queries SQL:** todo el filtrado es del lado del cliente. (Para consultas ad-hoc en SQL hay un script aparte que vuelca Firebase a SQLite — `fb_to_sqlite.py`.)
+- **Caché:** Cloudflare no cachea HTML en el borde; la staleness era por caché del navegador, resuelta con la Cache Rule `no-store` sobre `.html` (§2). Con eso los deploys se propagan al instante; igual conviene verificar la versión en pantalla tras subir. (Nota: una pestaña ya abierta no se actualiza sola; loguear/desloguear es client-side y no recarga el HTML — hay que recargar la página.)
+
+## 20. Recordatorio automático a instructores (proceso server-side / cron)
+
+Aviso por mail al instructor **~12 horas antes** de cada turno aprobado, para que organice el día. Corre fuera de la app web, como proceso programado, así funciona aunque no haya nadie con la página abierta.
+
+### Archivos (en el repo)
+- **`recordatorio_instructor.py`** (raíz del repo) — el script. Solo usa librería estándar de Python (urllib, json, datetime); no requiere pip.
+- **`.github/workflows/recordatorio-instructor.yml`** — el workflow de GitHub Actions que lo dispara.
+
+### Disparo
+- `schedule: cron "*/15 * * * *"` — cada 15 min. GitHub corre en **UTC** y puede atrasarse varios minutos; no importa, lo cubre la ventana + la marca anti-duplicado.
+- `workflow_dispatch` con input **`dry_run`** (`1` = prueba sin enviar ni marcar; `0` = real). Útil para probar desde la pestaña Actions.
+
+### Lógica del script
+1. Lee `/reservas` e `/instructores` de Firebase por REST (reglas de lectura abiertas).
+2. Calcula "ahora" en hora local (UTC-3 fijo; Argentina no usa horario de verano).
+3. Selecciona turnos `estado==aprobado` **con instructor asignado** (`aprobado_por`/`instructor`) cuyo vuelo cae dentro de las próximas `REMIND_HOURS` horas y que **no** tengan `recordatorio_inst_enviado`.
+4. Resuelve el email del instructor: matchea su `nombre` (de `aprobado_por`) contra `/instructores` y toma el campo `email`. Si no tiene email, lo **saltea** (lo loguea).
+5. Envía el mail vía **API REST de EmailJS** (server-side, con private key).
+6. Marca la reserva con `recordatorio_inst_enviado:true` + `recordatorio_inst_ts` (PATCH REST) para no repetir.
+7. Si hubo errores de envío, el job termina en fallo (rojo) para que se note en Actions.
+
+> La marca anti-duplicado hace que salga **un solo mail por turno**. Al **liberar** un turno se limpia la marca (v5.76), así un turno reaprobado por otro instructor vuelve a generar aviso.
+
+### EmailJS (cuenta dcamargo70 — ver §13)
+- Service `service_yeb4aqb`, template `template_8awr1zd` ("Recordatorio Instructor"), public key `TzbSjqDNPjTGSGdzN`.
+- Requiere tener habilitada en esa cuenta la opción **"API for non-browser applications"** (Account → Security) y usar la **private key** como `accessToken` en la llamada REST.
+- El mail sale **desde dcamargo70@gmail.com** (default email de la cuenta). Reply-To = mail del club (`CLUB_EMAIL`).
+
+### Configuración (variables `env:` del workflow)
+- Públicas (en el `.yml`): `FIREBASE_DB_URL`, `EMAILJS_SERVICE_ID` (`service_yeb4aqb`), `EMAILJS_TEMPLATE_ID` (`template_8awr1zd`), `EMAILJS_PUBLIC_KEY` (`TzbSjqDNPjTGSGdzN`), `CLUB_EMAIL` (`administracion@aeroclubriogrande.com`), `REMIND_HOURS` (**12**), `TZ_OFFSET` (`-3`), `DRY_RUN`.
+- **Secreta** (GitHub → Settings → Secrets and variables → Actions): `EMAILJS_PRIVATE_KEY` = private key de la cuenta dcamargo70. **Nunca** va en el repo.
+- **`REMIND_HOURS` se ajusta editando esa línea del `.yml`** (no toca el `.py`): cambiar el número y commitear.
+
+### Prerrequisito operativo
+Cada instructor debe tener su **`email` cargado** (Mi Perfil, o el admin desde el modal de instructor). Los que no lo tengan se saltean sin aviso; en la lista de instructores aparecen marcados con **"⚠ sin mail"**. `admin`/`administrador` no necesitan email (no aprueban turnos).
