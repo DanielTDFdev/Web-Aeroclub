@@ -31,7 +31,7 @@ import sys
 import json
 import urllib.request
 import urllib.error
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # ── Configuración ──────────────────────────────────────────────
 DB_URL       = os.environ.get("FIREBASE_DB_URL", "").rstrip("/")
@@ -70,7 +70,7 @@ def fb_marcar_enviado(key):
     url = "{}/reservas/{}.json".format(DB_URL, key)
     body = json.dumps({
         "recordatorio_inst_enviado": True,
-        "recordatorio_inst_ts": datetime.utcnow().isoformat() + "Z",
+        "recordatorio_inst_ts": datetime.now(timezone.utc).isoformat(),
     }).encode("utf-8")
     req = urllib.request.Request(url, data=body, method="PATCH",
                                  headers={"Content-Type": "application/json",
@@ -126,7 +126,7 @@ def main():
         print("ERROR: faltan variables de entorno:", ", ".join(faltan))
         sys.exit(1)
 
-    ahora_local = datetime.utcnow() + timedelta(hours=TZ_OFFSET)
+    ahora_local = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=TZ_OFFSET)
     print("== Recordatorio instructor ==")
     print("Ahora (local UTC{:+g}): {:%Y-%m-%d %H:%M}".format(TZ_OFFSET, ahora_local))
     print("Ventana: turnos dentro de las próximas {:g} h".format(REMIND_HOURS))
