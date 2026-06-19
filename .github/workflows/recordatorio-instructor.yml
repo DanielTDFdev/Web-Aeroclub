@@ -31,7 +31,7 @@ jobs:
           EMAILJS_SERVICE_ID: "service_yeb4aqb"      # << CONFIRMÁ el service de la cuenta dcamargo70
           EMAILJS_TEMPLATE_ID: "template_8awr1zd"
           EMAILJS_PUBLIC_KEY: "TzbSjqDNPjTGSGdzN"
-          CLUB_EMAIL: "administracion@aeroclubriogrande.com.ar"   # << PONÉ el mail real del club (Reply-To)
+          CLUB_EMAIL: "administracion@aeroclubriogrande.com"   # << PONÉ el mail real del club (Reply-To)
           REMIND_HOURS: "2"
           TZ_OFFSET: "-3"
           # ── Secreto: cargado en Settings > Secrets and variables > Actions ──
