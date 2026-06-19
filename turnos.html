@@ -1,5 +1,11 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.77
+  FECHA   : 2026-06-19
+  CAMBIOS : (1) Mi Perfil (instructor): ahora puede cargar/editar su Email y Celular
+            (boton "GUARDAR DATOS"). El email se guarda en /instructores y es el que usa
+            el recordatorio automatico. (2) Lista de instructores: marca "⚠ sin mail" en
+            los que no tienen email cargado (no aplica a admin/administrador).
   VERSION : 5.76
   FECHA   : 2026-06-19
   CAMBIOS : Liberar turno ahora limpia la marca recordatorio_inst_enviado/ts. Asi, si un
@@ -380,7 +386,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.76</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.77</div>
   </div>
 
 </div>
@@ -1077,8 +1083,17 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <label>Nombre</label>
         <input type="text" id="inst-perfil-user-label" placeholder="Tu nombre completo" autocomplete="off">
       </div>
+      <div class="field">
+        <label>Email <span style="font-size:10px;color:var(--text3)">(para recibir recordatorios)</span></label>
+        <input type="email" id="inst-perfil-email" placeholder="tu@email.com" autocapitalize="off" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Celular</label>
+        <input type="tel" id="inst-perfil-cel" placeholder="Ej: +54 9 2964 000000">
+      </div>
+      <div id="inst-perfil-datos-err" class="error"></div>
       <div id="inst-perfil-nombre-ok" class="success-msg"></div>
-      <button onclick="guardarNombreInstructor()">GUARDAR NOMBRE</button>
+      <button onclick="guardarNombreInstructor()">GUARDAR DATOS</button>
     </div>
 
     <div class="panel" style="max-width:460px">
@@ -2500,13 +2515,16 @@ window.cambiarClave=async function(){
 // ── PERFIL INSTRUCTOR ──────────────────────────────────────────
 // ── PERFIL INSTRUCTOR ──────────────────────────────────────────
 window.guardarNombreInstructor=async function(){
-  hideEl('inst-perfil-nombre-ok');
+  hideEl('inst-perfil-nombre-ok');hideEl('inst-perfil-datos-err');
   const nombre=document.getElementById('inst-perfil-user-label').value.trim();
-  if(!nombre){return;}
-  await fbUpdate('instructores/'+session.user,{nombre});
+  const email=document.getElementById('inst-perfil-email').value.trim().toLowerCase();
+  const cel=document.getElementById('inst-perfil-cel').value.trim();
+  if(!nombre){showErr('inst-perfil-datos-err','El nombre no puede estar vacío.');return;}
+  if(email&&!email.includes('@')){showErr('inst-perfil-datos-err','El email no es válido.');return;}
+  await fbUpdate('instructores/'+session.user,{nombre,email:email||null,cel:cel||null});
   session.nombre=nombre;
   document.getElementById('nav-user-name').textContent='✈ '+nombre;
-  showOk('inst-perfil-nombre-ok','// NOMBRE ACTUALIZADO CORRECTAMENTE');
+  showOk('inst-perfil-nombre-ok','// DATOS ACTUALIZADOS CORRECTAMENTE');
 };
 
 window.cambiarClaveInstructor=async function(){
@@ -2535,7 +2553,13 @@ window.showInstTab=function(tab){
   const segEl=document.getElementById('instructor-seguimiento');
   if(segEl) segEl.classList.toggle('active',tab==='seguimiento');
   if(tab==='perfil'){
-    hideEl('inst-perfil-err');hideEl('inst-perfil-ok');hideEl('inst-perfil-nombre-ok');
+    hideEl('inst-perfil-err');hideEl('inst-perfil-ok');hideEl('inst-perfil-nombre-ok');hideEl('inst-perfil-datos-err');
+    fbGet('instructores/'+session.user).then(i=>{
+      if(!i)return;
+      const nm=document.getElementById('inst-perfil-user-label'); if(nm) nm.value=i.nombre||'';
+      const em=document.getElementById('inst-perfil-email'); if(em) em.value=i.email||'';
+      const ce=document.getElementById('inst-perfil-cel'); if(ce) ce.value=i.cel||'';
+    });
   }
   document.getElementById('inst-tab-res').classList.toggle('active',tab==='reservas');
   document.getElementById('inst-tab-cfg').classList.toggle('active',tab==='config');
@@ -2911,6 +2935,9 @@ async function renderInstructoresList(){
   el.innerHTML=Object.entries(data).map(([k,i])=>{
     const enVacaciones=i.vacaciones===true;
     const esPrincipal=k==='admin';
+    const esEspecial=(k==='admin'||k==='administrador');
+    const sinMail=!((i.email||'').trim());
+    const avisoMail=(!esEspecial&&sinMail)?` <span title="Sin email cargado — no recibirá recordatorios automáticos" style="font-family:var(--font-mono);font-size:10px;color:var(--amber);letter-spacing:.04em">⚠ sin mail</span>`:'';
     // toggle vacaciones: solo para admin/administrador, no sobre sí mismo, no sobre admin principal
     const mostrarToggle=esAdmin&&!esPrincipal&&k!==session?.user;
     const toggleVac=mostrarToggle?`
@@ -2922,7 +2949,7 @@ async function renderInstructoresList(){
       </div>`:
       (enVacaciones?`<span style="font-family:var(--font-mono);font-size:10px;color:var(--amber)">🏖 VAC</span>`:'');
     return `<div class="toggle-row">
-      <span><strong>${i.nombre}</strong> — <span style="color:var(--text3)">${i.user}</span>${enVacaciones?` <span style="font-family:var(--font-mono);font-size:10px;color:var(--amber);letter-spacing:.06em">· de vacaciones</span>`:''}</span>
+      <span><strong>${i.nombre}</strong> — <span style="color:var(--text3)">${i.user}</span>${avisoMail}${enVacaciones?` <span style="font-family:var(--font-mono);font-size:10px;color:var(--amber);letter-spacing:.06em">· de vacaciones</span>`:''}</span>
       <div style="display:flex;align-items:center;gap:10px">
         ${toggleVac}
         ${esPrincipal?'<span style="font-size:11px;color:var(--text3)">PRINCIPAL</span>':`<button onclick="abrirModalInst('${k}')" style="font-size:11px;padding:3px 10px">EDITAR</button> <button onclick="eliminarInstructor('${k}')" style="font-size:11px;padding:3px 10px" class="danger">QUITAR</button>`}
