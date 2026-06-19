@@ -1,5 +1,10 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.83
+  FECHA   : 2026-06-19
+  CAMBIOS : Auditoria: la pantalla de auditoria EXCLUYE los registros de FPL (los que
+            genera fpl.html con rol:'fpl' / accion 'fpl_*'). Asi la auditoria de turnos
+            no se mezcla con la de planes de vuelo, que tiene su propia pantalla en fpl.html.
   VERSION : 5.82
   FECHA   : 2026-06-19
   CAMBIOS : Auditoria: soporte para el vencimiento automatico de turnos (proceso server-side).
@@ -403,7 +408,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.82</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.83</div>
   </div>
 
 </div>
@@ -3239,7 +3244,7 @@ async function cargarAuditoria(){
   el.innerHTML='<div class="empty">// Cargando registros...</div>';
   const data=await fbGet('auditoria');
   if(!data){el.innerHTML='<div class="empty">// SIN REGISTROS DE AUDITORÍA</div>';_auditoriaCache=[];renderAuditoria([]);return;}
-  _auditoriaCache=Object.entries(data).map(([k,v])=>({...v,key:k})).sort((a,b)=>b.ts.localeCompare(a.ts));
+  _auditoriaCache=Object.entries(data).map(([k,v])=>({...v,key:k})).filter(r=>r.rol!=='fpl'&&String(r.accion||'').indexOf('fpl')!==0).sort((a,b)=>b.ts.localeCompare(a.ts));
   _auditPage=0;filtrarAuditoria();
 }
 
