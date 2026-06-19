@@ -1,5 +1,12 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.84
+  FECHA   : 2026-06-19
+  CAMBIOS : Auditoria FPL: nueva sub-pestaña "Audit. FPL" en Configuracion, visible SOLO
+            para el usuario admin (no administrador). Lista los registros rol:'fpl' que
+            escribe fpl.html al generar un PDF, con columnas fecha/origen/destino/hora/
+            tiempo de vuelo/matricula/comandante (+ registrado y usuario). La auditoria de
+            turnos sigue excluyendo estos registros (v5.83): nada se mezcla.
   VERSION : 5.83
   FECHA   : 2026-06-19
   CAMBIOS : Auditoria: la pantalla de auditoria EXCLUYE los registros de FPL (los que
@@ -408,7 +415,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.83</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.84</div>
   </div>
 
 </div>
@@ -721,6 +728,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <button class="nav-btn"        id="cfg-tab-usuarios"     onclick="showCfgTab('usuarios')">Usuarios</button>
       <button class="nav-btn"        id="cfg-tab-consultas"    onclick="showCfgTab('consultas')">Consultas</button>
       <button class="nav-btn"        id="cfg-tab-auditoria"    onclick="showCfgTab('auditoria')">Auditoría</button>
+      <button class="nav-btn"        id="cfg-tab-auditoria-fpl" onclick="showCfgTab('auditoria-fpl')">Audit. FPL</button>
       <button class="nav-btn"        id="cfg-tab-sistema"      onclick="showCfgTab('sistema')" style="color:var(--red);border-color:rgba(248,81,73,.3)">Sistema</button>
     </div>
 
@@ -1037,6 +1045,15 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         </div>
         <div id="audit-stats" style="display:flex;gap:10px;margin-bottom:.85rem;flex-wrap:wrap"></div>
         <div id="audit-tabla" style="overflow-x:auto"><div class="empty">// Cargando registros...</div></div>
+      </div>
+    </div>
+
+    <div id="cfg-auditoria-fpl" class="cfg-panel" style="display:none">
+      <div class="card">
+        <h3>Auditoría de Planes de Vuelo (FPL)</h3>
+        <p style="font-family:var(--font-mono);font-size:11px;color:var(--text3);margin:0 0 .85rem;letter-spacing:.04em">Registro de cada plan de vuelo generado en PDF desde fpl.html. Solo visible para el administrador.</p>
+        <div style="margin-bottom:.85rem"><button onclick="cargarAuditoriaFpl()" style="padding:9px 16px;font-size:12px">↻ ACTUALIZAR</button></div>
+        <div id="audit-fpl-tabla" style="overflow-x:auto"><div class="empty">// Cargando registros...</div></div>
       </div>
     </div>
 
@@ -2618,6 +2635,8 @@ window.showInstTab=function(tab){
         b.style.display=session?.soloUsuarios?'none':'';
       }
     });
+    const btnAudFpl=document.getElementById('cfg-tab-auditoria-fpl');
+    if(btnAudFpl) btnAudFpl.style.display=(session?.user==='admin')?'':'none';
   }
 };
 
@@ -2765,8 +2784,9 @@ window.selectCfgAvion=function(key){
 
 window.showCfgTab=function(tab){
   if(tab==='sistema'&&session?.user!=='admin'&&session?.user!=='administrador') return;
+  if(tab==='auditoria-fpl'&&session?.user!=='admin') return;
   if(session?.soloUsuarios&&tab!=='usuarios'&&tab!=='sistema'&&tab!=='auditoria') return;
-  ['horarios','dias','instructores','usuarios','consultas','auditoria','sistema'].forEach(t=>{
+  ['horarios','dias','instructores','usuarios','consultas','auditoria','auditoria-fpl','sistema'].forEach(t=>{
     const panel=document.getElementById('cfg-'+t);
     const btn=document.getElementById('cfg-tab-'+t);
     if(panel)panel.style.display=t===tab?'block':'none';
@@ -2782,6 +2802,7 @@ window.showCfgTab=function(tab){
     if(cardDisp){ cardDisp.style.display=isAdmin?'block':'none'; if(isAdmin){admDispOffset=0;admDispInst=null;renderAdmDispSelector();const g=document.getElementById('adm-disp-grid');if(g)g.innerHTML='<div class="empty">// Cargando...</div>';} }
   }
   if(tab==='auditoria')cargarAuditoria();
+  if(tab==='auditoria-fpl')cargarAuditoriaFpl();
   if(tab==='sistema'){
     const zona=document.getElementById('card-zona-peligrosa');
     if(zona) zona.style.display=session?.user==='admin'?'block':'none';
@@ -3246,6 +3267,31 @@ async function cargarAuditoria(){
   if(!data){el.innerHTML='<div class="empty">// SIN REGISTROS DE AUDITORÍA</div>';_auditoriaCache=[];renderAuditoria([]);return;}
   _auditoriaCache=Object.entries(data).map(([k,v])=>({...v,key:k})).filter(r=>r.rol!=='fpl'&&String(r.accion||'').indexOf('fpl')!==0).sort((a,b)=>b.ts.localeCompare(a.ts));
   _auditPage=0;filtrarAuditoria();
+}
+
+async function cargarAuditoriaFpl(){
+  if(session?.user!=='admin') return;   // doble candado: solo admin
+  const el=document.getElementById('audit-fpl-tabla');
+  if(!el) return;
+  el.innerHTML='<div class="empty">// Cargando registros...</div>';
+  const data=await fbGet('auditoria');
+  const filas=Object.entries(data||{}).map(([k,v])=>({...v,key:k}))
+    .filter(r=>r.rol==='fpl'||String(r.accion||'').indexOf('fpl')===0)
+    .sort((a,b)=>String(b.ts||'').localeCompare(String(a.ts||'')));
+  if(!filas.length){el.innerHTML='<div class="empty">// SIN REGISTROS DE FPL</div>';return;}
+  const esc=s=>String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  const fmtTs=t=>{try{const d=new Date(t);const p=n=>String(n).padStart(2,'0');return p(d.getDate())+'/'+p(d.getMonth()+1)+' '+p(d.getHours())+':'+p(d.getMinutes());}catch(e){return t||'';}};
+  const th=c=>'<th style="text-align:left;padding:6px 8px;color:var(--text3);letter-spacing:.08em;font-weight:500;white-space:nowrap">'+c+'</th>';
+  const td=v=>'<td style="padding:7px 8px;color:var(--text2);white-space:nowrap;border-bottom:1px solid var(--border)">'+esc(v)+'</td>';
+  let h='<table style="width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:12px;min-width:620px">'+
+    '<thead><tr style="border-bottom:1px solid var(--border2)">'+
+    ['Registrado','Usuario','Fecha','Origen','Destino','Hora','T. vuelo','Matrícula','Comandante'].map(th).join('')+
+    '</tr></thead><tbody>';
+  filas.forEach(r=>{const f=r.fpl||{};
+    h+='<tr>'+td(fmtTs(r.ts))+td(r.usuario||'—')+td(f.fecha)+td(f.origen)+td(f.destino)+
+       td(f.hora)+td(f.tiempo_vuelo)+td(f.matricula)+td(f.comandante)+'</tr>';});
+  h+='</tbody></table>';
+  el.innerHTML=h;
 }
 
 window.filtrarAuditoria=function(){
