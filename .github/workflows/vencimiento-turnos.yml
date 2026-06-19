@@ -30,8 +30,8 @@ jobs:
           FIREBASE_DB_URL: "https://turnos-lv-oad-default-rtdb.firebaseio.com"
           # Cuenta server-side dcamargo70 (misma que el recordatorio)
           EMAILJS_SERVICE_ID: "service_yeb4aqb"
-          # << PEGÁ acá el template_id del NUEVO aviso de vencimiento al alumno
-          EMAILJS_TEMPLATE_ID: "template_PONER_ID"
+          # Template "Turno Caído" (aviso de vencimiento al alumno)
+          EMAILJS_TEMPLATE_ID: "template_4wja6rq"
           EMAILJS_PUBLIC_KEY: "TzbSjqDNPjTGSGdzN"
           CLUB_EMAIL: "administracion@aeroclubriogrande.com"   # Reply-To
           EXPIRE_HOURS: "6"      # DEBE ser < 12 (anticipación mínima del alumno)
