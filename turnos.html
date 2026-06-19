@@ -1,5 +1,9 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.85
+  FECHA   : 2026-06-19
+  CAMBIOS : Auditoria FPL: la columna Fecha (fecha del vuelo) ahora se muestra en formato
+            dd/mm/aaaa (antes salia el crudo aaaa-mm-dd que guarda el campo del FPL).
   VERSION : 5.84
   FECHA   : 2026-06-19
   CAMBIOS : Auditoria FPL: nueva sub-pestaña "Audit. FPL" en Configuracion, visible SOLO
@@ -415,7 +419,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.84</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.85</div>
   </div>
 
 </div>
@@ -3281,6 +3285,7 @@ async function cargarAuditoriaFpl(){
   if(!filas.length){el.innerHTML='<div class="empty">// SIN REGISTROS DE FPL</div>';return;}
   const esc=s=>String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
   const fmtTs=t=>{try{const d=new Date(t);const p=n=>String(n).padStart(2,'0');return p(d.getDate())+'/'+p(d.getMonth()+1)+' '+p(d.getHours())+':'+p(d.getMinutes());}catch(e){return t||'';}};
+  const fFecha=s=>{const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(s||''));return m?m[3]+'/'+m[2]+'/'+m[1]:(s||'');};
   const th=c=>'<th style="text-align:left;padding:6px 8px;color:var(--text3);letter-spacing:.08em;font-weight:500;white-space:nowrap">'+c+'</th>';
   const td=v=>'<td style="padding:7px 8px;color:var(--text2);white-space:nowrap;border-bottom:1px solid var(--border)">'+esc(v)+'</td>';
   let h='<table style="width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:12px;min-width:620px">'+
@@ -3288,7 +3293,7 @@ async function cargarAuditoriaFpl(){
     ['Registrado','Usuario','Fecha','Origen','Destino','Hora','T. vuelo','Matrícula','Comandante'].map(th).join('')+
     '</tr></thead><tbody>';
   filas.forEach(r=>{const f=r.fpl||{};
-    h+='<tr>'+td(fmtTs(r.ts))+td(r.usuario||'—')+td(f.fecha)+td(f.origen)+td(f.destino)+
+    h+='<tr>'+td(fmtTs(r.ts))+td(r.usuario||'—')+td(fFecha(f.fecha))+td(f.origen)+td(f.destino)+
        td(f.hora)+td(f.tiempo_vuelo)+td(f.matricula)+td(f.comandante)+'</tr>';});
   h+='</tbody></table>';
   el.innerHTML=h;
