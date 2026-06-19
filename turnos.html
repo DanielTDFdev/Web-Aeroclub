@@ -1,5 +1,11 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.78
+  FECHA   : 2026-06-19
+  CAMBIOS : Aprobar turno (LV-OAD): si la fecha/hora NO esta entre los slots que el
+            instructor declaro disponibles, muestra un aviso antes de confirmar
+            ("no figuras disponible en ese horario") para evitar pisar la disponibilidad
+            de otro instructor. Igual puede aprobar si confirma.
   VERSION : 5.77
   FECHA   : 2026-06-19
   CAMBIOS : (1) Mi Perfil (instructor): ahora puede cargar/editar su Email y Celular
@@ -386,7 +392,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.77</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.78</div>
   </div>
 
 </div>
@@ -2398,7 +2404,7 @@ window.abrirModal=function(key){
   if(r.estado==='pendiente'){
     if(esInstructorReal()){
       const ba=document.createElement('button');ba.className='primary';ba.textContent='APROBAR TURNO';
-      ba.onclick=async()=>{if(!confirm('¿Aprobar el turno de '+r.nombre+'?'))return;await fbUpdate('reservas/'+key,{estado:'aprobado',instructor:session.nombre,aprobado_por:session.nombre});await registrarAuditoria('aprobacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(r.avion||'LV-OAD')+' — '+r.fecha+' '+r.hora+' hs — alumno: '+r.nombre);mailAprob(r);cerrarModal();};
+      ba.onclick=async()=>{const esOADap=(r.avion||'LV-OAD')==='LV-OAD';let confirmar;if(esOADap&&session?.user){let disp=null;try{disp=await fbGet('disponibilidad/'+r.fecha+'/'+session.user);}catch(_){}const slots=Array.isArray(disp)?disp:[];if(!slots.includes(r.hora)){confirmar=confirm('⚠ OJO: según tu disponibilidad declarada, NO figurás disponible el '+fmtFechaLinda(r.fecha)+' a las '+r.hora+' hs.\n\nSi aprobás igual, podrías estar tomando un turno que otro instructor tenía previsto cubrir. ¿Aprobar de todas formas?');}else{confirmar=confirm('¿Aprobar el turno de '+r.nombre+'?');}}else{confirmar=confirm('¿Aprobar el turno de '+r.nombre+'?');}if(!confirmar)return;await fbUpdate('reservas/'+key,{estado:'aprobado',instructor:session.nombre,aprobado_por:session.nombre});await registrarAuditoria('aprobacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(r.avion||'LV-OAD')+' — '+r.fecha+' '+r.hora+' hs — alumno: '+r.nombre);mailAprob(r);cerrarModal();};
       actions.appendChild(ba);
     } else {
       const nota=document.createElement('div');
