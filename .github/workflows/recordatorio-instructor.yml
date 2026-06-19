@@ -32,7 +32,7 @@ jobs:
           EMAILJS_TEMPLATE_ID: "template_8awr1zd"
           EMAILJS_PUBLIC_KEY: "TzbSjqDNPjTGSGdzN"
           CLUB_EMAIL: "administracion@aeroclubriogrande.com"   # << PONÉ el mail real del club (Reply-To)
-          REMIND_HOURS: "2"
+          REMIND_HOURS: "12"
           TZ_OFFSET: "-3"
           # ── Secreto: cargado en Settings > Secrets and variables > Actions ──
           EMAILJS_PRIVATE_KEY: ${{ secrets.EMAILJS_PRIVATE_KEY }}
