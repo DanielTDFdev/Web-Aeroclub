@@ -1,5 +1,10 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.75
+  FECHA   : 2026-06-18
+  CAMBIOS : Instructores: campos Email (para recordatorios) y Celular en el alta y en el
+            modal de edicion. Email opcional pero validado si se carga. Quedan en
+            /instructores como email y cel. Base para el recordatorio automatico por mail.
   VERSION : 5.74
   FECHA   : 2026-06-18
   CAMBIOS : Auditoria: el filtro "Tipo de evento" ahora incluye Liberacion de turnos,
@@ -370,7 +375,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.74</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.75</div>
   </div>
 
 </div>
@@ -755,6 +760,10 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
           <div class="field"><label>Contraseña</label><input type="text" id="new-inst-pass" placeholder="contraseña"></div>
           <div class="field"><label>Nombre</label><input type="text" id="new-inst-nombre" placeholder="Nombre"></div>
         </div>
+        <div class="row">
+          <div class="field"><label>Email <span style="font-size:10px;color:var(--text3)">(para recordatorios)</span></label><input type="email" id="new-inst-email" placeholder="instructor@email.com" autocapitalize="off" autocomplete="off"></div>
+          <div class="field"><label>Celular <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><input type="tel" id="new-inst-cel" placeholder="Ej: +54 9 2964 000000"></div>
+        </div>
         <button onclick="agregarInstructor()">AGREGAR INSTRUCTOR</button>
       </div>
     </div>
@@ -880,6 +889,14 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
     <div class="field">
       <label>Nombre</label>
       <input type="text" id="edit-inst-nombre" placeholder="Nombre completo">
+    </div>
+    <div class="field">
+      <label>Email <span style="font-size:10px;color:var(--text3)">(para recordatorios)</span></label>
+      <input type="email" id="edit-inst-email" placeholder="instructor@email.com" autocapitalize="off" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>Celular <span style="font-size:10px;color:var(--text3)">(opcional)</span></label>
+      <input type="tel" id="edit-inst-cel" placeholder="Ej: +54 9 2964 000000">
     </div>
     <div class="field">
       <label>Nueva contraseña <span style="font-size:10px;color:var(--text3)">(dejar vacío para no cambiar)</span></label>
@@ -2921,11 +2938,16 @@ window.toggleVacacionesAdmin=async function(k){
 
 window.agregarInstructor=async function(){
   const user=val('new-inst-user'),pass=val('new-inst-pass'),nombre=val('new-inst-nombre');
+  const email=val('new-inst-email').toLowerCase(),cel=val('new-inst-cel');
   if(!user||!pass||!nombre)return;
   if(pass.length<6){alert('La contraseña debe tener al menos 6 caracteres.');return;}
+  if(email&&!email.includes('@')){alert('El email no es válido.');return;}
   if(await fbGet('instructores/'+user)){alert('Ese usuario ya existe.');return;}
-  await fbSet('instructores/'+user,{user,pass,nombre});
-  clearVal('new-inst-user','new-inst-pass','new-inst-nombre');
+  const nuevo={user,pass,nombre};
+  if(email) nuevo.email=email;
+  if(cel) nuevo.cel=cel;
+  await fbSet('instructores/'+user,nuevo);
+  clearVal('new-inst-user','new-inst-pass','new-inst-nombre','new-inst-email','new-inst-cel');
   renderInstructoresList();
 };
 
@@ -2939,6 +2961,8 @@ window.abrirModalInst=function(key){
     if(!i)return;
     document.getElementById('edit-inst-user').value=i.user||key;
     document.getElementById('edit-inst-nombre').value=i.nombre||'';
+    document.getElementById('edit-inst-email').value=i.email||'';
+    document.getElementById('edit-inst-cel').value=i.cel||'';
     document.getElementById('edit-inst-pass').value='';
     document.getElementById('edit-inst-forzar').checked=false;
     hideEl('edit-inst-err');hideEl('edit-inst-ok');
@@ -2954,11 +2978,14 @@ window.cerrarModalInst=function(){
 window.guardarInstructor=async function(){
   hideEl('edit-inst-err');hideEl('edit-inst-ok');
   const nombre=document.getElementById('edit-inst-nombre').value.trim();
+  const email=document.getElementById('edit-inst-email').value.trim().toLowerCase();
+  const cel=document.getElementById('edit-inst-cel').value.trim();
   const pass=document.getElementById('edit-inst-pass').value.trim();
   const forzar=document.getElementById('edit-inst-forzar').checked;
   if(!nombre){showErr('edit-inst-err','El nombre no puede estar vacío.');return;}
+  if(email&&!email.includes('@')){showErr('edit-inst-err','El email no es válido.');return;}
   if(pass&&pass.length<6){showErr('edit-inst-err','La contraseña debe tener al menos 6 caracteres.');return;}
-  const updates={nombre};
+  const updates={nombre,email:email||null,cel:cel||null};
   if(pass) updates.pass=pass;
   if(forzar) updates.pass_temporal=true;
   else if(pass) updates.pass_temporal=null;  // clave nueva definitiva, sin forzar cambio
