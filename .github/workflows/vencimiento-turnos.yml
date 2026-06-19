@@ -1,0 +1,43 @@
+name: Vencimiento de turnos
+
+on:
+  schedule:
+    # Cada 15 minutos. GitHub usa UTC y puede atrasar la ejecución varios minutos;
+    # no importa, lo cubre la ventana (EXPIRE_HOURS) + la marca estado:'vencido'
+    # (un turno ya vencido deja de ser 'pendiente', así que no se reprocesa).
+    - cron: "*/15 * * * *"
+  workflow_dispatch:        # permite correrlo a mano desde la pestaña Actions
+    inputs:
+      dry_run:
+        description: "Probar sin marcar ni enviar (1 = sí, 0 = no)"
+        default: "1"
+
+jobs:
+  vencimiento:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Vencer turnos pendientes
+        env:
+          # ── Públicos (no secretos): editá si hace falta ──────────────
+          FIREBASE_DB_URL: "https://turnos-lv-oad-default-rtdb.firebaseio.com"
+          # Cuenta server-side dcamargo70 (misma que el recordatorio)
+          EMAILJS_SERVICE_ID: "service_yeb4aqb"
+          # << PEGÁ acá el template_id del NUEVO aviso de vencimiento al alumno
+          EMAILJS_TEMPLATE_ID: "template_PONER_ID"
+          EMAILJS_PUBLIC_KEY: "TzbSjqDNPjTGSGdzN"
+          CLUB_EMAIL: "administracion@aeroclubriogrande.com"   # Reply-To
+          EXPIRE_HOURS: "6"      # DEBE ser < 12 (anticipación mínima del alumno)
+          TZ_OFFSET: "-3"
+          # ── Secreto: el mismo secret que ya usa el recordatorio ──────
+          EMAILJS_PRIVATE_KEY: ${{ secrets.EMAILJS_PRIVATE_KEY }}
+          # En corrida manual se respeta el input; el cron corre en real (0)
+          DRY_RUN: ${{ github.event.inputs.dry_run || '0' }}
+        run: python vencimiento_turnos.py
