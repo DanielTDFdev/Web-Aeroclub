@@ -1,11 +1,11 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 5.79
+  VERSION : 5.81
   FECHA   : 2026-06-19
-  CAMBIOS : *** BUILD DE DIAGNOSTICO TEMPORAL *** Al aprobar como usuario 'dcamargo'
-            muestra un alert con los valores en tiempo de ejecucion (user/avion/fecha/
-            hora/disp/incluyeHora) y NO aprueba. Solo afecta a dcamargo; el resto aprueba
-            normal. Se quita en la proxima version.
+  CAMBIOS : Aviso de disponibilidad al aprobar (LV-OAD): ahora es PROACTIVO. Al abrir el
+            modal de un turno pendiente, si el instructor no figura disponible en ese
+            horario, aparece un cartel ambar ANTES de aprobar (en vez del confirm posterior).
+            El boton APROBAR usa confirm simple. Quitada la build de diagnostico (v5.79).
   VERSION : 5.78
   FECHA   : 2026-06-19
   CAMBIOS : Aprobar turno (LV-OAD): si la fecha/hora NO esta entre los slots que el
@@ -398,7 +398,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.79-debug</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.81</div>
   </div>
 
 </div>
@@ -2410,8 +2410,10 @@ window.abrirModal=function(key){
   if(r.estado==='pendiente'){
     if(esInstructorReal()){
       const ba=document.createElement('button');ba.className='primary';ba.textContent='APROBAR TURNO';
-      ba.onclick=async()=>{if(session?.user==='dcamargo'){let _d=null;try{_d=await fbGet('disponibilidad/'+r.fecha+'/'+session.user);}catch(e){_d='ERR '+e;}const _s=Array.isArray(_d)?_d:[];alert('DEBUG | user='+session.user+' | avion=['+r.avion+'] | fecha=['+r.fecha+'] | hora=['+r.hora+'] | esOAD='+((r.avion||'LV-OAD')==='LV-OAD')+' | disp='+JSON.stringify(_d)+' | incluyeHora='+_s.includes(r.hora));return;}const esOADap=(r.avion||'LV-OAD')==='LV-OAD';let confirmar;if(esOADap&&session?.user){let disp=null;try{disp=await fbGet('disponibilidad/'+r.fecha+'/'+session.user);}catch(_){}const slots=Array.isArray(disp)?disp:[];if(!slots.includes(r.hora)){confirmar=confirm('⚠ OJO: según tu disponibilidad declarada, NO figurás disponible el '+fmtFechaLinda(r.fecha)+' a las '+r.hora+' hs.\n\nSi aprobás igual, podrías estar tomando un turno que otro instructor tenía previsto cubrir. ¿Aprobar de todas formas?');}else{confirmar=confirm('¿Aprobar el turno de '+r.nombre+'?');}}else{confirmar=confirm('¿Aprobar el turno de '+r.nombre+'?');}if(!confirmar)return;await fbUpdate('reservas/'+key,{estado:'aprobado',instructor:session.nombre,aprobado_por:session.nombre});await registrarAuditoria('aprobacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(r.avion||'LV-OAD')+' — '+r.fecha+' '+r.hora+' hs — alumno: '+r.nombre);mailAprob(r);cerrarModal();};
+      ba.onclick=async()=>{if(!confirm('¿Aprobar el turno de '+r.nombre+'?'))return;await fbUpdate('reservas/'+key,{estado:'aprobado',instructor:session.nombre,aprobado_por:session.nombre});await registrarAuditoria('aprobacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(r.avion||'LV-OAD')+' — '+r.fecha+' '+r.hora+' hs — alumno: '+r.nombre);mailAprob(r);cerrarModal();};
       actions.appendChild(ba);
+      // Aviso proactivo (LV-OAD): al abrir el modal, si el instructor no figura disponible en ese horario, muestra un cartel ambar ANTES de aprobar.
+      if((r.avion||'LV-OAD')==='LV-OAD'&&session?.user){(async()=>{let disp=null;try{disp=await fbGet('disponibilidad/'+r.fecha+'/'+session.user);}catch(_){}const slots=Array.isArray(disp)?disp:[];if(!slots.includes(r.hora)){const w=document.createElement('div');w.style.cssText='width:100%;margin-bottom:.25rem;padding:.6rem .8rem;background:rgba(240,165,0,.1);border:1px solid var(--amber);border-left:3px solid var(--amber);border-radius:var(--radius);font-family:var(--font-mono);font-size:11px;color:var(--amber);letter-spacing:.04em;line-height:1.55';w.textContent='⚠ Según tu disponibilidad declarada NO figurás disponible el '+fmtFechaLinda(r.fecha)+' a las '+r.hora+' hs. Si aprobás, podrías estar tomando un turno que otro instructor tenía previsto cubrir.';actions.insertBefore(w,actions.firstChild);}})();}
     } else {
       const nota=document.createElement('div');
       nota.style.cssText='font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.04em;line-height:1.5;width:100%';
