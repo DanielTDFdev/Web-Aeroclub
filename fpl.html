@@ -2,6 +2,9 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
+  v3.10 ·  PDF combinado: tildás varios borradores en "Mis planes" y generás UN PDF con todos
+           (una hoja por plan, en orden cronológico) para adjuntar de una vez. La descarga la
+           hace el usuario; el sistema no envía. Logica de dibujo extraida a dibujarPlan(p).
   v3.9  ·  La vista de auditoría FPL se movió a turnos.html (sub-pestaña Config, SOLO admin).
            Aca queda solo la ESCRITURA: cada PDF generado registra en /auditoria (rol:'fpl').
   v3.8  ·  Auditoría FPL: cada PDF generado se registra en /auditoria con tag rol:'fpl'
@@ -135,6 +138,12 @@
           estos registros. Usuario sigue en placeholder 'demo' hasta integrar el login.
     v3.9  La VISTA se movio a turnos.html (sub-pestaña "Audit. FPL" en Config, SOLO admin).
           Aca se quito el boton/modal: fpl.html solo ESCRIBE el registro al generar PDF.
+    v3.10 PDF COMBINADO. Checkbox por borrador en "Mis planes" + boton "PDF COMBINADO" que
+          genera un unico PDF con un plan por hoja (pdf-lib copyPages), ordenado por fecha/hora
+          local del vuelo. La logica de dibujo se extrajo de generarPDF a dibujarPlan(pdf,p),
+          que dibuja desde un objeto (form o borrador). planDataDesdeForm() es la fuente unica
+          (la usan guardar, generarPDF y la auditoria). Una entrada de auditoria por plan.
+          El sistema NO envia mails: el usuario descarga el PDF y lo adjunta el mismo.
 ==================================================================================
 -->
 <html lang="es">
@@ -326,7 +335,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v3.9</span>
+    <span class="ver">v3.10</span>
     <a href="turnos.html" title="Volver al turnero (sin cerrar sesión)" style="font-family:var(--mono);font-size:12px;color:var(--cyan);text-decoration:none;border:1px solid var(--line-hot);border-radius:5px;padding:5px 11px;letter-spacing:1px;transition:.15s" onmouseover="this.style.background='var(--cyan)';this.style.color='#04141a'" onmouseout="this.style.background='transparent';this.style.color='var(--cyan)'">← TURNERO</a>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
@@ -536,6 +545,10 @@
   <div class="saved">
     <h2>Mis planes</h2>
     <div id="lista"></div>
+    <div class="actions" style="margin-top:12px;align-items:center">
+      <button type="button" class="ghost" id="btnCombinar">PDF COMBINADO</button>
+      <span class="hint" style="font-size:11px">Tildá los planes y generá un solo PDF (una hoja por plan) para adjuntar de una vez.</span>
+    </div>
   </div>
 
   <div class="danger">
@@ -555,6 +568,7 @@ const TZ_OFFSET_H = 3; // Rio Grande UTC-3 (sin DST). UTC = local + 3h
 // Al integrar en turnos, asignar aqui el emailKey de la sesion (ver /alumnos/{emailKey}).
 let   USUARIO = 'demo';
 let   editKey = null;
+let   _borradoresCache = {};
 
 /* ============================ HELPERS ============================ */
 const $ = id => document.getElementById(id);
@@ -728,16 +742,7 @@ async function guardar(){
   }
   const u=calcUTC();
   const data={
-    matricula:vU('f7'), numero:$('f9n').value, tipo:vU('f9t'), estela:$('f9w').value,
-    equipo_10a:vU('f10a'), equipo_10b:vU('f10b'),
-    reglas:$('f8r').value, tipo_vuelo:$('f8t').value,
-    salida:vU('f13a'), eobt:u.eobt, fecha_local:$('f13fecha').value, hora_local:$('f13hora').value,
-    vel_crucero:vU('f15v'), nivel:vU('f15l'), ruta:vU('f15r'),
-    destino:vU('f16d'), eet:$('f16eet').value, altn:vU('f16a1'), altn2:vU('f16a2'),
-    otros_18:item18(u.dof),
-    endurance:$('f19e').value, pob:$('f19p').value,
-    radio_emerg:checks('r19'), equipo_superv:checks('s19'), chalecos:checks('j19'),
-    color_marcas:vU('f19a'), piloto:$('f19c').value, obs_19:$('f19n').value,
+    ...planDataDesdeForm(),
     firma:getFirma(),
     estado:'borrador', fecha_creacion:new Date().toISOString()
   };
@@ -756,6 +761,7 @@ async function cargarLista(){
   const cont=$('lista'); cont.innerHTML='<div class="hint" style="padding:6px">Cargando…</div>';
   try{
     const r=await fetch(`${DB}/fpl/${USUARIO}.json`); const o=await r.json()||{};
+    _borradoresCache=o;
     const items=Object.entries(o).sort((a,b)=>(b[1].fecha_creacion||'').localeCompare(a[1].fecha_creacion||''));
     if(!items.length){ cont.innerHTML='<div class="hint" style="padding:6px">No hay planes guardados todavía.</div>'; return; }
     cont.innerHTML='';
@@ -765,6 +771,11 @@ async function cargarLista(){
         <span class="meta">${p.fecha_local||''} ${p.hora_local||''} loc<br>EOBT ${p.eobt||'----'}Z</span>
         <span class="tag ${p.estado||'borrador'}">${(p.estado||'borrador').toUpperCase()}</span>`;
       div.onclick=()=>cargarEnForm(key,p);
+      const cb=document.createElement('input'); cb.type='checkbox'; cb.className='fpl-pick';
+      cb.dataset.key=key; cb.title='Seleccionar para PDF combinado';
+      cb.style.cssText='width:16px;height:16px;accent-color:var(--cyan);cursor:pointer;flex:0 0 auto';
+      cb.onclick=e=>e.stopPropagation();
+      div.insertBefore(cb, div.firstChild);
       cont.appendChild(div);
     }
   }catch(e){ cont.innerHTML='<div class="hint" style="padding:6px">Error al leer: '+e.message+'</div>'; }
@@ -1025,6 +1036,105 @@ function renderContactos(){
   renderContactosCampo('f16d','btnContactosDest','contactosPanelDest');
 }
 
+// Construye el objeto de datos del plan a partir del formulario en pantalla.
+// Misma forma que el borrador guardado, asi un plan se puede dibujar desde el form
+// o desde un borrador con identica logica (fuente unica de verdad).
+function planDataDesdeForm(){
+  const u=calcUTC();
+  return {
+    matricula:vU('f7'), numero:$('f9n').value, tipo:vU('f9t'), estela:$('f9w').value,
+    equipo_10a:vU('f10a'), equipo_10b:vU('f10b'),
+    reglas:$('f8r').value, tipo_vuelo:$('f8t').value,
+    salida:vU('f13a'), eobt:u.eobt, fecha_local:$('f13fecha').value, hora_local:$('f13hora').value,
+    vel_crucero:vU('f15v'), nivel:vU('f15l'), ruta:vU('f15r'),
+    destino:vU('f16d'), eet:$('f16eet').value, altn:vU('f16a1'), altn2:vU('f16a2'),
+    otros_18:item18(u.dof),
+    endurance:$('f19e').value, pob:$('f19p').value,
+    radio_emerg:checks('r19'), equipo_superv:checks('s19'), chalecos:checks('j19'),
+    color_marcas:vU('f19a'), piloto:$('f19c').value, obs_19:$('f19n').value,
+    firma:firmado?getFirma():''
+  };
+}
+
+// Dibuja UN plan (objeto p) sobre la primera pagina de pdf. Misma logica que tenia
+// generarPDF inline, pero leyendo de p en vez del DOM.
+async function dibujarPlan(pdf, p){
+  const {StandardFonts, rgb}=PDFLib;
+  const page=pdf.getPages()[0]; const H=page.getHeight();
+  const font=await pdf.embedFont(StandardFonts.Helvetica);
+  const ink=rgb(0,0,0.55), black=rgb(0,0,0);
+  const put=(n,str,size)=>{ const r=RECTS[n]; if(!r||str==null||str==='')return; str=String(str).toUpperCase();
+    let s=size||Math.min(9.5,r[3]-2);
+    const maxw=r[2]-3, tw=font.widthOfTextAtSize(str,s);
+    if(tw>maxw){ s=Math.max(5, s*maxw/tw); }
+    page.drawText(str,{x:r[0]+1.5, y:H-r[1]-r[3]+(r[3]-s)/2+0.5, size:s, font, color:ink}); };
+  const comb=(n,ch)=>{ const r=RECTS[n]; if(!r||!ch)return; ch=String(ch).toUpperCase(); const s=Math.min(11,r[3]-1); const cw=font.widthOfTextAtSize(ch,s);
+    page.drawText(ch,{x:r[0]+(r[2]-cw)/2, y:H-r[1]-r[3]+(r[3]-s)/2+0.5, size:s, font, color:ink}); };
+  const spread=(names,str)=>{ str=(str||'').toString(); names.forEach((n,i)=>comb(n,str[i]||'')); };
+  const strike=(n)=>{ const r=RECTS[n]; if(!r)return;
+    page.drawLine({start:{x:r[0]+1,y:H-r[1]-r[3]+1}, end:{x:r[0]+r[2]-1,y:H-r[1]-1}, thickness:1.1, color:black});
+    page.drawLine({start:{x:r[0]+1,y:H-r[1]-1}, end:{x:r[0]+r[2]-1,y:H-r[1]-r[3]+1}, thickness:1.1, color:black}); };
+
+  spread(['ID1','ID2','ID3','ID4','ID5','ID6','ID7'], p.matricula);
+  comb('FR',p.reglas); comb('TF',p.tipo_vuelo);
+  const num=String(p.numero||'').trim(); spread(['N1','N2'], num==='1'?'':num);
+  spread(['A1','A2','A3','A4'], p.tipo); comb('WT',p.estela);
+  const a10=String(p.equipo_10a||'').toUpperCase(); comb('E1', a10.length>1?a10[a10.length-2]:''); comb('E2', a10[a10.length-1]||'');
+  const b10=String(p.equipo_10b||'').toUpperCase(); comb('E3', b10[0]||''); comb('E4', b10[1]||'');
+  spread(['D1','D2','D3','D4'], resolveAero(p.salida).box); spread(['T1','T2','T3','T4'], p.eobt);
+  spread(['S1','S2','S3','S4','S5'], p.vel_crucero); spread(['L1','L2','L3','L4','L5'], p.nivel); put('Route1', p.ruta);
+  spread(['D5','D6','D7','D8'], resolveAero(p.destino).box); spread(['T5','T6','T7','T8'], p.eet);
+  spread(['D9','D10','D11','D12'], resolveAero(p.altn).box); spread(['D13','D14','D15','D16'], resolveAero(p.altn2).box);
+  put('Info1', p.otros_18);
+  spread(['T9','T10','T11','T12'], p.endurance);
+  const pob=String(p.pob||''); spread(['P1','P2','P3'], pob.toUpperCase()==='TBN' ? 'TBN' : pob.padStart(3,'0').slice(-3));
+  put('Markings', p.color_marcas); put('Pilot', p.piloto); put('Remarks', p.obs_19);
+
+  const cr=p.radio_emerg||''; if(!cr.includes('U'))strike('C1'); if(!cr.includes('V'))strike('C2'); if(!cr.includes('E'))strike('C3');
+  const cs=p.equipo_superv||''; const noS=!cs; if(noS)strike('C4'); if(noS||!cs.includes('P'))strike('C5'); if(noS||!cs.includes('D'))strike('C6'); if(noS||!cs.includes('M'))strike('C7'); if(noS||!cs.includes('J'))strike('C8');
+  const cj=p.chalecos||''; const noJ=!cj; if(noJ)strike('C9'); if(noJ||!cj.includes('L'))strike('C10'); if(noJ||!cj.includes('F'))strike('C11'); if(noJ||!cj.includes('U'))strike('C12'); if(noJ||!cj.includes('V'))strike('C13');
+  strike('C14'); strike('C15');
+  if(!p.obs_19) strike('C16');
+
+  if(p.firma){
+    try{
+      const png=await pdf.embedPng(p.firma);
+      const SCALE=0.36;
+      const SW=png.width*SCALE, SH=png.height*SCALE;
+      const SX=98, SY_TOP=746;
+      page.drawImage(png,{x:SX, y:H-SY_TOP-SH, width:SW, height:SH});
+    }catch(_){}
+  }
+}
+
+// Genera UN PDF con varios planes (uno por hoja). planes = array de objetos borrador.
+async function generarPDFCombinado(planes){
+  if(!planes||!planes.length){ toast('Tildá al menos un plan','warn'); return; }
+  // ordenar por fecha y hora local del vuelo (cronologico), no por orden de creacion
+  planes=planes.slice().sort((a,b)=>((a.fecha_local||'')+' '+(a.hora_local||'')).localeCompare((b.fecha_local||'')+' '+(b.hora_local||'')));
+  try{
+    toast('Generando PDF combinado ('+planes.length+')…');
+    const {PDFDocument}=PDFLib;
+    const baseBytes=new Uint8Array(await fetch(FORM_PDF).then(r=>{ if(!r.ok) throw new Error('no se encontró '+FORM_PDF); return r.arrayBuffer(); }));
+    const master=await PDFDocument.create();
+    for(const p of planes){
+      const tmp=await PDFDocument.load(baseBytes.slice(0));
+      await dibujarPlan(tmp, p);
+      const [pg]=await master.copyPages(tmp,[0]);
+      master.addPage(pg);
+    }
+    const bytes=await master.save({useObjectStreams:false});
+    const blob=new Blob([bytes],{type:'application/pdf'});
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement('a'); link.href=url;
+    const hoy=new Date().toISOString().slice(0,10).replace(/-/g,'');
+    link.download='FPL_combinado_'+hoy+'_'+planes.length+'planes.pdf'; link.click();
+    setTimeout(()=>URL.revokeObjectURL(url),3000);
+    planes.forEach(p=>auditarFPLData(p));   // una entrada de auditoria por plan
+    toast('PDF combinado generado · '+planes.length+' planes','ok');
+  }catch(e){ console.error(e); toast('Error generando PDF combinado: '+e.message,'bad'); }
+}
+
 async function generarPDF(){
   const {E,A,bad}=validar(); pintarValidacion(E,A,bad);
   if(E.length){ toast('Corregí los datos antes de generar el PDF','bad'); $('valbox').scrollIntoView({behavior:'smooth',block:'center'}); return; }
@@ -1035,56 +1145,7 @@ async function generarPDF(){
     const {PDFDocument, StandardFonts, rgb}=PDFLib;
     const base=await fetch(FORM_PDF).then(r=>{ if(!r.ok) throw new Error('no se encontró '+FORM_PDF); return r.arrayBuffer(); });
     const pdf=await PDFDocument.load(base);
-    const page=pdf.getPages()[0]; const H=page.getHeight();
-    const font=await pdf.embedFont(StandardFonts.Helvetica);
-    const ink=rgb(0,0,0.55), black=rgb(0,0,0);
-
-    const put=(n,str,size)=>{ const r=RECTS[n]; if(!r||str==null||str==='')return; str=String(str).toUpperCase();
-      let s=size||Math.min(9.5,r[3]-2);
-      const maxw=r[2]-3, tw=font.widthOfTextAtSize(str,s);           // achicar si no entra en el ancho de la caja
-      if(tw>maxw){ s=Math.max(5, s*maxw/tw); }
-      page.drawText(str,{x:r[0]+1.5, y:H-r[1]-r[3]+(r[3]-s)/2+0.5, size:s, font, color:ink}); };
-    const comb=(n,ch)=>{ const r=RECTS[n]; if(!r||!ch)return; ch=String(ch).toUpperCase(); const s=Math.min(11,r[3]-1); const cw=font.widthOfTextAtSize(ch,s);
-      page.drawText(ch,{x:r[0]+(r[2]-cw)/2, y:H-r[1]-r[3]+(r[3]-s)/2+0.5, size:s, font, color:ink}); };
-    const spread=(names,str)=>{ str=(str||'').toString(); names.forEach((n,i)=>comb(n,str[i]||'')); };
-    const strike=(n)=>{ const r=RECTS[n]; if(!r)return;
-      page.drawLine({start:{x:r[0]+1,y:H-r[1]-r[3]+1}, end:{x:r[0]+r[2]-1,y:H-r[1]-1}, thickness:1.1, color:black});
-      page.drawLine({start:{x:r[0]+1,y:H-r[1]-1}, end:{x:r[0]+r[2]-1,y:H-r[1]-r[3]+1}, thickness:1.1, color:black}); };
-
-    spread(['ID1','ID2','ID3','ID4','ID5','ID6','ID7'], vU('f7'));                  // 7
-    comb('FR',$('f8r').value); comb('TF',$('f8t').value);                          // 8
-    const num=($('f9n').value||'').trim(); spread(['N1','N2'], num==='1'?'':num);   // 9 numero
-    spread(['A1','A2','A3','A4'], vU('f9t')); comb('WT',$('f9w').value);            // 9 tipo/estela
-    const a10=vU('f10a'); comb('E1', a10.length>1?a10[a10.length-2]:''); comb('E2', a10[a10.length-1]||''); // 10a
-    const b10=vU('f10b'); comb('E3', b10[0]||''); comb('E4', b10[1]||'');           // 10b
-    spread(['D1','D2','D3','D4'], resolveAero(vU('f13a')).box); spread(['T1','T2','T3','T4'], u.eobt); // 13
-    spread(['S1','S2','S3','S4','S5'], vU('f15v')); spread(['L1','L2','L3','L4','L5'], vU('f15l')); put('Route1', vU('f15r')); // 15
-    spread(['D5','D6','D7','D8'], resolveAero(vU('f16d')).box); spread(['T5','T6','T7','T8'], $('f16eet').value);  // 16 destino/eet
-    spread(['D9','D10','D11','D12'], resolveAero(vU('f16a1')).box); spread(['D13','D14','D15','D16'], resolveAero(vU('f16a2')).box); // 16 altn
-    put('Info1', item18(u.dof));                                                   // 18
-    spread(['T9','T10','T11','T12'], $('f19e').value);                             // 19 autonomia
-    spread(['P1','P2','P3'], vU('f19p')==='TBN' ? 'TBN' : ($('f19p').value||'').padStart(3,'0').slice(-3)); // 19 POB
-    put('Markings', vU('f19a')); put('Pilot', $('f19c').value); put('Remarks', vU('f19n'));
-
-    // item 19 — convencion de tachado: tachar = NO disponible
-    const r=checks('r19'); if(!r.includes('U'))strike('C1'); if(!r.includes('V'))strike('C2'); if(!r.includes('E'))strike('C3');
-    const s=checks('s19'); const noS=!s; if(noS)strike('C4'); if(noS||!s.includes('P'))strike('C5'); if(noS||!s.includes('D'))strike('C6'); if(noS||!s.includes('M'))strike('C7'); if(noS||!s.includes('J'))strike('C8');
-    const j=checks('j19'); const noJ=!j; if(noJ)strike('C9'); if(noJ||!j.includes('L'))strike('C10'); if(noJ||!j.includes('F'))strike('C11'); if(noJ||!j.includes('U'))strike('C12'); if(noJ||!j.includes('V'))strike('C13');
-    strike('C14'); strike('C15');                 // sin botes neumáticos
-    if(!vU('f19n')) strike('C16');                // sin observaciones
-
-    // firma incrustada en zona PRESENTADO POR
-    // SCALE = unica perilla de tamano (sube/baja esto). SH/SW salen del PNG
-    // (600x150), asi nunca se deforma. SX/SY_TOP = esquina sup-izq; si pisa el
-    // nombre del piloto subi SY_TOP, si se sale de la caja bajalo.
-    if(firmado){
-      const png=await pdf.embedPng(getFirma());
-      const SCALE=0.36;                                  // antes ~0.29 y achatada
-      const SW=png.width*SCALE, SH=png.height*SCALE;     // 600x150 -> 216x54
-      const SX=98, SY_TOP=746;
-      page.drawImage(png,{x:SX, y:H-SY_TOP-SH, width:SW, height:SH});
-    }
-
+    await dibujarPlan(pdf, planDataDesdeForm());
     const bytes=await pdf.save({useObjectStreams:false});  // false = mejor compatibilidad de visores
     const blob=new Blob([bytes],{type:'application/pdf'});
     const url=URL.createObjectURL(blob);
@@ -1103,16 +1164,19 @@ async function generarPDF(){
 }
 
 /* ============================ AUDITORIA FPL ============================ */
-async function auditarFPL(){
+async function auditarFPL(){ return auditarFPLData(planDataDesdeForm()); }
+
+// Registra en /auditoria un plan a partir de un objeto de datos (form o borrador).
+async function auditarFPLData(p){
   try{
     const fpl={
-      fecha:        $('f13fecha').value||'',
-      origen:       vU('f13a'),
-      destino:      vU('f16d'),
-      hora:         $('f13hora').value||'',
-      tiempo_vuelo: $('f16eet').value||'',
-      matricula:    vU('f7'),
-      comandante:   (($('f19c').value)||'').toUpperCase()
+      fecha:        p.fecha_local||'',
+      origen:       (p.salida||'').toUpperCase(),
+      destino:      (p.destino||'').toUpperCase(),
+      hora:         p.hora_local||'',
+      tiempo_vuelo: p.eet||'',
+      matricula:    (p.matricula||'').toUpperCase(),
+      comandante:   (p.piloto||'').toUpperCase()
     };
     const detalle=(fpl.origen||'?')+' → '+(fpl.destino||'?')+' · '+(fpl.matricula||'?')+
       ' · '+(fpl.hora||'--:--')+' (EET '+(fpl.tiempo_vuelo||'----')+') · cmte '+(fpl.comandante||'?');
@@ -1140,6 +1204,12 @@ $('btnNuevo').onclick=limpiar;
 $('btnRecargar').onclick=cargarLista;
 $('selAvion').addEventListener('change',aplicarAeronave);
 $('btnBorrarTodo').onclick=pedirBorrarBorradores;
+$('btnCombinar').onclick=()=>{
+  const keys=[...document.querySelectorAll('.fpl-pick:checked')].map(c=>c.dataset.key);
+  if(!keys.length){ toast('Tildá al menos un plan de la lista','warn'); return; }
+  const planes=keys.map(k=>_borradoresCache[k]).filter(Boolean);
+  generarPDFCombinado(planes);
+};
 $('btnBorrarFirma').onclick=borrarFirma;
 initFirma();
 
