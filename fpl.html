@@ -2,6 +2,9 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
+  v3.11 ·  Usuario real: los borradores ahora se separan por usuario logueado. Lee la sesión
+           de turnos (sessionStorage 'lvoad-session') al navegar desde turnos en la misma
+           pestaña; si no hay sesión (link externo) usa 'externo'. Reemplaza el 'demo' fijo.
   v3.10 ·  PDF combinado: tildás varios borradores en "Mis planes" y generás UN PDF con todos
            (una hoja por plan, en orden cronológico) para adjuntar de una vez. La descarga la
            hace el usuario; el sistema no envía. Logica de dibujo extraida a dibujarPlan(p).
@@ -144,6 +147,13 @@
           que dibuja desde un objeto (form o borrador). planDataDesdeForm() es la fuente unica
           (la usan guardar, generarPDF y la auditoria). Una entrada de auditoria por plan.
           El sistema NO envia mails: el usuario descarga el PDF y lo adjunta el mismo.
+    v3.11 USUARIO real reemplaza el 'demo' fijo. resolverUsuario() lee sessionStorage
+          'lvoad-session' (sesion de turnos, misma pestaña): instructores/admin traen 'user',
+          alumnos caen a emailKey/nombre. Sin sesion (link externo) => 'externo' (bucket
+          compartido entre externos). Se sanitizan caracteres invalidos de Firebase. Se
+          muestra el usuario activo bajo "Mis planes". La auditoria FPL ahora registra el
+          usuario real en vez de 'demo'. NO requiere cambios en turnos.html (el link a fpl
+          es misma-pestaña, asi que sessionStorage viaja).
 ==================================================================================
 -->
 <html lang="es">
@@ -335,7 +345,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v3.10</span>
+    <span class="ver">v3.11</span>
     <a href="turnos.html" title="Volver al turnero (sin cerrar sesión)" style="font-family:var(--mono);font-size:12px;color:var(--cyan);text-decoration:none;border:1px solid var(--line-hot);border-radius:5px;padding:5px 11px;letter-spacing:1px;transition:.15s" onmouseover="this.style.background='var(--cyan)';this.style.color='#04141a'" onmouseout="this.style.background='transparent';this.style.color='var(--cyan)'">← TURNERO</a>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
@@ -544,6 +554,7 @@
 
   <div class="saved">
     <h2>Mis planes</h2>
+    <div class="hint" id="fpl-usuario-tag" style="font-size:11px;margin:-4px 0 8px"></div>
     <div id="lista"></div>
     <div class="actions" style="margin-top:12px;align-items:center">
       <button type="button" class="ghost" id="btnCombinar">PDF COMBINADO</button>
@@ -566,7 +577,22 @@ const DB = "https://turnos-lv-oad-default-rtdb.firebaseio.com"; // proyecto turn
 const TZ_OFFSET_H = 3; // Rio Grande UTC-3 (sin DST). UTC = local + 3h
 // Usuario actual: en el prototipo no hay login -> placeholder 'demo'.
 // Al integrar en turnos, asignar aqui el emailKey de la sesion (ver /alumnos/{emailKey}).
-let   USUARIO = 'demo';
+// Resuelve el usuario de los borradores: si vino navegando desde turnos.html (misma
+// pestaña), lee la sesión de sessionStorage 'lvoad-session'. Instructores/admin traen
+// 'user'; los alumnos no, así que se cae a emailKey o nombre. Si no hay sesión (entró
+// por link externo / pestaña nueva / no logueado), queda 'externo'.
+function resolverUsuario(){
+  try{
+    const s=JSON.parse(sessionStorage.getItem('lvoad-session')||'null');
+    if(s){
+      const id=s.user||s.emailKey||s.nombre||'';
+      const clean=String(id).trim().replace(/[.#$/\[\]]/g,'_');   // claves válidas en Firebase
+      if(clean) return clean;
+    }
+  }catch(_){}
+  return 'externo';
+}
+let   USUARIO = resolverUsuario();
 let   editKey = null;
 let   _borradoresCache = {};
 
@@ -1228,6 +1254,7 @@ $('f19e').addEventListener('blur',()=>{ fmtHHMM('f19e'); refrescarPreview(); });
 setChecks('r19','E');
 syncThemeIcon();
 if(!$('f13fecha').value) $('f13fecha').value=hoyLocal();
+const _utag=$('fpl-usuario-tag'); if(_utag) _utag.textContent='Usuario: '+USUARIO+(USUARIO==='externo'?' (no logueado · borradores compartidos)':'');
 refrescarPreview(); cargarFlota(); cargarAerodromos(); cargarLista(); reloj(); setInterval(reloj,1000);
 </script>
 </body>
