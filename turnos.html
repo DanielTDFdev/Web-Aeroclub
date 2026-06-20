@@ -1,5 +1,13 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.86
+  FECHA   : 2026-06-19
+  CAMBIOS : Cancelacion: cualquier instructor real (o admin) puede cancelar CUALQUIER turno
+            aprobado, sea de LV-OAD o de otro avion, sin importar quien lo aprobo. Antes el
+            boton CANCELAR estaba atado al aprobador (puedeGestionar), por eso un instructor
+            no podia cancelar turnos auto-aprobados de piloto en LV-ART/LV-MPH. LIBERAR sigue
+            restringido al aprobador o admin. El flujo no cambia: motivo OBLIGATORIO, auditoria
+            (cancelacion_turno) y mail de cancelacion al alumno/piloto.
   VERSION : 5.85
   FECHA   : 2026-06-19
   CAMBIOS : Auditoria FPL: la columna Fecha (fecha del vuelo) ahora se muestra en formato
@@ -419,7 +427,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.85</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.86</div>
   </div>
 
 </div>
@@ -2458,14 +2466,15 @@ window.abrirModal=function(key){
   } else if(r.estado==='aprobado'){
     const aprobador=r.aprobado_por||r.instructor||'';
     const esAdminGlobal=session?.user==='admin'||session?.user==='administrador';
-    const puedeGestionar=esAdminGlobal||(!!session?.nombre&&session.nombre===aprobador);
-    if(puedeGestionar){
+    const puedeLiberar=esAdminGlobal||(!!session?.nombre&&session.nombre===aprobador);
+    const puedeCancelar=esInstructorReal()||esAdminGlobal;   // cualquier instructor (o admin) puede cancelar cualquier turno aprobado
+    if(puedeCancelar){
       const bl=document.createElement('button');bl.textContent='LIBERAR TURNO';
       bl.style.cssText='background:rgba(240,165,0,.1);color:var(--amber);border-color:var(--amber)';
       bl.onclick=async()=>{if(!confirm('¿Liberar este turno?\n\nVolverá a estado PENDIENTE y quedará disponible para que otro instructor lo tome. El alumno conserva su reserva y recibirá un aviso por mail.'))return;const rv=await fbGet('reservas/'+key);if(rv){await fbUpdate('reservas/'+key,{estado:'pendiente',instructor:null,aprobado_por:null,recordatorio_inst_enviado:null,recordatorio_inst_ts:null});await registrarAuditoria('liberacion_turno',session.rol||'instructor','exito',(session.nombre||session.user)+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — liberado por '+(rv.aprobado_por||rv.instructor||'?'));mailLiberacion(rv);}cerrarModal();};
       const bc=document.createElement('button');bc.className='danger';bc.textContent='CANCELAR TURNO';
       bc.onclick=async()=>{if(!confirm('¿Cancelar el turno de '+r.nombre+'?'))return;const motivo=await pedirMotivoCancelacion(true);if(motivo===null)return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre,cancelado_por:session.nombre};upd.obs_cancelacion='Cancelado por el instructor — '+motivo;await fbUpdate('reservas/'+key,upd);await registrarAuditoria('cancelacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — '+motivo);if(!turnoYaPaso(rv))mailCancel(rv,motivo);}cerrarModal();};
-      if(!turnoYaPaso(r)) actions.appendChild(bl);
+      if(puedeLiberar&&!turnoYaPaso(r)) actions.appendChild(bl);
       actions.appendChild(bc);
     } else {
       const nota=document.createElement('div');
