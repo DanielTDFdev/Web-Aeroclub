@@ -1,5 +1,10 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.90
+  FECHA   : 2026-06-21
+  CAMBIOS : UI - boton "Plan de Vuelo" queda SOLO en las tab-bars (alumno e instructor),
+            alineado a la derecha. Se quita del top-nav (eliminada esa instancia .fpl-link).
+            La clase .fpl-link se conserva, ahora usada solo en las tab-bars.
   VERSION : 5.89
   FECHA   : 2026-06-21
   CAMBIOS : UI - boton "Plan de Vuelo" mas prominente. Nueva clase reutilizable .fpl-link
@@ -453,7 +458,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.89</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.90</div>
   </div>
 
 </div>
@@ -468,7 +473,6 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <a href="index.html" style="font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.1em;text-decoration:none;padding:4px 12px;border:1px solid var(--border);border-radius:var(--radius);transition:all .15s" onmouseover="this.style.borderColor='var(--cyan)';this.style.color='var(--cyan)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text3)'">⌂ HOME</a>
   <div id="nav-user-area" style="display:none;align-items:center;gap:8px">
     <span id="nav-user-name" style="font-family:var(--font-mono);font-size:12px;color:var(--text2)"></span>
-    <a href="fpl.html" class="fpl-link">✈ Plan de Vuelo</a>
     <button onclick="logout()" style="font-size:11px;padding:4px 12px">SALIR</button>
   </div>
 </div>
