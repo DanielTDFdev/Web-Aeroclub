@@ -1,5 +1,12 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.89
+  FECHA   : 2026-06-21
+  CAMBIOS : UI - boton "Plan de Vuelo" mas prominente. Nueva clase reutilizable .fpl-link
+            (pill solido ambar). Top-nav: reemplaza el boton chico inline por .fpl-link.
+            Ademas aparece destacado y alineado a la derecha (margin-left:auto) en las
+            tab-bars de alumno e instructor, para acceso desde el menu de acciones del
+            usuario y desde el centro del flujo de turnos.
   VERSION : 5.88
   FECHA   : 2026-06-19
   CAMBIOS : FIX del editor de observacion post-vuelo (v5.87): el gate estaba mal. El cliente
@@ -291,6 +298,9 @@ button.danger:hover{background:rgba(248,81,73,.18)}
 .nav-btn:hover{color:var(--text2);border-color:var(--border)}
 .nav-btn.active{color:var(--cyan);border-color:var(--cyan);background:rgba(0,200,212,.08);text-shadow:0 0 10px rgba(0,200,212,.4);}
 .tab-bar{display:flex;gap:8px;align-items:center;margin-bottom:1.25rem;flex-wrap:wrap;padding:.75rem 0;border-bottom:1px solid var(--border);}
+.fpl-link{font-family:var(--font-mono);font-size:13px;font-weight:700;letter-spacing:.12em;color:#0a0a0a;background:var(--amber);border:1px solid var(--amber);border-radius:var(--radius);padding:8px 22px;text-decoration:none;box-shadow:0 0 14px rgba(240,165,0,.3);transition:all .15s;display:inline-flex;align-items:center;gap:6px;text-transform:uppercase;white-space:nowrap;}
+.fpl-link:hover{background:var(--amber2);box-shadow:0 0 20px rgba(240,165,0,.55);transform:translateY(-1px);}
+.tab-bar .fpl-link{margin-left:auto;}
 
 /* SELECTOR DE AVIÓN */
 .avion-selector{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1.25rem;}
@@ -443,7 +453,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.88</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.89</div>
   </div>
 
 </div>
@@ -458,7 +468,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <a href="index.html" style="font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.1em;text-decoration:none;padding:4px 12px;border:1px solid var(--border);border-radius:var(--radius);transition:all .15s" onmouseover="this.style.borderColor='var(--cyan)';this.style.color='var(--cyan)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text3)'">⌂ HOME</a>
   <div id="nav-user-area" style="display:none;align-items:center;gap:8px">
     <span id="nav-user-name" style="font-family:var(--font-mono);font-size:12px;color:var(--text2)"></span>
-    <a href="fpl.html" style="font-family:var(--font-mono);font-size:12px;font-weight:600;color:var(--amber2);letter-spacing:.12em;text-decoration:none;padding:6px 18px;border:1px solid var(--amber);border-radius:var(--radius);background:rgba(240,165,0,.1);box-shadow:0 0 12px rgba(240,165,0,.18);transition:all .15s" onmouseover="this.style.background='rgba(240,165,0,.22)';this.style.boxShadow='0 0 16px rgba(240,165,0,.38)'" onmouseout="this.style.background='rgba(240,165,0,.1)';this.style.boxShadow='0 0 12px rgba(240,165,0,.18)'">✈ PLAN DE VUELO</a>
+    <a href="fpl.html" class="fpl-link">✈ Plan de Vuelo</a>
     <button onclick="logout()" style="font-size:11px;padding:4px 12px">SALIR</button>
   </div>
 </div>
@@ -530,6 +540,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
     <button class="nav-btn active" id="al-tab-mis"    onclick="showAlumnoTab('mis-turnos')">Mis Turnos</button>
     <button class="nav-btn"        id="al-tab-pedir"  onclick="showAlumnoTab('pedir-turno')">Pedir Turno</button>
     <button class="nav-btn"        id="al-tab-perfil" onclick="showAlumnoTab('perfil')">Mi Perfil</button>
+    <a href="fpl.html" class="fpl-link">✈ Plan de Vuelo</a>
   </div>
   <div id="alumno-mis-turnos" class="screen active">
     <h2>◈ Mis Turnos</h2>
@@ -626,6 +637,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
     <button class="nav-btn"        id="inst-tab-disp"  onclick="showInstTab('disponibilidad')">Mi Disponibilidad</button>
     <button class="nav-btn"        id="inst-tab-cfg"   onclick="showInstTab('config')">Configuración</button>
     <button class="nav-btn"        id="inst-tab-perfil" onclick="showInstTab('perfil')">Mi Perfil</button>
+    <a href="fpl.html" class="fpl-link">✈ Plan de Vuelo</a>
   </div>
   <div id="instructor-reservas" class="screen active">
     <h2>◈ Reservas</h2>
