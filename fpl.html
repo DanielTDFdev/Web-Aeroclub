@@ -2,6 +2,9 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
+  v3.15 ·  Editor de aeronaves: todos los campos de texto se guardan en MAYÚSCULAS
+           (se sumaron info_18, comandante y obs_19n, que faltaban). Los inputs del modal
+           muestran mayúsculas (text-transform) para que lo visto coincida con lo guardado.
   v3.14 ·  Aeronaves personales: usuarios registrados pueden crear/editar/borrar sus propias
            aeronaves (no del club) en /aeronaves_usuario/{USUARIO}. Modal "EDIT AIRCRAFT" con
            tabs FPL (7/9/10/15/18) y SPL (Item 19: R/ S/ J/ D/ A/ C/ N/), incluido D/ botes
@@ -270,6 +273,8 @@
   .swl input:checked + .sw::after{transform:translateX(16px);background:var(--amber)}
   .acdinghy{display:grid;grid-template-columns:70px 80px 1fr;gap:8px;align-items:end}
   .acdinghy .field label{font-size:10px}
+  .acmodal input[type=text],.acmodal input:not([type]),.acmodal textarea{text-transform:uppercase}
+  .acmodal input::placeholder,.acmodal textarea::placeholder{text-transform:none}
   /* contactos del aeródromo */
   .btn-contactos{margin-top:8px;font-family:var(--mono);font-size:12px;letter-spacing:.4px;
     background:transparent;border:1px solid var(--line-hot);color:var(--cyan);border-radius:5px;
@@ -405,7 +410,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v3.14</span>
+    <span class="ver">v3.15</span>
     <a href="turnos.html" title="Volver al turnero (sin cerrar sesión)" style="font-family:var(--mono);font-size:12px;color:var(--cyan);text-decoration:none;border:1px solid var(--line-hot);border-radius:5px;padding:5px 11px;letter-spacing:1px;transition:.15s" onmouseover="this.style.background='var(--cyan)';this.style.color='#04141a'" onmouseout="this.style.background='transparent';this.style.color='var(--cyan)'">← TURNERO</a>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
@@ -1239,13 +1244,13 @@ async function guardarAero(){
     equipo_10a:($('acE10a').value||'S').trim().toUpperCase(),
     equipo_10b:($('acE10b').value||'C').trim().toUpperCase(),
     vel_crucero:($('acVel').value||'').trim().toUpperCase(),
-    info_18:($('acInfo18').value||'').trim(),
+    info_18:($('acInfo18').value||'').trim().toUpperCase(),
     radio_emerg:checks('acr19'), equipo_superv:checks('acs19'), chalecos:checks('acj19'),
-    dinghies:{ num:($('acDnum').value||'').trim(), cap:($('acDcap').value||'').trim(),
+    dinghies:{ num:($('acDnum').value||'').trim().toUpperCase(), cap:($('acDcap').value||'').trim().toUpperCase(),
                cubierta:$('acDcov').checked, color:($('acDcol').value||'').trim().toUpperCase() },
     color_marcas:($('acColor').value||'').trim().toUpperCase(),
-    comandante:($('acCmte').value||'').trim(),
-    obs_19n:($('acN19').value||'').trim()
+    comandante:($('acCmte').value||'').trim().toUpperCase(),
+    obs_19n:($('acN19').value||'').trim().toUpperCase()
   };
   try{
     await fetch(`${DB}/${aeroUserPath()}/${mat}.json`,{method:'PUT',
