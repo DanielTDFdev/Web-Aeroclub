@@ -2,6 +2,13 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
+  v3.14 ·  Aeronaves personales: usuarios registrados pueden crear/editar/borrar sus propias
+           aeronaves (no del club) en /aeronaves_usuario/{USUARIO}. Modal "EDIT AIRCRAFT" con
+           tabs FPL (7/9/10/15/18) y SPL (Item 19: R/ S/ J/ D/ A/ C/ N/), incluido D/ botes
+           neumáticos (NET-NEW: campos en el form, preview y estampado en el PDF). El selector
+           mergea las 3 del club + las personales del usuario (solo el dueño las ve). Al elegir
+           una personal se precarga TODO (incl. SPL/comandante/remarks); las del club mantienen
+           sus defaults. Externos no guardan aeronaves.
   v3.13 ·  Externo aislado por sesión: cada no-logueado recibe un bucket efímero
            /fpl/externo_{id} (id en sessionStorage, muere al cerrar la pestaña), así NO ve
            los borradores de otros externos. El tag lo aclara. La depuración la hace el cron
@@ -219,6 +226,50 @@
   .selavion label{color:var(--txt-dim)}
   .selavion-row{display:flex;align-items:center;gap:9px}
   .selavion-row .plane-ico{flex:0 0 auto;color:var(--cyan);filter:drop-shadow(0 0 4px rgba(34,211,238,.45))}
+  /* ===== editor de aeronaves (modal EDIT AIRCRAFT) ===== */
+  .selavion-row .acbtn{flex:0 0 auto;font-family:var(--mono);font-size:12px;letter-spacing:.4px;
+    background:transparent;border:1px solid var(--line-hot);color:var(--cyan);border-radius:5px;
+    padding:6px 10px;cursor:pointer;transition:.15s;text-transform:none;font-weight:400}
+  .selavion-row .acbtn:hover{background:var(--cyan);color:var(--bg)}
+  .selavion-row .acbtn[disabled]{opacity:.4;cursor:not-allowed}
+  .acbtn.danger{border-color:var(--bad);color:var(--bad)}
+  .acbtn.danger:hover{background:var(--bad);color:var(--bg)}
+  #acOverlay{position:fixed;inset:0;z-index:80;background:rgba(2,6,11,.72);
+    display:none;align-items:flex-start;justify-content:center;padding:34px 14px;overflow:auto}
+  #acOverlay.show{display:flex}
+  .acmodal{width:100%;max-width:520px;background:linear-gradient(180deg,var(--panel2),var(--panel));
+    border:1px solid var(--line-hot);border-radius:8px;box-shadow:0 0 0 1px #000 inset,0 0 30px rgba(0,0,0,.6);
+    padding:0;font-family:var(--disp)}
+  .acmodal-head{display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid var(--line)}
+  .acmodal-head h3{margin:0;font-size:16px;letter-spacing:2px;text-transform:uppercase;color:var(--cyan)}
+  .acmodal-head .acx{margin-left:auto;background:transparent;border:1px solid var(--line);color:var(--txt-dim);
+    border-radius:5px;padding:4px 9px;cursor:pointer;font-size:14px;line-height:1}
+  .acmodal-head .acx:hover{border-color:var(--bad);color:var(--bad)}
+  .actabs{display:flex;gap:8px;padding:12px 16px 0}
+  .actab{flex:1;font-family:var(--mono);font-size:12px;letter-spacing:1.5px;text-transform:uppercase;
+    background:var(--bg);border:1px solid var(--line);color:var(--txt-dim);border-radius:5px 5px 0 0;
+    padding:9px 0;cursor:pointer;font-weight:700}
+  .actab.active{color:var(--cyan);border-color:var(--line-hot);border-bottom-color:var(--panel);background:var(--panel)}
+  .acpane{display:none;padding:14px 16px}
+  .acpane.active{display:block}
+  .acmodal-foot{display:flex;gap:10px;padding:13px 16px;border-top:1px solid var(--line)}
+  .acmodal-foot .save{flex:1;background:var(--amber);color:#1a1200;border:1px solid var(--amber);
+    font-weight:700;letter-spacing:1.5px;text-transform:uppercase;border-radius:5px;padding:11px 0;cursor:pointer}
+  .acmodal-foot .save:hover{background:var(--amber-dim);color:var(--txt)}
+  .acgroup{border:1px solid var(--line);border-radius:6px;padding:9px 11px;margin-bottom:11px;background:var(--bg)}
+  .acgroup .gtit{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--amber);
+    font-weight:700;margin-bottom:7px}
+  .acswitches{display:flex;flex-wrap:wrap;gap:12px}
+  .swl{display:inline-flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--txt);user-select:none}
+  .swl input{display:none}
+  .swl .sw{width:34px;height:18px;border-radius:10px;background:var(--line);border:1px solid var(--line-hot);
+    position:relative;transition:.15s;flex:0 0 auto}
+  .swl .sw::after{content:"";position:absolute;top:1px;left:1px;width:14px;height:14px;border-radius:50%;
+    background:var(--txt-dim);transition:.15s}
+  .swl input:checked + .sw{background:var(--amber-dim)}
+  .swl input:checked + .sw::after{transform:translateX(16px);background:var(--amber)}
+  .acdinghy{display:grid;grid-template-columns:70px 80px 1fr;gap:8px;align-items:end}
+  .acdinghy .field label{font-size:10px}
   /* contactos del aeródromo */
   .btn-contactos{margin-top:8px;font-family:var(--mono);font-size:12px;letter-spacing:.4px;
     background:transparent;border:1px solid var(--line-hot);color:var(--cyan);border-radius:5px;
@@ -354,7 +405,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v3.13</span>
+    <span class="ver">v3.14</span>
     <a href="turnos.html" title="Volver al turnero (sin cerrar sesión)" style="font-family:var(--mono);font-size:12px;color:var(--cyan);text-decoration:none;border:1px solid var(--line-hot);border-radius:5px;padding:5px 11px;letter-spacing:1px;transition:.15s" onmouseover="this.style.background='var(--cyan)';this.style.color='#04141a'" onmouseout="this.style.background='transparent';this.style.color='var(--cyan)'">← TURNERO</a>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
@@ -378,7 +429,11 @@
       <div class="selavion-row">
         <svg class="plane-ico" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L11 19v-5.5z"/></svg>
         <select id="selAvion"><option value="">— Cargando flota —</option></select>
+        <button type="button" class="acbtn" id="acNew" title="Crear una aeronave personal">＋ Nueva</button>
+        <button type="button" class="acbtn" id="acEdit" title="Editar la aeronave personal seleccionada" disabled>✎ Editar</button>
+        <button type="button" class="acbtn danger" id="acDel" title="Borrar la aeronave personal seleccionada" disabled>🗑</button>
       </div>
+      <div class="hint" id="acHint" style="margin-top:6px">Las 3 del club + las tuyas. Solo vos ves tus aeronaves personales.</div>
     </div>
   </fieldset>
 
@@ -533,6 +588,14 @@
         </div>
         <div class="field"><label>N/ Observaciones</label>
           <input id="f19n"></div>
+        <div class="acdinghy" style="margin-top:6px">
+          <div class="field"><label>D/ Nº botes</label><input id="f19dn" maxlength="2" placeholder=""></div>
+          <div class="field"><label>D/ Capacidad</label><input id="f19dc" maxlength="3" placeholder=""></div>
+          <div class="field"><label>D/ Color</label><input id="f19dcol" placeholder="ROJO"></div>
+        </div>
+        <div class="checks" style="margin-top:4px">
+          <label><input type="checkbox" id="f19dcov">D/ Con cubierta (C)</label>
+        </div>
         <div class="hint">El comandante (C/) puede ser distinto de quien carga el plan (p. ej. instructor en vuelo de instrucción).</div>
       </div>
     </fieldset>
@@ -578,6 +641,95 @@
   </div>
 
 </div>
+<div id="acOverlay">
+  <div class="acmodal" role="dialog" aria-modal="true" aria-label="Editar aeronave">
+    <div class="acmodal-head">
+      <h3 id="acTitle">Nueva aeronave</h3>
+      <button type="button" class="acx" id="acClose" title="Cerrar">✕</button>
+    </div>
+    <div class="actabs">
+      <button type="button" class="actab active" id="acTabFpl" data-pane="acPaneFpl">FPL</button>
+      <button type="button" class="actab" id="acTabSpl" data-pane="acPaneSpl">SPL</button>
+    </div>
+
+    <div class="acpane active" id="acPaneFpl">
+      <div class="row">
+        <div class="field"><label>7 · Matrícula / ID</label>
+          <input id="acMat" placeholder="LVXYZ" maxlength="7"></div>
+        <div class="field"><label>9 · Tipo (OACI)</label>
+          <input id="acTipo" placeholder="P28A" maxlength="4"></div>
+        <div class="field" style="max-width:120px"><label>9 · Estela</label>
+          <select id="acEstela">
+            <option value="L">L · Ligera</option>
+            <option value="M">M · Media</option>
+            <option value="H">H · Pesada</option>
+            <option value="J">J · Super</option>
+          </select></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>10a · Equipo COM/NAV</label>
+          <input id="acE10a" placeholder="S" value="S"></div>
+        <div class="field"><label>10b · Vigilancia</label>
+          <input id="acE10b" placeholder="C" value="C"></div>
+        <div class="field" style="max-width:140px"><label>15 · Vel. crucero</label>
+          <input id="acVel" placeholder="N0110" maxlength="5"></div>
+      </div>
+      <div class="field"><label>18 · Otra info (OPR/ RMK/ …)</label>
+        <textarea id="acInfo18" placeholder="OPR/... RMK/..."></textarea></div>
+    </div>
+
+    <div class="acpane" id="acPaneSpl">
+      <div class="acgroup">
+        <div class="gtit">R/ Radio emergencia</div>
+        <div class="acswitches">
+          <label class="swl"><input type="checkbox" class="acr19" value="U"><span class="sw"></span>UHF</label>
+          <label class="swl"><input type="checkbox" class="acr19" value="V"><span class="sw"></span>VHF</label>
+          <label class="swl"><input type="checkbox" class="acr19" value="E"><span class="sw"></span>ELT</label>
+        </div>
+      </div>
+      <div class="acgroup">
+        <div class="gtit">S/ Equipo de supervivencia</div>
+        <div class="acswitches">
+          <label class="swl"><input type="checkbox" class="acs19" value="P"><span class="sw"></span>Polar</label>
+          <label class="swl"><input type="checkbox" class="acs19" value="D"><span class="sw"></span>Desierto</label>
+          <label class="swl"><input type="checkbox" class="acs19" value="M"><span class="sw"></span>Marítimo</label>
+          <label class="swl"><input type="checkbox" class="acs19" value="J"><span class="sw"></span>Jungla</label>
+        </div>
+      </div>
+      <div class="acgroup">
+        <div class="gtit">J/ Chalecos</div>
+        <div class="acswitches">
+          <label class="swl"><input type="checkbox" class="acj19" value="L"><span class="sw"></span>Luz</label>
+          <label class="swl"><input type="checkbox" class="acj19" value="F"><span class="sw"></span>Fluor</label>
+          <label class="swl"><input type="checkbox" class="acj19" value="U"><span class="sw"></span>UHF</label>
+          <label class="swl"><input type="checkbox" class="acj19" value="V"><span class="sw"></span>VHF</label>
+        </div>
+      </div>
+      <div class="acgroup">
+        <div class="gtit">D/ Botes neumáticos</div>
+        <div class="acdinghy">
+          <div class="field"><label>Nº</label><input id="acDnum" maxlength="2"></div>
+          <div class="field"><label>Capacidad</label><input id="acDcap" maxlength="3"></div>
+          <div class="field"><label>Color</label><input id="acDcol" placeholder="ROJO"></div>
+        </div>
+        <div class="acswitches" style="margin-top:8px">
+          <label class="swl"><input type="checkbox" id="acDcov"><span class="sw"></span>Con cubierta (C)</label>
+        </div>
+      </div>
+      <div class="field"><label>A/ Color y marcas</label>
+        <input id="acColor" placeholder="WHITE BLUE"></div>
+      <div class="field"><label>C/ Comandante (default, editable en el plan)</label>
+        <input id="acCmte" placeholder="Apellido, Nombre"></div>
+      <div class="field"><label>N/ Observaciones</label>
+        <input id="acN19"></div>
+    </div>
+
+    <div class="acmodal-foot">
+      <button type="button" class="save" id="acSave">Guardar aeronave</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -728,6 +880,7 @@ function armarMensaje(){
   const r=checks('r19'); if(r) sup+=' R/'+r;
   const s=checks('s19'); if(s) sup+=' S/'+s;
   const j=checks('j19'); if(j) sup+=' J/'+j;
+  const dn=vU('f19dn'); if(dn){ let d='D/'+dn; const dc=vU('f19dc'); if(dc)d+=' '+dc; if($('f19dcov').checked)d+=' C'; const dcol=vU('f19dcol'); if(dcol)d+=' '+dcol; sup+=' '+d; }
   if(v('f19a')) sup+=' A/'+vU('f19a');
   if(v('f19c')) sup+=' C/'+vU('f19c');
   if(v('f19n')) sup+=' N/'+vU('f19n');
@@ -859,6 +1012,7 @@ function cargarEnForm(key,p){
   $('f18').value=(p.otros_18||'').replace(/DOF\/\d{6}\s*/g,'').trim();
   $('f19e').value=p.endurance||''; $('f19p').value=p.pob||''; $('f19a').value=p.color_marcas||'';
   $('f19c').value=p.piloto||''; $('f19n').value=p.obs_19||'';
+  { const d=p.dinghies||{}; $('f19dn').value=d.num||''; $('f19dc').value=d.cap||''; $('f19dcol').value=d.color||''; $('f19dcov').checked=!!d.cubierta; }
   setChecks('r19',p.radio_emerg); setChecks('s19',p.equipo_superv); setChecks('j19',p.chalecos);
   setFirma(p.firma||'');
   pintarValidacion([],[],[]);
@@ -872,6 +1026,7 @@ function limpiar(){
   $('f18').value='OPR/AEROCLUB RIO GRANDE'; $('f13a').value='SAWE';
   $('f13fecha').value=hoyLocal();
   setChecks('r19','E'); setChecks('s19',''); setChecks('j19','');
+  $('f19dn').value=''; $('f19dc').value=''; $('f19dcol').value=''; $('f19dcov').checked=false;
   borrarFirma();
   pintarValidacion([],[],[]);
   refrescarPreview(); toast('Formulario limpio');
@@ -954,7 +1109,12 @@ const FLOTA = {
   "LVART": { tipo:"P28A", estela:"L", equipo_10a:"S", equipo_10b:"C", vel_crucero:"N0110", color_marcas:"WHITE AND BLUE" },
   "LVMPH": { tipo:"P32T", estela:"L", equipo_10a:"S", equipo_10b:"C", vel_crucero:"N0165", color_marcas:"GREY AND WHITE" }
 };
-let flota = {};
+let flota = {};        // flota del club (global /aeronaves)
+let flotaUser = {};    // aeronaves personales del usuario (/aeronaves_usuario/{USUARIO})
+
+// ¿el usuario puede tener aeronaves personales? Solo registrados (no externos).
+function esUsuarioRegistrado(){ return !!USUARIO && USUARIO.indexOf('externo')!==0; }
+function aeroUserPath(){ return `aeronaves_usuario/${USUARIO}`; }
 
 async function cargarFlota(){
   try{
@@ -970,14 +1130,49 @@ async function cargarFlota(){
     console.warn('No se pudo leer /aeronaves, uso flota local.', e);
     flota=FLOTA;
   }
-  const sel=$('selAvion');
-  sel.innerHTML='<option value="">— Elegí aeronave —</option>'+
-    Object.keys(flota).sort().map(m=>`<option value="${m}">${m}</option>`).join('');
+  flotaUser={};
+  if(esUsuarioRegistrado()){
+    try{
+      const ru=await fetch(`${DB}/${aeroUserPath()}.json`);
+      flotaUser=(await ru.json())||{};
+    }catch(e){ console.warn('No se pudieron leer aeronaves personales.', e); flotaUser={}; }
+  }
+  pintarSelectorFlota();
+}
+
+function pintarSelectorFlota(){
+  const sel=$('selAvion'); const prev=sel.value;
+  const optClub=Object.keys(flota).sort().map(m=>`<option value="${m}">${m} · club</option>`).join('');
+  const persKeys=Object.keys(flotaUser).sort();
+  const optPers=persKeys.map(m=>`<option value="${m}">${m}</option>`).join('');
+  let html='<option value="">— Elegí aeronave —</option>';
+  html+=`<optgroup label="Club">${optClub}</optgroup>`;
+  if(persKeys.length) html+=`<optgroup label="Mías">${optPers}</optgroup>`;
+  sel.innerHTML=html;
+  if(prev && (flota[prev]||flotaUser[prev])) sel.value=prev;
+  const acNew=$('acNew'); if(acNew) acNew.disabled=!esUsuarioRegistrado();
+  const hint=$('acHint');
+  if(hint) hint.textContent = esUsuarioRegistrado()
+    ? 'Las 3 del club + las tuyas. Solo vos ves tus aeronaves personales.'
+    : 'Sin sesión: solo las 3 del club. Ingresá para cargar tus propias aeronaves.';
+  actualizarBotonesAero();
+}
+
+function actualizarBotonesAero(){
+  const m=$('selAvion').value;
+  const esPersonal = !!m && !!flotaUser[m];
+  const e=$('acEdit'), d=$('acDel');
+  if(e) e.disabled=!esPersonal;
+  if(d) d.disabled=!esPersonal;
 }
 
 function aplicarAeronave(){
-  const m=$('selAvion').value; if(!m||!flota[m]) return;
-  const a=flota[m];
+  const m=$('selAvion').value; actualizarBotonesAero();
+  if(!m) return;
+  const personal = flotaUser[m];
+  const a = personal || flota[m];
+  if(!a) return;
+  // Campos FPL comunes (club y personal)
   $('f7').value=m;
   $('f9t').value=a.tipo||'';
   $('f9w').value=a.estela||'L';
@@ -985,10 +1180,104 @@ function aplicarAeronave(){
   $('f10b').value=a.equipo_10b||'C';
   $('f15v').value=a.vel_crucero||'';
   $('f19a').value=a.color_marcas||'';
+  // Personal: además trae 18, SPL completo, comandante y N/ (la del club mantiene defaults)
+  if(personal){
+    if(a.info_18!=null) $('f18').value=a.info_18;
+    setChecks('r19', a.radio_emerg||'');
+    setChecks('s19', a.equipo_superv||'');
+    setChecks('j19', a.chalecos||'');
+    const dg=a.dinghies||{};
+    $('f19dn').value=dg.num||''; $('f19dc').value=dg.cap||''; $('f19dcol').value=dg.color||''; $('f19dcov').checked=!!dg.cubierta;
+    $('f19c').value=a.comandante||'';
+    $('f19n').value=a.obs_19n||'';
+  }
   document.querySelectorAll('.bad').forEach(el=>el.classList.remove('bad'));
   refrescarPreview();
-  toast('Datos de '+m+' cargados','ok');
+  toast('Datos de '+m+' cargados'+(personal?' (personal)':''),'ok');
 }
+
+/* ============================ EDITOR DE AERONAVES PERSONALES ============================ */
+let acEditingMat=null;
+
+function acTab(pane){
+  document.querySelectorAll('.actab').forEach(t=>t.classList.toggle('active', t.dataset.pane===pane));
+  document.querySelectorAll('.acpane').forEach(p=>p.classList.toggle('active', p.id===pane));
+}
+
+function abrirEditorAero(mat){
+  if(!esUsuarioRegistrado()){ toast('Ingresá para cargar aeronaves personales','warn'); return; }
+  acEditingMat=mat||null;
+  const a=mat?flotaUser[mat]:null;
+  $('acTitle').textContent=mat?('Editar '+mat):'Nueva aeronave';
+  $('acMat').value=mat||'';
+  $('acTipo').value=(a&&a.tipo)||'';
+  $('acEstela').value=(a&&a.estela)||'L';
+  $('acE10a').value=(a&&a.equipo_10a)||'S';
+  $('acE10b').value=(a&&a.equipo_10b)||'C';
+  $('acVel').value=(a&&a.vel_crucero)||'';
+  $('acInfo18').value=(a&&a.info_18)||'';
+  setChecks('acr19', (a&&a.radio_emerg)||'');
+  setChecks('acs19', (a&&a.equipo_superv)||'');
+  setChecks('acj19', (a&&a.chalecos)||'');
+  const dg=(a&&a.dinghies)||{};
+  $('acDnum').value=dg.num||''; $('acDcap').value=dg.cap||''; $('acDcol').value=dg.color||''; $('acDcov').checked=!!dg.cubierta;
+  $('acColor').value=(a&&a.color_marcas)||'';
+  $('acCmte').value=(a&&a.comandante)||'';
+  $('acN19').value=(a&&a.obs_19n)||'';
+  acTab('acPaneFpl');
+  $('acOverlay').classList.add('show');
+}
+function cerrarEditorAero(){ $('acOverlay').classList.remove('show'); }
+
+async function guardarAero(){
+  const mat=($('acMat').value||'').trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(mat.length<3){ toast('Matrícula inválida (mín. 3 alfanuméricos)','bad'); return; }
+  const tipo=($('acTipo').value||'').trim().toUpperCase();
+  if(!/^[A-Z0-9]{2,4}$/.test(tipo)){ toast('Tipo OACI inválido (2–4, ej. P28A)','bad'); return; }
+  const rec={
+    tipo, estela:$('acEstela').value||'L',
+    equipo_10a:($('acE10a').value||'S').trim().toUpperCase(),
+    equipo_10b:($('acE10b').value||'C').trim().toUpperCase(),
+    vel_crucero:($('acVel').value||'').trim().toUpperCase(),
+    info_18:($('acInfo18').value||'').trim(),
+    radio_emerg:checks('acr19'), equipo_superv:checks('acs19'), chalecos:checks('acj19'),
+    dinghies:{ num:($('acDnum').value||'').trim(), cap:($('acDcap').value||'').trim(),
+               cubierta:$('acDcov').checked, color:($('acDcol').value||'').trim().toUpperCase() },
+    color_marcas:($('acColor').value||'').trim().toUpperCase(),
+    comandante:($('acCmte').value||'').trim(),
+    obs_19n:($('acN19').value||'').trim()
+  };
+  try{
+    await fetch(`${DB}/${aeroUserPath()}/${mat}.json`,{method:'PUT',
+      headers:{'Content-Type':'application/json'}, body:JSON.stringify(rec)});
+    if(acEditingMat && acEditingMat!==mat){   // renombró la matrícula: borra la clave vieja
+      await fetch(`${DB}/${aeroUserPath()}/${acEditingMat}.json`,{method:'DELETE'});
+    }
+    toast('Aeronave '+mat+' guardada','ok');
+    cerrarEditorAero();
+    await cargarFlota();
+    $('selAvion').value=mat; aplicarAeronave();
+  }catch(e){ toast('Error al guardar: '+e.message,'bad'); }
+}
+
+async function borrarAero(mat){
+  if(!mat || !flotaUser[mat]) return;
+  if(!confirm('¿Borrar la aeronave personal '+mat+'? No se puede deshacer.')) return;
+  try{
+    await fetch(`${DB}/${aeroUserPath()}/${mat}.json`,{method:'DELETE'});
+    toast(mat+' borrada','ok');
+    await cargarFlota();
+  }catch(e){ toast('Error al borrar: '+e.message,'bad'); }
+}
+
+$('acNew').onclick   = ()=>abrirEditorAero(null);
+$('acEdit').onclick  = ()=>{ const m=$('selAvion').value; if(flotaUser[m]) abrirEditorAero(m); };
+$('acDel').onclick   = ()=>{ const m=$('selAvion').value; if(flotaUser[m]) borrarAero(m); };
+$('acClose').onclick = cerrarEditorAero;
+$('acSave').onclick  = guardarAero;
+$('acTabFpl').onclick= ()=>acTab('acPaneFpl');
+$('acTabSpl').onclick= ()=>acTab('acPaneSpl');
+$('acOverlay').addEventListener('click', e=>{ if(e.target===$('acOverlay')) cerrarEditorAero(); });
 
 /* ============================ BORRAR BORRADORES ============================ */
 let armado=false, armTimer=null;
@@ -1052,7 +1341,7 @@ function setFirma(dataUrl){
    renderiza en cualquier visor. Subila al repo junto a fpl.html con este nombre.
    RECTS = posicion de cada casilla (x, yTop, ancho, alto) en coords A4 (595x842). */
 const FORM_PDF = 'fpl_base.pdf?v=21';
-const RECTS = {ID1:[220.0,201.3,12.0,12.0],ID2:[235.0,201.0,12.0,12.0],ID3:[248.0,201.3,11.3,12.0],ID4:[262.0,201.0,12.0,12.0],ID5:[276.5,201.0,12.0,12.0],ID6:[291.0,201.0,12.0,12.0],ID7:[303.0,201.0,12.0,12.0],FR:[390.6,200.4,14.2,14.2],TF:[496.7,199.6,14.2,14.2],N1:[82.0,232.5,12.0,14.5],N2:[96.5,232.5,12.0,14.5],A1:[191.3,232.3,12.0,14.7],A2:[205.3,232.3,12.0,14.7],A3:[219.3,232.3,12.0,14.7],A4:[234.3,232.3,12.0,14.7],WT:[345.8,232.5,14.2,14.2],E1:[456.0,232.0,8.0,14.0],E2:[464.0,232.0,32.0,14.0],E3:[497.0,232.0,8.0,14.0],E4:[504.9,232.0,8.0,14.0],D1:[121.0,267.3,12.0,12.0],D2:[135.0,267.5,12.0,12.0],D3:[147.0,267.5,12.0,12.0],D4:[163.0,267.5,12.0,12.0],T1:[267.3,267.0,12.0,12.0],T2:[281.0,267.5,12.0,12.0],T3:[295.0,267.5,12.0,12.0],T4:[310.0,267.5,12.0,12.0],S1:[84.5,302.0,12.0,12.0],S2:[99.0,302.0,9.5,12.0],S3:[111.0,302.0,12.0,12.0],S4:[125.0,302.0,12.0,12.0],S5:[140.0,302.0,12.0,12.0],L1:[175.0,302.0,12.0,12.0],L2:[190.0,302.0,12.0,12.0],L3:[204.5,302.0,12.0,12.0],L4:[219.0,302.0,9.5,12.0],L5:[231.0,302.0,12.0,12.0],Route1:[266.0,301.0,298.0,13.0],Route2:[58.0,316.0,506.5,12.0],Route3:[58.0,330.0,507.0,12.0],Route4:[58.0,345.0,507.0,11.0],Route5:[58.0,359.0,463.0,12.0],D5:[113.0,401.0,12.0,12.0],D6:[127.0,401.0,12.0,12.0],D7:[141.0,401.0,12.0,12.0],D8:[155.0,401.0,12.0,12.0],T5:[229.0,401.0,12.0,12.0],T6:[243.0,401.0,12.0,12.0],T7:[257.0,401.0,12.0,12.0],T8:[271.0,401.0,12.0,12.0],D9:[347.0,401.0,12.0,12.0],D10:[361.0,401.0,12.0,12.0],D11:[375.0,401.0,12.0,12.0],D12:[389.0,401.0,12.0,12.0],D13:[463.0,400.5,12.0,12.0],D14:[478.0,400.5,12.0,12.0],D15:[491.3,400.3,12.0,12.0],D16:[505.3,400.3,12.0,12.0],Info1:[71.0,436.0,494.0,12.0],T9:[96.3,542.0,12.0,12.0],T10:[110.0,542.0,12.0,12.0],T11:[124.0,542.0,12.0,12.0],T12:[138.0,542.0,12.0,12.0],P1:[213.3,542.0,12.0,12.0],P2:[227.0,542.0,12.0,12.0],P3:[240.3,542.0,12.0,12.0],C1:[417.0,538.0,19.0,19.0],C2:[461.3,537.3,20.7,20.0],C3:[510.0,538.0,19.0,19.0],C4:[93.0,581.0,19.0,18.0],C5:[139.0,581.0,18.0,18.0],C6:[182.0,581.0,18.0,18.0],C7:[226.0,581.0,20.0,18.0],C8:[272.0,581.0,19.0,18.0],C9:[325.0,581.0,20.0,18.0],C10:[371.0,581.0,20.0,18.0],C11:[417.0,581.0,18.0,18.0],C12:[462.0,581.0,19.0,18.0],C13:[510.0,581.0,19.0,18.0],C14:[79.0,631.0,17.5,19.0],C15:[219.0,631.0,21.5,19.0],C16:[79.0,698.0,17.5,17.0],Markings:[109.0,668.0,456.0,11.0],Remarks:[108.0,702.0,412.0,11.0],Pilot:[108.0,733.0,280.0,11.0],Filed:[58.0,775.0,177.0,24.0]};
+const RECTS = {ID1:[220.0,201.3,12.0,12.0],ID2:[235.0,201.0,12.0,12.0],ID3:[248.0,201.3,11.3,12.0],ID4:[262.0,201.0,12.0,12.0],ID5:[276.5,201.0,12.0,12.0],ID6:[291.0,201.0,12.0,12.0],ID7:[303.0,201.0,12.0,12.0],FR:[390.6,200.4,14.2,14.2],TF:[496.7,199.6,14.2,14.2],N1:[82.0,232.5,12.0,14.5],N2:[96.5,232.5,12.0,14.5],A1:[191.3,232.3,12.0,14.7],A2:[205.3,232.3,12.0,14.7],A3:[219.3,232.3,12.0,14.7],A4:[234.3,232.3,12.0,14.7],WT:[345.8,232.5,14.2,14.2],E1:[456.0,232.0,8.0,14.0],E2:[464.0,232.0,32.0,14.0],E3:[497.0,232.0,8.0,14.0],E4:[504.9,232.0,8.0,14.0],D1:[121.0,267.3,12.0,12.0],D2:[135.0,267.5,12.0,12.0],D3:[147.0,267.5,12.0,12.0],D4:[163.0,267.5,12.0,12.0],T1:[267.3,267.0,12.0,12.0],T2:[281.0,267.5,12.0,12.0],T3:[295.0,267.5,12.0,12.0],T4:[310.0,267.5,12.0,12.0],S1:[84.5,302.0,12.0,12.0],S2:[99.0,302.0,9.5,12.0],S3:[111.0,302.0,12.0,12.0],S4:[125.0,302.0,12.0,12.0],S5:[140.0,302.0,12.0,12.0],L1:[175.0,302.0,12.0,12.0],L2:[190.0,302.0,12.0,12.0],L3:[204.5,302.0,12.0,12.0],L4:[219.0,302.0,9.5,12.0],L5:[231.0,302.0,12.0,12.0],Route1:[266.0,301.0,298.0,13.0],Route2:[58.0,316.0,506.5,12.0],Route3:[58.0,330.0,507.0,12.0],Route4:[58.0,345.0,507.0,11.0],Route5:[58.0,359.0,463.0,12.0],D5:[113.0,401.0,12.0,12.0],D6:[127.0,401.0,12.0,12.0],D7:[141.0,401.0,12.0,12.0],D8:[155.0,401.0,12.0,12.0],T5:[229.0,401.0,12.0,12.0],T6:[243.0,401.0,12.0,12.0],T7:[257.0,401.0,12.0,12.0],T8:[271.0,401.0,12.0,12.0],D9:[347.0,401.0,12.0,12.0],D10:[361.0,401.0,12.0,12.0],D11:[375.0,401.0,12.0,12.0],D12:[389.0,401.0,12.0,12.0],D13:[463.0,400.5,12.0,12.0],D14:[478.0,400.5,12.0,12.0],D15:[491.3,400.3,12.0,12.0],D16:[505.3,400.3,12.0,12.0],Info1:[71.0,436.0,494.0,12.0],T9:[96.3,542.0,12.0,12.0],T10:[110.0,542.0,12.0,12.0],T11:[124.0,542.0,12.0,12.0],T12:[138.0,542.0,12.0,12.0],P1:[213.3,542.0,12.0,12.0],P2:[227.0,542.0,12.0,12.0],P3:[240.3,542.0,12.0,12.0],C1:[417.0,538.0,19.0,19.0],C2:[461.3,537.3,20.7,20.0],C3:[510.0,538.0,19.0,19.0],C4:[93.0,581.0,19.0,18.0],C5:[139.0,581.0,18.0,18.0],C6:[182.0,581.0,18.0,18.0],C7:[226.0,581.0,20.0,18.0],C8:[272.0,581.0,19.0,18.0],C9:[325.0,581.0,20.0,18.0],C10:[371.0,581.0,20.0,18.0],C11:[417.0,581.0,18.0,18.0],C12:[462.0,581.0,19.0,18.0],C13:[510.0,581.0,19.0,18.0],C14:[79.0,631.0,17.5,19.0],C15:[219.0,631.0,21.5,19.0],C16:[79.0,698.0,17.5,17.0],Markings:[109.0,668.0,456.0,11.0],Remarks:[108.0,702.0,412.0,11.0],Pilot:[108.0,733.0,280.0,11.0],DingNum:[108.0,633.0,24.0,15.0],DingCap:[152.0,633.0,30.0,15.0],DingCol:[256.0,633.0,132.0,15.0],Filed:[58.0,775.0,177.0,24.0]};
 
 /* ===== CONTACTOS AERÓDROMO (ARO/AIS · Jefe · PSA) — fuente yovuelo.com.ar =====
    CONTACTOS[OACI] = [ [telARO,emailARO], [telJefe,emailJefe], [telPSA,emailPSA] ]
@@ -1119,6 +1408,7 @@ function planDataDesdeForm(){
     endurance:$('f19e').value, pob:$('f19p').value,
     radio_emerg:checks('r19'), equipo_superv:checks('s19'), chalecos:checks('j19'),
     color_marcas:vU('f19a'), piloto:$('f19c').value, obs_19:$('f19n').value,
+    dinghies:{num:vU('f19dn'), cap:vU('f19dc'), cubierta:$('f19dcov').checked, color:vU('f19dcol')},
     firma:firmado?getFirma():''
   };
 }
@@ -1160,7 +1450,13 @@ async function dibujarPlan(pdf, p){
   const cr=p.radio_emerg||''; if(!cr.includes('U'))strike('C1'); if(!cr.includes('V'))strike('C2'); if(!cr.includes('E'))strike('C3');
   const cs=p.equipo_superv||''; const noS=!cs; if(noS)strike('C4'); if(noS||!cs.includes('P'))strike('C5'); if(noS||!cs.includes('D'))strike('C6'); if(noS||!cs.includes('M'))strike('C7'); if(noS||!cs.includes('J'))strike('C8');
   const cj=p.chalecos||''; const noJ=!cj; if(noJ)strike('C9'); if(noJ||!cj.includes('L'))strike('C10'); if(noJ||!cj.includes('F'))strike('C11'); if(noJ||!cj.includes('U'))strike('C12'); if(noJ||!cj.includes('V'))strike('C13');
-  strike('C14'); strike('C15');
+  const dg=p.dinghies||{}; const hasDinghy=!!(dg.num&&String(dg.num).trim());
+  if(hasDinghy){
+    put('DingNum', dg.num); if(dg.cap) put('DingCap', dg.cap); if(dg.color) put('DingCol', dg.color);
+    if(!dg.cubierta) strike('C15');     // C15 = CUBIERTA: tachar si NO tiene cubierta
+  } else {
+    strike('C14'); strike('C15');       // sin botes: tachar D/ y cubierta
+  }
   if(!p.obs_19) strike('C16');
 
   if(p.firma){
