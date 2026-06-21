@@ -1,5 +1,11 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.91
+  FECHA   : 2026-06-21
+  CAMBIOS : La sesion de alumno (sessionStorage 'lvoad-session') ahora incluye 'username'
+            (antes solo nombre/email/emailKey). fpl.html lo usa para registrar el username
+            real en la auditoria FPL en vez del correo. Si el alumno no tiene username,
+            fpl cae al nombre real. Efecto recien tras re-login (la sesion se refresca al ingresar).
   VERSION : 5.90
   FECHA   : 2026-06-21
   CAMBIOS : UI - boton "Plan de Vuelo" queda SOLO en las tab-bars (alumno e instructor),
@@ -458,7 +464,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.90</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.91</div>
   </div>
 
 </div>
@@ -1480,7 +1486,7 @@ window.loginAlumno=async function(){
     }
     await registrarAuditoria('login',alumno.rol||'alumno','exito',alumno.nombre+' ('+id+')');
     const rol=alumno.rol||'alumno';
-    session={tipo:'alumno',rol,nombre:alumno.nombre,email:alumno.email,emailKey:k};
+    session={tipo:'alumno',rol,nombre:alumno.nombre,email:alumno.email,emailKey:k,username:alumno.username||''};
     guardarSesion();
     setNavUser(alumno.nombre,rol);
     await loadConfig();
