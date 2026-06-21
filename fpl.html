@@ -2,6 +2,11 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
+  v3.16 ·  FIX casilla 13/16: OACI deprecados se fuerzan a ZZZZ + item 18 (DEP/ DEST/ ALTN/).
+           Caso EAU (Ushuaia/Est. Aeronaval) traía i:SAWO en aerodromos.json y se estampaba
+           SAWO (ya no vigente) en vez de ZZZZ. Nueva lista OACI_DEPRECADOS={SAWO} en fpl.html
+           (sobrevive a la regeneración del JSON). La sustitución IATA→OACI vigente (EZE→SAEZ,
+           USU→SAWH, etc.) NO cambia. El preview ahora muestra "→ ZZZZ (ítem 18)" en deprecados.
   v3.15 ·  Editor de aeronaves: todos los campos de texto se guardan en MAYÚSCULAS
            (se sumaron info_18, comandante y obs_19n, que faltaban). Los inputs del modal
            muestran mayúsculas (text-transform) para que lo visto coincida con lo guardado.
@@ -410,7 +415,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v3.15</span>
+    <span class="ver">v3.16</span>
     <a href="turnos.html" title="Volver al turnero (sin cerrar sesión)" style="font-family:var(--mono);font-size:12px;color:var(--cyan);text-decoration:none;border:1px solid var(--line-hot);border-radius:5px;padding:5px 11px;letter-spacing:1px;transition:.15s" onmouseover="this.style.background='var(--cyan)';this.style.color='#04141a'" onmouseout="this.style.background='transparent';this.style.color='var(--cyan)'">← TURNERO</a>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
@@ -1062,21 +1067,35 @@ async function cargarAerodromos(){
   pintarNombres();
 }
 
+// OACI deprecados / dados de baja: NO se estampan en la casilla 13/16; se fuerza ZZZZ
+// y el detalle (código + nombre + coords) va al item 18 (DEP/ DEST/ ALTN/). Para sumar
+// otra estación sin OACI vigente, agregá su código OACI viejo acá. Vive en fpl.html para
+// que sobreviva a la regeneración de aerodromos.json.
+const OACI_DEPRECADOS = new Set(['SAWO']);   // SAWO = Ushuaia/Est. Aeronaval (EAU), ya no vigente
+
 // Resuelve un codigo de casilla 13/16 a su forma OFICIAL de formulario:
-//  - OACI 4 letras            -> va tal cual
-//  - LAD con OACI publicado   -> va el OACI
-//  - LAD sin OACI (o 3 letras desconocido) -> ZZZZ + dato para item 18 (nombre + coords)
+//  - OACI 4 letras vigente    -> va tal cual
+//  - OACI 4 letras deprecado  -> ZZZZ + dato para item 18
+//  - LAD con OACI vigente      -> va el OACI
+//  - LAD con OACI deprecado, o LAD sin OACI, o 3 letras desconocido -> ZZZZ + item 18
 // Devuelve {box, zzzz, i18}
 function resolveAero(val){
   const c=(val||'').toUpperCase();
   if(!c) return {box:'', zzzz:false, i18:''};
-  if(/^[A-Z]{4}$/.test(c)) return {box:c, zzzz:false, i18:''};
+  if(/^[A-Z]{4}$/.test(c)){
+    if(!OACI_DEPRECADOS.has(c)) return {box:c, zzzz:false, i18:''};
+    // OACI deprecado tipeado directo: buscamos su entrada en la lista para nombre/coords
+    const ent = AERO_OK ? Object.values(AERO).find(x=>x && x.i===c) : null;
+    const nom = ent ? ent.n : '';
+    const co  = (ent && ent.c) ? ' '+ent.c : '';
+    return {box:'ZZZZ', zzzz:true, i18:((c+' '+nom).trim()+co).trim()};
+  }
   if(!AERO_OK) return {box:c, zzzz:false, i18:''};            // sin lista, no decidimos ZZZZ
   const a = AERO[c];
-  if(a && a.i) return {box:a.i, zzzz:false, i18:''};          // LAD con OACI -> usar OACI
+  if(a && a.i && !OACI_DEPRECADOS.has(a.i)) return {box:a.i, zzzz:false, i18:''};  // LAD con OACI vigente
   const nombre = a ? a.n : '';                                // nombre del aeródromo
   const coords = (a && a.c) ? ' '+a.c : '';
-  // formato: <LAD> <NOMBRE> <COORDS>  (ej. THN TOLHUIN 5430S06710W)
+  // formato: <LAD> <NOMBRE> <COORDS>  (ej. THN TOLHUIN 5430S06710W ; EAU USHUAIA/EST. AERONAVAL 5449S06818W)
   return {box:'ZZZZ', zzzz:true, i18:((c+' '+nombre).trim()+coords).trim()};
 }
 
@@ -1089,7 +1108,9 @@ function aeroInfo(id){
   const isLAD = c.length===3;
   const kind = isLAD ? ' (LAD)' : '';       // 3 letras = Lugar Apto Declarado
   let suf='';
-  if(a && isLAD) suf = a.i ? ' → '+a.i : ' → ZZZZ (ítem 18)';  // cómo se presentará
+  const r = resolveAero(c);
+  if(r.zzzz) suf = ' → ZZZZ (ítem 18)';        // OACI deprecado / LAD sin OACI -> ZZZZ
+  else if(isLAD) suf = ' → '+r.box;            // LAD que resuelve a OACI vigente
   return a ? {found:true,  label:c+kind+' · '+(a.n||a.m)+suf}
            : {found:false, label:c+kind+' · no está en la lista (verificá)'};
 }
