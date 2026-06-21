@@ -257,13 +257,6 @@ def fpl_purga_externos(ahora_utc):
                 print("  ✗ no se pudo borrar {}: {}".format(etiqueta, e))
 
     print("  borradores FPL externos borrados: {} | errores: {}".format(borrados, errores))
-    if borrados and not DRY_RUN:
-        try:
-            _fb_post_auditoria("purga_fpl_externos", "sistema",
-                               "Purga de {} borrador(es) FPL externo(s) con más de {:g} h".format(
-                                   borrados, FPL_PURGE_HOURS))
-        except Exception as e:
-            print("  ! no se pudo auditar la purga (sigue):", e)
     return errores
 
 
