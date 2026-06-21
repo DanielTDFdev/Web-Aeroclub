@@ -2,6 +2,10 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
+  v3.13 ·  Externo aislado por sesión: cada no-logueado recibe un bucket efímero
+           /fpl/externo_{id} (id en sessionStorage, muere al cerrar la pestaña), así NO ve
+           los borradores de otros externos. El tag lo aclara. La depuración la hace el cron
+           vencimiento_turnos.py: borra borradores FPL externos con más de 1 h de creados.
   v3.12 ·  Auditoría FPL: el campo 'usuario' ahora registra el username real (alumno) o el
            nombre real en vez del emailKey/correo. Nuevo USUARIO_LABEL (user||username||nombre
            ||emailKey, sin sanitizar). El bucket de borradores /fpl/{USUARIO} NO cambia
@@ -350,7 +354,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v3.12</span>
+    <span class="ver">v3.13</span>
     <a href="turnos.html" title="Volver al turnero (sin cerrar sesión)" style="font-family:var(--mono);font-size:12px;color:var(--cyan);text-decoration:none;border:1px solid var(--line-hot);border-radius:5px;padding:5px 11px;letter-spacing:1px;transition:.15s" onmouseover="this.style.background='var(--cyan)';this.style.color='#04141a'" onmouseout="this.style.background='transparent';this.style.color='var(--cyan)'">← TURNERO</a>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
@@ -581,11 +585,27 @@
 const DB = "https://turnos-lv-oad-default-rtdb.firebaseio.com"; // proyecto turnos-lv-oad
 const TZ_OFFSET_H = 3; // Rio Grande UTC-3 (sin DST). UTC = local + 3h
 // Usuario actual: en el prototipo no hay login -> placeholder 'demo'.
+// ID efímero POR SESIÓN para el externo (no logueado): vive en sessionStorage, muere
+// al cerrar la pestaña. Le da a cada externo su PROPIO bucket /fpl/externo_{id}, así NO
+// ve los borradores de otros externos. El cron (vencimiento_turnos.py) borra estos
+// borradores pasada 1 h de creados. Si no hay sessionStorage, cae al bucket compartido
+// 'externo' (degradado, no debería pasar en navegadores normales).
+function externoBucketId(){
+  try{
+    let id=sessionStorage.getItem('lvoad-fpl-externo-id');
+    if(!id){
+      id=(self.crypto&&crypto.randomUUID)?crypto.randomUUID()
+         :(Date.now().toString(36)+Math.random().toString(36).slice(2,10));
+      sessionStorage.setItem('lvoad-fpl-externo-id',id);
+    }
+    return 'externo_'+String(id).replace(/[.#$/\[\]]/g,'_');
+  }catch(_){ return 'externo'; }
+}
 // Al integrar en turnos, asignar aqui el emailKey de la sesion (ver /alumnos/{emailKey}).
 // Resuelve el usuario de los borradores: si vino navegando desde turnos.html (misma
 // pestaña), lee la sesión de sessionStorage 'lvoad-session'. Instructores/admin traen
 // 'user'; los alumnos no, así que se cae a emailKey o nombre. Si no hay sesión (entró
-// por link externo / pestaña nueva / no logueado), queda 'externo'.
+// por link externo / pestaña nueva / no logueado), recibe un bucket efímero por sesión.
 function resolverUsuario(){
   try{
     const s=JSON.parse(sessionStorage.getItem('lvoad-session')||'null');
@@ -595,7 +615,7 @@ function resolverUsuario(){
       if(clean) return clean;
     }
   }catch(_){}
-  return 'externo';
+  return externoBucketId();
 }
 // Etiqueta LEGIBLE del usuario para auditoría y display (NO es clave de Firebase,
 // así que no se sanitiza: conserva acentos/espacios del nombre real). Prioridad:
@@ -1275,7 +1295,7 @@ $('f19e').addEventListener('blur',()=>{ fmtHHMM('f19e'); refrescarPreview(); });
 setChecks('r19','E');
 syncThemeIcon();
 if(!$('f13fecha').value) $('f13fecha').value=hoyLocal();
-const _utag=$('fpl-usuario-tag'); if(_utag) _utag.textContent='Usuario: '+USUARIO_LABEL+(USUARIO==='externo'?' (no logueado · borradores compartidos)':'');
+const _utag=$('fpl-usuario-tag'); if(_utag) _utag.textContent='Usuario: '+USUARIO_LABEL+(USUARIO.indexOf('externo')===0?' (no logueado · borradores de esta sesión, se depuran tras 1 h)':'');
 refrescarPreview(); cargarFlota(); cargarAerodromos(); cargarLista(); reloj(); setInterval(reloj,1000);
 </script>
 </body>
