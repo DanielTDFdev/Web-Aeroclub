@@ -2,6 +2,11 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
+  v3.12 ·  Auditoría FPL: el campo 'usuario' ahora registra el username real (alumno) o el
+           nombre real en vez del emailKey/correo. Nuevo USUARIO_LABEL (user||username||nombre
+           ||emailKey, sin sanitizar). El bucket de borradores /fpl/{USUARIO} NO cambia
+           (sigue usando la clave estable), así no se orfanan borradores. Requiere que
+           turnos.html incluya 'username' en la sesión de alumno (v5.91); si falta, cae a nombre.
   v3.11 ·  Usuario real: los borradores ahora se separan por usuario logueado. Lee la sesión
            de turnos (sessionStorage 'lvoad-session') al navegar desde turnos en la misma
            pestaña; si no hay sesión (link externo) usa 'externo'. Reemplaza el 'demo' fijo.
@@ -345,7 +350,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v3.11</span>
+    <span class="ver">v3.12</span>
     <a href="turnos.html" title="Volver al turnero (sin cerrar sesión)" style="font-family:var(--mono);font-size:12px;color:var(--cyan);text-decoration:none;border:1px solid var(--line-hot);border-radius:5px;padding:5px 11px;letter-spacing:1px;transition:.15s" onmouseover="this.style.background='var(--cyan)';this.style.color='#04141a'" onmouseout="this.style.background='transparent';this.style.color='var(--cyan)'">← TURNERO</a>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
@@ -592,7 +597,23 @@ function resolverUsuario(){
   }catch(_){}
   return 'externo';
 }
+// Etiqueta LEGIBLE del usuario para auditoría y display (NO es clave de Firebase,
+// así que no se sanitiza: conserva acentos/espacios del nombre real). Prioridad:
+// instructor/admin => 'user' (username); alumno => 'username' real si la sesión lo
+// trae, si no 'nombre' real; último recurso emailKey. Sin sesión => 'externo'.
+// El bucket de borradores sigue usando USUARIO (clave estable); esto es solo display.
+function resolverUsuarioLabel(){
+  try{
+    const s=JSON.parse(sessionStorage.getItem('lvoad-session')||'null');
+    if(s){
+      const lbl=s.user||s.username||s.nombre||s.emailKey||'';
+      if(String(lbl).trim()) return String(lbl).trim();
+    }
+  }catch(_){}
+  return 'externo';
+}
 let   USUARIO = resolverUsuario();
+let   USUARIO_LABEL = resolverUsuarioLabel();
 let   editKey = null;
 let   _borradoresCache = {};
 
@@ -1207,7 +1228,7 @@ async function auditarFPLData(p){
     const detalle=(fpl.origen||'?')+' → '+(fpl.destino||'?')+' · '+(fpl.matricula||'?')+
       ' · '+(fpl.hora||'--:--')+' (EET '+(fpl.tiempo_vuelo||'----')+') · cmte '+(fpl.comandante||'?');
     const entry={accion:'fpl_generado', rol:'fpl', resultado:'exito', detalle,
-                 usuario:USUARIO, fpl, ts:new Date().toISOString()};
+                 usuario:USUARIO_LABEL, fpl, ts:new Date().toISOString()};
     await fetch(`${DB}/auditoria.json`,{method:'POST',
       headers:{'Content-Type':'application/json'}, body:JSON.stringify(entry)});
   }catch(e){ console.warn('No se pudo auditar el FPL:',e); }  // nunca frena el PDF
@@ -1254,7 +1275,7 @@ $('f19e').addEventListener('blur',()=>{ fmtHHMM('f19e'); refrescarPreview(); });
 setChecks('r19','E');
 syncThemeIcon();
 if(!$('f13fecha').value) $('f13fecha').value=hoyLocal();
-const _utag=$('fpl-usuario-tag'); if(_utag) _utag.textContent='Usuario: '+USUARIO+(USUARIO==='externo'?' (no logueado · borradores compartidos)':'');
+const _utag=$('fpl-usuario-tag'); if(_utag) _utag.textContent='Usuario: '+USUARIO_LABEL+(USUARIO==='externo'?' (no logueado · borradores compartidos)':'');
 refrescarPreview(); cargarFlota(); cargarAerodromos(); cargarLista(); reloj(); setInterval(reloj,1000);
 </script>
 </body>
