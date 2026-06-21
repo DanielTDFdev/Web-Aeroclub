@@ -15,6 +15,9 @@ Corre desde GitHub Actions (cron). En cada ejecución:
      server-side, con private key). Si el vuelo ya pasó, solo limpia (no manda
      mail: no tiene sentido avisar de un turno viejo).
   5. Registra el vencimiento en /auditoria.
+  6. Purga borradores FPL de externos: borra de los buckets /fpl/externo* los
+     borradores con más de FPL_PURGE_HOURS de creados (fecha_creacion). Cada externo
+     no logueado tiene su propio bucket efímero por sesión; esto limpia los que quedan.
 
 Solo usa la librería estándar de Python (urllib, json, datetime). No requiere pip.
 
@@ -33,6 +36,7 @@ Configuración por variables de entorno (las setea el workflow):
   CLUB_EMAIL           mail del club (va como Reply-To, variable {{email}})
   EXPIRE_HOURS         ventana de vencimiento en horas (default 6, DEBE ser < 12)
   TZ_OFFSET            offset horario local respecto de UTC (default -3, Argentina)
+  FPL_PURGE_HOURS      antigüedad (h) para borrar borradores FPL externos (default 1)
   DRY_RUN              "1" para probar sin enviar, sin marcar, sin auditar (default "0")
 """
 
@@ -52,6 +56,7 @@ PRIVATE_KEY  = os.environ.get("EMAILJS_PRIVATE_KEY", "")
 CLUB_EMAIL   = os.environ.get("CLUB_EMAIL", "")
 EXPIRE_HOURS = float(os.environ.get("EXPIRE_HOURS", "6"))
 TZ_OFFSET    = float(os.environ.get("TZ_OFFSET", "-3"))
+FPL_PURGE_HOURS = float(os.environ.get("FPL_PURGE_HOURS", "1"))
 DRY_RUN      = os.environ.get("DRY_RUN", "0") == "1"
 
 EMAILJS_URL = "https://api.emailjs.com/api/v1.0/email/send"
@@ -82,6 +87,24 @@ def fb_get(path):
     return json.loads(raw) if raw and raw != "null" else None
 
 
+def fb_get_shallow(path):
+    """GET con ?shallow=true: trae solo las claves de primer nivel ({clave: true}),
+    sin descargar el subárbol. Útil para listar buckets sin traer todo /fpl."""
+    url = "{}/{}.json?shallow=true".format(DB_URL, path)
+    req = urllib.request.Request(url, headers={"User-Agent": "aeroclub-cron"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        raw = r.read().decode("utf-8")
+    return json.loads(raw) if raw and raw != "null" else None
+
+
+def fb_delete(path):
+    """DELETE de una clave (reglas de escritura abiertas)."""
+    url = "{}/{}.json".format(DB_URL, path)
+    req = urllib.request.Request(url, method="DELETE",
+                                 headers={"User-Agent": "aeroclub-cron"})
+    urllib.request.urlopen(req, timeout=30).read()
+
+
 def fb_marcar_vencido(key):
     """PATCH la reserva a estado:'vencido' (reglas de escritura abiertas)."""
     url = "{}/reservas/{}.json".format(DB_URL, key)
@@ -96,12 +119,12 @@ def fb_marcar_vencido(key):
     urllib.request.urlopen(req, timeout=30).read()
 
 
-def fb_auditar(detalle):
-    """POST a /auditoria, mismo esquema que registrarAuditoria() de la app."""
+def _fb_post_auditoria(accion, rol, detalle):
+    """POST genérico a /auditoria, mismo esquema que registrarAuditoria() de la app."""
     url = "{}/auditoria.json".format(DB_URL)
     body = json.dumps({
-        "accion": "vencimiento_turno",
-        "rol": "sistema",
+        "accion": accion,
+        "rol": rol,
         "resultado": "exito",
         "detalle": detalle,
         "ts": datetime.now(timezone.utc).isoformat(),
@@ -110,6 +133,11 @@ def fb_auditar(detalle):
                                  headers={"Content-Type": "application/json",
                                           "User-Agent": "aeroclub-cron"})
     urllib.request.urlopen(req, timeout=30).read()
+
+
+def fb_auditar(detalle):
+    """Registra el vencimiento de un turno en /auditoria."""
+    _fb_post_auditoria("vencimiento_turno", "sistema", detalle)
 
 
 def enviar_mail(params):
@@ -164,6 +192,79 @@ def ts_local(r):
         return dt_utc.astimezone(timezone.utc).replace(tzinfo=None) + timedelta(hours=TZ_OFFSET)
     except Exception:
         return None
+
+
+def _parse_iso_utc(s):
+    """ISO (con o sin 'Z') -> datetime aware en UTC. None si no parsea."""
+    if not s:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except Exception:
+        return None
+
+
+def fpl_purga_externos(ahora_utc):
+    """Borra borradores FPL de buckets externos (/fpl/externo*) con más de
+    FPL_PURGE_HOURS de creados (campo fecha_creacion, ISO UTC). Un borrador SIN
+    fecha_creacion legible se considera viejo y se purga. Devuelve cantidad de errores."""
+    print("--")
+    print("== Purga de borradores FPL externos (> {:g} h de creados) ==".format(FPL_PURGE_HOURS))
+    try:
+        top = fb_get_shallow("fpl") or {}
+    except Exception as e:
+        print("  ! no se pudo listar /fpl, se omite la purga:", e)
+        return 1
+
+    ext_keys = [k for k in top.keys() if k == "externo" or k.startswith("externo_")]
+    if not ext_keys:
+        print("  (sin buckets externos)")
+        return 0
+
+    limite = ahora_utc - timedelta(hours=FPL_PURGE_HOURS)
+    borrados = errores = 0
+
+    for bk in ext_keys:
+        try:
+            bucket = fb_get("fpl/" + bk)
+        except Exception as e:
+            print("  ! no se pudo leer fpl/{}: {}".format(bk, e))
+            errores += 1
+            continue
+        if not isinstance(bucket, dict):
+            continue
+        for dk, draft in bucket.items():
+            if not isinstance(draft, dict):
+                continue
+            dt = _parse_iso_utc(draft.get("fecha_creacion"))
+            viejo = (dt is None) or (dt < limite)   # sin fecha legible => purgar
+            if not viejo:
+                continue
+            etiqueta = "fpl/{}/{} (creado {})".format(bk, dk, draft.get("fecha_creacion") or "sin fecha")
+            if DRY_RUN:
+                print("  [DRY] borraría", etiqueta)
+                borrados += 1
+                continue
+            try:
+                fb_delete("fpl/{}/{}".format(bk, dk))
+                borrados += 1
+                print("  ✓ borrado", etiqueta)
+            except Exception as e:
+                errores += 1
+                print("  ✗ no se pudo borrar {}: {}".format(etiqueta, e))
+
+    print("  borradores FPL externos borrados: {} | errores: {}".format(borrados, errores))
+    if borrados and not DRY_RUN:
+        try:
+            _fb_post_auditoria("purga_fpl_externos", "sistema",
+                               "Purga de {} borrador(es) FPL externo(s) con más de {:g} h".format(
+                                   borrados, FPL_PURGE_HOURS))
+        except Exception as e:
+            print("  ! no se pudo auditar la purga (sigue):", e)
+    return errores
 
 
 def main():
@@ -294,7 +395,11 @@ def main():
     print("Pendientes revisados: {} | vencidos: {} | mails: {} | sin ventana: {} | "
           "fuera de ventana: {} | errores: {}".format(
               revisados, vencidos, mails, saltados_sinventana, saltados_fuera, errores))
-    if errores:
+
+    # Purga de borradores FPL externos (concern aparte, mismo cron por pedido).
+    err_fpl = fpl_purga_externos(datetime.now(timezone.utc))
+
+    if errores or err_fpl:
         sys.exit(2)
 
 
