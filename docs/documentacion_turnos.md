@@ -1,7 +1,7 @@
 # Documentación técnica — Sistema de Turnos (turnos.html)
 
 **Aeroclub Río Grande (SAWE) — Tierra del Fuego, Argentina**
-Versión documentada: **turnos.html v5.94** · **fpl.html v3.16** · Fecha: 2026-06-23
+Versión documentada: **turnos.html v5.96** · **fpl.html v3.16** · Fecha: 2026-06-23
 
 > Documento de referencia: describe qué hace cada parte del sistema. Mantener actualizado cuando se agreguen funciones.
 > Además de la app web (`turnos.html`) hay un generador de planes de vuelo (`fpl.html`, §22) y **dos procesos server-side** en GitHub Actions: el recordatorio a instructores (§20) y el vencimiento de pendientes + purga de borradores FPL (§21).
@@ -149,7 +149,7 @@ Modo **sombra**: Auth corre en paralelo, la clave plana es la red de seguridad y
 ## 8. Ciclo de vida de una reserva
 
 1. **Solicitud** (`confirmarTurno`): el usuario elige avión, día y horario; se valida anticipación y colisión de slot. Queda `pendiente` (o `aprobado` si es piloto en avión que no es LV-OAD).
-2. **Aprobación** (modal de detalle, `abrirModal` → botón APROBAR): solo instructor real. Setea `aprobado_por`/`instructor`, audita y manda mail de confirmación (`mailAprob`). Si el instructor abre un pendiente de LV-OAD para un horario en el que **no** declaró disponibilidad, el modal muestra un cartel ámbar de aviso **antes** de aprobar (proactivo, v5.78/v5.81), para no pisar la disponibilidad de otro instructor; igual puede aprobar. Si el turno tiene `sinInstructor:true` (piloto cargó un día sin instructor disponible, v5.94), el modal muestra junto al estado un badge rosa **"sin instructor"**.
+2. **Aprobación** (modal de detalle, `abrirModal` → botón APROBAR): solo instructor real. Setea `aprobado_por`/`instructor`, audita y manda mail de confirmación (`mailAprob`). **Cartel ámbar de aviso** (proactivo, v5.78/v5.81, corregido en v5.96): al abrir un pendiente de LV-OAD, el modal muestra un cartel ámbar **antes** de aprobar solo si el instructor que aprueba **no** declaró disponibilidad en ese horario **y además otro instructor (no de vacaciones) sí lo declaró** — es decir, únicamente cuando realmente estaría pisando un turno que otro tenía previsto cubrir. Lee `/disponibilidad/{fecha}` completo y nombra al/los instructor(es) con ese horario. Si nadie más lo tiene (p. ej. un turno de piloto `sinInstructor:true`), no se muestra. Igual puede aprobar. Si el turno tiene `sinInstructor:true` (v5.94), el modal muestra junto al estado un badge rosa **"sin instructor"**.
 3. **Cancelación**: por el usuario (`cancelarTurnoAlumno`, con motivo opcional) o por instructor/admin (modal, motivo obligatorio). Setea `cancelado_por`, `obs_cancelacion`, audita y manda mail (`mailCancel`). Cualquier instructor real (o admin) puede cancelar cualquier aprobado (v5.86).
 4. **Liberar turno** (solo en turnos aprobados futuros, `abrirModal`): devuelve el turno a `pendiente` sin cancelarlo, limpia `instructor`/`aprobado_por`, audita (`liberacion_turno`) y avisa al alumno (`mailLiberacion`). **Solo el instructor que aprobó, o admin/administrador, puede liberar.**
 5. **Vencimiento**: pasa a `vencido` al pasar su horario (barrido perezoso del cliente) y, para los **pendientes**, también por el cron server-side antes del vuelo (§6, §21).
@@ -173,7 +173,8 @@ Modo **sombra**: Auth corre en paralelo, la clave plana es la red de seguridad y
 ### Calendario de reservas
 - **Vista LISTA** (`renderTodasReservas`): 21 días (7 pasados + 7 actuales + 7 futuros), filtro por avión, columnas con feriados, reservas pasadas tachadas.
 - **Vista SEMANA** (`renderVistaSemana`): semana navegable, color por aeronave, leyenda.
-- **Color rosa "sin instructor"** (v5.94): en ambas vistas, los turnos de piloto en LV-OAD con `sinInstructor:true` se muestran en rosa/fucsia (clase `.cal-block.sin-instructor`, variable `--pink`) **solo mientras están `pendiente`**; el tooltip agrega "SIN INSTRUCTOR". Al aprobarse pasan al verde de aprobado normal.
+- **Color rosa "sin instructor"** (v5.94): en ambas vistas, los turnos de piloto en LV-OAD con `sinInstructor:true` se muestran en rosa/fucsia (clase `.cal-block.sin-instructor`, variable `--pink`) **solo mientras están `pendiente`**; el tooltip agrega "SIN INSTRUCTOR". Al aprobarse pasan al color de aprobado.
+- **Color azul "piloto aprobado"** (v5.95): los turnos `aprobado` de rol `piloto` (sea aprobación automática en aviones que no son LV-OAD, o manual por instructor en LV-OAD) se distinguen del verde de alumno. En **vista LISTA** el bloque va en azul (`.cal-block.aprobado-piloto`, variable `--blue`); en **vista SEMANA** se conserva el color por aeronave y se agrega un acento azul lateral (`.cal-block.pil-aprob`, barra izquierda), con un ítem nuevo en la leyenda ("PILOTO (aprob.)"). El tooltip agrega "turno de piloto". No afecta badges del lado usuario ni la lógica de aprobación.
 - **Línea de hora actual** (`dibujarLineaHoraActual`): punto + hora; **fija (sticky)** al hacer scroll lateral (v5.66); se actualiza cada minuto.
 - **Botón HOY** (`centrarHoy`): recentra la grilla en el día de hoy con scroll suave (v5.66).
 
