@@ -1,7 +1,7 @@
 # Documentación técnica — Sistema de Turnos (turnos.html)
 
 **Aeroclub Río Grande (SAWE) — Tierra del Fuego, Argentina**
-Versión documentada: **turnos.html v5.91** · **fpl.html v3.16** · Fecha: 2026-06-21
+Versión documentada: **turnos.html v5.94** · **fpl.html v3.16** · Fecha: 2026-06-23
 
 > Documento de referencia: describe qué hace cada parte del sistema. Mantener actualizado cuando se agreguen funciones.
 > Además de la app web (`turnos.html`) hay un generador de planes de vuelo (`fpl.html`, §22) y **dos procesos server-side** en GitHub Actions: el recordatorio a instructores (§20) y el vencimiento de pendientes + purga de borradores FPL (§21).
@@ -53,6 +53,7 @@ Clave = nombre de usuario.
 - `avion` — `LV-OAD` | `LV-ART` | `LV-MPH`
 - `obs` — observaciones del usuario
 - `estado` — `pendiente` | `aprobado` | `cancelado` | `vencido`
+- `sinInstructor` — `true` solo en turnos de **piloto en LV-OAD** cargados un día sin instructor con horario disponible (v5.94). Marca de origen: se calcula al confirmar (fresco) y solo se escribe si es `true`. Afecta el color en la UI mientras el turno está `pendiente` (rosa/fucsia); no condiciona la lógica de aprobación.
 - `instructor` — nombre del instructor que actuó (aprobó/canceló)
 - `aprobado_por` — nombre de quien aprobó (para Seguimiento)
 - `cancelado_por` — nombre de quien canceló
@@ -90,7 +91,7 @@ Borradores de usuarios **no logueados**: cada sesión externa recibe un bucket e
 ## 4. Roles y permisos
 
 - **alumno** — solo reserva LV-OAD; cada turno requiere aprobación de instructor; anticipación mínima 12h; horizonte 7 días.
-- **piloto** — reserva las tres aeronaves; en aviones que no son LV-OAD la aprobación es automática y puede reservar rangos de horas; en **LV-OAD reserva como alumno** (1 slot de 1h, queda pendiente de aprobación); anticipación mínima 1h; horizonte 30 días.
+- **piloto** — reserva las tres aeronaves; en aviones que no son LV-OAD la aprobación es automática y puede reservar rangos de horas; en **LV-OAD reserva como alumno** (1 slot de 1h, queda pendiente de aprobación) con una diferencia clave (v5.94): **puede reservar aunque no haya instructor con horario cargado ese día** — solo se verifica que el avión esté disponible y el slot libre, sin exigir la combinación avión + instructor. Esos turnos se marcan `sinInstructor:true` y salen en color rosa hasta que un instructor los apruebe. El alumno, en cambio, sigue viendo únicamente slots con instructor disponible. Anticipación mínima 1h; horizonte 30 días.
 - **pendiente_aprobacion** — usuario recién registrado, sin acceso hasta que un instructor lo apruebe (pantalla de espera).
 - **instructor** (real) — aprueba/cancela/libera turnos, configura horarios, gestiona su disponibilidad y vacaciones. `esInstructorReal()` = sesión instructor que NO es `admin` ni `administrador`.
 - **admin** — acceso de emergencia con clave fija; acceso completo incluida la Zona Peligrosa. **No puede aprobar turnos.**
@@ -108,6 +109,7 @@ Definidas en la constante `AVIONES`: **LV-OAD** (instrucción, Tomahawk PA-38-11
 - **Anticipación mínima:** alumno 12h (`ok12h`), piloto 1h (`ok1h`); se elige por rol en `okAnticipacion()`.
 - **Horizonte máximo:** alumno 7 días, piloto 30 días (`getDays`).
 - **Aprobación:** manual por instructor para LV-OAD y para todo alumno; automática solo para piloto en aviones que no son LV-OAD.
+- **Disponibilidad de instructor para reservar LV-OAD:** el **alumno** solo puede elegir slots donde algún instructor (no de vacaciones) declaró disponibilidad ese día. El **piloto** (v5.94) no tiene esa restricción: puede cargar cualquier slot libre de LV-OAD aunque no haya instructor con horario ese día; el turno igual queda `pendiente` de aprobación y se marca `sinInstructor:true` (color rosa en selector y calendario, tooltip "SIN INSTRUCTOR"). El color rosa solo aplica mientras está `pendiente`; al aprobarse vuelve al verde normal.
 - **Cancelación por el usuario:** piloto sin límite; alumno hasta 2h antes (`puedeAlumnoCancelar`).
 - **Vencimiento:** un turno `pendiente` o `aprobado` pasa a `vencido` cuando su fecha/hora ya pasó (`vencerTurnosPendientes`, barrido **perezoso** del lado del cliente). **Además**, un proceso server-side (cron `vencimiento_turnos.py`, §21) vence los **pendientes** que nadie confirmó dentro de la ventana previa al vuelo (default 6 h antes) y le avisa al alumno por mail, sin depender de que haya alguien con la app abierta. Ojo con la ambigüedad del término: para el cron, `vencido` = pendiente auto-expirado; en el uso coloquial "vencido" suele referirse a un aprobado cuya hora ya pasó (esos llevan editor de observación post-vuelo, §8).
 - **Bloqueo de slot:** `slotsTomados` considera ocupado todo lo que no esté `cancelado` ni `vencido` (es decir, pendiente y aprobado ocupan el slot).
@@ -147,7 +149,7 @@ Modo **sombra**: Auth corre en paralelo, la clave plana es la red de seguridad y
 ## 8. Ciclo de vida de una reserva
 
 1. **Solicitud** (`confirmarTurno`): el usuario elige avión, día y horario; se valida anticipación y colisión de slot. Queda `pendiente` (o `aprobado` si es piloto en avión que no es LV-OAD).
-2. **Aprobación** (modal de detalle, `abrirModal` → botón APROBAR): solo instructor real. Setea `aprobado_por`/`instructor`, audita y manda mail de confirmación (`mailAprob`). Si el instructor abre un pendiente de LV-OAD para un horario en el que **no** declaró disponibilidad, el modal muestra un cartel ámbar de aviso **antes** de aprobar (proactivo, v5.78/v5.81), para no pisar la disponibilidad de otro instructor; igual puede aprobar.
+2. **Aprobación** (modal de detalle, `abrirModal` → botón APROBAR): solo instructor real. Setea `aprobado_por`/`instructor`, audita y manda mail de confirmación (`mailAprob`). Si el instructor abre un pendiente de LV-OAD para un horario en el que **no** declaró disponibilidad, el modal muestra un cartel ámbar de aviso **antes** de aprobar (proactivo, v5.78/v5.81), para no pisar la disponibilidad de otro instructor; igual puede aprobar. Si el turno tiene `sinInstructor:true` (piloto cargó un día sin instructor disponible, v5.94), el modal muestra junto al estado un badge rosa **"sin instructor"**.
 3. **Cancelación**: por el usuario (`cancelarTurnoAlumno`, con motivo opcional) o por instructor/admin (modal, motivo obligatorio). Setea `cancelado_por`, `obs_cancelacion`, audita y manda mail (`mailCancel`). Cualquier instructor real (o admin) puede cancelar cualquier aprobado (v5.86).
 4. **Liberar turno** (solo en turnos aprobados futuros, `abrirModal`): devuelve el turno a `pendiente` sin cancelarlo, limpia `instructor`/`aprobado_por`, audita (`liberacion_turno`) y avisa al alumno (`mailLiberacion`). **Solo el instructor que aprobó, o admin/administrador, puede liberar.**
 5. **Vencimiento**: pasa a `vencido` al pasar su horario (barrido perezoso del cliente) y, para los **pendientes**, también por el cron server-side antes del vuelo (§6, §21).
@@ -159,7 +161,7 @@ Modo **sombra**: Auth corre en paralelo, la clave plana es la red de seguridad y
 - **Pendiente de aprobación**: pantalla de espera para usuarios nuevos.
 - **Usuario (alumno/piloto)** — pestañas (`showAlumnoTab`):
   - *Mis Turnos*: historial con filtro por estado (`setHistFiltro`) y orden (`toggleHistOrden`); cancelar turnos propios.
-  - *Pedir Turno*: selector de avión (pilotos), grilla de días (`renderDaysGrid`, con feriados), slots disponibles (`renderSlots`, filtrados por disponibilidad de instructor en LV-OAD), confirmación.
+  - *Pedir Turno*: selector de avión (pilotos), grilla de días (`renderDaysGrid`, con feriados), slots disponibles (`renderSlots`), confirmación. En LV-OAD los slots se filtran por disponibilidad de instructor **para alumnos**; el **piloto** ve además los slots sin instructor, marcados en rosa con tooltip aclaratorio, y puede reservarlos igual (v5.94).
   - *Mi Perfil*: datos personales (`guardarDatosPerfil`) y cambio de contraseña (`cambiarClave`).
 - **Instructor** — pestañas (`showInstTab`):
   - *Reservas*: estadísticas + calendario (vista LISTA de 21 días y vista SEMANA). **Banner de turnos pendientes** (v5.71/v5.72): cartel ámbar pulsante a nivel de pantalla que avisa "HAY N TURNOS PENDIENTES DE APROBACIÓN"; aparece al ingresar y en tiempo real, **persiste mientras haya pendientes** (sin botón de cerrar), el botón VER TURNOS lleva a Reservas/LISTA (`irAPendientes`), y desaparece solo cuando no quedan pendientes.
@@ -171,6 +173,7 @@ Modo **sombra**: Auth corre en paralelo, la clave plana es la red de seguridad y
 ### Calendario de reservas
 - **Vista LISTA** (`renderTodasReservas`): 21 días (7 pasados + 7 actuales + 7 futuros), filtro por avión, columnas con feriados, reservas pasadas tachadas.
 - **Vista SEMANA** (`renderVistaSemana`): semana navegable, color por aeronave, leyenda.
+- **Color rosa "sin instructor"** (v5.94): en ambas vistas, los turnos de piloto en LV-OAD con `sinInstructor:true` se muestran en rosa/fucsia (clase `.cal-block.sin-instructor`, variable `--pink`) **solo mientras están `pendiente`**; el tooltip agrega "SIN INSTRUCTOR". Al aprobarse pasan al verde de aprobado normal.
 - **Línea de hora actual** (`dibujarLineaHoraActual`): punto + hora; **fija (sticky)** al hacer scroll lateral (v5.66); se actualiza cada minuto.
 - **Botón HOY** (`centrarHoy`): recentra la grilla en el día de hoy con scroll suave (v5.66).
 
@@ -187,12 +190,12 @@ Modo **sombra**: Auth corre en paralelo, la clave plana es la red de seguridad y
 
 ## 11. Disponibilidad de instructores y vacaciones
 
-- **Mi Disponibilidad** (`renderDisponibilidad`): grilla semanal navegable (hasta 30 días adelante) de los slots de LV-OAD; el instructor tilda los horarios en que puede dar vuelo (`dispToggle`, guardado inmediato en `/disponibilidad`). Si desmarca un slot con turno aprobado, ese turno se cancela y avisa al alumno. Solo los slots marcados quedan visibles para reserva (en LV-OAD).
+- **Mi Disponibilidad** (`renderDisponibilidad`): grilla semanal navegable (hasta 30 días adelante) de los slots de LV-OAD; el instructor tilda los horarios en que puede dar vuelo (`dispToggle`, guardado inmediato en `/disponibilidad`). Si desmarca un slot con turno aprobado, ese turno se cancela y avisa al alumno. Solo los slots marcados quedan visibles para reserva en LV-OAD **para alumnos**; los **pilotos** pueden reservar slots sin instructor igualmente (v5.94, ver §4 y §6).
 - **Vacaciones** (`toggleVacaciones` / `renderToggleVacaciones`): suspende la disponibilidad del instructor sin borrar los datos; el admin puede gestionar la de otros (`toggleVacacionesAdmin`). Los instructores en vacaciones se excluyen del filtro de slots visibles.
 
 ## 12. Auditoría
 
-Registro de eventos (`registrarAuditoria`): login (éxito/fallo/bloqueado), registro, alta/aprobación/cancelación/liberación de turnos, vencimiento automático (`vencimiento_turno`), observación post-vuelo (`obs_post_turno`), habilitar/deshabilitar avión, bloquear/desbloquear día, aprobación/rechazo de usuario. Patrón fetch-al-abrir (no tiempo real). Filtros por tipo, texto y fecha. El desplegable "Tipo de evento" incluye liberación de turnos, bloqueo/desbloqueo de días (v5.74) y vencimiento de turnos (v5.82); el mapa `ACCION_LABEL` traduce las acciones a etiquetas legibles. La pantalla de turnos **excluye** los registros `rol:'fpl'` (v5.83), que tienen su propia vista "Audit. FPL" (§10, §22).
+Registro de eventos (`registrarAuditoria`): login (éxito/fallo/bloqueado), registro, alta/aprobación/cancelación/liberación de turnos, vencimiento automático (`vencimiento_turno`), observación post-vuelo (`obs_post_turno`), habilitar/deshabilitar avión, bloquear/desbloquear día, aprobación/rechazo de usuario. El detalle de un `alta_turno` de piloto en LV-OAD sin instructor disponible incluye el sufijo "— SIN INSTRUCTOR" (v5.94). Patrón fetch-al-abrir (no tiempo real). Filtros por tipo, texto y fecha. El desplegable "Tipo de evento" incluye liberación de turnos, bloqueo/desbloqueo de días (v5.74) y vencimiento de turnos (v5.82); el mapa `ACCION_LABEL` traduce las acciones a etiquetas legibles. La pantalla de turnos **excluye** los registros `rol:'fpl'` (v5.83), que tienen su propia vista "Audit. FPL" (§10, §22).
 
 ## 13. Email (EmailJS)
 
@@ -245,7 +248,7 @@ Registro de eventos (`registrarAuditoria`): login (éxito/fallo/bloqueado), regi
 - `getFeriados` — feriados (API + caché).
 
 ### Reserva (lado usuario)
-- `initAvionSelector`, `seleccionarAvion`, `renderDaysGrid`, `selectDay`, `renderSlots`, `slotsTomados`, `selectSlot`, `actualizarLabelRango`, `cancelarSeleccion`, `confirmarTurno`.
+- `initAvionSelector`, `seleccionarAvion`, `renderDaysGrid`, `selectDay`, `renderSlots`, `slotsConInstructorParaDia` (helper que devuelve el Set de horas con instructor disponible un día; reusado por `renderSlots`, `selectSlot` y `confirmarTurno`, v5.94), `slotsTomados`, `selectSlot`, `actualizarLabelRango`, `cancelarSeleccion`, `confirmarTurno`.
 - `showAlumnoTab`, `renderMisTurnos`, `setHistFiltro`, `toggleHistOrden`, `cancelarTurnoAlumno`, `pedirMotivoCancelacion`, `guardarDatosPerfil`, `cambiarClave`.
 
 ### Reserva (lado instructor) / calendario
