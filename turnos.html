@@ -1,5 +1,18 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.94
+  FECHA   : 2026-06-23
+  CAMBIOS : El rol PILOTO puede reservar en LV-OAD aunque no haya instructor con horario
+            cargado ese dia (antes el slot se ocultaba). Solo se verifica que el avion este
+            disponible y que el slot no este tomado. El turno sigue saliendo PENDIENTE y
+            requiere aprobacion de un instructor. Estos turnos "sin instructor" se distinguen
+            visualmente en color ROSA/FUCSIA (variable --pink) tanto en el selector de
+            horarios como en el calendario (vistas LISTA y SEMANA), con tooltip que aclara
+            "SIN INSTRUCTOR". Se guarda flag sinInstructor:true en la reserva. El color rosa
+            solo aplica mientras el turno esta PENDIENTE; al aprobarse pasa al verde normal.
+            Para alumnos NO cambia nada: siguen viendo solo slots con instructor disponible.
+            Nuevo helper slotsConInstructorParaDia(ds) reutilizado por renderSlots,
+            selectSlot y confirmarTurno.
   VERSION : 5.93
   FECHA   : 2026-06-23
   CAMBIOS : Calendario (vistas LISTA y SEMANA): el tooltip (help text) de cada turno ahora
@@ -249,6 +262,7 @@
   --amber:#f0a500;--amber2:#ffc840;--amber-dim:#7a5200;
   --cyan:#00c8d4;--cyan-dim:#003d42;
   --green:#39d353;--red:#f85149;
+  --pink:#e0529c;
   --border:rgba(0,200,212,0.15);--border2:rgba(0,200,212,0.35);
   --radius:4px;--radius-lg:6px;
   --font-mono:'Share Tech Mono',monospace;
@@ -260,6 +274,7 @@
   --amber:#b87000;--amber2:#c87800;--amber-dim:#f5d080;
   --cyan:#0090a0;--cyan-dim:#b0e8ee;
   --green:#1a8a30;--red:#c0392b;
+  --pink:#c0397f;
   --border:rgba(0,144,160,0.2);--border2:rgba(0,144,160,0.45);
 }
 body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px);pointer-events:none;z-index:9999;}
@@ -367,6 +382,9 @@ button.danger:hover{background:rgba(248,81,73,.18)}
 .slot{padding:12px;text-align:center;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--font-mono);font-size:13px;cursor:pointer;background:var(--bg2);color:var(--text2);transition:all .15s;}
 .slot:hover{border-color:var(--amber);color:var(--amber);background:rgba(240,165,0,.06)}
 .slot.selected{border-color:var(--amber);color:var(--amber);background:rgba(240,165,0,.1);box-shadow:0 0 12px rgba(240,165,0,.15)}
+.slot.sin-instructor{border-color:rgba(224,82,156,.55);color:var(--pink);background:rgba(224,82,156,.05);border-style:dashed;}
+.slot.sin-instructor:hover{border-color:var(--pink);color:var(--pink);background:rgba(224,82,156,.12)}
+.slot.sin-instructor.selected{border-style:solid;border-color:var(--pink);background:rgba(224,82,156,.14);box-shadow:0 0 12px rgba(224,82,156,.2)}
 .slot.taken{background:var(--bg);color:var(--text3);cursor:not-allowed;text-decoration:line-through;border-color:var(--border)}
 
 .reserva-item{padding:.85rem 0;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;}
@@ -419,6 +437,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 .cal-block.aprobado{background:rgba(57,211,83,.15);border:1px solid rgba(57,211,83,.45);color:var(--green);}
 .cal-block.cancelado{background:rgba(248,81,73,.18);border:1px solid rgba(248,81,73,.45);color:var(--red);text-decoration:line-through;}
 .cal-block.vencido{background:rgba(120,80,200,.18);border:1px solid rgba(120,80,200,.45);color:#c4aef8;text-decoration:line-through;}
+.cal-block.sin-instructor{background:rgba(224,82,156,.18);border:1px dashed rgba(224,82,156,.6);color:var(--pink);}
 .cal-empty{font-family:var(--font-mono);font-size:12px;color:var(--text3);padding:.75rem 0;letter-spacing:.05em;}
 /* columnas informativas semana anterior / siguiente */
 .cal-table th.col-pasado{color:var(--text3);opacity:.5;font-style:italic;}
@@ -476,7 +495,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.93</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.94</div>
   </div>
 
 </div>
@@ -1900,36 +1919,52 @@ function slotsTomados(ds,avion,data){
   return [...taken];
 }
 
+// Devuelve un Set con las horas de un día que tienen al menos un instructor
+// disponible (excluyendo instructores de vacaciones). Solo aplica a LV-OAD.
+let _slotsConInstructorDia=new Set();   // cache del último día renderizado
+let _slotsConInstructorFecha=null;
+async function slotsConInstructorParaDia(ds){
+  const dispData=await fbGet('disponibilidad/'+ds);
+  const instData=await fbGet('instructores');
+  const set=new Set();
+  if(dispData&&instData){
+    Object.entries(dispData).forEach(([instKey,arr])=>{
+      const instObj=Object.values(instData).find(i=>(i.user||'')===instKey);
+      if(instObj?.vacaciones===true) return; // ignorar de vacaciones
+      if(Array.isArray(arr)) arr.forEach(h=>set.add(h));
+    });
+  } else if(dispData){
+    Object.values(dispData).forEach(arr=>{ if(Array.isArray(arr)) arr.forEach(h=>set.add(h)); });
+  }
+  return set;
+}
+
 async function renderSlots(ds,data){
   const grid=document.getElementById('slots-grid');if(!grid||!selectedAvion)return;
   const taken=slotsTomados(ds,selectedAvion,data);
   document.getElementById('selected-day-label').textContent=ds;
   document.getElementById('slots-section').style.display='block';
-  // Filtrar por disponibilidad de instructores (solo LV-OAD)
-  // Instructores en vacaciones quedan excluidos
-  const dispData=await fbGet('disponibilidad/'+ds);
-  const instData=await fbGet('instructores');
-  let slotsConInstructor=new Set();
-  if(dispData&&instData){
-    Object.entries(dispData).forEach(([instKey,arr])=>{
-      // buscar si este instructor está de vacaciones
-      const instObj=Object.values(instData).find(i=>(i.user||'')=== instKey);
-      if(instObj?.vacaciones===true) return; // ignorar
-      if(Array.isArray(arr)) arr.forEach(h=>slotsConInstructor.add(h));
-    });
-  } else if(dispData){
-    Object.values(dispData).forEach(arr=>{ if(Array.isArray(arr)) arr.forEach(h=>slotsConInstructor.add(h)); });
-  }
   const esOAD=(selectedAvion||'LV-OAD')==='LV-OAD';
-  const avail=horasParaDia(ds,selectedAvion).filter(h=>okAnticipacion(ds,h)&&(!esOAD||slotsConInstructor.has(h)));
+  const esPiloto=(session?.rol||'alumno')==='piloto';
+  // Disponibilidad de instructores (solo relevante en LV-OAD)
+  const slotsConInstructor=esOAD?await slotsConInstructorParaDia(ds):new Set();
+  _slotsConInstructorDia=slotsConInstructor;
+  _slotsConInstructorFecha=ds;
+  // PILOTO en LV-OAD: puede reservar aunque no haya instructor (solo verifica avión/slot).
+  // ALUMNO en LV-OAD: solo ve slots con instructor disponible (sin cambios).
+  const pilotoOADLibre=esOAD&&esPiloto;
+  const avail=horasParaDia(ds,selectedAvion).filter(h=>okAnticipacion(ds,h)&&(!esOAD||pilotoOADLibre||slotsConInstructor.has(h)));
   if(!avail.length){
-    const sinDisp=esOAD&&slotsConInstructor.size===0;
+    const sinDisp=esOAD&&!pilotoOADLibre&&slotsConInstructor.size===0;
     grid.innerHTML='<div class="empty">//'+(sinDisp?' SIN INSTRUCTOR DISPONIBLE PARA ESTE DÍA':' SIN DISPONIBILIDAD (se requiere '+(session?.rol==='piloto'?'1 hora':'12 hs')+' de anticipación)')+'</div>';
     return;
   }
   grid.innerHTML=avail.map(h=>{
     const tk=taken.includes(h),sl=selectedSlot===h;
-    return `<div class="slot${tk?' taken':sl?' selected':''}" data-hora="${h}">${h}</div>`;
+    const sinInst=esOAD&&!slotsConInstructor.has(h);
+    const cls='slot'+(tk?' taken':sl?' selected':'')+(sinInst&&!tk?' sin-instructor':'');
+    const tip=(sinInst&&!tk)?' title="Sin instructor con horario cargado este día — podés reservar igual; quedará pendiente de aprobación"':'';
+    return `<div class="${cls}" data-hora="${h}"${tip}>${h}</div>`;
   }).join('');
   grid.querySelectorAll('.slot:not(.taken)').forEach(s=>s.addEventListener('click',()=>selectSlot(s.dataset.hora)));
 }
@@ -1963,7 +1998,11 @@ function selectSlot(h){
   } else {
     document.getElementById('slot-fin-wrap').innerHTML='';
     document.getElementById('confirm-label').textContent=selectedAvion+' — '+selectedDay+' a las '+h+' hs';
-    document.getElementById('confirm-nota').textContent='▸ Requerirá aprobación del instructor.';
+    const esOAD=(selectedAvion||'LV-OAD')==='LV-OAD';
+    const sinInst=esOAD&&_slotsConInstructorFecha===selectedDay&&!_slotsConInstructorDia.has(h);
+    document.getElementById('confirm-nota').textContent=sinInst
+      ?'▸ No hay instructor con horario cargado este día. El turno se cargará igual y quedará pendiente de aprobación.'
+      :'▸ Requerirá aprobación del instructor.';
   }
   document.getElementById('slot-confirm').style.display='block';
   hideEl('turno-err');hideEl('turno-ok');
@@ -2006,6 +2045,13 @@ window.confirmarTurno=async function(){
   const esPiloto=rol==='piloto';
   const esOAD=(selectedAvion||'LV-OAD')==='LV-OAD';
   const estado=(esPiloto&&!esOAD)?'aprobado':'pendiente';
+  // Marca turnos de piloto en LV-OAD cargados sin instructor con horario ese día.
+  // Recalcula fresco (el instructor pudo cargar disponibilidad entremedio).
+  let sinInstructor=false;
+  if(esPiloto&&esOAD){
+    const slotsInst=await slotsConInstructorParaDia(selectedDay);
+    sinInstructor=!slotsInst.has(selectedSlot);
+  }
   const horas=horasParaDia(selectedDay,selectedAvion);
   const esRango=esPiloto&&!esOAD&&selectedSlotFin&&selectedSlotFin!==selectedSlot;
   await fbPush('reservas',{
@@ -2018,11 +2064,12 @@ window.confirmarTurno=async function(){
     obs,
     estado,
     rol:session.rol||'alumno',
+    ...(sinInstructor?{sinInstructor:true}:{}),
     ts:new Date().toISOString()
   });
   const labelAudit=(esRango?selectedSlot+' a '+selectedSlotFin+' hs':selectedSlot+' hs');
   await registrarAuditoria('alta_turno',session.rol||'alumno','exito',
-    session.nombre+' — '+selectedAvion+' — '+selectedDay+' '+labelAudit);
+    session.nombre+' — '+selectedAvion+' — '+selectedDay+' '+labelAudit+(sinInstructor?' — SIN INSTRUCTOR':''));
   if(estado==='aprobado'){
     const label=esRango?selectedSlot+' a '+selectedSlotFin+' hs':selectedSlot+' hs';
     showOk('turno-ok','// TURNO CONFIRMADO — '+selectedAvion+' '+selectedDay+' '+label);
@@ -2254,7 +2301,10 @@ async function renderTodasReservas(data){
         const rangoLabel=r.horaInicio&&r.horaFin?`<span style="font-size:9px;opacity:.8">${r.horaInicio}–${r.horaFin}</span><br>`:'';
         // reservas pasadas: tachadas
         const estiloExtra=tipo==='pasado'?'text-decoration:line-through;':'';
-        html+=`<div class="cal-block ${r.estado}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'}${tooltipAccion(r)}" style="${estiloExtra}">${avLabel}${rangoLabel}${nombre}</div>`;
+        const sinInst=r.sinInstructor&&r.estado==='pendiente';
+        const colorCls=sinInst?'sin-instructor':r.estado;
+        const tipSin=sinInst?' — SIN INSTRUCTOR (pendiente)':'';
+        html+=`<div class="cal-block ${colorCls}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'}${tipSin}${tooltipAccion(r)}" style="${estiloExtra}">${avLabel}${rangoLabel}${nombre}</div>`;
       });
       html+='</td>';
     });
@@ -2360,7 +2410,10 @@ async function renderVistaSemana(){
         const colorCls=avColor[r.avion||'LV-OAD']||'oad';
         const estadoCls=r.estado==='pendiente'?'pendiente':'';
         const nombre=r.nombre.split(' ')[0];
-        html+=`<div class="cal-block ${colorCls} ${estadoCls}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'} — ${r.estado}${tooltipAccion(r)}">
+        const sinInst=r.sinInstructor&&r.estado==='pendiente';
+        const clases=sinInst?'sin-instructor':colorCls+' '+estadoCls;
+        const tipSin=sinInst?' — SIN INSTRUCTOR':'';
+        html+=`<div class="cal-block ${clases}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'} — ${r.estado}${tipSin}${tooltipAccion(r)}">
           <span style="font-size:9px;opacity:.8">${r.avion||'LV-OAD'}</span><br>${nombre}
         </div>`;
       });
@@ -2494,7 +2547,9 @@ window.abrirModal=function(key){
   const obsTexto=[r.obs?r.obs:'',r.obs_cancelacion?'Cancelación: '+r.obs_cancelacion:'',r.obs_post?'Post-vuelo: '+r.obs_post:''].filter(Boolean).join(' — ');
   if(obsTexto){document.getElementById('md-obs').textContent=obsTexto;obsRow.style.display='flex';}
   else{obsRow.style.display='none';}
-  document.getElementById('md-estado').innerHTML=`<span class="badge badge-${r.estado}">${r.estado}</span>`;
+  const _sinInstBadge=(r.sinInstructor&&r.estado==='pendiente')
+    ?` <span class="badge" style="background:rgba(224,82,156,.14);color:var(--pink);border:1px solid rgba(224,82,156,.45)">sin instructor</span>`:'';
+  document.getElementById('md-estado').innerHTML=`<span class="badge badge-${r.estado}">${r.estado}</span>`+_sinInstBadge;
   if(r.ts){
     const dt=new Date(r.ts);
     const DIAS=['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
