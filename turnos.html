@@ -1,5 +1,25 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.96
+  FECHA   : 2026-06-23
+  CAMBIOS : Fix del cartel ambar de aviso al aprobar un turno de LV-OAD ("estarias pisando
+            el horario de otro instructor"). Antes salia siempre que el instructor que aprueba
+            no tuviera ese horario cargado, AUNQUE no hubiera ningun otro instructor con ese
+            horario (caso tipico con los turnos de piloto sin instructor de v5.94). Ahora el
+            cartel solo aparece si el que aprueba NO figura disponible Y ADEMAS otro instructor
+            (no de vacaciones) SI declaro ese horario; es decir, solo cuando realmente estaria
+            pisando a alguien. El mensaje ahora nombra al/los instructor(es) con ese horario.
+            Lee /disponibilidad/{fecha} completo (antes leia solo el slot del propio usuario).
+  VERSION : 5.95
+  FECHA   : 2026-06-23
+  CAMBIOS : Los turnos APROBADOS de piloto (rol:'piloto' + estado:'aprobado') se distinguen
+            ahora del verde de alumno, tanto si la aprobacion fue automatica (piloto en avion
+            que no es LV-OAD) como manual por instructor (piloto en LV-OAD). Color azul,
+            variable --blue. En el calendario vista LISTA el bloque va en azul
+            (.cal-block.aprobado-piloto); en vista SEMANA se conserva el color por aeronave
+            y se agrega un acento azul lateral (.cal-block.pil-aprob, barra izquierda) + item
+            nuevo en la leyenda. Tooltip agrega "turno de piloto". No cambia ningun badge de
+            estado del lado usuario ni la logica de aprobacion. Acumulativo sobre v5.94.
   VERSION : 5.94
   FECHA   : 2026-06-23
   CAMBIOS : El rol PILOTO puede reservar en LV-OAD aunque no haya instructor con horario
@@ -263,6 +283,7 @@
   --cyan:#00c8d4;--cyan-dim:#003d42;
   --green:#39d353;--red:#f85149;
   --pink:#e0529c;
+  --blue:#4d9fff;
   --border:rgba(0,200,212,0.15);--border2:rgba(0,200,212,0.35);
   --radius:4px;--radius-lg:6px;
   --font-mono:'Share Tech Mono',monospace;
@@ -275,6 +296,7 @@
   --cyan:#0090a0;--cyan-dim:#b0e8ee;
   --green:#1a8a30;--red:#c0392b;
   --pink:#c0397f;
+  --blue:#2563c9;
   --border:rgba(0,144,160,0.2);--border2:rgba(0,144,160,0.45);
 }
 body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px);pointer-events:none;z-index:9999;}
@@ -438,6 +460,8 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 .cal-block.cancelado{background:rgba(248,81,73,.18);border:1px solid rgba(248,81,73,.45);color:var(--red);text-decoration:line-through;}
 .cal-block.vencido{background:rgba(120,80,200,.18);border:1px solid rgba(120,80,200,.45);color:#c4aef8;text-decoration:line-through;}
 .cal-block.sin-instructor{background:rgba(224,82,156,.18);border:1px dashed rgba(224,82,156,.6);color:var(--pink);}
+.cal-block.aprobado-piloto{background:rgba(77,159,255,.16);border:1px solid rgba(77,159,255,.5);color:var(--blue);}
+.cal-block.pil-aprob{box-shadow:inset 3px 0 0 var(--blue);}
 .cal-empty{font-family:var(--font-mono);font-size:12px;color:var(--text3);padding:.75rem 0;letter-spacing:.05em;}
 /* columnas informativas semana anterior / siguiente */
 .cal-table th.col-pasado{color:var(--text3);opacity:.5;font-style:italic;}
@@ -495,7 +519,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.94</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.96</div>
   </div>
 
 </div>
@@ -714,6 +738,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
           <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(240,165,0,.4)"></div>LV-ART</div>
           <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(57,211,83,.4)"></div>LV-MPH</div>
           <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(255,255,255,.15);border:1px dashed rgba(255,255,255,.3)"></div>PENDIENTE</div>
+          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(77,159,255,.15);box-shadow:inset 3px 0 0 var(--blue)"></div>PILOTO (aprob.)</div>
         </div>
       </div>
     </div>
@@ -2302,8 +2327,9 @@ async function renderTodasReservas(data){
         // reservas pasadas: tachadas
         const estiloExtra=tipo==='pasado'?'text-decoration:line-through;':'';
         const sinInst=r.sinInstructor&&r.estado==='pendiente';
-        const colorCls=sinInst?'sin-instructor':r.estado;
-        const tipSin=sinInst?' — SIN INSTRUCTOR (pendiente)':'';
+        const aprobPil=(r.rol==='piloto')&&r.estado==='aprobado';
+        const colorCls=sinInst?'sin-instructor':(aprobPil?'aprobado-piloto':r.estado);
+        const tipSin=sinInst?' — SIN INSTRUCTOR (pendiente)':(aprobPil?' — turno de piloto':'');
         html+=`<div class="cal-block ${colorCls}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'}${tipSin}${tooltipAccion(r)}" style="${estiloExtra}">${avLabel}${rangoLabel}${nombre}</div>`;
       });
       html+='</td>';
@@ -2411,8 +2437,9 @@ async function renderVistaSemana(){
         const estadoCls=r.estado==='pendiente'?'pendiente':'';
         const nombre=r.nombre.split(' ')[0];
         const sinInst=r.sinInstructor&&r.estado==='pendiente';
-        const clases=sinInst?'sin-instructor':colorCls+' '+estadoCls;
-        const tipSin=sinInst?' — SIN INSTRUCTOR':'';
+        const aprobPil=(r.rol==='piloto')&&r.estado==='aprobado';
+        const clases=sinInst?'sin-instructor':(colorCls+' '+estadoCls+(aprobPil?' pil-aprob':''));
+        const tipSin=sinInst?' — SIN INSTRUCTOR':(aprobPil?' — turno de piloto':'');
         html+=`<div class="cal-block ${clases}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'} — ${r.estado}${tipSin}${tooltipAccion(r)}">
           <span style="font-size:9px;opacity:.8">${r.avion||'LV-OAD'}</span><br>${nombre}
         </div>`;
@@ -2573,8 +2600,35 @@ window.abrirModal=function(key){
       const ba=document.createElement('button');ba.className='primary';ba.textContent='APROBAR TURNO';
       ba.onclick=async()=>{if(!confirm('¿Aprobar el turno de '+r.nombre+'?'))return;await fbUpdate('reservas/'+key,{estado:'aprobado',instructor:session.nombre,aprobado_por:session.nombre});await registrarAuditoria('aprobacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(r.avion||'LV-OAD')+' — '+r.fecha+' '+r.hora+' hs — alumno: '+r.nombre);mailAprob(r);cerrarModal();};
       actions.appendChild(ba);
-      // Aviso proactivo (LV-OAD): al abrir el modal, si el instructor no figura disponible en ese horario, muestra un cartel ambar ANTES de aprobar.
-      if((r.avion||'LV-OAD')==='LV-OAD'&&session?.user){(async()=>{let disp=null;try{disp=await fbGet('disponibilidad/'+r.fecha+'/'+session.user);}catch(_){}const slots=Array.isArray(disp)?disp:[];if(!slots.includes(r.hora)){const w=document.createElement('div');w.style.cssText='width:100%;margin-bottom:.25rem;padding:.6rem .8rem;background:rgba(240,165,0,.1);border:1px solid var(--amber);border-left:3px solid var(--amber);border-radius:var(--radius);font-family:var(--font-mono);font-size:11px;color:var(--amber);letter-spacing:.04em;line-height:1.55';w.textContent='⚠ Según tu disponibilidad declarada NO figurás disponible el '+fmtFechaLinda(r.fecha)+' a las '+r.hora+' hs. Si aprobás, podrías estar tomando un turno que otro instructor tenía previsto cubrir.';actions.insertBefore(w,actions.firstChild);}})();}
+      // Aviso proactivo (LV-OAD): muestra un cartel ámbar ANTES de aprobar SOLO si el
+      // instructor que aprueba NO tiene ese horario en su disponibilidad Y ADEMÁS otro
+      // instructor (no de vacaciones) SÍ lo declaró — o sea, si efectivamente estaría
+      // pisando un turno que otro tenía previsto cubrir. Si nadie más tiene ese horario
+      // (p.ej. turno de piloto sin instructor), no se muestra nada. (v5.96)
+      if((r.avion||'LV-OAD')==='LV-OAD'&&session?.user){(async()=>{
+        let dispDia=null,instData=null;
+        try{dispDia=await fbGet('disponibilidad/'+r.fecha);}catch(_){}
+        try{instData=await fbGet('instructores');}catch(_){}
+        const propioSlots=Array.isArray(dispDia?.[session.user])?dispDia[session.user]:[];
+        const propioTiene=propioSlots.includes(r.hora);
+        const otros=[];
+        if(dispDia){
+          Object.entries(dispDia).forEach(([instKey,arr])=>{
+            if(instKey===session.user) return;                 // ignorar al propio
+            if(!Array.isArray(arr)||!arr.includes(r.hora)) return;
+            const instObj=instData?Object.values(instData).find(i=>(i.user||'')===instKey):null;
+            if(instObj?.vacaciones===true) return;             // excluir de vacaciones
+            otros.push(instObj?.nombre||instKey);
+          });
+        }
+        if(!propioTiene&&otros.length){
+          const quienes=[...new Set(otros)].join(', ');
+          const w=document.createElement('div');
+          w.style.cssText='width:100%;margin-bottom:.25rem;padding:.6rem .8rem;background:rgba(240,165,0,.1);border:1px solid var(--amber);border-left:3px solid var(--amber);border-radius:var(--radius);font-family:var(--font-mono);font-size:11px;color:var(--amber);letter-spacing:.04em;line-height:1.55';
+          w.textContent='⚠ Vos NO figurás disponible el '+fmtFechaLinda(r.fecha)+' a las '+r.hora+' hs, pero '+quienes+' sí. Si aprobás, podrías estar tomando un turno que ese instructor tenía previsto cubrir.';
+          actions.insertBefore(w,actions.firstChild);
+        }
+      })();}
     } else {
       const nota=document.createElement('div');
       nota.style.cssText='font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.04em;line-height:1.5;width:100%';
