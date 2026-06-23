@@ -1,10 +1,10 @@
 # Documentación técnica — Sistema de Turnos (turnos.html)
 
 **Aeroclub Río Grande (SAWE) — Tierra del Fuego, Argentina**
-Versión documentada: **turnos.html v5.77** · Fecha: 2026-06-19
+Versión documentada: **turnos.html v5.91** · **fpl.html v3.16** · Fecha: 2026-06-21
 
 > Documento de referencia: describe qué hace cada parte del sistema. Mantener actualizado cuando se agreguen funciones.
-> El sistema incluye además un proceso server-side (GitHub Actions) para el recordatorio automático a instructores — ver §20.
+> Además de la app web (`turnos.html`) hay un generador de planes de vuelo (`fpl.html`, §22) y **dos procesos server-side** en GitHub Actions: el recordatorio a instructores (§20) y el vencimiento de pendientes + purga de borradores FPL (§21).
 
 ---
 
@@ -59,6 +59,7 @@ Clave = nombre de usuario.
 - `obs_cancelacion` — motivo de cancelación
 - `recordatorio_inst_enviado` — `true` si el recordatorio automático al instructor ya se envió para este turno (evita reenvíos). Lo escribe el cron (§20). Se limpia al liberar el turno.
 - `recordatorio_inst_ts` — timestamp ISO del envío del recordatorio.
+- `obs_post` — observación post-vuelo cargada por el instructor que aprobó (o admin) sobre un turno ya pasado (ej. "no se voló por meteo"). Editable desde el modal; se audita como `obs_post_turno` (v5.87/v5.88).
 - `ts` — fecha de solicitud (ISO)
 
 ### `/config/{avionKey}`
@@ -72,6 +73,19 @@ Array de `"HH:MM"` que el instructor marcó como disponibles ese día. La clave 
 
 ### `/auditoria/{pushKey}`
 - `accion`, `rol`, `resultado` (`exito`/`fallo`/`bloqueado`), `detalle`, `ts`
+- Conviven dos tipos de registro: los de **turnos** (los que escribe `turnos.html`) y los de **FPL** (`rol:'fpl'`, `accion:'fpl_*'`, los escribe `fpl.html` al generar un PDF). La pantalla de auditoría de turnos **excluye** los `rol:'fpl'`; estos se ven en su propia sub-pestaña "Audit. FPL" (§10, §22).
+
+### `/aeronaves/{MATRICULA}`
+Flota del club (global, la lee `fpl.html`; auto-seed la primera vez). Datos OACI del avión para precargar el plan de vuelo (casillas 7/9/10/15/19A).
+
+### `/aeronaves_usuario/{USUARIO}/{MATRICULA}`
+Aeronaves **personales** de cada usuario registrado (no las del club). Las crea/edita/borra el dueño desde `fpl.html`; solo el dueño las ve. Incluyen datos FPL (7/9/10/15/18) y SPL (Item 19: R/ S/ J/ D/ A/ C/ N/).
+
+### `/fpl/{USUARIO}/{pushKey}`
+Borradores de plan de vuelo por usuario. `USUARIO` = username/clave estable del usuario logueado (ver §22).
+
+### `/fpl/externo_{uuid}/{pushKey}`
+Borradores de usuarios **no logueados**: cada sesión externa recibe un bucket efímero (`uuid` en `sessionStorage`). El cron de vencimiento (§21) purga los borradores externos con más de 1 h de antigüedad.
 
 ## 4. Roles y permisos
 
@@ -83,6 +97,7 @@ Array de `"HH:MM"` que el instructor marcó como disponibles ese día. La clave 
 - **administrador** — gestión completa salvo edición de horarios/disponibilidad (solo lectura) y Zona Peligrosa; `esAdminRO()` = true. **No puede aprobar turnos.**
 
 > Regla clave (v5.65/v5.68): **solo los instructores reales aprueban turnos**, por cualquier vía (modal de detalle y modal de Consultas). admin/administrador solo pueden cancelar.
+> Cancelación (v5.86): **cualquier instructor real (o admin) puede cancelar cualquier turno aprobado**, sea de LV-OAD o de otro avión, sin importar quién lo aprobó (antes estaba atado al aprobador, lo que impedía cancelar auto-aprobados de piloto en LV-ART/LV-MPH). **Liberar** un turno sí sigue restringido al instructor que aprobó o a admin.
 
 ## 5. Aeronaves y configuración por avión
 
@@ -94,7 +109,7 @@ Definidas en la constante `AVIONES`: **LV-OAD** (instrucción, Tomahawk PA-38-11
 - **Horizonte máximo:** alumno 7 días, piloto 30 días (`getDays`).
 - **Aprobación:** manual por instructor para LV-OAD y para todo alumno; automática solo para piloto en aviones que no son LV-OAD.
 - **Cancelación por el usuario:** piloto sin límite; alumno hasta 2h antes (`puedeAlumnoCancelar`).
-- **Vencimiento:** un turno `pendiente` o `aprobado` pasa a `vencido` cuando su fecha/hora ya pasó (`vencerTurnosPendientes`). Es un barrido **perezoso** (corre del lado del cliente al dispararse el listener de reservas), no un proceso de servidor. *Hoy un pendiente bloquea el slot hasta su horario; ver pendiente de auto-vencimiento en §17.*
+- **Vencimiento:** un turno `pendiente` o `aprobado` pasa a `vencido` cuando su fecha/hora ya pasó (`vencerTurnosPendientes`, barrido **perezoso** del lado del cliente). **Además**, un proceso server-side (cron `vencimiento_turnos.py`, §21) vence los **pendientes** que nadie confirmó dentro de la ventana previa al vuelo (default 6 h antes) y le avisa al alumno por mail, sin depender de que haya alguien con la app abierta. Ojo con la ambigüedad del término: para el cron, `vencido` = pendiente auto-expirado; en el uso coloquial "vencido" suele referirse a un aprobado cuya hora ya pasó (esos llevan editor de observación post-vuelo, §8).
 - **Bloqueo de slot:** `slotsTomados` considera ocupado todo lo que no esté `cancelado` ni `vencido` (es decir, pendiente y aprobado ocupan el slot).
 - **Sesión:** timeout por inactividad de 10 minutos (`startSessionTimeout`/`resetSessionTimer`). La sesión se persiste en `sessionStorage` y se restaura al recargar (`restoreSession`).
 
@@ -132,10 +147,11 @@ Modo **sombra**: Auth corre en paralelo, la clave plana es la red de seguridad y
 ## 8. Ciclo de vida de una reserva
 
 1. **Solicitud** (`confirmarTurno`): el usuario elige avión, día y horario; se valida anticipación y colisión de slot. Queda `pendiente` (o `aprobado` si es piloto en avión que no es LV-OAD).
-2. **Aprobación** (modal de detalle, `abrirModal` → botón APROBAR): solo instructor real. Setea `aprobado_por`/`instructor`, audita y manda mail de confirmación (`mailAprob`).
-3. **Cancelación**: por el usuario (`cancelarTurnoAlumno`, con motivo opcional) o por instructor/admin (modal, motivo obligatorio). Setea `cancelado_por`, `obs_cancelacion`, audita y manda mail (`mailCancel`).
-4. **Liberar turno** (solo en turnos aprobados futuros, `abrirModal`): devuelve el turno a `pendiente` sin cancelarlo, limpia `instructor`/`aprobado_por`, audita (`liberacion_turno`) y avisa al alumno (`mailLiberacion`). **Solo el instructor que aprobó, o admin/administrador, puede liberar o cancelar un aprobado.**
-5. **Vencimiento**: pasa a `vencido` al pasar su horario (§6).
+2. **Aprobación** (modal de detalle, `abrirModal` → botón APROBAR): solo instructor real. Setea `aprobado_por`/`instructor`, audita y manda mail de confirmación (`mailAprob`). Si el instructor abre un pendiente de LV-OAD para un horario en el que **no** declaró disponibilidad, el modal muestra un cartel ámbar de aviso **antes** de aprobar (proactivo, v5.78/v5.81), para no pisar la disponibilidad de otro instructor; igual puede aprobar.
+3. **Cancelación**: por el usuario (`cancelarTurnoAlumno`, con motivo opcional) o por instructor/admin (modal, motivo obligatorio). Setea `cancelado_por`, `obs_cancelacion`, audita y manda mail (`mailCancel`). Cualquier instructor real (o admin) puede cancelar cualquier aprobado (v5.86).
+4. **Liberar turno** (solo en turnos aprobados futuros, `abrirModal`): devuelve el turno a `pendiente` sin cancelarlo, limpia `instructor`/`aprobado_por`, audita (`liberacion_turno`) y avisa al alumno (`mailLiberacion`). **Solo el instructor que aprobó, o admin/administrador, puede liberar.**
+5. **Vencimiento**: pasa a `vencido` al pasar su horario (barrido perezoso del cliente) y, para los **pendientes**, también por el cron server-side antes del vuelo (§6, §21).
+6. **Observación post-vuelo** (v5.87/v5.88): en un turno ya pasado que tuvo aprobador (estado `aprobado` o `vencido` con `aprobado_por`/`instructor`), el modal muestra un editor para cargar `obs_post` (ej. "no se voló por meteo"). Editable por el instructor que aprobó o admin; se audita (`obs_post_turno`) y se ve en la fila OBS. Los `vencido` del cron (pendientes nunca aprobados, sin aprobador) **no** muestran editor.
 
 ## 9. Pantallas y navegación
 
@@ -165,7 +181,8 @@ Modo **sombra**: Auth corre en paralelo, la clave plana es la red de seguridad y
 - **Instructores**: alta (`agregarInstructor`, exige clave ≥6), edición (`abrirModalInst`/`guardarInstructor`, con check de cambio forzado), baja, y toggle de vacaciones por instructor para admin (`toggleVacacionesAdmin`). El alta y la edición incluyen **email** (para el recordatorio, §20) y **celular**; la lista marca "⚠ sin mail" a quienes no tengan email. El propio instructor también puede cargar/editar su email y celular desde Mi Perfil (`guardarNombreInstructor`).
 - **Usuarios**: lista con filtros (texto/rol/estado); aprobar (`aprobarUsuario`, asigna rol) o rechazar (`rechazarUsuario`) pendientes; editar (`abrirModalAlumno`/`guardarAlumno`: nombre, tel, rol, estado_login, reseteo de clave + cambio forzado); eliminar.
 - **Consultas**: búsqueda de turnos por usuario/fechas/avión/estado (`ejecutarConsulta`), estadísticas, exportar CSV (`exportarCSV`), y edición de reserva (`abrirModalCqReserva`/`guardarCqReserva`, solo admin; la opción "Aprobado" está deshabilitada para no-instructores).
-- **Auditoría**: tabla paginada con filtros (`cargarAuditoria`/`filtrarAuditoria`/`renderAuditoria`); borrado por fila solo para `admin` (`borrarAuditoria`).
+- **Auditoría**: tabla paginada con filtros (`cargarAuditoria`/`filtrarAuditoria`/`renderAuditoria`); borrado por fila solo para `admin` (`borrarAuditoria`). **Excluye** los registros `rol:'fpl'`.
+- **Audit. FPL** (solo `admin`, no `administrador`, v5.84): lista los registros que escribe `fpl.html` al generar un PDF (`rol:'fpl'`), con columnas fecha del vuelo (dd/mm/aaaa, v5.85)/origen/destino/hora/tiempo de vuelo/matrícula/comandante (+ registrado y usuario). Separada de la auditoría de turnos: nada se mezcla.
 - **Sistema** (solo admin/administrador): Backup (`ejecutarBackup`) y Restore (`iniciarRestore`/`confirmarRestore`) de la base en JSON; **Zona Peligrosa** (solo `admin`): borrado masivo de turnos por estado y rango (`previewBorrar`/`ejecutarBorrar`).
 
 ## 11. Disponibilidad de instructores y vacaciones
@@ -175,7 +192,7 @@ Modo **sombra**: Auth corre en paralelo, la clave plana es la red de seguridad y
 
 ## 12. Auditoría
 
-Registro de eventos (`registrarAuditoria`): login (éxito/fallo/bloqueado), registro, alta/aprobación/cancelación/liberación de turnos, habilitar/deshabilitar avión, bloquear/desbloquear día, aprobación/rechazo de usuario. Patrón fetch-al-abrir (no tiempo real). Filtros por tipo, texto y fecha. El desplegable "Tipo de evento" incluye liberación de turnos y bloqueo/desbloqueo de días (v5.74); el mapa `ACCION_LABEL` traduce `liberacion_turno` a etiqueta legible.
+Registro de eventos (`registrarAuditoria`): login (éxito/fallo/bloqueado), registro, alta/aprobación/cancelación/liberación de turnos, vencimiento automático (`vencimiento_turno`), observación post-vuelo (`obs_post_turno`), habilitar/deshabilitar avión, bloquear/desbloquear día, aprobación/rechazo de usuario. Patrón fetch-al-abrir (no tiempo real). Filtros por tipo, texto y fecha. El desplegable "Tipo de evento" incluye liberación de turnos, bloqueo/desbloqueo de días (v5.74) y vencimiento de turnos (v5.82); el mapa `ACCION_LABEL` traduce las acciones a etiquetas legibles. La pantalla de turnos **excluye** los registros `rol:'fpl'` (v5.83), que tienen su propia vista "Audit. FPL" (§10, §22).
 
 ## 13. Email (EmailJS)
 
@@ -268,14 +285,14 @@ Registro de eventos (`registrarAuditoria`): login (éxito/fallo/bloqueado), regi
 
 - **Seguridad / Auth:** Fases 1 y 2 hechas (modo sombra). Se dejó **decantar la migración** (los usuarios migran al entrar). Próximo paso de desarrollo: Fase 3 (flujos de contraseña a Auth), que destraba endurecer reglas (Fase 5) y sacar el texto plano (Fase 6). Las 3 cuentas de instructor que tenían clave <6 (`fherlein`, `scarrizo`, `sdelarminat`) **ya fueron reseteadas a 6+** (2026-06-17); no quedan claves cortas pendientes.
 - **Caché que frenaba la migración (resuelto 2026-06-17):** varios usuarios entraban pero no aparecían en Auth porque su navegador servía una **copia vieja cacheada** del `turnos.html` (sin el código de migración) — no era un bug de la app (se verificó el código). Se resolvió con la Cache Rule `no-store` (ver §2): ahora cada navegador carga el HTML fresco, corre el código actual y se dispara la migración perezosa. Los ya pegados a una copia vieja se destraban con una recarga forzada o cuando su caché vence. La decantación continúa con esto resuelto.
-- **Recordatorio automático a instructores (HECHO, 2026-06-19):** implementado como proceso server-side (GitHub Actions cron). Avisa al instructor por mail 12 h antes del turno. Ver §20. Esto dejó montada toda la infraestructura de cron + envío server-side de mail.
-- **Feature en diseño — auto-vencimiento de pendientes:** un turno pendiente debería autorizarse o cancelarse **X horas antes del vuelo**; si ningún instructor lo confirma, cae solo, se libera el slot y **se le avisa al alumno**. Decisiones tomadas: X relativo al horario del vuelo, conviene **X<12h** (p. ej. 6h) para que siempre haya ventana de decisión; el aviso proactivo con nadie online requiere un proceso programado (cron). Borde a manejar: reservas creadas ya dentro de la ventana de X horas. **Ahora es mucho más fácil:** puede reusar la misma infraestructura del recordatorio (§20) — el cron de GitHub Actions, la lectura por REST y el envío server-side por EmailJS ya están resueltos. Sería agregar la lógica de vencimiento al mismo (o un segundo) workflow.
+- **Recordatorio automático a instructores (HECHO, 2026-06-19):** proceso server-side (GitHub Actions cron). Avisa al instructor por mail ~12 h antes del turno. Ver §20.
+- **Auto-vencimiento de pendientes (HECHO, 2026-06-19):** proceso server-side (cron `vencimiento_turnos.py`, §21). Vence los pendientes que nadie confirmó dentro de la ventana previa al vuelo (6 h antes), libera el slot y avisa al alumno por mail. El mismo cron purga los borradores FPL de externos. Ver §21.
 - **Backlog de features:** disponibilidad para LV-ART/LV-MPH; bitácora de horas de vuelo; asistencia/no-show; estado de mantenimiento de aeronaves; lista de espera; dashboard para la comisión; aviso al instructor de nuevas solicitudes.
 
 ## 19. Limitaciones conocidas
 
 - **Reglas de Firebase abiertas** y **passwords en texto plano** (en proceso de resolución vía Auth). La `apiKey`/URL son públicas por diseño; la seguridad depende de Auth + reglas, no de ocultarlas.
-- **Proceso de servidor:** la app web corre íntegramente en el navegador y los barridos de vencimiento siguen siendo **perezosos** (client-side). La **excepción** es el recordatorio automático a instructores, que sí es un proceso server-side programado (GitHub Actions cron, §20). Tareas garantizadas sin nadie online se resuelven por esa vía.
+- **Proceso de servidor:** la app web corre en el navegador y el barrido de vencimiento del cliente es **perezoso**. Hay **dos procesos server-side** programados (GitHub Actions): el recordatorio a instructores (§20) y el vencimiento de pendientes + purga FPL (§21). Las tareas que deben correr sin nadie online se resuelven por esa vía.
 - **Sin queries SQL:** todo el filtrado es del lado del cliente. (Para consultas ad-hoc en SQL hay un script aparte que vuelca Firebase a SQLite — `fb_to_sqlite.py`.)
 - **Caché:** Cloudflare no cachea HTML en el borde; la staleness era por caché del navegador, resuelta con la Cache Rule `no-store` sobre `.html` (§2). Con eso los deploys se propagan al instante; igual conviene verificar la versión en pantalla tras subir. (Nota: una pestaña ya abierta no se actualiza sola; loguear/desloguear es client-side y no recarga el HTML — hay que recargar la página.)
 
@@ -314,3 +331,49 @@ Aviso por mail al instructor **~12 horas antes** de cada turno aprobado, para qu
 
 ### Prerrequisito operativo
 Cada instructor debe tener su **`email` cargado** (Mi Perfil, o el admin desde el modal de instructor). Los que no lo tengan se saltean sin aviso; en la lista de instructores aparecen marcados con **"⚠ sin mail"**. `admin`/`administrador` no necesitan email (no aprueban turnos).
+
+## 21. Vencimiento de pendientes + purga FPL (proceso server-side / cron)
+
+Segundo proceso server-side, independiente del recordatorio (§20). Hace caer los turnos **pendientes** que nadie confirmó a tiempo y, de paso, limpia los borradores FPL de externos.
+
+### Archivos (en el repo)
+- **`vencimiento_turnos.py`** (raíz del repo) — solo librería estándar de Python (urllib, json, datetime); no requiere pip.
+- **`.github/workflows/vencimiento-turnos.yml`** — el workflow que lo dispara (cron periódico + `workflow_dispatch` con input `dry_run`).
+
+### Lógica del script (cada corrida)
+1. Lee `/reservas` por REST.
+2. Busca **pendientes** cuyo vuelo cae dentro de las próximas `EXPIRE_HOURS` (o ya pasó) y que **tuvieron ventana de confirmación** (creados antes del mojón de vencimiento). Esos "se cayeron": ningún instructor los confirmó a tiempo.
+3. Los marca `estado:'vencido'` (la app ya entiende ese estado y libera el slot).
+4. Si el vuelo todavía es **futuro**, avisa al **alumno** por mail (EmailJS REST server-side, private key). Si el vuelo ya pasó, solo limpia (no manda mail).
+5. Registra el vencimiento en `/auditoria` (`vencimiento_turno`).
+6. **Purga FPL:** borra de los buckets `/fpl/externo*` los borradores con más de `FPL_PURGE_HOURS` de creados (`fecha_creacion`).
+
+> **Por qué `EXPIRE_HOURS` debe ser < 12:** el alumno puede reservar hasta 12 h antes del vuelo. Si el vencimiento disparara a las 12 h (o más) antes, un turno pedido en el límite nacería ya vencido. Con 6 h queda una ventana (de las 12 h-antes a las 6 h-antes) para que un instructor confirme. Cuanto más chico el número, más tarde cae y más ventana hay.
+
+### Configuración (variables `env:` del workflow)
+- Públicas: `FIREBASE_DB_URL`, `EMAILJS_SERVICE_ID`, `EMAILJS_TEMPLATE_ID` (template del aviso de vencimiento al alumno, cuenta dcamargo70), `EMAILJS_PUBLIC_KEY`, `CLUB_EMAIL` (Reply-To), `EXPIRE_HOURS` (default **6**, debe ser <12), `TZ_OFFSET` (`-3`), `FPL_PURGE_HOURS` (default **1**), `DRY_RUN`.
+- **Secreta:** `EMAILJS_PRIVATE_KEY` (accessToken de la cuenta dcamargo70, en GitHub Secrets).
+
+## 22. Generador de planes de vuelo (`fpl.html`)
+
+Página aparte (no es turnos.html) para armar **planes de vuelo OACI** (casillas 7 a 19) y generar el PDF para presentar. Comparte la misma Firebase (`turnos-lv-oad`) vía REST.
+
+### Funcionamiento
+- **PDF:** estampa los valores por coordenadas (`RECTS`) sobre una base **rasterizada** del formulario oficial argentino, así renderiza idéntico en cualquier visor sin depender de fuentes embebidas. Incrusta la firma a mano alzada. Texto del usuario en **MAYÚSCULAS**.
+- **Horas:** se cargan en **local (UTC-3)** y el sistema convierte/muestra **UTC** (casilla 13); `DOF` (18) se calcula en UTC (maneja el cambio de día). El comandante (19 C/) es un campo explícito, separado de quien arma el plan.
+- **OACI deprecados (`OACI_DEPRECADOS={SAWO}`, v3.16):** los aeródromos ya no vigentes se fuerzan a `ZZZZ` + detalle en el ítem 18 (DEP/ DEST/ ALTN/). Caso EAU (Est. Aeronaval Ushuaia): venía como SAWO y se estampaba mal. La lista vive en `fpl.html` (sobrevive a la regeneración del JSON de aeródromos). La sustitución IATA→OACI vigente (EZE→SAEZ, etc.) no cambia.
+
+### Borradores y usuario
+- Borradores por usuario en `/fpl/{USUARIO}`. Resuelve el usuario leyendo la sesión de turnos (`sessionStorage 'lvoad-session'`) **en la misma pestaña**; usa el `username` real (v3.12, requiere que turnos incluya `username` en la sesión — v5.91). Si no hay sesión (link externo) usa un bucket efímero `/fpl/externo_{uuid}` por sesión, que el cron (§21) purga al cabo de 1 h.
+- **PDF combinado (v3.10):** se tildan varios borradores y se genera **un** PDF con todos (una hoja por plan, en orden cronológico). La descarga la hace el usuario; el sistema no envía.
+
+### Aeronaves
+- El selector **mergea** las 3 del club (`/aeronaves`, global) + las **personales** del usuario (`/aeronaves_usuario/{USUARIO}`, solo el dueño las ve). Al elegir una personal precarga todo (FPL + SPL/comandante/remarks).
+- Editor "EDIT AIRCRAFT" (v3.14) con tabs **FPL** (7/9/10/15/18) y **SPL** (Item 19: R/ S/ J/ D/ A/ C/ N/), incluido **D/ botes neumáticos**. Externos no guardan aeronaves.
+
+### Auditoría FPL
+- Cada PDF generado escribe un registro en `/auditoria` con `rol:'fpl'` (`accion: 'fpl_*'`). `fpl.html` **solo escribe**; la **vista** está en turnos.html (sub-pestaña "Audit. FPL", solo admin — §10). La auditoría de turnos excluye estos registros.
+
+### Integración con turnos.html
+- Botón **"Plan de Vuelo"** (clase `.fpl-link`, pill ámbar) en las tab-bars de alumno e instructor (v5.89/v5.90).
+- Meteorología **METAR/TAF de SAWE** (CheckWX) vive en `fpl.html`, no en turnos.html.
