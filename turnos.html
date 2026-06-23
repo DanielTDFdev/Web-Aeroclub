@@ -1,5 +1,11 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.92
+  FECHA   : 2026-06-23
+  CAMBIOS : Auditoria: las fechas embebidas en la columna DETALLE se muestran en dd/mm/aaaa
+            (antes salian en ISO aaaa-mm-dd, ej. la fecha del turno en una cancelacion).
+            Se transforma al renderizar (regex), asi corrige tambien los registros viejos.
+            No cambia lo que se guarda en /auditoria.
   VERSION : 5.91
   FECHA   : 2026-06-21
   CAMBIOS : La sesion de alumno (sessionStorage 'lvoad-session') ahora incluye 'username'
@@ -464,7 +470,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.91</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.92</div>
   </div>
 
 </div>
@@ -3457,7 +3463,7 @@ function renderAuditoria(lista,skipPageReset){
         <td style="padding:7px 8px;color:var(--amber)">${ACCION_LABEL[r.accion]||r.accion}</td>
         <td style="padding:7px 8px;color:var(--text2)">${ROL_ICON[r.rol]||''} ${r.rol}</td>
         <td style="padding:7px 8px"><span style="padding:3px 8px;border-radius:var(--radius);background:${resBg};border:1px solid ${resBorder};color:${resColor}">${esExito?'✓ ÉXITO':'✗ FALLO'}</span></td>
-        <td style="padding:7px 8px;color:var(--text);max-width:200px;word-break:break-all">${r.detalle||'—'}</td>
+        <td style="padding:7px 8px;color:var(--text);max-width:200px;word-break:break-all">${(r.detalle||'—').replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g,'$3/$2/$1')}</td>
         ${esAdmin?`<td style="padding:7px 8px;text-align:center"><button onclick="borrarAuditoria('${r.key}')" title="Borrar esta entrada" style="padding:3px 8px;font-size:12px;background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);color:var(--red);border-radius:var(--radius);cursor:pointer">✕</button></td>`:''}
       </tr>`;
     }).join('')}
