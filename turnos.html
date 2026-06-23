@@ -1,5 +1,11 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.93
+  FECHA   : 2026-06-23
+  CAMBIOS : Calendario (vistas LISTA y SEMANA): el tooltip (help text) de cada turno ahora
+            agrega quien lo aprobo ("Aprobo: X") si esta aprobado, o quien lo cancelo
+            ("Cancelo: X") si fue cancelado. Helper tooltipAccion(r): prioriza cancelado_por,
+            luego aprobado_por. Sin cambios si el turno esta pendiente.
   VERSION : 5.92
   FECHA   : 2026-06-23
   CAMBIOS : Auditoria: las fechas embebidas en la columna DETALLE se muestran en dd/mm/aaaa
@@ -470,7 +476,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.92</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.93</div>
   </div>
 
 </div>
@@ -2165,6 +2171,13 @@ window.setCalFiltroAvion=function(key){
 // Banner de turnos pendientes: persiste mientras haya pendientes. VER TURNOS solo navega, no lo oculta.
 window.irAPendientes=function(){showInstTab('reservas');setCalVista('lista');const w=document.querySelector('.cal-wrap');if(w)w.scrollIntoView({behavior:'smooth',block:'start'});};
 
+// Sufijo del tooltip del calendario: quién aprobó o canceló el turno (si corresponde).
+function tooltipAccion(r){
+  if(r.cancelado_por) return ' — Canceló: '+r.cancelado_por;
+  if(r.aprobado_por) return ' — Aprobó: '+r.aprobado_por;
+  return '';
+}
+
 async function renderTodasReservas(data){
   const todas=rArr(data);
   const nPend=todas.filter(r=>r.estado==='pendiente').length;
@@ -2241,7 +2254,7 @@ async function renderTodasReservas(data){
         const rangoLabel=r.horaInicio&&r.horaFin?`<span style="font-size:9px;opacity:.8">${r.horaInicio}–${r.horaFin}</span><br>`:'';
         // reservas pasadas: tachadas
         const estiloExtra=tipo==='pasado'?'text-decoration:line-through;':'';
-        html+=`<div class="cal-block ${r.estado}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'}" style="${estiloExtra}">${avLabel}${rangoLabel}${nombre}</div>`;
+        html+=`<div class="cal-block ${r.estado}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'}${tooltipAccion(r)}" style="${estiloExtra}">${avLabel}${rangoLabel}${nombre}</div>`;
       });
       html+='</td>';
     });
@@ -2347,7 +2360,7 @@ async function renderVistaSemana(){
         const colorCls=avColor[r.avion||'LV-OAD']||'oad';
         const estadoCls=r.estado==='pendiente'?'pendiente':'';
         const nombre=r.nombre.split(' ')[0];
-        html+=`<div class="cal-block ${colorCls} ${estadoCls}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'} — ${r.estado}">
+        html+=`<div class="cal-block ${colorCls} ${estadoCls}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'} — ${r.estado}${tooltipAccion(r)}">
           <span style="font-size:9px;opacity:.8">${r.avion||'LV-OAD'}</span><br>${nombre}
         </div>`;
       });
