@@ -139,6 +139,20 @@ def construir_indice_instructores(instData):
     return idx
 
 
+DIAS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+MESES_ES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+            "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+
+
+def fecha_es(fecha_str):
+    """'2026-06-24' -> 'Miércoles, 24 de Junio de 2026'."""
+    y, m, d = map(int, fecha_str.split("-"))
+    dt = datetime(y, m, d)
+    dia = DIAS_ES[dt.weekday()]
+    mes = MESES_ES[m - 1].capitalize()
+    return "{}, {} de {} de {}".format(dia, d, mes, y)
+
+
 def hora_texto(r):
     if r.get("horaInicio") and r.get("horaFin"):
         return r["horaInicio"] + " a " + r["horaFin"]
@@ -234,7 +248,7 @@ def main():
         params = {
             "instructor_email": inst["email"],
             "instructor_nombre": inst["nombre"],
-            "fecha_turnos": fecha,
+            "fecha_turnos": fecha_es(fecha),
             "cantidad_turnos": str(len(turnos)),
             "turnos_lista": turnos_lista_html,
             "name": FROM_NAME,
