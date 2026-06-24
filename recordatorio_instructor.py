@@ -241,8 +241,9 @@ def main():
 
         lineas = []
         for fdt, key, r in turnos:
-            lineas.append("{} hs — {} — alumno: {}".format(
-                hora_texto(r), r.get("avion", "LV-OAD"), r.get("nombre", "")))
+            etiqueta = "piloto" if r.get("rol") == "piloto" else "alumno"
+            lineas.append("{} hs — {} — {}: {}".format(
+                hora_texto(r), r.get("avion", "LV-OAD"), etiqueta, r.get("nombre", "")))
         turnos_lista_html = "<br>".join(lineas)
 
         params = {
