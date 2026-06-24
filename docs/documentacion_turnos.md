@@ -1,7 +1,7 @@
 # Documentación técnica — Sistema de Turnos (turnos.html)
 
 **Aeroclub Río Grande (SAWE) — Tierra del Fuego, Argentina**
-Versión documentada: **turnos.html v5.96** · **fpl.html v3.16** · Fecha: 2026-06-23
+Versión documentada: **turnos.html v5.96** · **fpl.html v3.16** · Fecha: 2026-06-24
 
 > Documento de referencia: describe qué hace cada parte del sistema. Mantener actualizado cuando se agreguen funciones.
 > Además de la app web (`turnos.html`) hay un generador de planes de vuelo (`fpl.html`, §22) y **dos procesos server-side** en GitHub Actions: el recordatorio a instructores (§20) y el vencimiento de pendientes + purga de borradores FPL (§21).
@@ -302,7 +302,7 @@ Registro de eventos (`registrarAuditoria`): login (éxito/fallo/bloqueado), regi
 
 ## 20. Recordatorio automático a instructores (proceso server-side / cron)
 
-Aviso por mail al instructor **~12 horas antes** de cada turno aprobado, para que organice el día. Corre fuera de la app web, como proceso programado, así funciona aunque no haya nadie con la página abierta.
+Aviso por mail al instructor **~12 horas antes** del turno más temprano de cada día, con el listado de **todos** los turnos aprobados que tiene ese día (no un mail por turno). Corre fuera de la app web, como proceso programado, así funciona aunque no haya nadie con la página abierta.
 
 ### Archivos (en el repo)
 - **`recordatorio_instructor.py`** (raíz del repo) — el script. Solo usa librería estándar de Python (urllib, json, datetime); no requiere pip.
@@ -312,16 +312,22 @@ Aviso por mail al instructor **~12 horas antes** de cada turno aprobado, para qu
 - `schedule: cron "*/15 * * * *"` — cada 15 min. GitHub corre en **UTC** y puede atrasarse varios minutos; no importa, lo cubre la ventana + la marca anti-duplicado.
 - `workflow_dispatch` con input **`dry_run`** (`1` = prueba sin enviar ni marcar; `0` = real). Útil para probar desde la pestaña Actions.
 
-### Lógica del script
+### Lógica del script (agrupado por día desde 2026-06-24)
 1. Lee `/reservas` e `/instructores` de Firebase por REST (reglas de lectura abiertas).
 2. Calcula "ahora" en hora local (UTC-3 fijo; Argentina no usa horario de verano).
-3. Selecciona turnos `estado==aprobado` **con instructor asignado** (`aprobado_por`/`instructor`) cuyo vuelo cae dentro de las próximas `REMIND_HOURS` horas y que **no** tengan `recordatorio_inst_enviado`.
-4. Resuelve el email del instructor: matchea su `nombre` (de `aprobado_por`) contra `/instructores` y toma el campo `email`. Si no tiene email, lo **saltea** (lo loguea).
-5. Envía el mail vía **API REST de EmailJS** (server-side, con private key).
-6. Marca la reserva con `recordatorio_inst_enviado:true` + `recordatorio_inst_ts` (PATCH REST) para no repetir.
-7. Si hubo errores de envío, el job termina en fallo (rojo) para que se note en Actions.
+3. Filtra turnos `estado==aprobado` **con instructor asignado** (`aprobado_por`/`instructor`) que todavía no pasaron, y los **agrupa por (instructor, fecha)**.
+4. Para cada grupo, toma el turno **más temprano todavía futuro** de ese día. Si cae dentro de las próximas `REMIND_HOURS` horas **y ese día no fue avisado todavía para ese instructor**, dispara un único mail con el listado completo (ordenado por hora) de los turnos del grupo.
+5. Resuelve el email del instructor matcheando `nombre` (de `aprobado_por`) contra `/instructores`. Sin email cargado → se saltea (se loguea).
+6. Envía el mail vía **API REST de EmailJS** (server-side, con private key).
+7. Marca el día como avisado en `/recordatorios_diarios/{fecha}/{instructor_user}` (PATCH REST) — **ese es el anti-duplicado real**. También marca cada reserva incluida con `recordatorio_inst_enviado:true` + `recordatorio_inst_ts`, a fines de auditoría (ya no se usa para decidir si reenviar).
+8. Si hubo errores de envío, el job termina en fallo (rojo) para que se note en Actions.
 
-> La marca anti-duplicado hace que salga **un solo mail por turno**. Al **liberar** un turno se limpia la marca (v5.76), así un turno reaprobado por otro instructor vuelve a generar aviso.
+> **Límite conocido:** si después de mandado el mail del día se aprueba un turno nuevo para ese mismo instructor el mismo día, no genera un aviso adicional — el día ya quedó marcado como avisado. Si se quiere que un turno nuevo "reabra" el aviso del día, hay que borrar `/recordatorios_diarios/{fecha}/{instructor_user}` (por ejemplo al aprobar/liberar un turno de ese día), cosa que **todavía no está implementada**.
+>
+> Al **liberar** un turno se sigue limpiando `recordatorio_inst_enviado/ts` de esa reserva (v5.76), pero ya es solo informativo — no afecta el envío del recordatorio diario.
+
+### Template EmailJS (cambio de variables)
+El template `template_8awr1zd` pasa de variables de **un solo turno** (`alumno_nombre`, `turno_hora`, `matricula_avion`) a una variable de **listado**: `{{turnos_lista}}` (líneas tipo `HH:MM hs — MATRÍCULA — alumno: NOMBRE`, separadas por `<br>`, pensado para template HTML), más `{{fecha_turnos}}` y `{{cantidad_turnos}}`. Las variables `instructor_email`, `instructor_nombre`, `name`, `email` se mantienen igual. **Hay que editar el template en EmailJS a mano** para usar `{{turnos_lista}}` en vez de los campos viejos.
 
 ### EmailJS (cuenta dcamargo70 — ver §13)
 - Service `service_yeb4aqb`, template `template_8awr1zd` ("Recordatorio Instructor"), public key `TzbSjqDNPjTGSGdzN`.
