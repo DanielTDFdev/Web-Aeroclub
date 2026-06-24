@@ -5,12 +5,16 @@ recordatorio_instructor.py — Recordatorio automático por mail al instructor.
 
 Corre desde GitHub Actions (cron). En cada ejecución:
   1. Lee /reservas e /instructores de Firebase (REST, reglas de lectura abiertas).
-  2. Busca turnos APROBADOS con instructor asignado cuyo vuelo cae dentro de la
-     ventana de aviso (REMIND_HOURS) y que todavía no fueron avisados.
-  3. Resuelve el email del instructor (campo `email` en /instructores, matcheando
-     por nombre con aprobado_por/instructor de la reserva).
-  4. Envía el recordatorio vía EmailJS (API REST server-side, con private key).
-  5. Marca la reserva con recordatorio_inst_enviado:true para no repetir.
+  2. Agrupa los turnos APROBADOS con instructor asignado por (instructor, fecha),
+     descartando los que ya pasaron.
+  3. Para cada grupo, toma el turno más temprano TODAVÍA FUTURO. Si ese turno cae
+     dentro de la ventana de aviso (REMIND_HOURS) y el día no fue avisado todavía
+     para ese instructor, manda UN SOLO mail con el listado completo de turnos
+     del día (ordenados por hora).
+  4. Marca el día como avisado en /recordatorios_diarios/{fecha}/{instructor} para
+     no repetir, y además marca cada reserva individual con
+     recordatorio_inst_enviado:true (solo a fines de auditoría/compatibilidad;
+     el anti-duplicado real corre por el nodo diario).
 
 Solo usa la librería estándar de Python (urllib, json, datetime). No requiere pip.
 
@@ -21,9 +25,18 @@ Configuración por variables de entorno (las setea el workflow):
   EMAILJS_PUBLIC_KEY   public key (user_id) de esa cuenta
   EMAILJS_PRIVATE_KEY  private key (accessToken) — SECRET, viene de GitHub Secrets
   CLUB_EMAIL           mail del club (va como Reply-To, variable {{email}})
-  REMIND_HOURS         ventana de aviso en horas (default 2)
+  REMIND_HOURS         ventana de aviso en horas, respecto del turno MÁS TEMPRANO
+                        del día (default 2)
   TZ_OFFSET            offset horario local respecto de UTC (default -3, Argentina)
   DRY_RUN              "1" para probar sin enviar ni marcar (default "0")
+
+IMPORTANTE — template EmailJS (template_8awr1zd):
+  Antes recibía un turno por mail (instructor_nombre, alumno_nombre, turno_hora,
+  matricula_avion). Ahora recibe el listado completo del día en una sola variable
+  de texto: {{turnos_lista}} (líneas separadas por <br>, pensado para template
+  HTML). También se siguen mandando instructor_nombre/instructor_email/name/email
+  y se agrega cantidad_turnos. HAY QUE EDITAR EL TEMPLATE EN EMAILJS para que
+  use {{turnos_lista}} en vez de los campos viejos de un solo turno.
 """
 
 import os
@@ -65,17 +78,28 @@ def fb_get(path):
     return json.loads(raw) if raw and raw != "null" else None
 
 
-def fb_marcar_enviado(key):
-    """PATCH la reserva con la marca de recordatorio enviado (reglas de escritura abiertas)."""
-    url = "{}/reservas/{}.json".format(DB_URL, key)
-    body = json.dumps({
-        "recordatorio_inst_enviado": True,
-        "recordatorio_inst_ts": datetime.now(timezone.utc).isoformat(),
-    }).encode("utf-8")
+def fb_patch(path, body_dict):
+    url = "{}/{}.json".format(DB_URL, path)
+    body = json.dumps(body_dict).encode("utf-8")
     req = urllib.request.Request(url, data=body, method="PATCH",
                                  headers={"Content-Type": "application/json",
                                           "User-Agent": "aeroclub-cron"})
     urllib.request.urlopen(req, timeout=30).read()
+
+
+def fb_marcar_reserva_enviada(key):
+    """Marca individual de auditoría (no se usa para el anti-duplicado real)."""
+    fb_patch("reservas/{}".format(key), {
+        "recordatorio_inst_enviado": True,
+        "recordatorio_inst_ts": datetime.now(timezone.utc).isoformat(),
+    })
+
+
+def fb_marcar_dia_avisado(fecha, instructor_key):
+    fb_patch("recordatorios_diarios/{}/{}".format(fecha, instructor_key), {
+        "enviado": True,
+        "ts": datetime.now(timezone.utc).isoformat(),
+    })
 
 
 def enviar_mail(params):
@@ -94,8 +118,16 @@ def enviar_mail(params):
         return r.status, r.read().decode("utf-8", "replace")
 
 
+def fb_key_seguro(s):
+    """Saca caracteres prohibidos en paths de Firebase (. # $ [ ] /)."""
+    out = s
+    for ch in ".#$[]/":
+        out = out.replace(ch, "_")
+    return out.strip("_") or "x"
+
+
 def construir_indice_instructores(instData):
-    """nombre (normalizado) -> email. Solo instructores con email cargado."""
+    """nombre (normalizado) -> {user, nombre, email}. Solo con email cargado."""
     idx = {}
     for k, v in (instData or {}).items():
         if not isinstance(v, dict):
@@ -103,7 +135,7 @@ def construir_indice_instructores(instData):
         nombre = (v.get("nombre") or "").strip()
         email = (v.get("email") or "").strip()
         if nombre and email:
-            idx[nombre.lower()] = {"nombre": nombre, "email": email}
+            idx[nombre.lower()] = {"user": k, "nombre": nombre, "email": email}
     return idx
 
 
@@ -127,17 +159,20 @@ def main():
         sys.exit(1)
 
     ahora_local = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=TZ_OFFSET)
-    print("== Recordatorio instructor ==")
+    print("== Recordatorio instructor (agrupado por día) ==")
     print("Ahora (local UTC{:+g}): {:%Y-%m-%d %H:%M}".format(TZ_OFFSET, ahora_local))
-    print("Ventana: turnos dentro de las próximas {:g} h".format(REMIND_HOURS))
+    print("Ventana: turno más temprano del día dentro de las próximas {:g} h".format(REMIND_HOURS))
     if DRY_RUN:
-        print(">> DRY_RUN activo: no se envían mails ni se marcan reservas.")
+        print(">> DRY_RUN activo: no se envían mails ni se marcan reservas/días.")
 
     reservas = fb_get("reservas") or {}
     instructores = fb_get("instructores") or {}
     idxInst = construir_indice_instructores(instructores)
+    diasAvisados = fb_get("recordatorios_diarios") or {}
 
-    revisados = enviados = saltados_sinmail = saltados_fuera = errores = 0
+    # ── 1) Agrupar por (instructor_user, fecha), solo turnos futuros ──────
+    grupos = {}  # (instructor_user, fecha) -> {"inst":..., "turnos":[(fdt,key,r)]}
+    revisados = saltados_sinmail = saltados_pasado = 0
 
     for key, r in reservas.items():
         if not isinstance(r, dict):
@@ -147,8 +182,6 @@ def main():
         actor = (r.get("aprobado_por") or r.get("instructor") or "").strip()
         if not actor:
             continue  # aprobado automático (turismo) sin instructor: no aplica
-        if r.get("recordatorio_inst_enviado") is True:
-            continue
         if not r.get("fecha"):
             continue
 
@@ -159,11 +192,9 @@ def main():
             print("  ! reserva", key, "fecha/hora inválida:", e)
             continue
 
-        delta_h = (fdt - ahora_local).total_seconds() / 3600.0
-        # Avisar si el vuelo está en el futuro y dentro de la ventana
-        if not (0 < delta_h <= REMIND_HOURS):
-            saltados_fuera += 1
-            continue
+        if fdt <= ahora_local:
+            saltados_pasado += 1
+            continue  # ya pasó, no cuenta para el día
 
         inst = idxInst.get(actor.lower())
         if not inst:
@@ -172,28 +203,60 @@ def main():
                 actor, r.get("fecha"), hora_texto(r)))
             continue
 
+        gkey = (inst["user"], r["fecha"])
+        g = grupos.setdefault(gkey, {"inst": inst, "fecha": r["fecha"], "turnos": []})
+        g["turnos"].append((fdt, key, r))
+
+    # ── 2) Por cada grupo: ¿el más temprano entra en ventana? ─────────────
+    enviados = saltados_yaavisado = saltados_fuera = errores = 0
+
+    for (inst_user, fecha), g in grupos.items():
+        inst = g["inst"]
+        turnos = sorted(g["turnos"], key=lambda t: t[0])
+        fdt_temprano = turnos[0][0]
+        delta_h = (fdt_temprano - ahora_local).total_seconds() / 3600.0
+
+        ya_avisado = bool((diasAvisados.get(fecha) or {}).get(inst_user, {}).get("enviado"))
+        if ya_avisado:
+            saltados_yaavisado += 1
+            continue
+
+        if not (0 < delta_h <= REMIND_HOURS):
+            saltados_fuera += 1
+            continue
+
+        lineas = []
+        for fdt, key, r in turnos:
+            lineas.append("{} hs — {} — alumno: {}".format(
+                hora_texto(r), r.get("avion", "LV-OAD"), r.get("nombre", "")))
+        turnos_lista_html = "<br>".join(lineas)
+
         params = {
             "instructor_email": inst["email"],
             "instructor_nombre": inst["nombre"],
-            "alumno_nombre": r.get("nombre", ""),
-            "turno_hora": hora_texto(r),
-            "matricula_avion": r.get("avion", "LV-OAD"),
+            "fecha_turnos": fecha,
+            "cantidad_turnos": str(len(turnos)),
+            "turnos_lista": turnos_lista_html,
             "name": FROM_NAME,
             "email": CLUB_EMAIL,
         }
 
-        desc = "{} -> {} | {} {} | alumno: {}".format(
-            inst["nombre"], inst["email"], r.get("fecha"), hora_texto(r), r.get("nombre", ""))
+        desc = "{} -> {} | {} | {} turno(s)".format(
+            inst["nombre"], inst["email"], fecha, len(turnos))
 
         if DRY_RUN:
             print("  [DRY] enviaría:", desc)
+            for fdt, key, r in turnos:
+                print("        -", hora_texto(r), "—", r.get("nombre", ""))
             enviados += 1
             continue
 
         try:
             status, body = enviar_mail(params)
             if status == 200:
-                fb_marcar_enviado(key)
+                fb_marcar_dia_avisado(fecha, inst_user)
+                for fdt, key, r in turnos:
+                    fb_marcar_reserva_enviada(key)
                 enviados += 1
                 print("  ✓ enviado:", desc)
             else:
@@ -207,10 +270,11 @@ def main():
             print("  ✗ error:", e, "—", desc)
 
     print("--")
-    print("Revisados aprobados c/instructor: {} | enviados: {} | sin email: {} | "
+    print("Turnos revisados (aprobados c/instructor): {} | ya pasados: {} | sin email: {}".format(
+        revisados, saltados_pasado, saltados_sinmail))
+    print("Grupos (instructor+día) — mails enviados: {} | ya avisados: {} | "
           "fuera de ventana: {} | errores: {}".format(
-              revisados, enviados, saltados_sinmail, saltados_fuera, errores))
-    # Si hubo errores de envío, fallar el job para que se note en Actions
+              enviados, saltados_yaavisado, saltados_fuera, errores))
     if errores:
         sys.exit(2)
 
