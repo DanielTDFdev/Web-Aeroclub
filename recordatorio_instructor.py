@@ -31,12 +31,13 @@ Configuración por variables de entorno (las setea el workflow):
   DRY_RUN              "1" para probar sin enviar ni marcar (default "0")
 
 IMPORTANTE — template EmailJS (template_8awr1zd):
-  Antes recibía un turno por mail (instructor_nombre, alumno_nombre, turno_hora,
-  matricula_avion). Ahora recibe el listado completo del día en una sola variable
-  de texto: {{turnos_lista}} (líneas separadas por <br>, pensado para template
-  HTML). También se siguen mandando instructor_nombre/instructor_email/name/email
-  y se agrega cantidad_turnos. HAY QUE EDITAR EL TEMPLATE EN EMAILJS para que
-  use {{turnos_lista}} en vez de los campos viejos de un solo turno.
+  Recibe el listado completo del día en una sola variable de texto HTML:
+  {{turnos_lista}} (cada turno con viñeta "• ", líneas separadas por <br>).
+  En el template hay que usar TRIPLE llave {{{turnos_lista}}} (no doble), porque
+  EmailJS escapa el HTML de las variables por default; con doble llave el <span>
+  y el <br> llegaban literales en vez de interpretarse (resuelto 2026-06-25).
+  También se siguen mandando instructor_nombre/instructor_email/name/email y
+  cantidad_turnos (esas sí pueden ir con doble llave, son texto plano).
 """
 
 import os
@@ -245,7 +246,7 @@ def main():
             color = "#0000cd" if etiqueta == "piloto" else "#006400"
             etiqueta_html = '<span style="color:{};font-weight:bold">{}</span>'.format(
                 color, etiqueta)
-            lineas.append("{} hs — {} — {}: {}".format(
+            lineas.append("• {} hs — {} — {}: {}".format(
                 hora_texto(r), r.get("avion", "LV-OAD"), etiqueta_html, r.get("nombre", "")))
         turnos_lista_html = "<br>".join(lineas)
 
