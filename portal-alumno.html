@@ -2,6 +2,11 @@
 <!--
 ==================================================================================
   PORTAL ALUMNO — Aeroclub Río Grande
+  v1.1 ·  Importador de JSON en el editor de quiz (tab QUIZ, solo staff): pegás un
+          array {pregunta, opciones:["A) ...","B) ...","C) ..."], respuesta_correcta:"A"}
+          y se agrega a las preguntas ya cargadas (no reemplaza). Tolera fences de
+          markdown (```json) y CRLF pegados al copiar. Pensado para los cuestionarios
+          de instrucción por aeronave (ej. Cuestionario_LVOAD.json, 75 preguntas).
   v1.0 ·  Primera versión. Página nueva, validada con la sesión de turnos.html
           (sessionStorage 'lvoad-session', misma pestaña). Acceso: rol alumno
           (NO piloto), instructor, admin, administrador.
@@ -108,7 +113,7 @@ button.danger{background:rgba(248,81,73,.08);color:var(--red);border-color:var(-
     <h1>PORTAL ALUMNO<small>AEROCLUB RÍO GRANDE</small></h1>
     <div class="sp">
       <span class="who" id="who-label"></span>
-      <span class="ver">v1.0</span>
+      <span class="ver">v1.1</span>
       <a class="back" href="turnos.html">← TURNERO</a>
     </div>
   </header>
@@ -341,6 +346,13 @@ function formQuiz(item,key){
         <div class="field"><label>Categoría</label><input id="qf-categoria" value="${escHtml(item&&item.categoria||'')}"></div>
         <div id="qf-preguntas">${preguntas.map((p,i)=>preguntaHtml(p,i)).join('')}</div>
         <button id="qf-add-preg" style="margin-bottom:14px">+ AGREGAR PREGUNTA</button>
+        <div class="card" style="background:var(--bg);margin-bottom:14px">
+          <h3>IMPORTAR DESDE JSON</h3>
+          <div class="sub" style="margin-bottom:8px">Esquema esperado: array de objetos <code>{pregunta, opciones:["A) ...","B) ...","C) ..."], respuesta_correcta:"A"}</code>. Agrega las preguntas a las que ya estén cargadas (no las reemplaza).</div>
+          <div class="field"><textarea id="qf-import-txt" rows="4" placeholder="Pegá aquí el JSON completo…"></textarea></div>
+          <button id="qf-import-btn">IMPORTAR</button>
+          <span class="sub" id="qf-import-status" style="margin-left:8px"></span>
+        </div>
         <div class="row">
           <button class="primary" id="qf-guardar">GUARDAR QUIZ</button>
           <button id="qf-cancelar">CANCELAR</button>
@@ -348,6 +360,28 @@ function formQuiz(item,key){
         <span class="sub" id="qf-status" style="margin-left:6px"></span>
       </div>`;
     document.getElementById('qf-add-preg').onclick=()=>{ preguntas.push({enunciado:'',opciones:['','','',''],correcta:0}); pintar(); };
+    document.getElementById('qf-import-btn').onclick=()=>{
+      const ist=document.getElementById('qf-import-status');
+      let raw=document.getElementById('qf-import-txt').value.trim();
+      // Tolera fences de markdown (```json ... ```) y CRLF que a veces vienen pegados al copiar.
+      raw=raw.replace(/^```(?:json)?\s*/i,'').replace(/```\s*$/,'').trim();
+      let arr;
+      try{ arr=JSON.parse(raw); }catch(e){ ist.textContent='✗ JSON inválido: '+e.message; ist.style.color='var(--red)'; return; }
+      if(!Array.isArray(arr)){ ist.textContent='✗ Tiene que ser un array de preguntas'; ist.style.color='var(--red)'; return; }
+      const letraIdx={A:0,B:1,C:2,D:3,E:4};
+      let n=0;
+      for(const it of arr){
+        const opciones=(it.opciones||[]).map(o=>String(o).replace(/^\s*[A-Za-z]\)\s*/,'').trim());
+        const correcta=letraIdx[String(it.respuesta_correcta||'A').trim().toUpperCase()]??0;
+        if(!it.pregunta||!opciones.length) continue;
+        preguntas.push({enunciado:String(it.pregunta).trim(),opciones,correcta});
+        n++;
+      }
+      pintar();
+      // pintar() reconstruye todo el box, así que el status se muestra recién en el próximo render;
+      // lo mostramos vía alert para que no se pierda el feedback de cuántas se importaron.
+      if(n) alert('✓ Importadas '+n+' pregunta(s).'); else alert('✗ No se importó ninguna pregunta (revisá el formato).');
+    };
     box.querySelectorAll('.qf-del-preg').forEach(b=>b.onclick=()=>{ preguntas.splice(+b.dataset.i,1); pintar(); });
     box.querySelectorAll('.qf-correcta').forEach(r=>r.onchange=()=>{ preguntas[+r.dataset.i].correcta=+r.value; });
     box.querySelectorAll('.qf-enunciado').forEach(inp=>inp.oninput=()=>{ preguntas[+inp.dataset.i].enunciado=inp.value; });
