@@ -1,5 +1,16 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.97
+  FECHA   : 2026-06-25
+  CAMBIOS : FIX critico: cancelacion de turno por parte del ALUMNO no hacia nada
+            visible. Causa: el modal #modal-motivo-cancel estaba anidado en el HTML
+            dentro de #instructor-screen. Como esa pantalla esta oculta (display:none)
+            cuando hay sesion de alumno, el modal se abria (clase 'open') pero nunca
+            se pintaba en pantalla (descendiente de ancestro display:none no se
+            renderiza, aunque su computedStyle siga diciendo flex). Funcionaba para
+            instructor/admin porque ahi instructor-screen SI esta visible. Solucion:
+            el modal se "rescata" al <body> al cargar la pagina (rescatarModalMotivoCancel),
+            asi queda fuera de cualquier screen y siempre visible cuando se abre.
   VERSION : 5.96
   FECHA   : 2026-06-23
   CAMBIOS : Fix del cartel ambar de aviso al aprobar un turno de LV-OAD ("estarias pisando
@@ -519,7 +530,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.96</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.97</div>
   </div>
 
 </div>
@@ -2170,6 +2181,17 @@ function puedeAlumnoCancelar(r){
   const fechaTurno=new Date(y,m-1,d,hh,mm,0).getTime();
   return (fechaTurno - Date.now()) >= 2*60*60*1000;
 }
+
+// FIX v5.97: el modal de motivo de cancelación estaba anidado dentro de
+// #instructor-screen en el HTML. Cuando lo dispara un ALUMNO (instructor-screen
+// oculta con display:none), el modal se abre (clase 'open') pero nunca se pinta
+// en pantalla porque un descendiente de un ancestro display:none no se renderiza,
+// aunque su propio computedStyle diga display:flex. Lo "rescatamos" al <body> una
+// sola vez para que siempre sea visible sin importar qué screen esté activa.
+(function rescatarModalMotivoCancel(){
+  const m=document.getElementById('modal-motivo-cancel');
+  if(m&&m.parentElement!==document.body) document.body.appendChild(m);
+})();
 
 function pedirMotivoCancelacion(obligatorio=false){
   return new Promise(resolve=>{
