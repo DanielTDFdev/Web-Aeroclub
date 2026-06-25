@@ -2,6 +2,14 @@
 <!--
 ==================================================================================
   PORTAL ALUMNO — Aeroclub Río Grande
+  v1.6 ·  FIX CRÍTICO: renderPerfil() y renderManuales() nunca se ejecutaban.
+          Al final del script solo quedaba la llamada a renderQuiz() — en cada
+          paso de construcción anterior (v1.0→v1.1→...) se usó la línea de
+          invocación del paso previo como ancla para insertar la siguiente,
+          pisándola en vez de conservarla. Resultado: la tab PERFIL y la tab
+          MANUALES quedaban completamente vacías (nunca se les seteaba innerHTML),
+          mientras que QUIZ funcionaba por ser la única invocación que sobrevivió.
+          Restauradas las tres llamadas al final del módulo.
   v1.5 ·  Tab MANUALES: nueva sección "ARCHIVOS EN /manuales (REPOSITORIO)" que
           lista automáticamente el contenido real de la carpeta /manuales del
           repo (GitHub Contents API, sin autenticar — repo público). Cada
@@ -148,7 +156,7 @@ button.danger{background:rgba(248,81,73,.08);color:var(--red);border-color:var(-
     <h1>PORTAL ALUMNO<small>AEROCLUB RÍO GRANDE</small></h1>
     <div class="sp">
       <span class="who" id="who-label"></span>
-      <span class="ver">v1.5</span>
+      <span class="ver">v1.6</span>
       <a class="back" href="turnos.html">← TURNERO</a>
     </div>
   </header>
@@ -698,6 +706,8 @@ async function cargarHistorial(){
       <span class="tag ${f.puntaje/f.total>=0.7?'ok':'bad'}">${f.puntaje}/${f.total}</span></div>`).join('');
 }
 
+renderPerfil();
+renderManuales();
 renderQuiz();
 </script>
 </body>
