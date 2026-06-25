@@ -2,6 +2,26 @@
 <!--
 ==================================================================================
   PORTAL ALUMNO — Aeroclub Río Grande
+  v1.5 ·  Tab MANUALES: nueva sección "ARCHIVOS EN /manuales (REPOSITORIO)" que
+          lista automáticamente el contenido real de la carpeta /manuales del
+          repo (GitHub Contents API, sin autenticar — repo público). Cada
+          archivo sale como link de descarga directo (download_url de la API).
+          No depende de Firebase ni de que el staff lo registre a mano: subís
+          el PDF a la carpeta y aparece solo en el próximo refresh de la página.
+          El catálogo manual existente (Firebase /manuales, para links externos
+          o metadata curada) sigue debajo, ahora bajo el título "CATÁLOGO / LINKS".
+          Límite conocido: la API de GitHub sin autenticar permite 60 req/hora
+          por IP; con el tráfico de un aeroclub no debería ser problema.
+  v1.4 ·  Banco de preguntas: si un quiz tiene 50 o más preguntas cargadas
+          (QZ_BANCO_SIZE), al rendir se sortean 50 al azar (Fisher-Yates) para
+          ESE intento puntual — distinto alumno, distinto sorteo. Si tiene menos
+          de 50, se usan todas (comportamiento anterior, sin cambios). El sorteo
+          se hace una sola vez al abrir el formulario y se mantiene fijo durante
+          todo el intento (no se vuelve a sortear al cambiar de página). Aviso
+          visible al alumno ("Banco de N preguntas — te tocaron 50 al azar") y
+          en la lista de quizzes para el staff. El detalle guardado en el intento
+          (VER DETALLE) refleja exactamente las 50 que le tocaron, no el banco
+          completo.
   v1.3 ·  Paginado al RENDIR un quiz (no afecta el editor de staff): 10 preguntas
           por página (QZ_PAGE_SIZE), navegación Anterior/Siguiente, contador
           "Respondidas: X/Y". Las respuestas se guardan en un array fuera del
@@ -128,7 +148,7 @@ button.danger{background:rgba(248,81,73,.08);color:var(--red);border-color:var(-
     <h1>PORTAL ALUMNO<small>AEROCLUB RÍO GRANDE</small></h1>
     <div class="sp">
       <span class="who" id="who-label"></span>
-      <span class="ver">v1.3</span>
+      <span class="ver">v1.5</span>
       <a class="back" href="turnos.html">← TURNERO</a>
     </div>
   </header>
@@ -256,14 +276,44 @@ async function cargarFichaStaff(emailKey, dataAlumnos){
 }
 
 // ── MANUALES ──────────────────────────────────────────────────────
+const GH_REPO='danieltdfdev/Web-Aeroclub'; // repo del sitio, para listar /manuales por API
+
 async function renderManuales(){
   const el=document.getElementById('screen-manuales');
-  el.innerHTML='<div class="card"><h2>// REPOSITORIO DE MANUALES</h2>'+
+  el.innerHTML='<div class="card"><h2>// ARCHIVOS EN /manuales (REPOSITORIO)</h2>'+
+    '<div class="sub" style="margin-bottom:10px">Se listan solos: subí un PDF a la carpeta <b>/manuales</b> del repo (GitHub web UI) y aparece aquí, sin tocar esta página.</div>'+
+    '<div id="man-repo-lista" class="empty">Cargando…</div></div>'+
+    '<div class="card"><h2>// CATÁLOGO / LINKS</h2>'+
     (esStaff?'<button class="primary" id="man-nuevo" style="margin-bottom:14px">+ NUEVO MANUAL</button>':'')+
     '<div id="man-form-box"></div>'+
     '<div id="man-lista" class="empty">Cargando…</div></div>';
   if(esStaff) document.getElementById('man-nuevo').onclick=()=>formManual();
+  await cargarManualesRepo();
   await cargarManuales();
+}
+
+async function cargarManualesRepo(){
+  const el=document.getElementById('man-repo-lista');
+  try{
+    const r=await fetch('https://api.github.com/repos/'+GH_REPO+'/contents/manuales');
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const items=await r.json();
+    const archivos=(Array.isArray(items)?items:[]).filter(it=>it.type==='file');
+    if(!archivos.length){ el.innerHTML='<div class="empty">// CARPETA /manuales VACÍA EN EL REPO</div>'; return; }
+    archivos.sort((a,b)=>a.name.localeCompare(b.name));
+    el.innerHTML=archivos.map(f=>`
+      <div class="item">
+        <div class="meta"><div class="ttl">${escHtml(f.name)}</div>
+          <div class="sub">${(f.size/1024).toFixed(0)} KB</div></div>
+        <a href="${escHtml(f.download_url)}" target="_blank" rel="noopener"><button class="primary">DESCARGAR</button></a>
+      </div>`).join('');
+  }catch(e){
+    // Típico: repo privado, carpeta inexistente, o límite de la API de GitHub sin autenticar
+    // (60 req/hora por IP — para el tráfico de un aeroclub no debería ser problema, pero
+    // si varios alumnos abren la página casi a la vez desde la misma red podría pegarles
+    // a todos el mismo contador).
+    el.innerHTML='<div class="empty">✗ No se pudo leer /manuales del repo ('+escHtml(e.message)+')</div>';
+  }
 }
 
 function formManual(item,key){
@@ -458,7 +508,7 @@ async function cargarQuizzes(){
       <div class="meta">
         <div class="ttl">${escHtml(v.titulo)} <span class="tag ${v.activo!==false?'ok':'bad'}">${v.activo!==false?'ACTIVO':'INACTIVO'}</span>
           ${v.obligatorio?'<span class="tag" style="color:var(--amber);border-color:var(--amber)">OBLIGATORIO</span>':''}</div>
-        <div class="sub">${escHtml(v.categoria||'')} · ${(v.preguntas||[]).length} pregunta(s)</div>
+        <div class="sub">${escHtml(v.categoria||'')} · ${(v.preguntas||[]).length} pregunta(s)${(v.preguntas||[]).length>=QZ_BANCO_SIZE?' (banco — se sortean '+QZ_BANCO_SIZE+')':''}</div>
       </div>
       ${esAlumno&&v.activo!==false?(yaCompletado?'<span class="tag ok">✓ YA RENDIDO</span>':`<button class="primary qz-rendir" data-k="${k}">RENDIR</button>`):''}
       ${esStaff?`
@@ -531,7 +581,18 @@ async function verIntentos(quizKey,quiz){
   });
 }
 
-const QZ_PAGE_SIZE=10; // preguntas por página al rendir (solo afecta la vista del alumno)
+const QZ_PAGE_SIZE=10;  // preguntas por página al rendir (solo afecta la vista del alumno)
+const QZ_BANCO_SIZE=50; // si el banco tiene >= esta cantidad, se sortean QZ_BANCO_SIZE al azar
+
+function elegirSubconjunto(bancoCompleto){
+  if(bancoCompleto.length<QZ_BANCO_SIZE) return bancoCompleto;
+  const copia=bancoCompleto.slice();
+  for(let i=copia.length-1;i>0;i--){ // Fisher-Yates
+    const j=Math.floor(Math.random()*(i+1));
+    [copia[i],copia[j]]=[copia[j],copia[i]];
+  }
+  return copia.slice(0,QZ_BANCO_SIZE);
+}
 
 async function rendirQuiz(quiz,key){
   const box=document.getElementById('qz-rendir-box');
@@ -543,7 +604,9 @@ async function rendirQuiz(quiz,key){
       return;
     }
   }
-  const preguntas=quiz.preguntas||[];
+  const bancoCompleto=quiz.preguntas||[];
+  const esBanco=bancoCompleto.length>=QZ_BANCO_SIZE;
+  const preguntas=elegirSubconjunto(bancoCompleto); // sorteo único al abrir, se mantiene fijo durante todo el intento
   const total=preguntas.length;
   const totalPaginas=Math.max(1,Math.ceil(total/QZ_PAGE_SIZE));
   const respuestas=new Array(total).fill(-1); // persiste entre páginas, no se reinicia al repintar
@@ -554,6 +617,7 @@ async function rendirQuiz(quiz,key){
   function pintar(){
     const desde=pagina*QZ_PAGE_SIZE, hasta=Math.min(desde+QZ_PAGE_SIZE,total);
     box.innerHTML=`<div class="card"><h2>// ${escHtml(quiz.titulo).toUpperCase()}</h2>
+      ${esBanco?`<div class="sub" style="color:var(--amber);margin-bottom:6px">⚠ Banco de ${bancoCompleto.length} preguntas — te tocaron ${total} al azar para este intento.</div>`:''}
       <div class="sub" style="margin-bottom:12px">Página ${pagina+1} de ${totalPaginas} · Preguntas ${desde+1}–${hasta} de ${total} · Respondidas: ${respondidas()}/${total}</div>
       <div id="qr-preguntas">${preguntas.slice(desde,hasta).map((p,j)=>{
         const i=desde+j;
