@@ -1,5 +1,15 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 5.99
+  FECHA   : 2026-06-25
+  CAMBIOS : Reubicación de los links "Portal Alumno" y "Plan de Vuelo": salen de
+            adentro de la .tab-bar y pasan a una fila propia (.links-row) arriba
+            de la barra de pestañas, en alumno-screen e instructor-screen.
+            Portal Alumno a la izquierda, Plan de Vuelo a la derecha
+            (justify-content:space-between). Antes quedaban pegados al final de
+            la tab-bar y en pantallas angostas se iban a una segunda fila de forma
+            desprolija. Limpieza: se quitan las reglas de margin-left:auto/6px que
+            solo aplicaban cuando los links vivían dentro de .tab-bar.
   VERSION : 5.98
   FECHA   : 2026-06-25
   CAMBIOS : Link "🎓 Portal Alumno" (portal-alumno.html) en la tab-bar de alumno-screen
@@ -377,12 +387,11 @@ button.danger:hover{background:rgba(248,81,73,.18)}
 .nav-btn:hover{color:var(--text2);border-color:var(--border)}
 .nav-btn.active{color:var(--cyan);border-color:var(--cyan);background:rgba(0,200,212,.08);text-shadow:0 0 10px rgba(0,200,212,.4);}
 .tab-bar{display:flex;gap:8px;align-items:center;margin-bottom:1.25rem;flex-wrap:wrap;padding:.75rem 0;border-bottom:1px solid var(--border);}
+.links-row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:.85rem;flex-wrap:wrap;}
 .fpl-link{font-family:var(--font-mono);font-size:13px;font-weight:700;letter-spacing:.12em;color:#0a0a0a;background:var(--amber);border:1px solid var(--amber);border-radius:var(--radius);padding:8px 22px;text-decoration:none;box-shadow:0 0 14px rgba(240,165,0,.3);transition:all .15s;display:inline-flex;align-items:center;gap:6px;text-transform:uppercase;white-space:nowrap;}
 .fpl-link:hover{background:var(--amber2);box-shadow:0 0 20px rgba(240,165,0,.55);transform:translateY(-1px);}
-.tab-bar .fpl-link{margin-left:auto;}
 .portal-link{font-family:var(--font-mono);font-size:13px;font-weight:700;letter-spacing:.12em;color:#0a0a0a;background:var(--cyan);border:1px solid var(--cyan);border-radius:var(--radius);padding:8px 22px;text-decoration:none;box-shadow:0 0 14px rgba(0,200,212,.3);transition:all .15s;display:inline-flex;align-items:center;gap:6px;text-transform:uppercase;white-space:nowrap;}
 .portal-link:hover{background:var(--cyan-dim);color:var(--cyan);box-shadow:0 0 20px rgba(0,200,212,.55);transform:translateY(-1px);}
-.tab-bar .fpl-link ~ .portal-link, .tab-bar .portal-link{margin-left:6px;}
 
 /* SELECTOR DE AVIÓN */
 .avion-selector{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1.25rem;}
@@ -541,7 +550,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.98</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.99</div>
   </div>
 
 </div>
@@ -623,12 +632,14 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 
 <!-- USUARIO (alumno / piloto) -->
 <div id="alumno-screen" class="screen">
+  <div class="links-row">
+    <a href="portal-alumno.html" class="portal-link" id="al-portal-link">🎓 Portal Alumno</a>
+    <a href="fpl.html" class="fpl-link">✈ Plan de Vuelo</a>
+  </div>
   <div class="tab-bar">
     <button class="nav-btn active" id="al-tab-mis"    onclick="showAlumnoTab('mis-turnos')">Mis Turnos</button>
     <button class="nav-btn"        id="al-tab-pedir"  onclick="showAlumnoTab('pedir-turno')">Pedir Turno</button>
     <button class="nav-btn"        id="al-tab-perfil" onclick="showAlumnoTab('perfil')">Mi Perfil</button>
-    <a href="fpl.html" class="fpl-link">✈ Plan de Vuelo</a>
-    <a href="portal-alumno.html" class="portal-link" id="al-portal-link">🎓 Portal Alumno</a>
   </div>
   <div id="alumno-mis-turnos" class="screen active">
     <h2>◈ Mis Turnos</h2>
@@ -719,14 +730,16 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
     <span id="banner-turnos-pend-txt" style="font-family:var(--font-mono);font-size:14px;color:var(--amber2);letter-spacing:.06em;flex:1;min-width:180px;font-weight:600"></span>
     <button onclick="irAPendientes()" style="font-family:var(--font-mono);font-size:12px;letter-spacing:.1em;padding:8px 18px;border-color:var(--amber);color:var(--amber2);background:rgba(240,165,0,.15);white-space:nowrap;font-weight:600">VER TURNOS →</button>
   </div>
+  <div class="links-row">
+    <a href="portal-alumno.html" class="portal-link" id="inst-portal-link">🎓 Portal Alumno</a>
+    <a href="fpl.html" class="fpl-link">✈ Plan de Vuelo</a>
+  </div>
   <div class="tab-bar">
     <button class="nav-btn active" id="inst-tab-res"   onclick="showInstTab('reservas')">Reservas</button>
     <button class="nav-btn"        id="inst-tab-seg"   onclick="showInstTab('seguimiento')">Seguimiento</button>
     <button class="nav-btn"        id="inst-tab-disp"  onclick="showInstTab('disponibilidad')">Mi Disponibilidad</button>
     <button class="nav-btn"        id="inst-tab-cfg"   onclick="showInstTab('config')">Configuración</button>
     <button class="nav-btn"        id="inst-tab-perfil" onclick="showInstTab('perfil')">Mi Perfil</button>
-    <a href="fpl.html" class="fpl-link">✈ Plan de Vuelo</a>
-    <a href="portal-alumno.html" class="portal-link" id="inst-portal-link">🎓 Portal Alumno</a>
   </div>
   <div id="instructor-reservas" class="screen active">
     <h2>◈ Reservas</h2>
