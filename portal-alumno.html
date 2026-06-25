@@ -2,6 +2,12 @@
 <!--
 ==================================================================================
   PORTAL ALUMNO — Aeroclub Río Grande
+  v1.3 ·  Paginado al RENDIR un quiz (no afecta el editor de staff): 10 preguntas
+          por página (QZ_PAGE_SIZE), navegación Anterior/Siguiente, contador
+          "Respondidas: X/Y". Las respuestas se guardan en un array fuera del
+          render, así no se pierden al cambiar de página. Al enviar con preguntas
+          sin responder, salta directo a la página de la primera pendiente en
+          vez de solo avisar por alert.
   v1.2 ·  Quiz de resolución OBLIGATORIA: checkbox "obligatorio" en el editor.
           Si está marcado, el alumno tiene UN SOLO intento permitido (se re-chequea
           contra Firebase tanto al abrir el formulario como al enviar, para cubrir
@@ -122,7 +128,7 @@ button.danger{background:rgba(248,81,73,.08);color:var(--red);border-color:var(-
     <h1>PORTAL ALUMNO<small>AEROCLUB RÍO GRANDE</small></h1>
     <div class="sp">
       <span class="who" id="who-label"></span>
-      <span class="ver">v1.2</span>
+      <span class="ver">v1.3</span>
       <a class="back" href="turnos.html">← TURNERO</a>
     </div>
   </header>
@@ -525,6 +531,8 @@ async function verIntentos(quizKey,quiz){
   });
 }
 
+const QZ_PAGE_SIZE=10; // preguntas por página al rendir (solo afecta la vista del alumno)
+
 async function rendirQuiz(quiz,key){
   const box=document.getElementById('qz-rendir-box');
   if(quiz.obligatorio){
@@ -535,57 +543,81 @@ async function rendirQuiz(quiz,key){
       return;
     }
   }
-  box.innerHTML=`<div class="card"><h2>// ${escHtml(quiz.titulo).toUpperCase()}</h2>
-    <div id="qr-preguntas">${(quiz.preguntas||[]).map((p,i)=>`
-      <div class="card" style="background:var(--bg2)">
-        <h3>${i+1}. ${escHtml(p.enunciado)}</h3>
-        ${p.opciones.map((o,j)=>`
-          <div class="field" style="flex-direction:row;align-items:center;gap:8px">
-            <input type="radio" name="qr-${i}" value="${j}" data-i="${i}">
-            <label style="text-transform:none;font-size:14px;color:var(--text)">${escHtml(o)}</label>
-          </div>`).join('')}
-      </div>`).join('')}</div>
-    <div class="row">
-      <button class="primary" id="qr-enviar">ENVIAR</button>
-      <button id="qr-cancelar">CANCELAR</button>
-    </div>
-    <div id="qr-resultado"></div>
-  </div>`;
-  document.getElementById('qr-cancelar').onclick=()=>{box.innerHTML='';};
-  document.getElementById('qr-enviar').onclick=async()=>{
-    const preguntas=quiz.preguntas||[];
-    // Re-chequeo server-side al momento de enviar (no solo al pintar la lista): cubre el caso
-    // de dos pestañas abiertas o que el alumno haya dejado este formulario abierto un rato.
-    if(quiz.obligatorio){
-      const previo=await fbGet('intentos_quiz/'+userKey+'/'+key);
-      if(previo&&Object.keys(previo).length>0){
-        alert('Este cuestionario es de resolución obligatoria y ya tenés un intento registrado. No se puede volver a rendir.');
-        box.innerHTML=''; await cargarQuizzes(); return;
-      }
-    }
-    const respuestas=preguntas.map((p,i)=>{
-      const sel=box.querySelector(`input[name="qr-${i}"]:checked`);
-      return sel?+sel.value:-1;
-    });
-    if(respuestas.includes(-1)){ alert('Respondé todas las preguntas antes de enviar.'); return; }
-    const puntaje=respuestas.filter((r,i)=>r===preguntas[i].correcta).length;
-    const total=preguntas.length;
-    const detalle=preguntas.map((p,i)=>({
-      enunciado:p.enunciado,
-      elegida:p.opciones[respuestas[i]],
-      correcta_texto:p.opciones[p.correcta],
-      acierto:respuestas[i]===p.correcta
-    }));
-    const intento={respuestas,detalle,puntaje,total,fecha:new Date().toLocaleString('es-AR'),nombre:userLabel};
-    try{
-      await fbPush('intentos_quiz/'+userKey+'/'+key,intento);
-      document.getElementById('qr-resultado').innerHTML=`
-        <div class="card" style="background:var(--bg2);margin-top:14px">
-          <h3>RESULTADO: <span class="tag ${puntaje/total>=0.7?'ok':'bad'}">${puntaje}/${total}</span></h3>
+  const preguntas=quiz.preguntas||[];
+  const total=preguntas.length;
+  const totalPaginas=Math.max(1,Math.ceil(total/QZ_PAGE_SIZE));
+  const respuestas=new Array(total).fill(-1); // persiste entre páginas, no se reinicia al repintar
+  let pagina=0;
+
+  function respondidas(){ return respuestas.filter(r=>r!==-1).length; }
+
+  function pintar(){
+    const desde=pagina*QZ_PAGE_SIZE, hasta=Math.min(desde+QZ_PAGE_SIZE,total);
+    box.innerHTML=`<div class="card"><h2>// ${escHtml(quiz.titulo).toUpperCase()}</h2>
+      <div class="sub" style="margin-bottom:12px">Página ${pagina+1} de ${totalPaginas} · Preguntas ${desde+1}–${hasta} de ${total} · Respondidas: ${respondidas()}/${total}</div>
+      <div id="qr-preguntas">${preguntas.slice(desde,hasta).map((p,j)=>{
+        const i=desde+j;
+        return `<div class="card" style="background:var(--bg2)">
+          <h3>${i+1}. ${escHtml(p.enunciado)}</h3>
+          ${p.opciones.map((o,jj)=>`
+            <div class="field" style="flex-direction:row;align-items:center;gap:8px">
+              <input type="radio" name="qr-${i}" value="${jj}" data-i="${i}" ${respuestas[i]===jj?'checked':''}>
+              <label style="text-transform:none;font-size:14px;color:var(--text)">${escHtml(o)}</label>
+            </div>`).join('')}
         </div>`;
-      await cargarHistorial();
-    }catch(e){ alert('Error al guardar el intento: '+e.message); }
-  };
+      }).join('')}</div>
+      <div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap">
+        <div class="row">
+          <button id="qr-prev" ${pagina===0?'disabled':''}>← ANTERIOR</button>
+          ${pagina<totalPaginas-1?'<button class="primary" id="qr-next">SIGUIENTE →</button>':'<button class="primary" id="qr-enviar">ENVIAR</button>'}
+        </div>
+        <button id="qr-cancelar">CANCELAR</button>
+      </div>
+      <div id="qr-resultado"></div>
+    </div>`;
+    box.querySelectorAll('input[type="radio"]').forEach(r=>r.onchange=()=>{ respuestas[+r.dataset.i]=+r.value; });
+    document.getElementById('qr-cancelar').onclick=()=>{box.innerHTML='';};
+    const prevBtn=document.getElementById('qr-prev');
+    if(prevBtn) prevBtn.onclick=()=>{ pagina--; pintar(); };
+    const nextBtn=document.getElementById('qr-next');
+    if(nextBtn) nextBtn.onclick=()=>{ pagina++; pintar(); };
+    const enviarBtn=document.getElementById('qr-enviar');
+    if(enviarBtn) enviarBtn.onclick=async()=>{
+      const faltanIdx=respuestas.findIndex(r=>r===-1);
+      if(faltanIdx!==-1){
+        pagina=Math.floor(faltanIdx/QZ_PAGE_SIZE);
+        pintar();
+        alert('Te faltan responder '+(total-respondidas())+' pregunta(s). Te lleve a la pregunta '+(faltanIdx+1)+'.');
+        return;
+      }
+      // Re-chequeo server-side al momento de enviar (no solo al pintar la lista): cubre el caso
+      // de dos pestañas abiertas o que el alumno haya dejado este formulario abierto un rato.
+      if(quiz.obligatorio){
+        const previo=await fbGet('intentos_quiz/'+userKey+'/'+key);
+        if(previo&&Object.keys(previo).length>0){
+          alert('Este cuestionario es de resolución obligatoria y ya tenés un intento registrado. No se puede volver a rendir.');
+          box.innerHTML=''; await cargarQuizzes(); return;
+        }
+      }
+      const puntaje=respuestas.filter((r,i)=>r===preguntas[i].correcta).length;
+      const detalle=preguntas.map((p,i)=>({
+        enunciado:p.enunciado,
+        elegida:p.opciones[respuestas[i]],
+        correcta_texto:p.opciones[p.correcta],
+        acierto:respuestas[i]===p.correcta
+      }));
+      const intento={respuestas,detalle,puntaje,total,fecha:new Date().toLocaleString('es-AR'),nombre:userLabel};
+      try{
+        await fbPush('intentos_quiz/'+userKey+'/'+key,intento);
+        document.getElementById('qr-resultado').innerHTML=`
+          <div class="card" style="background:var(--bg2);margin-top:14px">
+            <h3>RESULTADO: <span class="tag ${puntaje/total>=0.7?'ok':'bad'}">${puntaje}/${total}</span></h3>
+          </div>`;
+        await cargarHistorial();
+      }catch(e){ alert('Error al guardar el intento: '+e.message); }
+    };
+  }
+  pintar();
 }
 
 async function cargarHistorial(){
