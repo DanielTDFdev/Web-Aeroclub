@@ -2,6 +2,15 @@
 <!--
 ==================================================================================
   PORTAL ALUMNO — Aeroclub Río Grande
+  v1.2 ·  Quiz de resolución OBLIGATORIA: checkbox "obligatorio" en el editor.
+          Si está marcado, el alumno tiene UN SOLO intento permitido (se re-chequea
+          contra Firebase tanto al abrir el formulario como al enviar, para cubrir
+          doble pestaña). El intento guarda ahora, además de respuestas/puntaje,
+          un detalle por pregunta {enunciado,elegida,correcta_texto,acierto} para
+          que el staff pueda revisar exactamente qué contestó mal el alumno
+          (botón VER DETALLE en INTENTOS). Si el quiz es obligatorio, INTENTOS
+          también muestra el roster de alumnos (rol:'alumno') que todavía NO
+          lo rindieron, comparando contra /alumnos.
   v1.1 ·  Importador de JSON en el editor de quiz (tab QUIZ, solo staff): pegás un
           array {pregunta, opciones:["A) ...","B) ...","C) ..."], respuesta_correcta:"A"}
           y se agrega a las preguntas ya cargadas (no reemplaza). Tolera fences de
@@ -113,7 +122,7 @@ button.danger{background:rgba(248,81,73,.08);color:var(--red);border-color:var(-
     <h1>PORTAL ALUMNO<small>AEROCLUB RÍO GRANDE</small></h1>
     <div class="sp">
       <span class="who" id="who-label"></span>
-      <span class="ver">v1.1</span>
+      <span class="ver">v1.2</span>
       <a class="back" href="turnos.html">← TURNERO</a>
     </div>
   </header>
@@ -344,6 +353,10 @@ function formQuiz(item,key){
         <h3>${key?'EDITAR':'NUEVO'} QUIZ</h3>
         <div class="field"><label>Título</label><input id="qf-titulo" value="${escHtml(item&&item.titulo||'')}"></div>
         <div class="field"><label>Categoría</label><input id="qf-categoria" value="${escHtml(item&&item.categoria||'')}"></div>
+        <div class="field" style="flex-direction:row;align-items:center;gap:8px">
+          <input type="checkbox" id="qf-obligatorio" ${item&&item.obligatorio?'checked':''}>
+          <label style="text-transform:none;font-size:13px;color:var(--text)">Resolución obligatoria (un solo intento permitido por alumno)</label>
+        </div>
         <div id="qf-preguntas">${preguntas.map((p,i)=>preguntaHtml(p,i)).join('')}</div>
         <button id="qf-add-preg" style="margin-bottom:14px">+ AGREGAR PREGUNTA</button>
         <div class="card" style="background:var(--bg);margin-bottom:14px">
@@ -395,7 +408,8 @@ function formQuiz(item,key){
       for(const p of preguntas){
         if(!p.enunciado.trim()||p.opciones.some(o=>!o.trim())){ st.textContent='✗ Hay preguntas/opciones vacías'; st.style.color='var(--red)'; return; }
       }
-      const data={titulo,categoria,preguntas,activo:item?item.activo!==false:true,autor:userLabel,
+      const data={titulo,categoria,preguntas,activo:item?item.activo!==false:true,
+        obligatorio:document.getElementById('qf-obligatorio').checked,autor:userLabel,
         creado:item&&item.creado||new Date().toLocaleString('es-AR')};
       try{
         if(key) await fbUpdate('quizzes/'+key,data);
@@ -429,20 +443,25 @@ async function cargarQuizzes(){
   const cont=document.getElementById('qz-lista');
   const entries=Object.entries(data||{});
   if(!entries.length){ cont.innerHTML='<div class="empty">// SIN QUIZZES CARGADOS</div>'; return; }
-  cont.innerHTML=entries.map(([k,v])=>`
+  // Para el alumno: sus propios intentos, para saber si un quiz obligatorio ya está completado.
+  const misIntentos=esAlumno?(await fbGet('intentos_quiz/'+userKey)||{}):{};
+  cont.innerHTML=entries.map(([k,v])=>{
+    const yaCompletado=esAlumno&&v.obligatorio&&misIntentos[k]&&Object.keys(misIntentos[k]).length>0;
+    return `
     <div class="item">
       <div class="meta">
-        <div class="ttl">${escHtml(v.titulo)} <span class="tag ${v.activo!==false?'ok':'bad'}">${v.activo!==false?'ACTIVO':'INACTIVO'}</span></div>
+        <div class="ttl">${escHtml(v.titulo)} <span class="tag ${v.activo!==false?'ok':'bad'}">${v.activo!==false?'ACTIVO':'INACTIVO'}</span>
+          ${v.obligatorio?'<span class="tag" style="color:var(--amber);border-color:var(--amber)">OBLIGATORIO</span>':''}</div>
         <div class="sub">${escHtml(v.categoria||'')} · ${(v.preguntas||[]).length} pregunta(s)</div>
       </div>
-      ${esAlumno&&v.activo!==false?`<button class="primary qz-rendir" data-k="${k}">RENDIR</button>`:''}
+      ${esAlumno&&v.activo!==false?(yaCompletado?'<span class="tag ok">✓ YA RENDIDO</span>':`<button class="primary qz-rendir" data-k="${k}">RENDIR</button>`):''}
       ${esStaff?`
         <button data-k="${k}" class="qz-toggle">${v.activo!==false?'DESACTIVAR':'ACTIVAR'}</button>
         <button data-k="${k}" class="qz-edit">EDITAR</button>
         <button data-k="${k}" class="qz-intentos">INTENTOS</button>
         <button data-k="${k}" class="danger qz-del">BORRAR</button>`:''}
     </div>
-    <div id="qz-intentos-${k}"></div>`).join('');
+    <div id="qz-intentos-${k}"></div>`;}).join('');
   cont.querySelectorAll('.qz-rendir').forEach(b=>b.onclick=()=>rendirQuiz(data[b.dataset.k],b.dataset.k));
   if(esStaff){
     cont.querySelectorAll('.qz-edit').forEach(b=>b.onclick=()=>formQuiz(data[b.dataset.k],b.dataset.k));
@@ -455,30 +474,67 @@ async function cargarQuizzes(){
       await fbRemove('quizzes/'+b.dataset.k);
       await cargarQuizzes();
     });
-    cont.querySelectorAll('.qz-intentos').forEach(b=>b.onclick=()=>verIntentos(b.dataset.k));
+    cont.querySelectorAll('.qz-intentos').forEach(b=>b.onclick=()=>verIntentos(b.dataset.k,data[b.dataset.k]));
   }
 }
 
-async function verIntentos(quizKey){
+async function verIntentos(quizKey,quiz){
   const box=document.getElementById('qz-intentos-'+quizKey);
   if(box.innerHTML){ box.innerHTML=''; return; }
   const todos=await fbGet('intentos_quiz');
   const filas=[];
+  const completaron=new Set();
   Object.entries(todos||{}).forEach(([uk,quizzes])=>{
     Object.entries(quizzes||{}).forEach(([qk,intentos])=>{
       if(qk!==quizKey) return;
+      completaron.add(uk);
       Object.values(intentos||{}).forEach(it=>filas.push(it));
     });
   });
   filas.sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
+  let pendientesHtml='';
+  if(quiz&&quiz.obligatorio){
+    const alumnosData=await fbGet('alumnos');
+    const pendientes=Object.entries(alumnosData||{}).filter(([k,v])=>(v.rol||'alumno')==='alumno'&&!completaron.has(k));
+    pendientesHtml=`<div class="card" style="background:var(--bg2)"><h3>PENDIENTES (${pendientes.length})</h3>`+
+      (pendientes.length? pendientes.map(([k,v])=>`<div class="item"><div class="meta"><div class="ttl">${escHtml(v.nombre||v.email||k)}</div></div></div>`).join('')
+        :'<div class="empty">// TODOS LO RINDIERON</div>')+'</div>';
+  }
   box.innerHTML='<div class="card" style="background:var(--bg)"><h3>INTENTOS</h3>'+
-    (filas.length? filas.map(f=>`<div class="item"><div class="meta"><div class="ttl">${escHtml(f.nombre||'?')}</div>
-      <div class="sub">${escHtml(f.fecha||'')}</div></div><span class="tag ${f.puntaje/f.total>=0.7?'ok':'bad'}">${f.puntaje}/${f.total}</span></div>`).join('')
-      :'<div class="empty">// SIN INTENTOS</div>')+'</div>';
+    (filas.length? filas.map((f,i)=>`
+      <div class="item"><div class="meta"><div class="ttl">${escHtml(f.nombre||'?')}</div>
+        <div class="sub">${escHtml(f.fecha||'')}</div></div>
+        <span class="tag ${f.puntaje/f.total>=0.7?'ok':'bad'}">${f.puntaje}/${f.total}</span>
+        ${f.detalle?`<button class="qzd-toggle" data-i="${i}">VER DETALLE</button>`:''}
+      </div>
+      <div id="qzd-${quizKey}-${i}" style="display:none"></div>`).join('')
+      :'<div class="empty">// SIN INTENTOS</div>')+'</div>'+pendientesHtml;
+  box.querySelectorAll('.qzd-toggle').forEach(b=>b.onclick=()=>{
+    const f=filas[+b.dataset.i];
+    const det=document.getElementById('qzd-'+quizKey+'-'+b.dataset.i);
+    if(det.style.display!=='none'){ det.style.display='none'; return; }
+    det.style.display='block';
+    det.innerHTML=(f.detalle||[]).map((d,j)=>`
+      <div class="item" style="background:var(--bg2)">
+        <div class="meta">
+          <div class="ttl">${j+1}. ${escHtml(d.enunciado)}</div>
+          <div class="sub">Eligió: ${escHtml(d.elegida)}${d.acierto?'':' · Correcta: '+escHtml(d.correcta_texto)}</div>
+        </div>
+        <span class="tag ${d.acierto?'ok':'bad'}">${d.acierto?'✓':'✗'}</span>
+      </div>`).join('');
+  });
 }
 
 async function rendirQuiz(quiz,key){
   const box=document.getElementById('qz-rendir-box');
+  if(quiz.obligatorio){
+    const previo=await fbGet('intentos_quiz/'+userKey+'/'+key);
+    if(previo&&Object.keys(previo).length>0){
+      alert('Ya tenés un intento registrado en este cuestionario obligatorio.');
+      await cargarQuizzes();
+      return;
+    }
+  }
   box.innerHTML=`<div class="card"><h2>// ${escHtml(quiz.titulo).toUpperCase()}</h2>
     <div id="qr-preguntas">${(quiz.preguntas||[]).map((p,i)=>`
       <div class="card" style="background:var(--bg2)">
@@ -498,6 +554,15 @@ async function rendirQuiz(quiz,key){
   document.getElementById('qr-cancelar').onclick=()=>{box.innerHTML='';};
   document.getElementById('qr-enviar').onclick=async()=>{
     const preguntas=quiz.preguntas||[];
+    // Re-chequeo server-side al momento de enviar (no solo al pintar la lista): cubre el caso
+    // de dos pestañas abiertas o que el alumno haya dejado este formulario abierto un rato.
+    if(quiz.obligatorio){
+      const previo=await fbGet('intentos_quiz/'+userKey+'/'+key);
+      if(previo&&Object.keys(previo).length>0){
+        alert('Este cuestionario es de resolución obligatoria y ya tenés un intento registrado. No se puede volver a rendir.');
+        box.innerHTML=''; await cargarQuizzes(); return;
+      }
+    }
     const respuestas=preguntas.map((p,i)=>{
       const sel=box.querySelector(`input[name="qr-${i}"]:checked`);
       return sel?+sel.value:-1;
@@ -505,7 +570,13 @@ async function rendirQuiz(quiz,key){
     if(respuestas.includes(-1)){ alert('Respondé todas las preguntas antes de enviar.'); return; }
     const puntaje=respuestas.filter((r,i)=>r===preguntas[i].correcta).length;
     const total=preguntas.length;
-    const intento={respuestas,puntaje,total,fecha:new Date().toLocaleString('es-AR'),nombre:userLabel};
+    const detalle=preguntas.map((p,i)=>({
+      enunciado:p.enunciado,
+      elegida:p.opciones[respuestas[i]],
+      correcta_texto:p.opciones[p.correcta],
+      acierto:respuestas[i]===p.correcta
+    }));
+    const intento={respuestas,detalle,puntaje,total,fecha:new Date().toLocaleString('es-AR'),nombre:userLabel};
     try{
       await fbPush('intentos_quiz/'+userKey+'/'+key,intento);
       document.getElementById('qr-resultado').innerHTML=`
