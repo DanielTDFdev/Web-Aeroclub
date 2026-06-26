@@ -2,6 +2,18 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
+  v3.18 ·  FIX critico de auditoria: resolverUsuario() no miraba session.username
+           (solo user/emailKey/nombre), a diferencia de resolverUsuarioLabel() que si
+           lo hacia — para alumno/piloto (sin 'user' en la sesion) el borrador se
+           guardaba bajo el emailKey sanitizado mientras pantalla/auditoria mostraban
+           el username: dos identidades distintas para la misma persona, imposible de
+           encontrar buscando por el nombre que se ve. Se agrega username en la misma
+           posicion relativa que tenia en el Label. Ademas: auditarFPL ya no es fire-
+           and-forget silencioso — ahora se espera (await), y si el POST a /auditoria
+           falla (sin red, etc.) el registro queda en una cola en localStorage que se
+           reintenta sola en cada carga de pagina y antes de cada auditoria nueva; si
+           sigue sin entrar justo despues de generar el PDF, se avisa con alert()
+           explicito (no un toast que se pueda pisar con el siguiente mensaje).
   v3.17 ·  Nuevo campo "Presentado por" (Filed by): casilla existente en el RECTS del
            formulario ('Filed') que nunca se llenaba. Input en pantalla, se autocompleta
            con el usuario logueado, se imprime en el PDF (incluido PDF combinado) y se
@@ -419,7 +431,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v3.17</span>
+    <span class="ver">v3.18</span>
     <a href="turnos.html" title="Volver al turnero (sin cerrar sesión)" style="font-family:var(--mono);font-size:12px;color:var(--cyan);text-decoration:none;border:1px solid var(--line-hot);border-radius:5px;padding:5px 11px;letter-spacing:1px;transition:.15s" onmouseover="this.style.background='var(--cyan)';this.style.color='#04141a'" onmouseout="this.style.background='transparent';this.style.color='var(--cyan)'">← TURNERO</a>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
@@ -780,7 +792,15 @@ function resolverUsuario(){
   try{
     const s=JSON.parse(sessionStorage.getItem('lvoad-session')||'null');
     if(s){
-      const id=s.user||s.emailKey||s.nombre||'';
+      // FIX v3.18: antes esta funcion NO miraba s.username (solo user/emailKey/nombre),
+      // mientras que resolverUsuarioLabel() de abajo SI lo mira. Para instructor/admin
+      // no afectaba (siempre traen 'user'), pero para alumno/piloto la clave real de
+      // guardado (esta funcion) terminaba siendo el emailKey sanitizado, mientras que
+      // la auditoria y la pantalla mostraban el username — dos identidades distintas
+      // para la misma persona. Se inserta username en la misma posicion relativa que
+      // tiene en resolverUsuarioLabel (justo despues de 'user'), sin tocar el orden
+      // emailKey/nombre para no reubicar borradores ya guardados de cuentas sin username.
+      const id=s.user||s.username||s.emailKey||s.nombre||'';
       const clean=String(id).trim().replace(/[.#$/\[\]]/g,'_');   // claves válidas en Firebase
       if(clean) return clean;
     }
@@ -1530,8 +1550,12 @@ async function generarPDFCombinado(planes){
     const hoy=new Date().toISOString().slice(0,10).replace(/-/g,'');
     link.download='FPL_combinado_'+hoy+'_'+planes.length+'planes.pdf'; link.click();
     setTimeout(()=>URL.revokeObjectURL(url),3000);
-    planes.forEach(p=>auditarFPLData(p));   // una entrada de auditoria por plan
+    let fallaron=0;
+    for(const p of planes){ if(!(await auditarFPLData(p))) fallaron++; }   // una entrada de auditoria por plan
     toast('PDF combinado generado · '+planes.length+' planes','ok');
+    if(fallaron){
+      alert('⚠ Se generaron los '+planes.length+' PDF, pero '+fallaron+' de '+planes.length+' auditorías no se pudieron registrar (sin conexión con la base). Quedaron guardadas en este navegador y se van a reintentar solas la próxima vez que generes un PDF o recargues la página.');
+    }
   }catch(e){ console.error(e); toast('Error generando PDF combinado: '+e.message,'bad'); }
 }
 
@@ -1552,7 +1576,10 @@ async function generarPDF(){
     const link=document.createElement('a'); link.href=url;
     link.download=`FPL_${vU('f7')||'SIN_ID'}_${$('f13fecha').value||''}.pdf`; link.click();
     setTimeout(()=>URL.revokeObjectURL(url),3000);
-    auditarFPL();   // registro en /auditoria (tag rol:'fpl'), no bloqueante
+    const auditOk=await auditarFPL();   // registro en /auditoria (tag rol:'fpl')
+    if(!auditOk){
+      alert('⚠ El PDF se generó y descargó bien, pero la AUDITORÍA no se pudo registrar (sin conexión con la base). Quedó guardada en este navegador y se va a reintentar sola la próxima vez que generes un PDF o recargues la página — no hace falta que lo vuelvas a hacer.');
+    }
     // copiar email ARO/AIS del aeródromo de SALIDA para enviar el plan
     const _c=contactoDe('f13a'); const _mail=_c.data&&_c.data[0]&&_c.data[0][1];
     if(_mail){ const ok=await copiar(_mail);
@@ -1563,28 +1590,65 @@ async function generarPDF(){
   }catch(err){ console.error(err); toast('Error generando PDF: '+err.message,'bad'); }
 }
 
-/* ============================ AUDITORIA FPL ============================ */
+/* ============================ AUDITORIA FPL ============================
+   v3.18: el POST a /auditoria era 'fire and forget' (sin await desde el llamador) y
+   cualquier falla se tragaba en consola sin avisar a nadie — el usuario veia "PDF
+   generado" igual aunque la auditoria nunca llegara a la base (caso real: un piloto
+   decia haber presentado planes que nunca aparecieron auditados). Ahora:
+   1) los llamadores SI esperan (await) el resultado antes de dar el OK final;
+   2) si el POST falla, el registro se guarda en una cola en localStorage en vez de
+      perderse, y se reintenta solo en cada carga de la pagina y antes de cada
+      auditoria nueva, hasta que entre;
+   3) si despues de generar el PDF la auditoria sigue sin poder entrar, se avisa
+      explicitamente con alert() (no un toast que se pueda pisar con el siguiente). */
+const AUDIT_QUEUE_KEY='fpl-audit-queue';
+function _auditQueueGet(){ try{ return JSON.parse(localStorage.getItem(AUDIT_QUEUE_KEY)||'[]'); }catch(_){ return []; } }
+function _auditQueueSet(arr){ try{ localStorage.setItem(AUDIT_QUEUE_KEY, JSON.stringify(arr)); }catch(_){} }
+async function _auditPost(entry){
+  const r=await fetch(`${DB}/auditoria.json`,{method:'POST',
+    headers:{'Content-Type':'application/json'}, body:JSON.stringify(entry)});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+}
+// Reintenta despachar lo que haya quedado pendiente de una sesion anterior (u otro
+// intento fallido recien). No bloquea ni avisa si no hay nada en cola.
+async function flushAuditQueue(){
+  const cola=_auditQueueGet();
+  if(!cola.length) return;
+  const restantes=[];
+  for(const entry of cola){
+    try{ await _auditPost(entry); }catch(_){ restantes.push(entry); }
+  }
+  _auditQueueSet(restantes);
+  if(restantes.length<cola.length) toast('Auditoría FPL pendiente regularizada ('+(cola.length-restantes.length)+')','ok');
+}
+
 async function auditarFPL(){ return auditarFPLData(planDataDesdeForm()); }
 
 // Registra en /auditoria un plan a partir de un objeto de datos (form o borrador).
+// Devuelve true/false segun si el registro quedo efectivamente en /auditoria.
 async function auditarFPLData(p){
+  const fpl={
+    fecha:        p.fecha_local||'',
+    origen:       (p.salida||'').toUpperCase(),
+    destino:      (p.destino||'').toUpperCase(),
+    hora:         p.hora_local||'',
+    tiempo_vuelo: p.eet||'',
+    matricula:    (p.matricula||'').toUpperCase(),
+    comandante:   (p.piloto||'').toUpperCase()
+  };
+  const detalle=(fpl.origen||'?')+' → '+(fpl.destino||'?')+' · '+(fpl.matricula||'?')+
+    ' · '+(fpl.hora||'--:--')+' (EET '+(fpl.tiempo_vuelo||'----')+') · cmte '+(fpl.comandante||'?');
+  const entry={accion:'fpl_generado', rol:'fpl', resultado:'exito', detalle,
+               usuario:USUARIO_LABEL, fpl, ts:new Date().toISOString()};
   try{
-    const fpl={
-      fecha:        p.fecha_local||'',
-      origen:       (p.salida||'').toUpperCase(),
-      destino:      (p.destino||'').toUpperCase(),
-      hora:         p.hora_local||'',
-      tiempo_vuelo: p.eet||'',
-      matricula:    (p.matricula||'').toUpperCase(),
-      comandante:   (p.piloto||'').toUpperCase()
-    };
-    const detalle=(fpl.origen||'?')+' → '+(fpl.destino||'?')+' · '+(fpl.matricula||'?')+
-      ' · '+(fpl.hora||'--:--')+' (EET '+(fpl.tiempo_vuelo||'----')+') · cmte '+(fpl.comandante||'?');
-    const entry={accion:'fpl_generado', rol:'fpl', resultado:'exito', detalle,
-                 usuario:USUARIO_LABEL, fpl, ts:new Date().toISOString()};
-    await fetch(`${DB}/auditoria.json`,{method:'POST',
-      headers:{'Content-Type':'application/json'}, body:JSON.stringify(entry)});
-  }catch(e){ console.warn('No se pudo auditar el FPL:',e); }  // nunca frena el PDF
+    await flushAuditQueue();   // primero despacha lo viejo, asi no se mezcla el orden
+    await _auditPost(entry);
+    return true;
+  }catch(e){
+    console.warn('No se pudo auditar el FPL, queda en cola para reintentar:',e);
+    const cola=_auditQueueGet(); cola.push(entry); _auditQueueSet(cola);
+    return false;
+  }
 }
 
 /* ============================ RELOJ ============================ */
@@ -1631,6 +1695,7 @@ if(!$('f13fecha').value) $('f13fecha').value=hoyLocal();
 if(!$('ffiledby').value && USUARIO.indexOf('externo')!==0) $('ffiledby').value=USUARIO_LABEL;
 const _utag=$('fpl-usuario-tag'); if(_utag) _utag.textContent='Usuario: '+USUARIO_LABEL+(USUARIO.indexOf('externo')===0?' (no logueado · borradores de esta sesión, se depuran tras 1 h)':'');
 refrescarPreview(); cargarFlota(); cargarAerodromos(); cargarLista(); reloj(); setInterval(reloj,1000);
+flushAuditQueue();   // por si quedó algo pendiente de una sesión anterior con error de red
 </script>
 </body>
 </html>
