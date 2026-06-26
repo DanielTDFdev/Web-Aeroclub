@@ -2,6 +2,10 @@
 <!--
 ==================================================================================
   PESO Y BALANCE — Aeroclub Río Grande
+  v1.1 ·  Tooltip (title) con la conversión a kg en todos los valores que se
+          muestran en lbs: Peso total, MTOW y Peso disponible (resBox), y los
+          ticks del eje Y + etiqueta MTOW del ábaco SVG. Affordance visual:
+          subrayado punteado + cursor "help" en los valores que tienen tooltip.
   v1.0 ·  Primera versión. Calculadora de peso y balance, replicando la planilla
           de Excel del club (envolvente, combustible, equipaje, piloto/pasajero)
           con gráfico de ábaco dibujado en SVG (polígono + punto de CG).
@@ -92,6 +96,7 @@ h3{font-family:var(--font-mono);font-size:12px;color:var(--amber);letter-spacing
 .kv:last-child{border-bottom:none}
 .kv .k{color:var(--text2)}
 .kv .v{color:var(--text);font-weight:700}
+.kv .v[title]{cursor:help;border-bottom:1px dotted var(--text3)}
 .abaco-wrap{margin-top:14px;display:flex;justify-content:center}
 .proximamente{font-family:var(--font-mono);color:var(--text3);text-align:center;padding:2.6rem 1rem;letter-spacing:.04em}
 .empty{color:var(--text3);font-family:var(--font-mono);font-size:12px;padding:1rem 0;text-align:center}
@@ -120,7 +125,7 @@ h3{font-family:var(--font-mono);font-size:12px;color:var(--amber);letter-spacing
         <span class="theme-toggle-icon">☀️</span>
       </div>
       <span class="who" id="who-label"></span>
-      <span class="ver">v1.0</span>
+      <span class="ver">v1.1</span>
       <a class="back" href="turnos.html">← TURNERO</a>
     </div>
   </header>
@@ -212,6 +217,9 @@ function puntoEnPoligono(x,y,poly){
   return dentro;
 }
 
+// Conversión para tooltips (misma constante que el resto del cálculo, kg_a_lb=2.2)
+function lbsAKg(lbs, av){ return lbs/(av&&av.kg_a_lb?av.kg_a_lb:2.2); }
+
 function calcular(av, piloto_kg, pasajero_kg, combustible_l, equipaje_kg){
   const pesoTripLbs = (piloto_kg+pasajero_kg)*av.kg_a_lb;
   const pesoCombLbs = (combustible_l*av.fuel_kg_por_litro)*av.kg_a_lb;
@@ -246,7 +254,7 @@ function svgAbaco(av, res){
   const gridX=xTicks.map(t=>`<line x1="${sx(t)}" y1="${PADT}" x2="${sx(t)}" y2="${H-PADB}" stroke="var(--border)" stroke-width="1"/>
     <text x="${sx(t)}" y="${H-PADB+16}" font-family="var(--font-mono)" font-size="9" fill="var(--text3)" text-anchor="middle">${t.toFixed(1)}</text>`).join('');
   const gridY=yTicks.map(t=>`<line x1="${PADL}" y1="${sy(t)}" x2="${W-PADR}" y2="${sy(t)}" stroke="var(--border)" stroke-width="1"/>
-    <text x="${PADL-8}" y="${sy(t)+3}" font-family="var(--font-mono)" font-size="9" fill="var(--text3)" text-anchor="end">${t.toFixed(0)}</text>`).join('');
+    <text x="${PADL-8}" y="${sy(t)+3}" font-family="var(--font-mono)" font-size="9" fill="var(--text3)" text-anchor="end"><title>${lbsAKg(t,av).toFixed(0)} kg</title>${t.toFixed(0)}</text>`).join('');
   const poly=av.envolvente.map(p=>sx(p[0])+','+sy(p[1])).join(' ');
   const mtowY=sy(av.mtow);
   const cx=sx(res.cg), cy=sy(res.pesoTotal);
@@ -254,7 +262,7 @@ function svgAbaco(av, res){
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg)">
     ${gridX}${gridY}
     <line x1="${PADL}" y1="${mtowY}" x2="${W-PADR}" y2="${mtowY}" stroke="var(--amber)" stroke-width="1" stroke-dasharray="4,3"/>
-    <text x="${W-PADR-4}" y="${mtowY-5}" font-family="var(--font-mono)" font-size="9" fill="var(--amber)" text-anchor="end">MTOW ${av.mtow}</text>
+    <text x="${W-PADR-4}" y="${mtowY-5}" font-family="var(--font-mono)" font-size="9" fill="var(--amber)" text-anchor="end"><title>${lbsAKg(av.mtow,av).toFixed(0)} kg</title>MTOW ${av.mtow}</text>
     <polygon points="${poly}" fill="rgba(0,200,212,.08)" stroke="var(--cyan)" stroke-width="1.6"/>
     <circle cx="${cx}" cy="${cy}" r="6" fill="${colorPunto}" stroke="var(--bg)" stroke-width="1.5"/>
     <text x="${PADL+ (W-PADL-PADR)/2}" y="${H-6}" font-family="var(--font-mono)" font-size="10" fill="var(--text2)" text-anchor="middle">BRAZO (pulgadas)</text>
@@ -323,9 +331,9 @@ function actualizarResultado(key){
   else { estadoTxt='⚠ CG FUERA DE LA ENVOLVENTE'; estadoCls='bad'; }
   $('resBox').innerHTML=`
     <div class="estado-box ${estadoCls}">${estadoTxt}</div>
-    <div class="kv"><span class="k">Peso total</span><span class="v">${res.pesoTotal.toFixed(1)} lbs</span></div>
-    <div class="kv"><span class="k">MTOW</span><span class="v">${av.mtow} lbs</span></div>
-    <div class="kv"><span class="k">Peso disponible</span><span class="v">${res.pesoDisponible.toFixed(1)} lbs</span></div>
+    <div class="kv"><span class="k">Peso total</span><span class="v" title="${(res.pesoTotal/av.kg_a_lb).toFixed(1)} kg">${res.pesoTotal.toFixed(1)} lbs</span></div>
+    <div class="kv"><span class="k">MTOW</span><span class="v" title="${(av.mtow/av.kg_a_lb).toFixed(1)} kg">${av.mtow} lbs</span></div>
+    <div class="kv"><span class="k">Peso disponible</span><span class="v" title="${(res.pesoDisponible/av.kg_a_lb).toFixed(1)} kg">${res.pesoDisponible.toFixed(1)} lbs</span></div>
     <div class="kv"><span class="k">CG actual</span><span class="v">${res.cg.toFixed(2)}"</span></div>
     ${res.autonomia!=null?`<div class="kv"><span class="k">Autonomía estimada</span><span class="v">${res.autonomia.toFixed(1)} h</span></div>`:''}
   `;
