@@ -2,6 +2,15 @@
 <!--
 ==================================================================================
   PESO Y BALANCE — Aeroclub Río Grande
+  v1.2 ·  LV-ART y LV-MPH agregados con datos reales del POH/TCDS (antes
+          "próximamente"). Esquema generalizado de "estaciones" de carga
+          (lista de filas/compartimentos con su propio brazo, en vez de los
+          4 campos fijos piloto/pasajero/combustible/equipaje de antes) —
+          necesario porque Archer (4 plazas) y Lance (6 plazas, 3 filas, 2
+          compartimentos de equipaje) no entran en el molde de 1 sola fila
+          del Tomahawk. Aviso explícito (estado-box rojo) en pantalla mientras
+          el peso vacío de un avión sea una estimación sin confirmar contra
+          la planilla de pesaje real — LV-ART y LV-MPH arrancan así.
   v1.1 ·  Tooltip (title) con la conversión a kg en todos los valores que se
           muestran en lbs: Peso total, MTOW y Peso disponible (resBox), y los
           ticks del eje Y + etiqueta MTOW del ábaco SVG. Affordance visual:
@@ -125,7 +134,7 @@ h3{font-family:var(--font-mono);font-size:12px;color:var(--amber);letter-spacing
         <span class="theme-toggle-icon">☀️</span>
       </div>
       <span class="who" id="who-label"></span>
-      <span class="ver">v1.1</span>
+      <span class="ver">v1.2</span>
       <a class="back" href="turnos.html">← TURNERO</a>
     </div>
   </header>
@@ -170,34 +179,85 @@ window.toggleTheme=function(){
 const $=id=>document.getElementById(id);
 
 /* ============================ DATOS DE AERONAVES ============================
-   Para agregar un avión nuevo (LV-ART, LV-MPH): sumar una entrada acá con sus
-   datos reales del POH. No hace falta tocar nada más del código — si la
-   entrada es `null`, la pantalla muestra automáticamente "PRÓXIMAMENTE".
-   Unidades: brazo en pulgadas, peso en libras (estándar de los POH/manuales
-   originales). El usuario carga piloto/pasajero/equipaje en KG y combustible
-   en LITROS (unidades habituales en Argentina); todo se convierte internamente. */
+   v1.2: esquema generalizado por "estaciones" de carga (en vez de los 4 campos
+   fijos piloto/pasajero/combustible/equipaje de la v1.0/v1.1, pensados solo
+   para el Tomahawk de 2 plazas en una sola fila). Archer (4 plazas) y Lance
+   (6 plazas, 3 filas, 2 compartimentos de equipaje) necesitan más de una
+   fila/compartimento, cada uno con su propio brazo — por eso cada avión
+   declara su propia lista de `estaciones`, y el formulario/cálculo/SVG se
+   generan dinámicamente a partir de esa lista. Agregar un avión nuevo es
+   sumar una entrada acá; no hace falta tocar el resto del código.
+
+   `verificado:false` = el peso_vacio/brazo_vacio son una ESTIMACIÓN, no el
+   dato real de pesaje de ESTE avión puntual. La pantalla muestra un aviso
+   explícito mientras siga así — confirmar contra la planilla de pesaje real
+   antes de usar para vuelo. El resto de los datos (brazos de estaciones,
+   envolvente, MTOW) son de certificación (TCDS/POH) y SÍ son fijos para el
+   modelo, no varían entre aeronaves del mismo tipo:
+   - LV-OAD: planilla original del club (verificada).
+   - LV-ART: brazos/envolvente/MTOW de TCDS+POH del PA-28-181 Archer II.
+     peso_vacio/brazo_vacio: placeholder de catálogo, SIN dato real de LV-ART.
+   - LV-MPH: brazos/envolvente/MTOW de la TCDS A3SO de la FAA (Modelo V,
+     PA-32RT-300 Lance II). peso_vacio: estimado a partir de la carga útil
+     publicada en flota.html (514 kg / 1134 lbs ⇒ 3600-1134=2466 lbs) — NO es
+     un dato de pesaje confirmado, falta validar contra la planilla real.
+
+   Unidades: brazo en pulgadas, peso en libras (estándar de TCDS/POH). El
+   usuario carga personas/equipaje en KG y combustible en LITROS; se convierte
+   todo internamente con kg_a_lb / fuel_kg_por_litro. */
 const AERONAVES_WB={
   'LV-OAD':{
     nombre:'LV-OAD · Tomahawk PA-38-112',
+    verificado:true,
     peso_vacio:1187, brazo_vacio:74.96,
-    brazo_piloto:85.50,
-    brazo_combustible:75.40, fuel_kg_por_litro:0.72,
-    brazo_equipaje:115.00,
     mtow:1670,
-    consumo_lh:22,           // L/h, para la autonomía estimada
-    kg_a_lb:2.2,
-    // Envolvente (polígono de peso y balance): [brazo(pulg), peso(lbs)]
+    kg_a_lb:2.2, fuel_kg_por_litro:0.72, consumo_lh:22,
+    estaciones:[
+      {id:'piloto', label:'Piloto (kg)', brazo:85.50, tipo:'persona', valorDefault:80},
+      {id:'pasajero', label:'Pasajero (kg)', brazo:85.50, tipo:'persona', valorDefault:0, hint:'Dejá en 0 si volás solo'},
+      {id:'combustible', label:'Combustible (litros)', brazo:75.40, tipo:'combustible', valorDefault:50},
+      {id:'equipaje', label:'Equipaje (kg)', brazo:115.00, tipo:'equipaje', valorDefault:0}
+    ],
     envolvente:[[72.4,1000],[72.4,1277],[73.5,1670],[78.5,1670],[78.5,1000]]
   },
-  'LV-ART':null,   // PRÓXIMAMENTE — Archer II PA-28-181, pendiente cargar datos del POH
-  'LV-MPH':null    // PRÓXIMAMENTE — Lance II PA-32RT-300, pendiente cargar datos del POH
+  'LV-ART':{
+    nombre:'LV-ART · Archer II PA-28-181',
+    verificado:false,
+    peso_vacio:1550, brazo_vacio:86.0,
+    mtow:2550,
+    kg_a_lb:2.2, fuel_kg_por_litro:0.72, consumo_lh:38,
+    estaciones:[
+      {id:'piloto', label:'Piloto (kg)', brazo:80.50, tipo:'persona', valorDefault:80},
+      {id:'pasajero_del', label:'Pasajero delantero (kg)', brazo:80.50, tipo:'persona', valorDefault:0, hint:'Asiento junto al piloto'},
+      {id:'pasajeros_tras', label:'Pasajeros traseros (kg, total)', brazo:118.10, tipo:'persona', valorDefault:0, hint:'Hasta 2 personas'},
+      {id:'combustible', label:'Combustible (litros)', brazo:95.00, tipo:'combustible', valorDefault:100},
+      {id:'equipaje', label:'Equipaje (kg)', brazo:142.80, tipo:'equipaje', valorDefault:0, max_kg:90.7, max_lbl:'200 lbs'}
+    ],
+    envolvente:[[82.0,1500],[82.0,2050],[88.5,2550],[93.0,2550],[93.0,1500]]
+  },
+  'LV-MPH':{
+    nombre:'LV-MPH · Lance II PA-32RT-300',
+    verificado:false,
+    peso_vacio:2466, brazo_vacio:90.0,
+    mtow:3600,
+    kg_a_lb:2.2, fuel_kg_por_litro:0.72, consumo_lh:68.1,
+    estaciones:[
+      {id:'piloto', label:'Piloto (kg)', brazo:85.50, tipo:'persona', valorDefault:80},
+      {id:'pasajero_del', label:'Pasajero delantero (kg)', brazo:85.50, tipo:'persona', valorDefault:0, hint:'Asiento junto al piloto'},
+      {id:'pasajeros_centro', label:'Pasajeros fila central (kg, total)', brazo:118.10, tipo:'persona', valorDefault:0, hint:'Hasta 3 personas'},
+      {id:'pasajeros_tras', label:'Pasajeros fila trasera (kg, total)', brazo:157.60, tipo:'persona', valorDefault:0, hint:'Hasta 2 personas'},
+      {id:'combustible', label:'Combustible (litros)', brazo:93.60, tipo:'combustible', valorDefault:150},
+      {id:'equipaje_del', label:'Equipaje delantero (kg)', brazo:42.00, tipo:'equipaje', valorDefault:0, max_kg:45.4, max_lbl:'100 lbs'},
+      {id:'equipaje_tras', label:'Equipaje trasero (kg)', brazo:178.70, tipo:'equipaje', valorDefault:0, max_kg:45.4, max_lbl:'100 lbs'}
+    ],
+    envolvente:[[82.0,2000],[82.0,2500],[84.0,3000],[91.4,3600],[96.0,3600],[96.0,2000]]
+  }
 };
 
-// Etiquetas para el selector (incluye los "próximamente" aunque su valor sea null)
 const ETIQUETAS_AVION={
   'LV-OAD':'LV-OAD · Tomahawk PA-38-112',
-  'LV-ART':'LV-ART · Archer II PA-28-181 (próximamente)',
-  'LV-MPH':'LV-MPH · Lance II PA-32RT-300 (próximamente)'
+  'LV-ART':'LV-ART · Archer II PA-28-181',
+  'LV-MPH':'LV-MPH · Lance II PA-32RT-300'
 };
 
 function llenarSelector(){
@@ -220,21 +280,25 @@ function puntoEnPoligono(x,y,poly){
 // Conversión para tooltips (misma constante que el resto del cálculo, kg_a_lb=2.2)
 function lbsAKg(lbs, av){ return lbs/(av&&av.kg_a_lb?av.kg_a_lb:2.2); }
 
-function calcular(av, piloto_kg, pasajero_kg, combustible_l, equipaje_kg){
-  const pesoTripLbs = (piloto_kg+pasajero_kg)*av.kg_a_lb;
-  const pesoCombLbs = (combustible_l*av.fuel_kg_por_litro)*av.kg_a_lb;
-  const pesoEquipLbs= equipaje_kg*av.kg_a_lb;
-  const pesoTotal   = av.peso_vacio + pesoTripLbs + pesoCombLbs + pesoEquipLbs;
-  const momento     = av.peso_vacio*av.brazo_vacio + pesoTripLbs*av.brazo_piloto +
-                       pesoCombLbs*av.brazo_combustible + pesoEquipLbs*av.brazo_equipaje;
-  const cg          = pesoTotal>0 ? momento/pesoTotal : av.brazo_vacio;
-  const dentroEnvolvente = puntoEnPoligono(cg, pesoTotal, av.envolvente);
-  const dentroMTOW  = pesoTotal<=av.mtow;
+function calcular(av, valores){
+  let pesoTotal=av.peso_vacio;
+  let momento=av.peso_vacio*av.brazo_vacio;
+  const excesos=[];   // estaciones que superan su propio max_kg (informativo, no bloqueante)
+  for(const e of av.estaciones){
+    const val=valores[e.id]||0;
+    const pesoLbs=(e.tipo==='combustible'? val*av.fuel_kg_por_litro : val) * av.kg_a_lb;
+    pesoTotal+=pesoLbs; momento+=pesoLbs*e.brazo;
+    if(e.max_kg && val>e.max_kg) excesos.push(e.label+' supera el máximo ('+(e.max_lbl||e.max_kg+' kg')+')');
+  }
+  const cg=pesoTotal>0 ? momento/pesoTotal : av.brazo_vacio;
+  const dentroEnvolvente=puntoEnPoligono(cg, pesoTotal, av.envolvente);
+  const dentroMTOW=pesoTotal<=av.mtow;
+  const comb=valores['combustible']||0;
   return{
-    pesoTotal, cg, dentroEnvolvente, dentroMTOW,
-    ok: dentroEnvolvente && dentroMTOW,
+    pesoTotal, cg, dentroEnvolvente, dentroMTOW, excesos,
+    ok: dentroEnvolvente && dentroMTOW && !excesos.length,
     pesoDisponible: av.mtow-pesoTotal,
-    autonomia: av.consumo_lh ? combustible_l/av.consumo_lh : null
+    autonomia: av.consumo_lh ? comb/av.consumo_lh : null
   };
 }
 
@@ -275,35 +339,23 @@ function renderCalcArea(){
   const key=$('selAvion').value;
   const av=AERONAVES_WB[key];
   const area=$('calcArea');
-  if(!av){
-    area.innerHTML=`<div class="card"><div class="proximamente">
-      ⚠ ${ETIQUETAS_AVION[key]}<br><br>
-      Todavía no se cargaron los datos de peso y balance de esta aeronave (envolvente,
-      brazos, MTOW del POH). Avisale a Daniel si lo necesitás antes de que esté listo.
-    </div></div>`;
-    return;
-  }
+  const avisoNoVerificado=!av.verificado?`<div class="estado-box bad" style="margin-bottom:14px">
+      ⚠ PESO VACÍO SIN VERIFICAR — el peso vacío y su brazo para ${av.nombre} son una
+      ESTIMACIÓN (de catálogo / cálculo indirecto), NO el dato real de pesaje de este
+      avión puntual. No usar para vuelo real hasta confirmar contra la planilla de
+      pesaje actual de la aeronave.
+    </div>`:'';
   area.innerHTML=`<div class="card">
     <h2>// CARGA — ${av.nombre}</h2>
+    ${avisoNoVerificado}
     <div class="wb-grid">
       <div>
-        <div class="field">
-          <label>Piloto (kg)</label>
-          <input type="number" id="inPiloto" min="0" step="1" value="80">
-        </div>
-        <div class="field">
-          <label>Pasajero (kg)</label>
-          <input type="number" id="inPasajero" min="0" step="1" value="0">
-          <span class="hint">Dejá en 0 si volás solo</span>
-        </div>
-        <div class="field">
-          <label>Combustible (litros)</label>
-          <input type="number" id="inComb" min="0" step="1" value="50">
-        </div>
-        <div class="field">
-          <label>Equipaje (kg)</label>
-          <input type="number" id="inEquip" min="0" step="1" value="0">
-        </div>
+        ${av.estaciones.map(e=>`
+          <div class="field">
+            <label>${e.label}</label>
+            <input type="number" id="in_${e.id}" min="0" step="1" value="${e.valorDefault}">
+            ${e.hint?`<span class="hint">${e.hint}</span>`:''}
+          </div>`).join('')}
       </div>
       <div>
         <div id="resBox"></div>
@@ -311,26 +363,24 @@ function renderCalcArea(){
       </div>
     </div>
   </div>`;
-  ['inPiloto','inPasajero','inComb','inEquip'].forEach(id=>{
-    $(id).addEventListener('input',()=>actualizarResultado(key));
+  av.estaciones.forEach(e=>{
+    $('in_'+e.id).addEventListener('input',()=>actualizarResultado(key));
   });
   actualizarResultado(key);
 }
 
 function actualizarResultado(key){
   const av=AERONAVES_WB[key];
-  if(!av) return;
-  const piloto=parseFloat($('inPiloto').value)||0;
-  const pasajero=parseFloat($('inPasajero').value)||0;
-  const comb=parseFloat($('inComb').value)||0;
-  const equip=parseFloat($('inEquip').value)||0;
-  const res=calcular(av, piloto, pasajero, comb, equip);
+  const valores={};
+  av.estaciones.forEach(e=>{ valores[e.id]=parseFloat($('in_'+e.id).value)||0; });
+  const res=calcular(av, valores);
   let estadoTxt, estadoCls;
   if(res.ok){ estadoTxt='✓ DENTRO DE LA ENVOLVENTE — PESO Y BALANCE OK'; estadoCls='ok'; }
   else if(!res.dentroMTOW){ estadoTxt='⚠ EXCEDE EL MTOW'; estadoCls='bad'; }
+  else if(res.excesos.length){ estadoTxt='⚠ '+res.excesos[0]; estadoCls='bad'; }
   else { estadoTxt='⚠ CG FUERA DE LA ENVOLVENTE'; estadoCls='bad'; }
   $('resBox').innerHTML=`
-    <div class="estado-box ${estadoCls}">${estadoTxt}</div>
+    <div class="estado-box ${estadoCls}">${estadoTxt}${!av.verificado&&res.ok?' (DATOS SIN VERIFICAR)':''}</div>
     <div class="kv"><span class="k">Peso total</span><span class="v" title="${(res.pesoTotal/av.kg_a_lb).toFixed(1)} kg">${res.pesoTotal.toFixed(1)} lbs</span></div>
     <div class="kv"><span class="k">MTOW</span><span class="v" title="${(av.mtow/av.kg_a_lb).toFixed(1)} kg">${av.mtow} lbs</span></div>
     <div class="kv"><span class="k">Peso disponible</span><span class="v" title="${(res.pesoDisponible/av.kg_a_lb).toFixed(1)} kg">${res.pesoDisponible.toFixed(1)} lbs</span></div>
