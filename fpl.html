@@ -2,6 +2,10 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
+  v3.17 ·  Nuevo campo "Presentado por" (Filed by): casilla existente en el RECTS del
+           formulario ('Filed') que nunca se llenaba. Input en pantalla, se autocompleta
+           con el usuario logueado, se imprime en el PDF (incluido PDF combinado) y se
+           guarda/restaura en los borradores. Aviso (no bloqueante) si queda vacío.
   v3.16 ·  FIX casilla 13/16: OACI deprecados se fuerzan a ZZZZ + item 18 (DEP/ DEST/ ALTN/).
            Caso EAU (Ushuaia/Est. Aeronaval) traía i:SAWO en aerodromos.json y se estampaba
            SAWO (ya no vigente) en vez de ZZZZ. Nueva lista OACI_DEPRECADOS={SAWO} en fpl.html
@@ -415,7 +419,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v3.16</span>
+    <span class="ver">v3.17</span>
     <a href="turnos.html" title="Volver al turnero (sin cerrar sesión)" style="font-family:var(--mono);font-size:12px;color:var(--cyan);text-decoration:none;border:1px solid var(--line-hot);border-radius:5px;padding:5px 11px;letter-spacing:1px;transition:.15s" onmouseover="this.style.background='var(--cyan)';this.style.color='#04141a'" onmouseout="this.style.background='transparent';this.style.color='var(--cyan)'">← TURNERO</a>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
@@ -596,6 +600,10 @@
           <div class="field"><label>C/ Comandante (firma el plan)</label>
             <input id="f19c" placeholder="Apellido, Nombre"></div>
         </div>
+        <div class="row">
+          <div class="field"><label>Presentado por (Filed by)</label>
+            <input id="ffiledby" placeholder="Apellido, Nombre"></div>
+        </div>
         <div class="field"><label>N/ Observaciones</label>
           <input id="f19n"></div>
         <div class="acdinghy" style="margin-top:6px">
@@ -606,7 +614,7 @@
         <div class="checks" style="margin-top:4px">
           <label><input type="checkbox" id="f19dcov">D/ Con cubierta (C)</label>
         </div>
-        <div class="hint">El comandante (C/) puede ser distinto de quien carga el plan (p. ej. instructor en vuelo de instrucción).</div>
+        <div class="hint">El comandante (C/) puede ser distinto de quien presenta el plan (p. ej. instructor en vuelo de instrucción). "Presentado por" se imprime en el casillero "Filed by" al pie del formulario.</div>
       </div>
     </fieldset>
 
@@ -943,6 +951,7 @@ function validar(){
   }
   const esLocal = !!vU('f13a') && vU('f13a')===vU('f16d');
   if(!esLocal && !v('f16a1')) A.push('16 · Sin aeródromo alternativo (recomendado en vuelo no local)');
+  if(!v('ffiledby')) A.push('Falta "Presentado por" (Filed by) — se imprimirá en blanco');
   if(/^\d{4}$/.test(v('f19e')) && /^\d{4}$/.test(v('f16eet'))){
     const min=s=>(+s.slice(0,2))*60+(+s.slice(2));
     if(min(v('f19e'))<=min(v('f16eet'))) A.push('Autonomía (E/) no supera el tiempo de vuelo (EET) — revisá');
@@ -1021,7 +1030,7 @@ function cargarEnForm(key,p){
   $('f16d').value=p.destino||''; $('f16eet').value=p.eet||''; $('f16a1').value=p.altn||''; $('f16a2').value=p.altn2||'';
   $('f18').value=(p.otros_18||'').replace(/DOF\/\d{6}\s*/g,'').trim();
   $('f19e').value=p.endurance||''; $('f19p').value=p.pob||''; $('f19a').value=p.color_marcas||'';
-  $('f19c').value=p.piloto||''; $('f19n').value=p.obs_19||'';
+  $('f19c').value=p.piloto||''; $('ffiledby').value=p.presentado_por||''; $('f19n').value=p.obs_19||'';
   { const d=p.dinghies||{}; $('f19dn').value=d.num||''; $('f19dc').value=d.cap||''; $('f19dcol').value=d.color||''; $('f19dcov').checked=!!d.cubierta; }
   setChecks('r19',p.radio_emerg); setChecks('s19',p.equipo_superv); setChecks('j19',p.chalecos);
   setFirma(p.firma||'');
@@ -1037,6 +1046,7 @@ function limpiar(){
   $('f13fecha').value=hoyLocal();
   setChecks('r19','E'); setChecks('s19',''); setChecks('j19','');
   $('f19dn').value=''; $('f19dc').value=''; $('f19dcol').value=''; $('f19dcov').checked=false;
+  $('ffiledby').value=(USUARIO.indexOf('externo')!==0)?USUARIO_LABEL:'';
   borrarFirma();
   pintarValidacion([],[],[]);
   refrescarPreview(); toast('Formulario limpio');
@@ -1433,7 +1443,7 @@ function planDataDesdeForm(){
     otros_18:item18(u.dof),
     endurance:$('f19e').value, pob:$('f19p').value,
     radio_emerg:checks('r19'), equipo_superv:checks('s19'), chalecos:checks('j19'),
-    color_marcas:vU('f19a'), piloto:$('f19c').value, obs_19:$('f19n').value,
+    color_marcas:vU('f19a'), piloto:$('f19c').value, presentado_por:$('ffiledby').value, obs_19:$('f19n').value,
     dinghies:{num:vU('f19dn'), cap:vU('f19dc'), cubierta:$('f19dcov').checked, color:vU('f19dcol')},
     firma:firmado?getFirma():''
   };
@@ -1472,6 +1482,7 @@ async function dibujarPlan(pdf, p){
   spread(['T9','T10','T11','T12'], p.endurance);
   const pob=String(p.pob||''); spread(['P1','P2','P3'], pob.toUpperCase()==='TBN' ? 'TBN' : pob.padStart(3,'0').slice(-3));
   put('Markings', p.color_marcas); put('Pilot', p.piloto); put('Remarks', p.obs_19);
+  put('Filed', p.presentado_por);
 
   const cr=p.radio_emerg||''; if(!cr.includes('U'))strike('C1'); if(!cr.includes('V'))strike('C2'); if(!cr.includes('E'))strike('C3');
   const cs=p.equipo_superv||''; const noS=!cs; if(noS)strike('C4'); if(noS||!cs.includes('P'))strike('C5'); if(noS||!cs.includes('D'))strike('C6'); if(noS||!cs.includes('M'))strike('C7'); if(noS||!cs.includes('J'))strike('C8');
@@ -1617,6 +1628,7 @@ $('f19e').addEventListener('blur',()=>{ fmtHHMM('f19e'); refrescarPreview(); });
 setChecks('r19','E');
 syncThemeIcon();
 if(!$('f13fecha').value) $('f13fecha').value=hoyLocal();
+if(!$('ffiledby').value && USUARIO.indexOf('externo')!==0) $('ffiledby').value=USUARIO_LABEL;
 const _utag=$('fpl-usuario-tag'); if(_utag) _utag.textContent='Usuario: '+USUARIO_LABEL+(USUARIO.indexOf('externo')===0?' (no logueado · borradores de esta sesión, se depuran tras 1 h)':'');
 refrescarPreview(); cargarFlota(); cargarAerodromos(); cargarLista(); reloj(); setInterval(reloj,1000);
 </script>
