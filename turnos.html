@@ -1,5 +1,17 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.01
+  FECHA   : 2026-06-26
+  CAMBIOS : FIX critico: cancelacion de turno por ALUMNO podia abortarse en silencio.
+            El motivo de cancelacion es OPCIONAL para el alumno (pedirMotivoCancelacion
+            con obligatorio=false), pero si cerraba ese modal (boton CANCELAR, Escape,
+            o click afuera) la funcion devolvia null y un 'return' de mas arriba
+            abortaba TODA la cancelacion ya confirmada en el paso anterior — el alumno
+            creia que el turno habia quedado cancelado y en realidad seguia activo.
+            Ahora cerrar el modal de motivo solo significa "sin motivo", nunca aborta
+            la cancelacion. Se agrega ademas un alert() de exito explicito al terminar
+            ("Turno cancelado correctamente") y un alert() de error si falla la
+            actualizacion en Firebase, para que no queden dudas del resultado.
   VERSION : 6.00
   FECHA   : 2026-06-26
   CAMBIOS : Solicitar turno: la fecha que se muestra junto a "Horarios disponibles"
@@ -556,7 +568,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.00</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.01</div>
   </div>
 
 </div>
@@ -2264,15 +2276,26 @@ function pedirMotivoCancelacion(obligatorio=false){
 
 window.cancelarTurnoAlumno=async function(key){
   if(!confirm('¿Cancelar este turno?'))return;
+  // FIX v6.01: el motivo es OPCIONAL para el alumno (pedirMotivoCancelacion(false)).
+  // Antes, si cerraba el modal de motivo (botón CANCELAR, Escape o sin escribir nada),
+  // pedirMotivoCancelacion devolvía null y el 'return' de abajo abortaba TODA la
+  // cancelación silenciosamente — el alumno ya había confirmado en el paso anterior
+  // y creía que el turno había quedado cancelado. Ahora null sólo significa "sin motivo"
+  // y la cancelación sigue su curso igual.
   const motivo=await pedirMotivoCancelacion(false);
-  if(motivo===null)return;
-  const rv=await fbGet('reservas/'+key);
-  const update={estado:'cancelado'};
-  update.obs_cancelacion=motivo?'Cancelado por el usuario — '+motivo:'Cancelado por el usuario';
-  await fbUpdate('reservas/'+key,update);
-  if(rv){
-    await registrarAuditoria('cancelacion_turno',session.rol||'alumno','exito',
-      session.nombre+' (usuario) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs'+(motivo?' — '+motivo:''));
+  try{
+    const rv=await fbGet('reservas/'+key);
+    const update={estado:'cancelado'};
+    update.obs_cancelacion=motivo?'Cancelado por el usuario — '+motivo:'Cancelado por el usuario';
+    await fbUpdate('reservas/'+key,update);
+    if(rv){
+      await registrarAuditoria('cancelacion_turno',session.rol||'alumno','exito',
+        session.nombre+' (usuario) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs'+(motivo?' — '+motivo:''));
+    }
+    alert('✅ Turno cancelado correctamente.');
+  }catch(e){
+    console.error(e);
+    alert('⚠ No se pudo cancelar el turno (error de conexión). Volvé a intentarlo; si la lista sigue mostrando el turno como activo, NO se canceló.');
   }
 };
 
