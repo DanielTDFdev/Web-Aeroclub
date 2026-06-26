@@ -1,10 +1,10 @@
 # Documentación técnica — Sistema de Turnos (turnos.html)
 
 **Aeroclub Río Grande (SAWE) — Tierra del Fuego, Argentina**
-Versión documentada: **turnos.html v5.96** · **fpl.html v3.16** · Fecha: 2026-06-24
+Versión documentada: **turnos.html v5.99** · **fpl.html v3.16** · **portal-alumno.html v1.9** · Fecha: 2026-06-26
 
 > Documento de referencia: describe qué hace cada parte del sistema. Mantener actualizado cuando se agreguen funciones.
-> Además de la app web (`turnos.html`) hay un generador de planes de vuelo (`fpl.html`, §22) y **dos procesos server-side** en GitHub Actions: el recordatorio a instructores (§20) y el vencimiento de pendientes + purga de borradores FPL (§21).
+> Además de la app web (`turnos.html`) hay un generador de planes de vuelo (`fpl.html`, §22), un **portal de alumno** (`portal-alumno.html`, §23) y **dos procesos server-side** en GitHub Actions: el recordatorio a instructores (§20) y el vencimiento de pendientes + purga de borradores FPL (§21).
 
 ---
 
@@ -88,6 +88,18 @@ Borradores de plan de vuelo por usuario. `USUARIO` = username/clave estable del 
 ### `/fpl/externo_{uuid}/{pushKey}`
 Borradores de usuarios **no logueados**: cada sesión externa recibe un bucket efímero (`uuid` en `sessionStorage`). El cron de vencimiento (§21) purga los borradores externos con más de 1 h de antigüedad.
 
+### `/manuales/{pushKey}`
+Catálogo de manuales del portal de alumno (§23): `{titulo,categoria,tipo:'archivo'|'link',url,descripcion,fecha,autor}`. Para `tipo:'archivo'`, `url` es la ruta relativa dentro de `/manuales/` del repo (no una URL completa).
+
+### `/quizzes/{quizKey}`
+Cuestionarios del portal de alumno (§23): `{titulo,categoria,activo,obligatorio,preguntas:[{enunciado,opciones:[...],correcta}],autor,creado}`.
+
+### `/intentos_quiz/{userKey}/{quizKey}/{pushKey}`
+Cada intento de un alumno en un cuestionario: `{respuestas,detalle:[{enunciado,elegida,correcta_texto,acierto}],puntaje,total,fecha,nombre}`.
+
+### `/notas_alumno/{emailKey}`
+Nota libre del instructor/admin sobre un alumno (visible para el alumno, solo lectura): `{texto,autor,fecha}`.
+
 ## 4. Roles y permisos
 
 - **alumno** — solo reserva LV-OAD; cada turno requiere aprobación de instructor; anticipación mínima 12h; horizonte 7 días.
@@ -161,8 +173,9 @@ Modo **sombra**: Auth corre en paralelo, la clave plana es la red de seguridad y
 - **Pendiente de aprobación**: pantalla de espera para usuarios nuevos.
 - **Usuario (alumno/piloto)** — pestañas (`showAlumnoTab`):
   - *Mis Turnos*: historial con filtro por estado (`setHistFiltro`) y orden (`toggleHistOrden`); cancelar turnos propios.
-  - *Pedir Turno*: selector de avión (pilotos), grilla de días (`renderDaysGrid`, con feriados), slots disponibles (`renderSlots`), confirmación. En LV-OAD los slots se filtran por disponibilidad de instructor **para alumnos**; el **piloto** ve además los slots sin instructor, marcados en rosa con tooltip aclaratorio, y puede reservarlos igual (v5.94).
+  - *Pedir Turno*: selector de avión (pilotos), grilla de días (`renderDaysGrid`, con feriados), slots disponibles (`renderSlots`), confirmación. En LV-OAD los slots se filtran por disponibilidad de instructor **para alumnos**; el **piloto** ve además los slots sin instructor, marcados en rosa con tooltip aclaratorio, y puede reservarlos igual (v5.94). La fecha mostrada junto a "Horarios disponibles" sale en `dd/mm/aaaa` (v6.00, pendiente de subir al repo a la fecha de este doc — el repo sigue en v5.99 con el formato ISO crudo).
   - *Mi Perfil*: datos personales (`guardarDatosPerfil`) y cambio de contraseña (`cambiarClave`).
+  - **Link "🎓 Portal Alumno"** (v5.98/v5.99): pill en `.links-row`, arriba de la tab-bar, junto al de "✈ Plan de Vuelo". Visible para `rol:'alumno'`, instructor, admin y administrador; **oculto para `rol:'piloto'`** (vía `setNavUser`, id `al-portal-link`). Lleva a `portal-alumno.html` (§23), que valida su propio acceso leyendo la misma `sessionStorage 'lvoad-session'` — no requiere backend adicional en turnos.html más allá de este link.
 - **Instructor** — pestañas (`showInstTab`):
   - *Reservas*: estadísticas + calendario (vista LISTA de 21 días y vista SEMANA). **Banner de turnos pendientes** (v5.71/v5.72): cartel ámbar pulsante a nivel de pantalla que avisa "HAY N TURNOS PENDIENTES DE APROBACIÓN"; aparece al ingresar y en tiempo real, **persiste mientras haya pendientes** (sin botón de cerrar), el botón VER TURNOS lleva a Reservas/LISTA (`irAPendientes`), y desaparece solo cuando no quedan pendientes.
   - *Seguimiento*: aprobaciones/cancelaciones por instructor (`renderSeguimiento`), **agrupadas por día** con encabezado de fecha en español largo (v5.73); selector de instructor para admin.
@@ -219,7 +232,7 @@ Registro de eventos (`registrarAuditoria`): login (éxito/fallo/bloqueado), regi
 - **Firebase:** `fbGet`, `fbSet`, `fbUpdate` (merge), `fbPush`, `fbRemove`; `ek(email)` convierte email a clave; `rArr(data)` convierte objeto Firebase a array con `key`.
 - **Fechas/horas:** siempre en hora local (`new Date(y, m-1, d, ...)`), nunca parseo de ISO, para evitar el corrimiento de zona horaria (Argentina UTC-3). `fmtFechaLinda` (fecha larga en español), `fmtDate`, `horasParaDia`.
 - **UI:** `showScreen`, `showErr`/`showOk`/`hideEl`, `val`, `clearVal`, `setLoading`.
-- **Modales:** patrón con clase CSS `.open`; **deben estar a nivel raíz**, fuera de los contenedores de pantalla, o se vuelven invisibles durante el login.
+- **Modales:** patrón con clase CSS `.open`; **deben estar a nivel raíz**, fuera de los contenedores de pantalla (`#alumno-screen`, `#instructor-screen`, etc.), o se vuelven invisibles cuando esa pantalla está oculta. **Caso real (v5.97):** `#modal-motivo-cancel` estaba anidado dentro de `#instructor-screen` en el HTML; funcionaba para instructor/admin (esa pantalla está visible) pero la cancelación de turno por parte del **alumno** no hacía nada visible — el modal se abría (clase `open` puesta) pero nunca se pintaba, porque un descendiente de un ancestro `display:none` no se renderiza aunque su propio `computedStyle` siga diciendo `flex`. Se resolvió "rescatando" el nodo al `<body>` con `appendChild` al cargar la página, en vez de reordenar el HTML grande. Si aparece un bug de "el modal no se ve pero tampoco tira error", revisar primero en qué `screen` está anidado en el HTML.
 - **Caches locales** (se resetean al logout): `_reservasCache`, `_alumnosCache`, `_misTurnosData`, `_auditoriaCache`, `_cqResultados`, `_dispEstado`.
 - **Suscripción en tiempo real:** `onValue` sobre `/reservas` (`suscribirReservas`); `/alumnos` para el banner de pendientes (`suscribirPendientes`).
 - **Estilo:** fuentes Share Tech Mono + Rajdhani + Orbitron; tema oscuro/claro; colores cian `#00c8d4` y ámbar `#f0a500`.
@@ -291,7 +304,9 @@ Registro de eventos (`registrarAuditoria`): login (éxito/fallo/bloqueado), regi
 - **Caché que frenaba la migración (resuelto 2026-06-17):** varios usuarios entraban pero no aparecían en Auth porque su navegador servía una **copia vieja cacheada** del `turnos.html` (sin el código de migración) — no era un bug de la app (se verificó el código). Se resolvió con la Cache Rule `no-store` (ver §2): ahora cada navegador carga el HTML fresco, corre el código actual y se dispara la migración perezosa. Los ya pegados a una copia vieja se destraban con una recarga forzada o cuando su caché vence. La decantación continúa con esto resuelto.
 - **Recordatorio automático a instructores (HECHO, 2026-06-19):** proceso server-side (GitHub Actions cron). Avisa al instructor por mail ~12 h antes del turno. Ver §20.
 - **Auto-vencimiento de pendientes (HECHO, 2026-06-19):** proceso server-side (cron `vencimiento_turnos.py`, §21). Vence los pendientes que nadie confirmó dentro de la ventana previa al vuelo (6 h antes), libera el slot y avisa al alumno por mail. El mismo cron purga los borradores FPL de externos. Ver §21.
-- **Backlog de features:** disponibilidad para LV-ART/LV-MPH; bitácora de horas de vuelo; asistencia/no-show; estado de mantenimiento de aeronaves; lista de espera; dashboard para la comisión; aviso al instructor de nuevas solicitudes.
+- **Portal de Alumno (HECHO, 2026-06-25/26):** página nueva `portal-alumno.html` con perfil, manuales y cuestionarios. Ver §23. Banco de preguntas ANAC PPA cargado (318 preguntas).
+- **Pendiente de subir al repo:** turnos.html v6.00 (formato `dd/mm/aaaa` en la fecha de "Horarios disponibles" al pedir turno) — entregado pero no confirmado en el repo a la fecha de este doc.
+- **Backlog de features:** disponibilidad para LV-ART/LV-MPH; bitácora de horas de vuelo; asistencia/no-show; estado de mantenimiento de aeronaves; lista de espera; dashboard para la comisión; aviso al instructor de nuevas solicitudes; ampliar el banco de preguntas del portal (otros temas además de PPA); revisar las 66 preguntas de ANAC excluidas por depender de figuras, por si vale la pena re-incluirlas con las imágenes.
 
 ## 19. Limitaciones conocidas
 
@@ -387,3 +402,44 @@ Página aparte (no es turnos.html) para armar **planes de vuelo OACI** (casillas
 ### Integración con turnos.html
 - Botón **"Plan de Vuelo"** (clase `.fpl-link`, pill ámbar) en las tab-bars de alumno e instructor (v5.89/v5.90).
 - Meteorología **METAR/TAF de SAWE** (CheckWX) vive en `fpl.html`, no en turnos.html.
+
+## 23. Portal de Alumno (`portal-alumno.html`)
+
+Página aparte, nueva (construida 2026-06-25/26), con tres pestañas: **PERFIL**, **MANUALES**, **CUESTIONARIOS** (renombrado de "QUIZ" en v1.9 — solo el texto del tab, los textos internos del panel no cambiaron). Comparte la misma Firebase (`turnos-lv-oad`) vía SDK modular (no REST como `fpl.html`).
+
+### Acceso (gate de sesión)
+Valida contra la misma `sessionStorage 'lvoad-session'` que pone `turnos.html` al loguearse, **en la misma pestaña** (no hay persistencia entre pestañas, igual que en `fpl.html`). Acceso permitido:
+- `rol:'alumno'` (alumno) — entra como **esAlumno**.
+- `tipo:'instructor'` (cubre instructor real, admin y administrador) — entra como **esStaff**.
+- **`rol:'piloto'` NO tiene acceso** (igual que el link de turnos.html, que oculta el botón "Portal Alumno" para pilotos).
+
+Si no hay sesión válida, muestra "VALIDANDO SESIÓN…" y redirige sola a `turnos.html` en ~900ms.
+
+### Tema
+Hereda el tema (claro/oscuro) elegido en `turnos.html` o `index.html`: lee `localStorage.getItem('lvoad-theme')` al cargar (misma clave que esos dos archivos). Desde v1.9 tiene su **propio selector** (🌙/☀️ en el header, idéntico visualmente al de turnos.html) para cambiarlo sin volver al turnero; al cambiarlo, también actualiza esa misma clave compartida.
+
+### Tab PERFIL
+- **Alumno:** ve su propia ficha (de `/alumnos/{emailKey}`: nombre, email, teléfono, usuario, rol) y la nota del instructor (`/notas_alumno/{emailKey}`), ambas **solo lectura**.
+- **Staff:** selector de alumno (filtra `rol==='alumno'` de `/alumnos`) y un textarea para escribir/editar la nota de ese alumno (`{texto,autor,fecha}`).
+
+### Tab MANUALES
+Dos fuentes combinadas:
+1. **"ARCHIVOS EN /manuales (REPOSITORIO)"** — listado automático del contenido real de la carpeta `/manuales` del repo vía **GitHub Contents API** (`https://api.github.com/repos/danieltdfdev/Web-Aeroclub/contents/manuales`, sin autenticar, repo público). Cada archivo es un link de descarga directo (`download_url`). No depende de Firebase ni de que el staff registre nada a mano: subís el PDF a esa carpeta del repo y aparece solo en el próximo refresh. **Límite conocido:** la API de GitHub sin autenticar permite 60 req/hora por IP — no debería ser problema con el tráfico de un aeroclub, salvo que varios alumnos abran la página casi a la vez desde la misma red (mismo IP, mismo contador).
+2. **"CATÁLOGO / LINKS"** (`/manuales` en Firebase) — para links externos o para ponerle nombre/categoría prolijos a un archivo del repo en vez de su nombre de archivo tal cual. Alta/edición/borrado solo staff.
+
+### Tab CUESTIONARIOS (quiz)
+- **Alumno:** ve la lista de quizzes `activo`. Si ya rindió, ve directamente su **puntaje del último intento** en el ítem (sin tener que abrir nada); si el quiz **no** es obligatorio, además del puntaje aparece un botón REINTENTAR. Si nunca rindió, botón RENDIR.
+- **Banco de preguntas (`QZ_BANCO_SIZE=50`):** si el quiz tiene 50 o más preguntas cargadas, al rendir se sortean 50 al azar (Fisher-Yates) **para ese intento puntual** — sorteo distinto por alumno y por intento, fijo durante todo el intento (no se vuelve a mezclar al cambiar de página). Aviso visible al alumno ("⚠ Banco de N preguntas — te tocaron 50 al azar"). El **banco real cargado a la fecha de este doc es el de ANAC PPA, con 318 preguntas** (parseadas del PDF oficial de ANAC, *Preguntas según RAAC 61.105*, descartando ~66 que dependían de figuras/ilustraciones no disponibles, y 1 pregunta rota en el propio PDF fuente).
+- **Paginado al rendir:** 10 preguntas por página (`QZ_PAGE_SIZE`), navegación Anterior/Siguiente, contador "Respondidas: X/Y". Las respuestas se guardan en un array fuera del render (no se pierden al cambiar de página). Si se envía con preguntas sin responder, salta directo a la página de la primera pendiente.
+- **Quiz obligatorio** (checkbox en el editor): el alumno tiene **un solo intento permitido**, re-chequeado contra Firebase tanto al abrir el formulario como al enviar (cubre el caso de doble pestaña). El intento guarda, además de puntaje, un **detalle por pregunta** (`{enunciado,elegida,correcta_texto,acierto}`) para que el staff revise exactamente qué contestó mal cada alumno.
+- **Staff:** botón "+ NUEVO QUIZ"; editor con título, categoría, checkbox obligatorio, preguntas (enunciado + 4 opciones + radio de cuál es correcta), y un **importador de JSON** que tolera fences de markdown (` ```json `) y CRLF pegados al copiar — agrega las preguntas pegadas a las que ya estén cargadas (no las reemplaza). Esquema esperado: `[{pregunta, opciones:["A) ...","B) ...","C) ..."], respuesta_correcta:"A"}]`.
+  - En la lista de quizzes, junto a la categoría y cantidad de preguntas, ve un resumen agregado de **todos** los alumnos: "N intento(s) · Promedio X%", o "Sin intentos todavía".
+  - Botón INTENTOS: detalle por alumno (fecha, puntaje, botón VER DETALLE con el desglose pregunta por pregunta). Si el quiz es obligatorio, además muestra el **roster de pendientes** (alumnos de `/alumnos` con `rol==='alumno'` que todavía no lo rindieron).
+  - Botones ACTIVAR/DESACTIVAR, EDITAR, BORRAR (el borrado del quiz **no borra los intentos asociados en Firebase** — quedan huérfanos en `/intentos_quiz`, solo desaparecen de la vista; es dato suelto que ocupa espacio, sin impacto funcional).
+- **Mi Historial** (solo alumno): lista de todos sus intentos pasados (fecha + puntaje), de cualquier quiz.
+
+### Bug crítico corregido (v1.6)
+`renderPerfil()` y `renderManuales()` nunca se ejecutaban: en cada paso de construcción incremental (v1.0→v1.1→...) se usó la línea de invocación del paso anterior como ancla de edición, pisándola en vez de conservarla, hasta que de las tres llamadas finales solo sobrevivió `renderQuiz()`. Resultado: las tabs PERFIL y MANUALES quedaban completamente vacías. Lección aplicada desde entonces: al hacer ediciones incrementales sobre líneas de invocación al final de un módulo, verificar explícitamente que las llamadas anteriores sigan presentes antes de entregar.
+
+### Esquema de Firebase
+Ver §3: `/manuales`, `/quizzes`, `/intentos_quiz`, `/notas_alumno`. También lee (solo lectura desde el portal) `/alumnos` e `/instructores`.
