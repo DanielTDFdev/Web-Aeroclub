@@ -1,5 +1,16 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.03
+  FECHA   : 2026-06-26
+  CAMBIOS : Banner global de "version vieja": las pestanas que quedan abiertas por dias
+            nunca vuelven a pedir el HTML al servidor, asi que corren para siempre el JS
+            viejo aunque ya se hayan subido fixes (caso real: alumno no podia cancelar
+            porque tenia abierta una version de antes del fix v6.01). Cada 5 minutos (y
+            al volver a la pestana) se re-pide turnos.html con cache-buster, se compara
+            la version de .hero-sub contra la que esta corriendo, y si difieren se
+            muestra un banner fijo arriba de toda la pantalla (fuera de cualquier .screen,
+            visible sin importar la sesion activa) con boton "ACTUALIZAR AHORA" que hace
+            location.reload().
   VERSION : 6.02
   FECHA   : 2026-06-26
   CAMBIOS : pedirMotivoCancelacion: el boton "CANCELAR" del modal de motivo era
@@ -572,13 +583,21 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 </head>
 <body>
 
+<!-- v6.03: banner global de version vieja. Fuera de cualquier .screen (igual criterio que
+     el FIX v5.97 del modal de motivo): si estuviera anidado en alumno-screen/instructor-screen,
+     un display:none en el ancestro lo dejaria invisible aunque su propio estilo diga flex. -->
+<div id="banner-version-nueva" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:var(--amber);color:#0a0a0a;font-family:var(--font-mono);font-size:12px;letter-spacing:.05em;padding:.65rem 1rem;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;box-shadow:0 2px 12px rgba(0,0,0,.45)">
+  <span>⚠ Esta pestaña está corriendo una <b>versión vieja</b> del sistema — los arreglos y cambios recientes NO van a funcionar hasta que actualices.</span>
+  <button id="btn-recargar-version" style="font-family:var(--font-mono);font-size:12px;font-weight:700;padding:6px 16px;background:#0a0a0a;color:var(--amber);border:1px solid #0a0a0a;border-radius:var(--radius);cursor:pointer">ACTUALIZAR AHORA</button>
+</div>
+
 <div class="hero">
   <img src="aviones.JPG" alt="Aeroclub Río Grande">
   <div class="hero-status">SISTEMA ACTIVO</div>
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.02</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.03</div>
   </div>
 
 </div>
@@ -4424,6 +4443,44 @@ async function renderAdmDisp(){
   </div>`;
   grid.innerHTML=html;
 }
+
+/* ===================== CHEQUEO DE VERSION (pestañas que quedan abiertas) =====================
+   v6.03: si alguien deja turnos.html abierto en una pestaña por días, esa pestaña nunca vuelve
+   a pedirle el HTML al servidor — corre para siempre el JS que tenía cargado en memoria desde
+   que la abrió, sin importar cuántos deploys/fixes se suban después. La Cache Rule no-store
+   (ver §2 de la doc) no ayuda en este caso porque no hay ninguna request nueva que interceptar.
+   Caso real (2026-06-26): un alumno no podía cancelar un turno porque tenía abierta una versión
+   vieja de antes del fix v6.01, y el motivo no era evidente hasta preguntarle.
+   Solución: cada VERSION_POLL_MS volvemos a pedir este mismo archivo con cache-buster y
+   comparamos la versión de .hero-sub contra la que está corriendo en esta pestaña. Si difieren,
+   se muestra el banner fijo (fuera de cualquier .screen, visible sin importar la sesión activa)
+   con un botón para recargar. También se chequea al volver a la pestaña (visibilitychange). */
+function extraerVersionDeHTML(html){
+  const m=html.match(/<div class="hero-sub">([^<]*)<\/div>/);
+  if(!m)return null;
+  const v=m[1].match(/v[\d.]+/);
+  return v?v[0]:null;
+}
+const VERSION_ACTUAL=(document.querySelector('.hero-sub')?.textContent.match(/v[\d.]+/)||[])[0]||null;
+const VERSION_POLL_MS=5*60*1000; // 5 minutos
+let _versionDesactualizada=false;
+async function chequearVersionNueva(){
+  if(_versionDesactualizada||!VERSION_ACTUAL)return;
+  try{
+    const r=await fetch(location.pathname+'?_v='+Date.now(),{cache:'no-store'});
+    if(!r.ok)return;
+    const html=await r.text();
+    const versionServidor=extraerVersionDeHTML(html);
+    if(versionServidor&&versionServidor!==VERSION_ACTUAL){
+      _versionDesactualizada=true;
+      const b=document.getElementById('banner-version-nueva');
+      if(b)b.style.display='flex';
+    }
+  }catch(e){console.warn('No se pudo chequear si hay una version nueva:',e);}
+}
+document.getElementById('btn-recargar-version')?.addEventListener('click',()=>location.reload());
+setInterval(chequearVersionNueva,VERSION_POLL_MS);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')chequearVersionNueva();});
 
 </script>
 </body>
