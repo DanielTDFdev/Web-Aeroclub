@@ -2,7 +2,12 @@
 <!--
 ==================================================================================
   PORTAL ALUMNO — Aeroclub Río Grande
-  v1.9 ·  El título del tab "QUIZ" pasa a "CUESTIONARIOS" (solo el texto del botón
+  v1.9 ·  (1) Agregado el selector de tema (claro/oscuro) en el header, igual al de
+          turnos.html. El portal ya HEREDABA el tema elegido en turnos.html o
+          index.html (lee localStorage 'lvoad-theme' al cargar, misma clave), pero
+          no tenía forma de cambiarlo desde acá mismo. toggleTheme() idéntica a la
+          de turnos.html.
+          (2) El título del tab "QUIZ" pasa a "CUESTIONARIOS" (solo el texto del botón
           de navegación; los textos internos del panel — "// QUIZ", "NUEVO QUIZ",
           "EDITAR/NUEVO QUIZ", etc. — quedan igual, no se tocaron).
   v1.8 ·  La lista de quizzes ahora muestra el puntaje directamente en el item,
@@ -158,6 +163,11 @@ button.danger{background:rgba(248,81,73,.08);color:var(--red);border-color:var(-
 .tag.ok{color:var(--green);border-color:var(--green)}
 .tag.bad{color:var(--red);border-color:var(--red)}
 #gate-msg{max-width:480px;margin:80px auto;text-align:center;font-family:var(--font-mono);color:var(--text2)}
+.theme-toggle{display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;}
+.theme-toggle-track{width:36px;height:20px;border-radius:10px;background:var(--bg4);border:1px solid var(--border2);position:relative;transition:background .25s;}
+.theme-toggle-thumb{width:14px;height:14px;border-radius:50%;background:var(--cyan);position:absolute;top:2px;left:2px;transition:transform .25s,background .25s;box-shadow:0 0 6px rgba(0,200,212,.5);}
+:root.light .theme-toggle-thumb{transform:translateX(16px);background:var(--amber);}
+.theme-toggle-icon{font-size:13px;line-height:1;}
 </style>
 </head>
 <body>
@@ -171,8 +181,13 @@ button.danger{background:rgba(248,81,73,.08);color:var(--red);border-color:var(-
     <div class="dot"></div>
     <h1>PORTAL ALUMNO<small>AEROCLUB RÍO GRANDE</small></h1>
     <div class="sp">
+      <div class="theme-toggle" onclick="toggleTheme()" title="Cambiar tema">
+        <span class="theme-toggle-icon">🌙</span>
+        <div class="theme-toggle-track"><div class="theme-toggle-thumb"></div></div>
+        <span class="theme-toggle-icon">☀️</span>
+      </div>
       <span class="who" id="who-label"></span>
-      <span class="ver">v1.8</span>
+      <span class="ver">v1.9</span>
       <a class="back" href="turnos.html">← TURNERO</a>
     </div>
   </header>
@@ -229,6 +244,15 @@ let session=null, esAlumno=false, esStaff=false, userKey='', userLabel='';
   document.getElementById('who-label').textContent=userLabel+(esStaff?' · STAFF':' · ALUMNO');
   document.getElementById('app-wrap').style.display='block';
 })();
+
+// ── TEMA ─────────────────────────────────────────────────────────
+// El estado inicial ya se aplica en el <script> del <head> (lee localStorage 'lvoad-theme',
+// la misma clave que usan turnos.html e index.html, así el portal hereda el tema elegido en
+// cualquiera de esas páginas). Esto solo agrega el selector para cambiarlo desde aquí.
+window.toggleTheme=function(){
+  const isLight=document.documentElement.classList.toggle('light');
+  localStorage.setItem('lvoad-theme',isLight?'light':'dark');
+};
 
 window.showTab=function(name){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
