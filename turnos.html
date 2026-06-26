@@ -1,5 +1,11 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.00
+  FECHA   : 2026-06-26
+  CAMBIOS : Solicitar turno: la fecha que se muestra junto a "Horarios disponibles"
+            ahora sale en formato dd/mm/aaaa (ej. 28/06/2026) en vez de ISO crudo
+            (2026-06-28). Solo cambia el texto mostrado; internamente sigue
+            usando el formato ISO para todas las consultas a Firebase.
   VERSION : 5.99
   FECHA   : 2026-06-25
   CAMBIOS : Reubicación de los links "Portal Alumno" y "Plan de Vuelo": salen de
@@ -550,7 +556,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v5.99</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.00</div>
   </div>
 
 </div>
@@ -2007,7 +2013,7 @@ async function slotsConInstructorParaDia(ds){
 async function renderSlots(ds,data){
   const grid=document.getElementById('slots-grid');if(!grid||!selectedAvion)return;
   const taken=slotsTomados(ds,selectedAvion,data);
-  document.getElementById('selected-day-label').textContent=ds;
+  document.getElementById('selected-day-label').textContent=ds.replace(/^(\d{4})-(\d{2})-(\d{2})$/,'$3/$2/$1');
   document.getElementById('slots-section').style.display='block';
   const esOAD=(selectedAvion||'LV-OAD')==='LV-OAD';
   const esPiloto=(session?.rol||'alumno')==='piloto';
