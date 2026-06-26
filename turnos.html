@@ -1,5 +1,14 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.05
+  FECHA   : 2026-06-26
+  CAMBIOS : Nuevo boton "Peso y Balance" en la .links-row de alumno-screen e
+            instructor-screen, al lado de "Plan de Vuelo" (link a la pagina
+            nueva peso-balance.html, calculadora con abaco SVG). Nueva clase
+            .wb-link, mismo tipo/tamano de boton que .portal-link/.fpl-link,
+            en verde para diferenciarlo. Visible para CUALQUIER rol (a
+            diferencia de "Portal Alumnos", que se esconde para piloto) porque
+            peso y balance le aplica a todo el que vuela.
   VERSION : 6.04
   FECHA   : 2026-06-26
   CAMBIOS : Texto del link "Portal Alumno" pasa a "Portal Alumnos" (plural), en
@@ -433,6 +442,8 @@ button.danger:hover{background:rgba(248,81,73,.18)}
 .links-row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:.85rem;flex-wrap:wrap;}
 .fpl-link{font-family:var(--font-mono);font-size:13px;font-weight:700;letter-spacing:.12em;color:#0a0a0a;background:var(--amber);border:1px solid var(--amber);border-radius:var(--radius);padding:8px 22px;text-decoration:none;box-shadow:0 0 14px rgba(240,165,0,.3);transition:all .15s;display:inline-flex;align-items:center;gap:6px;text-transform:uppercase;white-space:nowrap;}
 .fpl-link:hover{background:var(--amber2);box-shadow:0 0 20px rgba(240,165,0,.55);transform:translateY(-1px);}
+.wb-link{font-family:var(--font-mono);font-size:13px;font-weight:700;letter-spacing:.12em;color:#0a0a0a;background:var(--green);border:1px solid var(--green);border-radius:var(--radius);padding:8px 22px;text-decoration:none;box-shadow:0 0 14px rgba(57,211,83,.3);transition:all .15s;display:inline-flex;align-items:center;gap:6px;text-transform:uppercase;white-space:nowrap;}
+.wb-link:hover{box-shadow:0 0 20px rgba(57,211,83,.55);transform:translateY(-1px);}
 .portal-link{font-family:var(--font-mono);font-size:13px;font-weight:700;letter-spacing:.12em;color:#0a0a0a;background:var(--cyan);border:1px solid var(--cyan);border-radius:var(--radius);padding:8px 22px;text-decoration:none;box-shadow:0 0 14px rgba(0,200,212,.3);transition:all .15s;display:inline-flex;align-items:center;gap:6px;text-transform:uppercase;white-space:nowrap;}
 .portal-link:hover{background:var(--cyan-dim);color:var(--cyan);box-shadow:0 0 20px rgba(0,200,212,.55);transform:translateY(-1px);}
 
@@ -601,7 +612,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.04</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.05</div>
   </div>
 
 </div>
@@ -686,6 +697,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="links-row">
     <a href="portal-alumno.html" class="portal-link" id="al-portal-link">🎓 Portal Alumnos</a>
     <a href="fpl.html" class="fpl-link">✈ Plan de Vuelo</a>
+    <a href="peso-balance.html" class="wb-link">⚖ Peso y Balance</a>
   </div>
   <div class="tab-bar">
     <button class="nav-btn active" id="al-tab-mis"    onclick="showAlumnoTab('mis-turnos')">Mis Turnos</button>
@@ -784,6 +796,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="links-row">
     <a href="portal-alumno.html" class="portal-link" id="inst-portal-link">🎓 Portal Alumnos</a>
     <a href="fpl.html" class="fpl-link">✈ Plan de Vuelo</a>
+    <a href="peso-balance.html" class="wb-link">⚖ Peso y Balance</a>
   </div>
   <div class="tab-bar">
     <button class="nav-btn active" id="inst-tab-res"   onclick="showInstTab('reservas')">Reservas</button>
