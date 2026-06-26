@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<!--
+==================================================================================
+  PESO Y BALANCE — Aeroclub Río Grande
+  v1.0 ·  Primera versión. Calculadora de peso y balance, replicando la planilla
+          de Excel del club (envolvente, combustible, equipaje, piloto/pasajero)
+          con gráfico de ábaco dibujado en SVG (polígono + punto de CG).
+
+          Acceso: página APARTE de portal-alumno.html, valida la sesión de
+          turnos.html (sessionStorage 'lvoad-session', misma pestaña) pero a
+          diferencia del portal deja entrar CUALQUIER rol (alumno/piloto/
+          instructor/admin/administrador) — la herramienta aplica a todo el que
+          vuela, no solo a alumnos en instrucción. Sin sesión, redirige a
+          turnos.html. No usa Firebase para nada: no guarda ni lee datos, todo
+          se tipea a mano cada vez (decisión explícita, no hace falta más).
+
+          Aeronaves: arranca con LV-OAD (Tomahawk PA-38-112) con datos reales de
+          la planilla. LV-ART y LV-MPH están listados pero marcados "PRÓXIMAMENTE"
+          — falta cargar los datos de peso y balance de cada POH. Agregar un
+          avión nuevo es solo sumar una entrada al objeto AERONAVES_WB, no hay
+          que tocar el resto del código.
+
+          FIX respecto a la planilla original: la planilla tenía un bug real en
+          la celda "Equipaje OK" (B19): comparaba el número fijo 14 contra 100,
+          nunca el peso real de equipaje — siempre daba "OK" sin importar cuánto
+          se cargara. Acá no se replica: en vez de un chequeo de equipaje aparte,
+          se valida geométricamente si el punto (brazo, peso) cae DENTRO del
+          polígono de la envolvente completa, que es más estricto y correcto que
+          comparar cualquier cosa solo contra el MTOW.
+==================================================================================
+-->
+<html lang="es">
+<head>
+<script>if(localStorage.getItem('lvoad-theme')==='light')document.documentElement.classList.add('light');</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Peso y Balance · Aeroclub Río Grande</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0c0f;--bg2:#111418;--bg3:#161b22;--bg4:#1c2330;
+  --text:#c8d8e8;--text2:#7a9bb8;--text3:#3d5a72;
+  --amber:#f0a500;--amber2:#ffc840;--amber-dim:#7a5200;
+  --cyan:#00c8d4;--cyan-dim:#003d42;
+  --green:#39d353;--red:#f85149;
+  --border:rgba(0,200,212,0.15);--border2:rgba(0,200,212,0.35);
+  --radius:4px;--radius-lg:6px;
+  --font-mono:'Share Tech Mono',monospace;
+  --font-ui:'Rajdhani',sans-serif;
+}
+:root.light{
+  --bg:#f0f4f8;--bg2:#e2e8f0;--bg3:#ffffff;--bg4:#d1dce8;
+  --text:#1a2a3a;--text2:#3a5a78;--text3:#7a9ab8;
+  --amber:#b87000;--amber2:#c87800;--amber-dim:#f5d080;
+  --cyan:#0090a0;--cyan-dim:#b0e8ee;
+  --green:#1a8a30;--red:#c0392b;
+  --border:rgba(0,144,160,0.2);--border2:rgba(0,144,160,0.45);
+}
+body{font-family:var(--font-ui);font-size:15px;color:var(--text);background:var(--bg);min-height:100vh;letter-spacing:.02em;transition:background .25s,color .25s;}
+.wrap{max-width:980px;margin:0 auto;padding:18px 16px 80px}
+header.bar{display:flex;align-items:center;gap:14px;border:1px solid var(--border2);
+  background:linear-gradient(180deg,var(--bg3),var(--bg2));padding:12px 16px;border-radius:var(--radius-lg);
+  margin-bottom:18px;box-shadow:0 0 0 1px #000 inset,0 0 22px rgba(0,200,212,.07)}
+header.bar .dot{width:11px;height:11px;border-radius:50%;background:var(--cyan);box-shadow:0 0 10px var(--cyan);animation:pulse 2.4s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+header.bar h1{font-size:20px;letter-spacing:2.5px;font-weight:700;text-transform:uppercase;color:var(--text)}
+header.bar h1 small{color:var(--amber);letter-spacing:2px;display:block;font-size:11px;font-family:var(--font-mono);margin-top:2px}
+header.bar .sp{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header.bar .ver{font-family:var(--font-mono);font-size:11px;color:var(--text3);border:1px solid var(--border);border-radius:4px;padding:2px 7px;letter-spacing:1px}
+header.bar .who{font-family:var(--font-mono);font-size:12px;color:var(--cyan)}
+.back{font-family:var(--font-mono);font-size:12px;color:var(--text2);text-decoration:none;border:1px solid var(--border);border-radius:var(--radius);padding:6px 12px;white-space:nowrap}
+.back:hover{color:var(--cyan);border-color:var(--cyan)}
+.card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;margin-bottom:16px;position:relative}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:.4}
+h2{font-family:var(--font-mono);font-size:13px;color:var(--cyan);letter-spacing:.16em;text-transform:uppercase;margin-bottom:1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border)}
+h3{font-family:var(--font-mono);font-size:12px;color:var(--amber);letter-spacing:.12em;text-transform:uppercase;margin-bottom:.6rem}
+.field{margin-bottom:12px;display:flex;flex-direction:column;gap:5px}
+.field label{font-family:var(--font-mono);font-size:11px;color:var(--text2);letter-spacing:.08em;text-transform:uppercase}
+.field input,.field select{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);
+  color:var(--text);padding:9px 10px;font-family:var(--font-ui);font-size:14px}
+.field input:focus,.field select:focus{outline:none;border-color:var(--cyan)}
+.field .hint{font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.04em}
+.wb-grid{display:grid;grid-template-columns:1fr;gap:18px}
+@media(min-width:780px){ .wb-grid{grid-template-columns:300px 1fr} }
+.estado-box{font-family:var(--font-mono);font-size:13px;letter-spacing:.05em;padding:12px 14px;border-radius:var(--radius);border:1px solid var(--border);margin-bottom:14px;font-weight:700}
+.estado-box.ok{color:var(--green);border-color:var(--green);background:rgba(57,211,83,.08)}
+.estado-box.bad{color:var(--red);border-color:var(--red);background:rgba(248,81,73,.08)}
+.kv{display:flex;justify-content:space-between;align-items:baseline;font-family:var(--font-mono);font-size:13px;padding:6px 0;border-bottom:1px dashed var(--border)}
+.kv:last-child{border-bottom:none}
+.kv .k{color:var(--text2)}
+.kv .v{color:var(--text);font-weight:700}
+.abaco-wrap{margin-top:14px;display:flex;justify-content:center}
+.proximamente{font-family:var(--font-mono);color:var(--text3);text-align:center;padding:2.6rem 1rem;letter-spacing:.04em}
+.empty{color:var(--text3);font-family:var(--font-mono);font-size:12px;padding:1rem 0;text-align:center}
+#gate-msg{max-width:480px;margin:80px auto;text-align:center;font-family:var(--font-mono);color:var(--text2)}
+.theme-toggle{display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;}
+.theme-toggle-track{width:36px;height:20px;border-radius:10px;background:var(--bg4);border:1px solid var(--border2);position:relative;transition:background .25s;}
+.theme-toggle-thumb{width:14px;height:14px;border-radius:50%;background:var(--cyan);position:absolute;top:2px;left:2px;transition:transform .25s,background .25s;box-shadow:0 0 6px rgba(0,200,212,.5);}
+:root.light .theme-toggle-thumb{transform:translateX(16px);background:var(--amber);}
+.theme-toggle-icon{font-size:13px;line-height:1;}
+</style>
+</head>
+<body>
+<div id="gate-msg" style="display:none">
+  <h2 style="border:none">// VALIDANDO SESIÓN…</h2>
+  <p>Si no tenés sesión activa, te redirige a <b>turnos.html</b>.</p>
+</div>
+
+<div class="wrap" id="app-wrap" style="display:none">
+  <header class="bar">
+    <div class="dot"></div>
+    <h1>PESO Y BALANCE<small>AEROCLUB RÍO GRANDE</small></h1>
+    <div class="sp">
+      <div class="theme-toggle" onclick="toggleTheme()" title="Cambiar tema">
+        <span class="theme-toggle-icon">🌙</span>
+        <div class="theme-toggle-track"><div class="theme-toggle-thumb"></div></div>
+        <span class="theme-toggle-icon">☀️</span>
+      </div>
+      <span class="who" id="who-label"></span>
+      <span class="ver">v1.0</span>
+      <a class="back" href="turnos.html">← TURNERO</a>
+    </div>
+  </header>
+
+  <div class="card">
+    <h2>// AERONAVE</h2>
+    <div class="field" style="max-width:420px">
+      <label>Seleccioná la aeronave</label>
+      <select id="selAvion"></select>
+    </div>
+  </div>
+
+  <div id="calcArea"></div>
+</div>
+
+<script>
+// ── GATE DE SESIÓN ───────────────────────────────────────────────
+// A diferencia de portal-alumno.html, NO se filtra por rol: entra cualquiera
+// que tenga sesión activa en turnos.html (alumno, piloto, instructor, admin,
+// administrador). El peso y balance le importa a todo el que vuela.
+let session=null, userLabel='', userRol='';
+(function gate(){
+  let s=null;
+  try{ s=JSON.parse(sessionStorage.getItem('lvoad-session')||'null'); }catch(_){ s=null; }
+  if(s && (s.tipo==='alumno' || s.tipo==='instructor')) session=s;
+  if(!session){
+    document.getElementById('gate-msg').style.display='block';
+    setTimeout(()=>{ location.href='turnos.html'; },900);
+    return;
+  }
+  userLabel=session.user||session.username||session.nombre||session.emailKey||'';
+  userRol=session.rol||(session.tipo==='instructor'?(session.soloUsuarios?'admin':'instructor'):'');
+  document.getElementById('who-label').textContent=userLabel+(userRol?' · '+userRol.toUpperCase():'');
+  document.getElementById('app-wrap').style.display='block';
+})();
+
+window.toggleTheme=function(){
+  const isLight=document.documentElement.classList.toggle('light');
+  localStorage.setItem('lvoad-theme',isLight?'light':'dark');
+};
+
+const $=id=>document.getElementById(id);
+
+/* ============================ DATOS DE AERONAVES ============================
+   Para agregar un avión nuevo (LV-ART, LV-MPH): sumar una entrada acá con sus
+   datos reales del POH. No hace falta tocar nada más del código — si la
+   entrada es `null`, la pantalla muestra automáticamente "PRÓXIMAMENTE".
+   Unidades: brazo en pulgadas, peso en libras (estándar de los POH/manuales
+   originales). El usuario carga piloto/pasajero/equipaje en KG y combustible
+   en LITROS (unidades habituales en Argentina); todo se convierte internamente. */
+const AERONAVES_WB={
+  'LV-OAD':{
+    nombre:'LV-OAD · Tomahawk PA-38-112',
+    peso_vacio:1187, brazo_vacio:74.96,
+    brazo_piloto:85.50,
+    brazo_combustible:75.40, fuel_kg_por_litro:0.72,
+    brazo_equipaje:115.00,
+    mtow:1670,
+    consumo_lh:22,           // L/h, para la autonomía estimada
+    kg_a_lb:2.2,
+    // Envolvente (polígono de peso y balance): [brazo(pulg), peso(lbs)]
+    envolvente:[[72.4,1000],[72.4,1277],[73.5,1670],[78.5,1670],[78.5,1000]]
+  },
+  'LV-ART':null,   // PRÓXIMAMENTE — Archer II PA-28-181, pendiente cargar datos del POH
+  'LV-MPH':null    // PRÓXIMAMENTE — Lance II PA-32RT-300, pendiente cargar datos del POH
+};
+
+// Etiquetas para el selector (incluye los "próximamente" aunque su valor sea null)
+const ETIQUETAS_AVION={
+  'LV-OAD':'LV-OAD · Tomahawk PA-38-112',
+  'LV-ART':'LV-ART · Archer II PA-28-181 (próximamente)',
+  'LV-MPH':'LV-MPH · Lance II PA-32RT-300 (próximamente)'
+};
+
+function llenarSelector(){
+  const sel=$('selAvion');
+  sel.innerHTML=Object.keys(ETIQUETAS_AVION).map(k=>`<option value="${k}">${ETIQUETAS_AVION[k]}</option>`).join('');
+  sel.value='LV-OAD';
+}
+
+/* ============================ CALCULO ============================ */
+// Ray casting estándar: ¿el punto (x,y) cae dentro del polígono `poly`?
+function puntoEnPoligono(x,y,poly){
+  let dentro=false;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+    const [xi,yi]=poly[i], [xj,yj]=poly[j];
+    if(((yi>y)!==(yj>y)) && (x < (xj-xi)*(y-yi)/(yj-yi)+xi)) dentro=!dentro;
+  }
+  return dentro;
+}
+
+function calcular(av, piloto_kg, pasajero_kg, combustible_l, equipaje_kg){
+  const pesoTripLbs = (piloto_kg+pasajero_kg)*av.kg_a_lb;
+  const pesoCombLbs = (combustible_l*av.fuel_kg_por_litro)*av.kg_a_lb;
+  const pesoEquipLbs= equipaje_kg*av.kg_a_lb;
+  const pesoTotal   = av.peso_vacio + pesoTripLbs + pesoCombLbs + pesoEquipLbs;
+  const momento     = av.peso_vacio*av.brazo_vacio + pesoTripLbs*av.brazo_piloto +
+                       pesoCombLbs*av.brazo_combustible + pesoEquipLbs*av.brazo_equipaje;
+  const cg          = pesoTotal>0 ? momento/pesoTotal : av.brazo_vacio;
+  const dentroEnvolvente = puntoEnPoligono(cg, pesoTotal, av.envolvente);
+  const dentroMTOW  = pesoTotal<=av.mtow;
+  return{
+    pesoTotal, cg, dentroEnvolvente, dentroMTOW,
+    ok: dentroEnvolvente && dentroMTOW,
+    pesoDisponible: av.mtow-pesoTotal,
+    autonomia: av.consumo_lh ? combustible_l/av.consumo_lh : null
+  };
+}
+
+/* ============================ ABACO (SVG) ============================ */
+function svgAbaco(av, res){
+  const W=520,H=360,PADL=52,PADB=36,PADT=18,PADR=18;
+  const xs=av.envolvente.map(p=>p[0]), ys=av.envolvente.map(p=>p[1]);
+  let xMin=Math.min(...xs), xMax=Math.max(...xs);
+  let yMin=Math.min(...ys), yMax=Math.max(av.mtow,...ys);
+  const xPad=(xMax-xMin)*0.18||1, yPad=(yMax-yMin)*0.12||50;
+  xMin-=xPad; xMax+=xPad; yMin=Math.max(0,yMin-yPad); yMax+=yPad;
+  const sx=x=>PADL+(x-xMin)/(xMax-xMin)*(W-PADL-PADR);
+  const sy=y=>H-PADB-(y-yMin)/(yMax-yMin)*(H-PADB-PADT);
+  const NT=5;
+  const xTicks=Array.from({length:NT},(_,i)=>xMin+i*(xMax-xMin)/(NT-1));
+  const yTicks=Array.from({length:NT},(_,i)=>yMin+i*(yMax-yMin)/(NT-1));
+  const gridX=xTicks.map(t=>`<line x1="${sx(t)}" y1="${PADT}" x2="${sx(t)}" y2="${H-PADB}" stroke="var(--border)" stroke-width="1"/>
+    <text x="${sx(t)}" y="${H-PADB+16}" font-family="var(--font-mono)" font-size="9" fill="var(--text3)" text-anchor="middle">${t.toFixed(1)}</text>`).join('');
+  const gridY=yTicks.map(t=>`<line x1="${PADL}" y1="${sy(t)}" x2="${W-PADR}" y2="${sy(t)}" stroke="var(--border)" stroke-width="1"/>
+    <text x="${PADL-8}" y="${sy(t)+3}" font-family="var(--font-mono)" font-size="9" fill="var(--text3)" text-anchor="end">${t.toFixed(0)}</text>`).join('');
+  const poly=av.envolvente.map(p=>sx(p[0])+','+sy(p[1])).join(' ');
+  const mtowY=sy(av.mtow);
+  const cx=sx(res.cg), cy=sy(res.pesoTotal);
+  const colorPunto=res.ok?'var(--cyan)':'var(--red)';
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg)">
+    ${gridX}${gridY}
+    <line x1="${PADL}" y1="${mtowY}" x2="${W-PADR}" y2="${mtowY}" stroke="var(--amber)" stroke-width="1" stroke-dasharray="4,3"/>
+    <text x="${W-PADR-4}" y="${mtowY-5}" font-family="var(--font-mono)" font-size="9" fill="var(--amber)" text-anchor="end">MTOW ${av.mtow}</text>
+    <polygon points="${poly}" fill="rgba(0,200,212,.08)" stroke="var(--cyan)" stroke-width="1.6"/>
+    <circle cx="${cx}" cy="${cy}" r="6" fill="${colorPunto}" stroke="var(--bg)" stroke-width="1.5"/>
+    <text x="${PADL+ (W-PADL-PADR)/2}" y="${H-6}" font-family="var(--font-mono)" font-size="10" fill="var(--text2)" text-anchor="middle">BRAZO (pulgadas)</text>
+    <text x="12" y="${PADT+(H-PADB-PADT)/2}" font-family="var(--font-mono)" font-size="10" fill="var(--text2)" text-anchor="middle" transform="rotate(-90 12 ${PADT+(H-PADB-PADT)/2})">PESO (lbs)</text>
+  </svg>`;
+}
+
+/* ============================ RENDER ============================ */
+function renderCalcArea(){
+  const key=$('selAvion').value;
+  const av=AERONAVES_WB[key];
+  const area=$('calcArea');
+  if(!av){
+    area.innerHTML=`<div class="card"><div class="proximamente">
+      ⚠ ${ETIQUETAS_AVION[key]}<br><br>
+      Todavía no se cargaron los datos de peso y balance de esta aeronave (envolvente,
+      brazos, MTOW del POH). Avisale a Daniel si lo necesitás antes de que esté listo.
+    </div></div>`;
+    return;
+  }
+  area.innerHTML=`<div class="card">
+    <h2>// CARGA — ${av.nombre}</h2>
+    <div class="wb-grid">
+      <div>
+        <div class="field">
+          <label>Piloto (kg)</label>
+          <input type="number" id="inPiloto" min="0" step="1" value="80">
+        </div>
+        <div class="field">
+          <label>Pasajero (kg)</label>
+          <input type="number" id="inPasajero" min="0" step="1" value="0">
+          <span class="hint">Dejá en 0 si volás solo</span>
+        </div>
+        <div class="field">
+          <label>Combustible (litros)</label>
+          <input type="number" id="inComb" min="0" step="1" value="50">
+        </div>
+        <div class="field">
+          <label>Equipaje (kg)</label>
+          <input type="number" id="inEquip" min="0" step="1" value="0">
+        </div>
+      </div>
+      <div>
+        <div id="resBox"></div>
+        <div class="abaco-wrap" id="abacoBox"></div>
+      </div>
+    </div>
+  </div>`;
+  ['inPiloto','inPasajero','inComb','inEquip'].forEach(id=>{
+    $(id).addEventListener('input',()=>actualizarResultado(key));
+  });
+  actualizarResultado(key);
+}
+
+function actualizarResultado(key){
+  const av=AERONAVES_WB[key];
+  if(!av) return;
+  const piloto=parseFloat($('inPiloto').value)||0;
+  const pasajero=parseFloat($('inPasajero').value)||0;
+  const comb=parseFloat($('inComb').value)||0;
+  const equip=parseFloat($('inEquip').value)||0;
+  const res=calcular(av, piloto, pasajero, comb, equip);
+  let estadoTxt, estadoCls;
+  if(res.ok){ estadoTxt='✓ DENTRO DE LA ENVOLVENTE — PESO Y BALANCE OK'; estadoCls='ok'; }
+  else if(!res.dentroMTOW){ estadoTxt='⚠ EXCEDE EL MTOW'; estadoCls='bad'; }
+  else { estadoTxt='⚠ CG FUERA DE LA ENVOLVENTE'; estadoCls='bad'; }
+  $('resBox').innerHTML=`
+    <div class="estado-box ${estadoCls}">${estadoTxt}</div>
+    <div class="kv"><span class="k">Peso total</span><span class="v">${res.pesoTotal.toFixed(1)} lbs</span></div>
+    <div class="kv"><span class="k">MTOW</span><span class="v">${av.mtow} lbs</span></div>
+    <div class="kv"><span class="k">Peso disponible</span><span class="v">${res.pesoDisponible.toFixed(1)} lbs</span></div>
+    <div class="kv"><span class="k">CG actual</span><span class="v">${res.cg.toFixed(2)}"</span></div>
+    ${res.autonomia!=null?`<div class="kv"><span class="k">Autonomía estimada</span><span class="v">${res.autonomia.toFixed(1)} h</span></div>`:''}
+  `;
+  $('abacoBox').innerHTML=svgAbaco(av,res);
+}
+
+llenarSelector();
+$('selAvion').addEventListener('change',renderCalcArea);
+renderCalcArea();
+</script>
+</body>
+</html>
