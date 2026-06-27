@@ -2,12 +2,22 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
-  v3.19 ·  Banner global de "version vieja" (mismo mecanismo que turnos.html v6.03),
-           que faltaba en esta pagina. Caso real: 5 planes generados como admin no
-           quedaron auditados porque la pestaña tenia una version de antes del fix
-           v3.18, y no habia ningun aviso de que estuviera desactualizada. Cada 5
-           minutos (y al volver a la pestaña) se compara contra la version publicada
-           y, si difiere, aparece un banner fijo con boton "ACTUALIZAR AHORA".
+  v3.20 ·  FIX critico de auditoria (caso real: 5 planes combinados desde celular, ninguno
+           quedo auditado, version v3.18 confirmada en pantalla — no era pestaña vieja).
+           En generarPDF() y generarPDFCombinado() el link.click() (dispara la descarga)
+           se ejecutaba ANTES de esperar la auditoria. En mobile, descargar/compartir un
+           blob suele abrir la hoja nativa de guardado del sistema operativo, lo que pone
+           la pestaña en segundo plano — el navegador puede congelar el JS a mitad del
+           await (sobre todo en el loop de varios planes del combinado). Si se congela ahi,
+           la auditoria nunca llega a ejecutarse NI a fallar formalmente: no cae ni en la
+           cola de reintento de v3.18, no hay alert, nada. Fix: la auditoria ahora corre
+           ANTES del link.click(), mientras la pestaña sigue 100% en foreground — si algo
+           se congela despues, como mucho se pierde el toast final, pero el registro en
+           /auditoria ya esta hecho.
+  v3.19 ·  Banner global de "version vieja" (mismo mecanismo que turnos.html v6.03), que
+           faltaba en esta pagina. Cada 5 minutos (y al volver a la pestaña) se compara
+           contra la version publicada y, si difiere, aparece un banner fijo con boton
+           "ACTUALIZAR AHORA".
   v3.18 ·  FIX critico de auditoria: resolverUsuario() no miraba session.username
            (solo user/emailKey/nombre), a diferencia de resolverUsuarioLabel() que si
            lo hacia — para alumno/piloto (sin 'user' en la sesion) el borrador se
@@ -444,7 +454,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v3.19</span>
+    <span class="ver">v3.20</span>
     <a href="turnos.html" title="Volver al turnero (sin cerrar sesión)" style="font-family:var(--mono);font-size:12px;color:var(--cyan);text-decoration:none;border:1px solid var(--line-hot);border-radius:5px;padding:5px 11px;letter-spacing:1px;transition:.15s" onmouseover="this.style.background='var(--cyan)';this.style.color='#04141a'" onmouseout="this.style.background='transparent';this.style.color='var(--cyan)'">← TURNERO</a>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
@@ -1559,12 +1569,20 @@ async function generarPDFCombinado(planes){
     const bytes=await master.save({useObjectStreams:false});
     const blob=new Blob([bytes],{type:'application/pdf'});
     const url=URL.createObjectURL(blob);
-    const link=document.createElement('a'); link.href=url;
     const hoy=new Date().toISOString().slice(0,10).replace(/-/g,'');
-    link.download='FPL_combinado_'+hoy+'_'+planes.length+'planes.pdf'; link.click();
-    setTimeout(()=>URL.revokeObjectURL(url),3000);
+    // FIX v3.20: la auditoría va ANTES del link.click(). En mobile, descargar/compartir
+    // un blob suele abrir la hoja nativa de guardado del sistema operativo, lo que pone
+    // la pestaña en segundo plano — y el navegador puede congelar el JS a mitad del
+    // await, sobre todo en este loop de varios planes. Si eso pasa DESPUÉS de auditar,
+    // como mucho se pierde el toast/alert final, pero la auditoría ya está hecha. Si
+    // pasara ANTES (como estaba), la auditoría nunca llega a ejecutarse ni a fallar
+    // formalmente (queda congelada, no cae ni en la cola de reintento) — caso real:
+    // 5 planes combinados desde el celular, ninguno quedó auditado.
     let fallaron=0;
     for(const p of planes){ if(!(await auditarFPLData(p))) fallaron++; }   // una entrada de auditoria por plan
+    const link=document.createElement('a'); link.href=url;
+    link.download='FPL_combinado_'+hoy+'_'+planes.length+'planes.pdf'; link.click();
+    setTimeout(()=>URL.revokeObjectURL(url),3000);
     toast('PDF combinado generado · '+planes.length+' planes','ok');
     if(fallaron){
       alert('⚠ Se generaron los '+planes.length+' PDF, pero '+fallaron+' de '+planes.length+' auditorías no se pudieron registrar (sin conexión con la base). Quedaron guardadas en este navegador y se van a reintentar solas la próxima vez que generes un PDF o recargues la página.');
@@ -1586,10 +1604,11 @@ async function generarPDF(){
     const bytes=await pdf.save({useObjectStreams:false});  // false = mejor compatibilidad de visores
     const blob=new Blob([bytes],{type:'application/pdf'});
     const url=URL.createObjectURL(blob);
+    // FIX v3.20: auditoría ANTES del link.click() — ver comentario en generarPDFCombinado.
+    const auditOk=await auditarFPL();   // registro en /auditoria (tag rol:'fpl')
     const link=document.createElement('a'); link.href=url;
     link.download=`FPL_${vU('f7')||'SIN_ID'}_${$('f13fecha').value||''}.pdf`; link.click();
     setTimeout(()=>URL.revokeObjectURL(url),3000);
-    const auditOk=await auditarFPL();   // registro en /auditoria (tag rol:'fpl')
     if(!auditOk){
       alert('⚠ El PDF se generó y descargó bien, pero la AUDITORÍA no se pudo registrar (sin conexión con la base). Quedó guardada en este navegador y se va a reintentar sola la próxima vez que generes un PDF o recargues la página — no hace falta que lo vuelvas a hacer.');
     }
@@ -1711,12 +1730,9 @@ refrescarPreview(); cargarFlota(); cargarAerodromos(); cargarLista(); reloj(); s
 flushAuditQueue();   // por si quedó algo pendiente de una sesión anterior con error de red
 
 /* ===================== CHEQUEO DE VERSION (pestañas que quedan abiertas) =====================
-   v3.19: mismo mecanismo que turnos.html v6.03. Caso real (2026-06-27): se hicieron 5 planes
-   como admin y no quedó ningún registro en /auditoria — la pestaña de fpl.html tenía una
-   versión vieja (de antes del fix v3.18 de auditoría) y nadie se enteró porque esta página
-   todavía no tenía este chequeo. Cada 5 minutos (y al volver a la pestaña) se re-pide este
-   mismo archivo con cache-buster, se compara la versión de .ver contra la que está corriendo,
-   y si difieren se muestra el banner fijo con botón para recargar. */
+   v3.19: mismo mecanismo que turnos.html v6.03. Cada 5 minutos (y al volver a la pestaña) se
+   re-pide este mismo archivo con cache-buster, se compara la versión de .ver contra la que
+   está corriendo, y si difieren se muestra el banner fijo con botón para recargar. */
 function extraerVersionFPL(html){
   const m=html.match(/<span class="ver">([^<]*)<\/span>/);
   return m?m[1]:null;
@@ -1741,6 +1757,7 @@ async function chequearVersionNuevaFPL(){
 document.getElementById('btn-recargar-version')?.addEventListener('click',()=>location.reload());
 setInterval(chequearVersionNuevaFPL,VERSION_POLL_MS_FPL);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')chequearVersionNuevaFPL();});
+flushAuditQueue();   // por si quedó algo pendiente de una sesión anterior con error de red
 </script>
 </body>
 </html>
