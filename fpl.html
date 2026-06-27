@@ -2,6 +2,12 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
+  v3.19 ·  Banner global de "version vieja" (mismo mecanismo que turnos.html v6.03),
+           que faltaba en esta pagina. Caso real: 5 planes generados como admin no
+           quedaron auditados porque la pestaña tenia una version de antes del fix
+           v3.18, y no habia ningun aviso de que estuviera desactualizada. Cada 5
+           minutos (y al volver a la pestaña) se compara contra la version publicada
+           y, si difiere, aparece un banner fijo con boton "ACTUALIZAR AHORA".
   v3.18 ·  FIX critico de auditoria: resolverUsuario() no miraba session.username
            (solo user/emailKey/nombre), a diferencia de resolverUsuarioLabel() que si
            lo hacia — para alumno/piloto (sin 'user' en la sesion) el borrador se
@@ -426,12 +432,19 @@
 </style>
 </head>
 <body>
+<!-- v3.19: banner global de version vieja, mismo mecanismo que turnos.html v6.03.
+     Colgado directo de <body>, antes de .wrap, para que se vea sin depender de
+     ningun estado de la pagina. -->
+<div id="banner-version-nueva" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:var(--amber);color:#0a0a0a;font-family:var(--mono);font-size:12px;letter-spacing:.05em;padding:.65rem 1rem;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;box-shadow:0 2px 12px rgba(0,0,0,.45)">
+  <span>⚠ Esta pestaña está corriendo una <b>versión vieja</b> de fpl.html — los arreglos y cambios recientes (incluida la auditoría) NO van a funcionar hasta que actualices.</span>
+  <button id="btn-recargar-version" style="font-family:var(--mono);font-size:12px;font-weight:700;padding:6px 16px;background:#0a0a0a;color:var(--amber);border:1px solid #0a0a0a;border-radius:5px;cursor:pointer">ACTUALIZAR AHORA</button>
+</div>
 <div class="wrap">
 
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v3.18</span>
+    <span class="ver">v3.19</span>
     <a href="turnos.html" title="Volver al turnero (sin cerrar sesión)" style="font-family:var(--mono);font-size:12px;color:var(--cyan);text-decoration:none;border:1px solid var(--line-hot);border-radius:5px;padding:5px 11px;letter-spacing:1px;transition:.15s" onmouseover="this.style.background='var(--cyan)';this.style.color='#04141a'" onmouseout="this.style.background='transparent';this.style.color='var(--cyan)'">← TURNERO</a>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
@@ -1696,6 +1709,38 @@ if(!$('ffiledby').value && USUARIO.indexOf('externo')!==0) $('ffiledby').value=U
 const _utag=$('fpl-usuario-tag'); if(_utag) _utag.textContent='Usuario: '+USUARIO_LABEL+(USUARIO.indexOf('externo')===0?' (no logueado · borradores de esta sesión, se depuran tras 1 h)':'');
 refrescarPreview(); cargarFlota(); cargarAerodromos(); cargarLista(); reloj(); setInterval(reloj,1000);
 flushAuditQueue();   // por si quedó algo pendiente de una sesión anterior con error de red
+
+/* ===================== CHEQUEO DE VERSION (pestañas que quedan abiertas) =====================
+   v3.19: mismo mecanismo que turnos.html v6.03. Caso real (2026-06-27): se hicieron 5 planes
+   como admin y no quedó ningún registro en /auditoria — la pestaña de fpl.html tenía una
+   versión vieja (de antes del fix v3.18 de auditoría) y nadie se enteró porque esta página
+   todavía no tenía este chequeo. Cada 5 minutos (y al volver a la pestaña) se re-pide este
+   mismo archivo con cache-buster, se compara la versión de .ver contra la que está corriendo,
+   y si difieren se muestra el banner fijo con botón para recargar. */
+function extraerVersionFPL(html){
+  const m=html.match(/<span class="ver">([^<]*)<\/span>/);
+  return m?m[1]:null;
+}
+const VERSION_ACTUAL_FPL=document.querySelector('.ver')?.textContent.trim()||null;
+const VERSION_POLL_MS_FPL=5*60*1000;
+let _versionDesactualizadaFPL=false;
+async function chequearVersionNuevaFPL(){
+  if(_versionDesactualizadaFPL||!VERSION_ACTUAL_FPL)return;
+  try{
+    const r=await fetch(location.pathname+'?_v='+Date.now(),{cache:'no-store'});
+    if(!r.ok)return;
+    const html=await r.text();
+    const versionServidor=extraerVersionFPL(html);
+    if(versionServidor&&versionServidor!==VERSION_ACTUAL_FPL){
+      _versionDesactualizadaFPL=true;
+      const b=document.getElementById('banner-version-nueva');
+      if(b)b.style.display='flex';
+    }
+  }catch(e){console.warn('No se pudo chequear si hay una version nueva:',e);}
+}
+document.getElementById('btn-recargar-version')?.addEventListener('click',()=>location.reload());
+setInterval(chequearVersionNuevaFPL,VERSION_POLL_MS_FPL);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')chequearVersionNuevaFPL();});
 </script>
 </body>
 </html>
