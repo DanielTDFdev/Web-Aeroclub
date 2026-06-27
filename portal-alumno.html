@@ -4,7 +4,902 @@
   PORTAL ALUMNO — Aeroclub Río Grande
   v1.9 ·  (1) Agregado el selector de tema (claro/oscuro) en el header, igual al de
           turnos.html. El portal ya HEREDABA el tema elegido en turnos.html o
+          index.html (lee localStorage 'lvoad-theme' al cargar, misma clave), pero<!DOCTYPE html>
+<!--
+==================================================================================
+  PORTAL ALUMNO — Aeroclub Río Grande
+  v1.10 ·  Nueva tab "FLASHCARDS": mazo de 75 preguntas/respuestas sobre el
+           LV-OAD (PA-38-112), con flip 3D pregunta/respuesta. Se mezclan al
+           azar; "la sé" sale del mazo de la vuelta, "no la sé" va al final
+           para volver a aparecer antes de terminar. Contenido estático
+           curado a mano (no editable desde la UI, no usa Firebase). Datos
+           recibidos en JSON con un formato inusual (cada item codificaba 2
+           preguntas distintas cruzadas como {Q1:Q2, A1:A2} en vez de
+           {Q1:A1, Q2:A2}) y con notación LaTeX cruda ($112$, V_{NO}, etc.) —
+           se reparó el cruce y se limpió la notación (Vno, Vfe, °, ±, ²/³)
+           antes de cargar el banco.
+  v1.9 ·  (1) Agregado el selector de tema (claro/oscuro) en el header, igual al de
+          turnos.html. El portal ya HEREDABA el tema elegido en turnos.html o
           index.html (lee localStorage 'lvoad-theme' al cargar, misma clave), pero
+          no tenía forma de cambiarlo desde acá mismo. toggleTheme() idéntica a la
+          de turnos.html.
+          (2) El título del tab "QUIZ" pasa a "CUESTIONARIOS" (solo el texto del botón
+          de navegación; los textos internos del panel — "// QUIZ", "NUEVO QUIZ",
+          "EDITAR/NUEVO QUIZ", etc. — quedan igual, no se tocaron).
+  v1.8 ·  La lista de quizzes ahora muestra el puntaje directamente en el item,
+          sin tener que abrir nada:
+          - Alumno: si ya tiene un intento, ve su propio puntaje (último intento)
+            en vez del genérico "✓ YA RENDIDO". Si el quiz NO es obligatorio,
+            además del puntaje aparece un botón REINTENTAR.
+          - Staff: en la línea de categoría/preguntas se agrega
+            "N intento(s) · Promedio X%" (agregado de TODOS los alumnos que lo
+            rindieron), o "Sin intentos todavía" si nadie lo rindió. El detalle
+            por alumno sigue estando en el botón INTENTOS, esto es solo el
+            resumen a simple vista.
+  v1.7 ·  Se quita el texto explicativo "Se listan solos: subí un PDF a la
+          carpeta /manuales..." de la tab MANUALES. Era una nota interna de
+          implementación, no algo que tenga que ver un alumno.
+  v1.6 ·  FIX CRÍTICO: renderPerfil() y renderManuales() nunca se ejecutaban.
+          Al final del script solo quedaba la llamada a renderQuiz() — en cada
+          paso de construcción anterior (v1.0→v1.1→...) se usó la línea de
+          invocación del paso previo como ancla para insertar la siguiente,
+          pisándola en vez de conservarla. Resultado: la tab PERFIL y la tab
+          MANUALES quedaban completamente vacías (nunca se les seteaba innerHTML),
+          mientras que QUIZ funcionaba por ser la única invocación que sobrevivió.
+          Restauradas las tres llamadas al final del módulo.
+  v1.5 ·  Tab MANUALES: nueva sección "ARCHIVOS EN /manuales (REPOSITORIO)" que
+          lista automáticamente el contenido real de la carpeta /manuales del
+          repo (GitHub Contents API, sin autenticar — repo público). Cada
+          archivo sale como link de descarga directo (download_url de la API).
+          No depende de Firebase ni de que el staff lo registre a mano: subís
+          el PDF a la carpeta y aparece solo en el próximo refresh de la página.
+          El catálogo manual existente (Firebase /manuales, para links externos
+          o metadata curada) sigue debajo, ahora bajo el título "CATÁLOGO / LINKS".
+          Límite conocido: la API de GitHub sin autenticar permite 60 req/hora
+          por IP; con el tráfico de un aeroclub no debería ser problema.
+  v1.4 ·  Banco de preguntas: si un quiz tiene 50 o más preguntas cargadas
+          (QZ_BANCO_SIZE), al rendir se sortean 50 al azar (Fisher-Yates) para
+          ESE intento puntual — distinto alumno, distinto sorteo. Si tiene menos
+          de 50, se usan todas (comportamiento anterior, sin cambios). El sorteo
+          se hace una sola vez al abrir el formulario y se mantiene fijo durante
+          todo el intento (no se vuelve a sortear al cambiar de página). Aviso
+          visible al alumno ("Banco de N preguntas — te tocaron 50 al azar") y
+          en la lista de quizzes para el staff. El detalle guardado en el intento
+          (VER DETALLE) refleja exactamente las 50 que le tocaron, no el banco
+          completo.
+  v1.3 ·  Paginado al RENDIR un quiz (no afecta el editor de staff): 10 preguntas
+          por página (QZ_PAGE_SIZE), navegación Anterior/Siguiente, contador
+          "Respondidas: X/Y". Las respuestas se guardan en un array fuera del
+          render, así no se pierden al cambiar de página. Al enviar con preguntas
+          sin responder, salta directo a la página de la primera pendiente en
+          vez de solo avisar por alert.
+  v1.2 ·  Quiz de resolución OBLIGATORIA: checkbox "obligatorio" en el editor.
+          Si está marcado, el alumno tiene UN SOLO intento permitido (se re-chequea
+          contra Firebase tanto al abrir el formulario como al enviar, para cubrir
+          doble pestaña). El intento guarda ahora, además de respuestas/puntaje,
+          un detalle por pregunta {enunciado,elegida,correcta_texto,acierto} para
+          que el staff pueda revisar exactamente qué contestó mal el alumno
+          (botón VER DETALLE en INTENTOS). Si el quiz es obligatorio, INTENTOS
+          también muestra el roster de alumnos (rol:'alumno') que todavía NO
+          lo rindieron, comparando contra /alumnos.
+  v1.1 ·  Importador de JSON en el editor de quiz (tab QUIZ, solo staff): pegás un
+          array {pregunta, opciones:["A) ...","B) ...","C) ..."], respuesta_correcta:"A"}
+          y se agrega a las preguntas ya cargadas (no reemplaza). Tolera fences de
+          markdown (```json) y CRLF pegados al copiar. Pensado para los cuestionarios
+          de instrucción por aeronave (ej. Cuestionario_LVOAD.json, 75 preguntas).
+  v1.0 ·  Primera versión. Página nueva, validada con la sesión de turnos.html
+          (sessionStorage 'lvoad-session', misma pestaña). Acceso: rol alumno
+          (NO piloto), instructor, admin, administrador.
+          - PERFIL: ficha del alumno + notas del instructor/admin (solo lectura
+            para el alumno; staff elige alumno y edita).
+          - MANUALES: repositorio (archivo en /manuales del repo o link externo).
+            Alta/borrado solo staff.
+          - QUIZ: el alumno rinde con autocorrección y puntaje, ve su historial.
+            Staff crea preguntas, activa/desactiva quizzes y ve intentos de todos.
+  Esquema Firebase nuevo:
+    /manuales/{pushKey}            {titulo,categoria,tipo:'archivo'|'link',url,descripcion,fecha,autor}
+    /quizzes/{quizId}              {titulo,categoria,activo,preguntas:[{enunciado,opciones:[...],correcta}],creado,autor}
+    /intentos_quiz/{userKey}/{quizId}/{pushKey}  {respuestas:[...],puntaje,total,fecha,nombre}
+    /notas_alumno/{emailKey}       {texto,autor,fecha}
+==================================================================================
+-->
+<html lang="es">
+<head>
+<script>if(localStorage.getItem('lvoad-theme')==='light')document.documentElement.classList.add('light');</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portal Alumno · Aeroclub Río Grande</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0c0f;--bg2:#111418;--bg3:#161b22;--bg4:#1c2330;
+  --text:#c8d8e8;--text2:#7a9bb8;--text3:#3d5a72;
+  --amber:#f0a500;--amber2:#ffc840;--amber-dim:#7a5200;
+  --cyan:#00c8d4;--cyan-dim:#003d42;
+  --green:#39d353;--red:#f85149;
+  --border:rgba(0,200,212,0.15);--border2:rgba(0,200,212,0.35);
+  --radius:4px;--radius-lg:6px;
+  --font-mono:'Share Tech Mono',monospace;
+  --font-ui:'Rajdhani',sans-serif;
+}
+:root.light{
+  --bg:#f0f4f8;--bg2:#e2e8f0;--bg3:#ffffff;--bg4:#d1dce8;
+  --text:#1a2a3a;--text2:#3a5a78;--text3:#7a9ab8;
+  --amber:#b87000;--amber2:#c87800;--amber-dim:#f5d080;
+  --cyan:#0090a0;--cyan-dim:#b0e8ee;
+  --green:#1a8a30;--red:#c0392b;
+  --border:rgba(0,144,160,0.2);--border2:rgba(0,144,160,0.45);
+}
+body{font-family:var(--font-ui);font-size:15px;color:var(--text);background:var(--bg);min-height:100vh;letter-spacing:.02em;transition:background .25s,color .25s;}
+.wrap{max-width:980px;margin:0 auto;padding:18px 16px 80px}
+header.bar{display:flex;align-items:center;gap:14px;border:1px solid var(--border2);
+  background:linear-gradient(180deg,var(--bg3),var(--bg2));padding:12px 16px;border-radius:var(--radius-lg);
+  margin-bottom:18px;box-shadow:0 0 0 1px #000 inset,0 0 22px rgba(0,200,212,.07)}
+header.bar .dot{width:11px;height:11px;border-radius:50%;background:var(--cyan);box-shadow:0 0 10px var(--cyan);animation:pulse 2.4s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+header.bar h1{font-size:20px;letter-spacing:2.5px;font-weight:700;text-transform:uppercase;color:var(--text)}
+header.bar h1 small{color:var(--amber);letter-spacing:2px;display:block;font-size:11px;font-family:var(--font-mono);margin-top:2px}
+header.bar .sp{margin-left:auto;display:flex;align-items:center;gap:10px}
+header.bar .ver{font-family:var(--font-mono);font-size:11px;color:var(--text3);border:1px solid var(--border);border-radius:4px;padding:2px 7px;letter-spacing:1px}
+header.bar .who{font-family:var(--font-mono);font-size:12px;color:var(--cyan)}
+.back{font-family:var(--font-mono);font-size:12px;color:var(--text2);text-decoration:none;border:1px solid var(--border);border-radius:var(--radius);padding:6px 12px;white-space:nowrap}
+.back:hover{color:var(--cyan);border-color:var(--cyan)}
+nav.tabs{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+.tabbtn{font-family:var(--font-mono);font-size:12px;letter-spacing:1.5px;text-transform:uppercase;
+  background:var(--bg3);border:1px solid var(--border);color:var(--text2);border-radius:var(--radius);
+  padding:9px 18px;cursor:pointer;font-weight:600}
+.tabbtn.active{color:var(--cyan);border-color:var(--cyan);background:rgba(0,200,212,.08);text-shadow:0 0 10px rgba(0,200,212,.3)}
+.card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;margin-bottom:16px;position:relative}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:.4}
+h2{font-family:var(--font-mono);font-size:13px;color:var(--cyan);letter-spacing:.16em;text-transform:uppercase;margin-bottom:1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border)}
+h3{font-family:var(--font-mono);font-size:12px;color:var(--amber);letter-spacing:.12em;text-transform:uppercase;margin-bottom:.6rem}
+.screen{display:none}
+.screen.active{display:block}
+.empty{color:var(--text3);font-family:var(--font-mono);font-size:12px;padding:1rem 0;text-align:center}
+button{font-family:var(--font-ui);font-size:14px;font-weight:600;background:var(--bg4);color:var(--text2);
+  border:1px solid var(--border);border-radius:var(--radius);padding:8px 16px;cursor:pointer;transition:.15s}
+button:hover{background:var(--bg4);color:var(--text);border-color:var(--cyan)}
+button.primary{background:linear-gradient(135deg,rgba(0,200,212,.15),rgba(0,200,212,.05));color:var(--cyan);border-color:var(--cyan)}
+button.danger{background:rgba(248,81,73,.08);color:var(--red);border-color:var(--red)}
+.field{margin-bottom:12px;display:flex;flex-direction:column;gap:5px}
+.field label{font-family:var(--font-mono);font-size:11px;color:var(--text2);letter-spacing:.08em;text-transform:uppercase}
+.field input,.field select,.field textarea{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);
+  color:var(--text);padding:9px 10px;font-family:var(--font-ui);font-size:14px}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--cyan)}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.item{border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.item .meta{flex:1;min-width:160px}
+.item .ttl{font-weight:700;color:var(--text)}
+.item .sub{font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-top:2px}
+.tag{font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;border:1px solid var(--border);
+  border-radius:3px;padding:2px 7px;color:var(--text2)}
+.tag.ok{color:var(--green);border-color:var(--green)}
+.tag.bad{color:var(--red);border-color:var(--red)}
+#gate-msg{max-width:480px;margin:80px auto;text-align:center;font-family:var(--font-mono);color:var(--text2)}
+.theme-toggle{display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;}
+.theme-toggle-track{width:36px;height:20px;border-radius:10px;background:var(--bg4);border:1px solid var(--border2);position:relative;transition:background .25s;}
+.theme-toggle-thumb{width:14px;height:14px;border-radius:50%;background:var(--cyan);position:absolute;top:2px;left:2px;transition:transform .25s,background .25s;box-shadow:0 0 6px rgba(0,200,212,.5);}
+:root.light .theme-toggle-thumb{transform:translateX(16px);background:var(--amber);}
+.theme-toggle-icon{font-size:13px;line-height:1;}
+
+/* ── FLASHCARDS ──────────────────────────────────────────────── */
+.fc-progress{font-family:var(--font-mono);font-size:11px;color:var(--text2);letter-spacing:.08em;text-align:center;margin-bottom:12px}
+.fc-stage{perspective:1400px;max-width:520px;margin:0 auto}
+.fc-card{position:relative;width:100%;min-height:240px;cursor:pointer}
+.fc-card-inner{position:relative;width:100%;height:100%;min-height:240px;transition:transform .5s;transform-style:preserve-3d}
+.fc-card.flipped .fc-card-inner{transform:rotateY(180deg)}
+.fc-face{position:absolute;inset:0;backface-visibility:hidden;border:1px solid var(--border2);border-radius:var(--radius-lg);
+  background:linear-gradient(160deg,var(--bg3),var(--bg2));display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:28px 24px;text-align:center;box-shadow:0 0 24px rgba(0,200,212,.06)}
+.fc-face-back{transform:rotateY(180deg);border-color:var(--amber)}
+.fc-face-tag{font-family:var(--font-mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--cyan);margin-bottom:14px}
+.fc-face-back .fc-face-tag{color:var(--amber)}
+.fc-face-text{font-size:18px;line-height:1.45;color:var(--text)}
+.fc-face-hint{position:absolute;bottom:12px;font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.06em}
+.fc-controls{display:flex;justify-content:center;align-items:center;gap:10px;margin-top:18px;flex-wrap:wrap}
+.fc-btn{font-family:var(--font-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;
+  border:1px solid var(--border);border-radius:var(--radius);background:var(--bg2);color:var(--text2);
+  padding:9px 16px;cursor:pointer;transition:all .15s}
+.fc-btn:hover{border-color:var(--cyan);color:var(--cyan)}
+.fc-btn.ok-btn:hover{border-color:var(--green);color:var(--green)}
+.fc-btn.bad-btn:hover{border-color:var(--red);color:var(--red)}
+.fc-btn:disabled{opacity:.35;cursor:default;pointer-events:none}
+.fc-done{text-align:center;padding:2.5rem 1rem}
+.fc-done .big{font-size:34px;margin-bottom:.5rem}
+</style>
+</head>
+<body>
+<div id="gate-msg" style="display:none">
+  <h2 style="border:none">// VALIDANDO SESIÓN…</h2>
+  <p>Si no tenés sesión activa, te redirige a <b>turnos.html</b>.</p>
+</div>
+
+<div class="wrap" id="app-wrap" style="display:none">
+  <header class="bar">
+    <div class="dot"></div>
+    <h1>PORTAL ALUMNO<small>AEROCLUB RÍO GRANDE</small></h1>
+    <div class="sp">
+      <div class="theme-toggle" onclick="toggleTheme()" title="Cambiar tema">
+        <span class="theme-toggle-icon">🌙</span>
+        <div class="theme-toggle-track"><div class="theme-toggle-thumb"></div></div>
+        <span class="theme-toggle-icon">☀️</span>
+      </div>
+      <span class="who" id="who-label"></span>
+      <span class="ver">v1.10</span>
+      <a class="back" href="turnos.html">← TURNERO</a>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tabbtn active" data-tab="perfil" onclick="showTab('perfil')">PERFIL</button>
+    <button class="tabbtn" data-tab="manuales" onclick="showTab('manuales')">MANUALES</button>
+    <button class="tabbtn" data-tab="quiz" onclick="showTab('quiz')">CUESTIONARIOS</button>
+    <button class="tabbtn" data-tab="flashcards" onclick="showTab('flashcards')">FLASHCARDS</button>
+  </nav>
+
+  <section id="screen-perfil" class="screen active"></section>
+  <section id="screen-manuales" class="screen"></section>
+  <section id="screen-quiz" class="screen"></section>
+  <section id="screen-flashcards" class="screen"></section>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, set, get, update, remove, push, child }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig={
+  apiKey:"AIzaSyATPSaoOV_wKLaJR_dc1jgTzEF2L5p0tHk",
+  authDomain:"turnos-lv-oad.firebaseapp.com",
+  databaseURL:"https://turnos-lv-oad-default-rtdb.firebaseio.com",
+  projectId:"turnos-lv-oad",
+  storageBucket:"turnos-lv-oad.firebasestorage.app",
+  messagingSenderId:"855020455192",
+  appId:"1:855020455192:web:4b6d18f1b2efbb52faca6d"
+};
+const app=initializeApp(firebaseConfig), db=getDatabase(app);
+function dbRef(){ return ref(db); }
+async function fbGet(p){const s=await get(child(dbRef(),p));return s.exists()?s.val():null;}
+async function fbSet(p,v){await set(ref(db,p),v);}
+async function fbUpdate(p,v){await update(ref(db,p),v);}
+async function fbPush(p,v){return await push(ref(db,p),v);}
+async function fbRemove(p){await remove(ref(db,p));}
+
+// ── GATE DE SESIÓN ───────────────────────────────────────────────
+// Acceso: rol:'alumno' (NO piloto) o tipo:'instructor' (cubre instructor real,
+// admin y administrador, que entran como tipo:'instructor' con soloUsuarios).
+let session=null, esAlumno=false, esStaff=false, userKey='', userLabel='';
+(function gate(){
+  let s=null;
+  try{ s=JSON.parse(sessionStorage.getItem('lvoad-session')||'null'); }catch(_){ s=null; }
+  if(s && s.tipo==='alumno' && s.rol==='alumno'){ session=s; esAlumno=true; }
+  else if(s && s.tipo==='instructor'){ session=s; esStaff=true; }
+  if(!session){
+    document.getElementById('gate-msg').style.display='block';
+    setTimeout(()=>{ location.href='turnos.html'; },900);
+    return;
+  }
+  userKey=String(session.user||session.emailKey||session.nombre||'').trim().replace(/[.#$/\[\]]/g,'_');
+  userLabel=session.user||session.nombre||session.emailKey||'';
+  document.getElementById('who-label').textContent=userLabel+(esStaff?' · STAFF':' · ALUMNO');
+  document.getElementById('app-wrap').style.display='block';
+})();
+
+// ── TEMA ─────────────────────────────────────────────────────────
+// El estado inicial ya se aplica en el <script> del <head> (lee localStorage 'lvoad-theme',
+// la misma clave que usan turnos.html e index.html, así el portal hereda el tema elegido en
+// cualquiera de esas páginas). Esto solo agrega el selector para cambiarlo desde aquí.
+window.toggleTheme=function(){
+  const isLight=document.documentElement.classList.toggle('light');
+  localStorage.setItem('lvoad-theme',isLight?'light':'dark');
+};
+
+window.showTab=function(name){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.tabbtn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('screen-'+name).classList.add('active');
+  document.querySelector('.tabbtn[data-tab="'+name+'"]').classList.add('active');
+};
+
+// ── PERFIL ────────────────────────────────────────────────────────
+// Alumno: ve su ficha (de /alumnos/{emailKey}) + nota del instructor/admin
+// (solo lectura). Staff: selector de alumno + textarea para escribir la nota.
+function escHtml(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+async function renderPerfil(){
+  const el=document.getElementById('screen-perfil');
+  if(esAlumno){
+    el.innerHTML='<div class="card"><h2>// MI FICHA</h2><div id="perfil-ficha" class="empty">Cargando…</div></div>'+
+      '<div class="card"><h2>// NOTA DEL INSTRUCTOR</h2><div id="perfil-nota" class="empty">Cargando…</div></div>';
+    const alumno=await fbGet('alumnos/'+session.emailKey);
+    document.getElementById('perfil-ficha').innerHTML=alumno?(`
+      <div class="field"><label>Nombre</label><div>${escHtml(alumno.nombre||'')}</div></div>
+      <div class="field"><label>Email</label><div>${escHtml(alumno.email||'')}</div></div>
+      <div class="field"><label>Teléfono</label><div>${escHtml(alumno.tel||'—')}</div></div>
+      <div class="field"><label>Usuario</label><div>${escHtml(alumno.username||'—')}</div></div>
+      <div class="field"><label>Rol</label><div>${escHtml(session.rol||'alumno')}</div></div>
+    `):'<div class="empty">// NO SE PUDO LEER LA FICHA</div>';
+    const nota=await fbGet('notas_alumno/'+session.emailKey);
+    document.getElementById('perfil-nota').innerHTML=(nota&&nota.texto)?(`
+      <div style="white-space:pre-wrap">${escHtml(nota.texto)}</div>
+      <div class="sub" style="margin-top:8px;font-family:var(--font-mono);font-size:11px;color:var(--text3)">— ${escHtml(nota.autor||'')} · ${escHtml(nota.fecha||'')}</div>
+    `):'<div class="empty">// SIN NOTAS</div>';
+  }else{
+    el.innerHTML=`
+      <div class="card"><h2>// FICHA DE ALUMNO</h2>
+        <div class="field"><label>Elegí un alumno</label>
+          <select id="perfil-sel-alumno"><option value="">— Cargando…</option></select>
+        </div>
+        <div id="perfil-staff-body"></div>
+      </div>`;
+    const data=await fbGet('alumnos');
+    const sel=document.getElementById('perfil-sel-alumno');
+    const alumnos=Object.entries(data||{}).filter(([k,v])=>(v.rol||'alumno')==='alumno');
+    sel.innerHTML='<option value="">— Seleccionar —</option>'+
+      alumnos.map(([k,v])=>`<option value="${escHtml(k)}">${escHtml(v.nombre||v.email||k)}</option>`).join('');
+    sel.onchange=()=>cargarFichaStaff(sel.value, data);
+  }
+}
+
+async function cargarFichaStaff(emailKey, dataAlumnos){
+  const body=document.getElementById('perfil-staff-body');
+  if(!emailKey){ body.innerHTML=''; return; }
+  const alumno=dataAlumnos[emailKey];
+  const nota=await fbGet('notas_alumno/'+emailKey);
+  body.innerHTML=`
+    <div class="field"><label>Email</label><div>${escHtml(alumno.email||'')}</div></div>
+    <div class="field"><label>Teléfono</label><div>${escHtml(alumno.tel||'—')}</div></div>
+    <h3 style="margin-top:14px">// NOTA / PROGRESO</h3>
+    <div class="field"><textarea id="perfil-nota-txt" rows="5">${escHtml(nota&&nota.texto||'')}</textarea></div>
+    <button class="primary" id="perfil-nota-guardar">GUARDAR NOTA</button>
+    <span class="sub" id="perfil-nota-status" style="margin-left:10px"></span>`;
+  document.getElementById('perfil-nota-guardar').onclick=async()=>{
+    const txt=document.getElementById('perfil-nota-txt').value.trim();
+    const st=document.getElementById('perfil-nota-status');
+    try{
+      await fbSet('notas_alumno/'+emailKey,{texto:txt,autor:userLabel,fecha:new Date().toLocaleString('es-AR')});
+      st.textContent='✓ Guardado'; st.style.color='var(--green)';
+    }catch(e){ st.textContent='✗ '+e.message; st.style.color='var(--red)'; }
+  };
+}
+
+// ── MANUALES ──────────────────────────────────────────────────────
+const GH_REPO='danieltdfdev/Web-Aeroclub'; // repo del sitio, para listar /manuales por API
+
+async function renderManuales(){
+  const el=document.getElementById('screen-manuales');
+  el.innerHTML='<div class="card"><h2>// ARCHIVOS EN /manuales (REPOSITORIO)</h2>'+
+    '<div id="man-repo-lista" class="empty">Cargando…</div></div>'+
+    '<div class="card"><h2>// CATÁLOGO / LINKS</h2>'+
+    (esStaff?'<button class="primary" id="man-nuevo" style="margin-bottom:14px">+ NUEVO MANUAL</button>':'')+
+    '<div id="man-form-box"></div>'+
+    '<div id="man-lista" class="empty">Cargando…</div></div>';
+  if(esStaff) document.getElementById('man-nuevo').onclick=()=>formManual();
+  await cargarManualesRepo();
+  await cargarManuales();
+}
+
+async function cargarManualesRepo(){
+  const el=document.getElementById('man-repo-lista');
+  try{
+    const r=await fetch('https://api.github.com/repos/'+GH_REPO+'/contents/manuales');
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const items=await r.json();
+    const archivos=(Array.isArray(items)?items:[]).filter(it=>it.type==='file');
+    if(!archivos.length){ el.innerHTML='<div class="empty">// CARPETA /manuales VACÍA EN EL REPO</div>'; return; }
+    archivos.sort((a,b)=>a.name.localeCompare(b.name));
+    el.innerHTML=archivos.map(f=>`
+      <div class="item">
+        <div class="meta"><div class="ttl">${escHtml(f.name)}</div>
+          <div class="sub">${(f.size/1024).toFixed(0)} KB</div></div>
+        <a href="${escHtml(f.download_url)}" target="_blank" rel="noopener"><button class="primary">DESCARGAR</button></a>
+      </div>`).join('');
+  }catch(e){
+    // Típico: repo privado, carpeta inexistente, o límite de la API de GitHub sin autenticar
+    // (60 req/hora por IP — para el tráfico de un aeroclub no debería ser problema, pero
+    // si varios alumnos abren la página casi a la vez desde la misma red podría pegarles
+    // a todos el mismo contador).
+    el.innerHTML='<div class="empty">✗ No se pudo leer /manuales del repo ('+escHtml(e.message)+')</div>';
+  }
+}
+
+function formManual(item,key){
+  const box=document.getElementById('man-form-box');
+  box.innerHTML=`
+    <div class="card" style="background:var(--bg2)">
+      <h3>${key?'EDITAR':'NUEVO'} MANUAL</h3>
+      <div class="field"><label>Título</label><input id="mf-titulo" value="${escHtml(item&&item.titulo||'')}"></div>
+      <div class="field"><label>Categoría</label><input id="mf-categoria" value="${escHtml(item&&item.categoria||'')}" placeholder="ej: PA-28, Meteorología, Reglamentación"></div>
+      <div class="field"><label>Tipo</label>
+        <select id="mf-tipo">
+          <option value="archivo" ${item&&item.tipo==='archivo'?'selected':''}>Archivo en el repo</option>
+          <option value="link" ${item&&item.tipo==='link'?'selected':''}>Link externo</option>
+        </select>
+      </div>
+      <div class="field"><label>URL / ruta</label><input id="mf-url" value="${escHtml(item&&item.url||'')}" placeholder="manuales/poh_pa28.pdf  ó  https://...">
+        <span class="sub">Si es "Archivo en el repo": subí el PDF a la carpeta <b>/manuales/</b> del repo (GitHub web UI) y poné aquí esa ruta relativa.</span>
+      </div>
+      <div class="field"><label>Descripción</label><textarea id="mf-desc" rows="2">${escHtml(item&&item.descripcion||'')}</textarea></div>
+      <div class="row">
+        <button class="primary" id="mf-guardar">GUARDAR</button>
+        <button id="mf-cancelar">CANCELAR</button>
+      </div>
+      <span class="sub" id="mf-status" style="margin-left:6px"></span>
+    </div>`;
+  document.getElementById('mf-cancelar').onclick=()=>{box.innerHTML='';};
+  document.getElementById('mf-guardar').onclick=async()=>{
+    const st=document.getElementById('mf-status');
+    const data={
+      titulo:document.getElementById('mf-titulo').value.trim(),
+      categoria:document.getElementById('mf-categoria').value.trim(),
+      tipo:document.getElementById('mf-tipo').value,
+      url:document.getElementById('mf-url').value.trim(),
+      descripcion:document.getElementById('mf-desc').value.trim(),
+      autor:userLabel,
+      fecha:new Date().toLocaleString('es-AR')
+    };
+    if(!data.titulo||!data.url){ st.textContent='✗ Falta título o URL'; st.style.color='var(--red)'; return; }
+    try{
+      if(key) await fbUpdate('manuales/'+key,data);
+      else await fbPush('manuales',data);
+      box.innerHTML='';
+      await cargarManuales();
+    }catch(e){ st.textContent='✗ '+e.message; st.style.color='var(--red)'; }
+  };
+}
+
+async function cargarManuales(){
+  const data=await fbGet('manuales');
+  const cont=document.getElementById('man-lista');
+  const entries=Object.entries(data||{});
+  if(!entries.length){ cont.innerHTML='<div class="empty">// SIN MANUALES CARGADOS</div>'; return; }
+  entries.sort((a,b)=>(a[1].titulo||'').localeCompare(b[1].titulo||''));
+  cont.innerHTML=entries.map(([k,v])=>`
+    <div class="item">
+      <div class="meta">
+        <div class="ttl">${escHtml(v.titulo)} <span class="tag">${escHtml(v.tipo==='archivo'?'ARCHIVO':'LINK')}</span></div>
+        <div class="sub">${escHtml(v.categoria||'')}${v.descripcion?' · '+escHtml(v.descripcion):''}</div>
+      </div>
+      <a href="${escHtml(v.url)}" target="_blank" rel="noopener"><button class="primary">ABRIR</button></a>
+      ${esStaff?`<button data-k="${k}" class="man-edit">EDITAR</button><button data-k="${k}" class="danger man-del">BORRAR</button>`:''}
+    </div>`).join('');
+  if(esStaff){
+    cont.querySelectorAll('.man-edit').forEach(b=>b.onclick=()=>formManual(data[b.dataset.k],b.dataset.k));
+    cont.querySelectorAll('.man-del').forEach(b=>b.onclick=async()=>{
+      if(!confirm('¿Borrar "'+data[b.dataset.k].titulo+'"?'))return;
+      await fbRemove('manuales/'+b.dataset.k);
+      await cargarManuales();
+    });
+  }
+}
+
+// ── QUIZ ──────────────────────────────────────────────────────────
+async function renderQuiz(){
+  const el=document.getElementById('screen-quiz');
+  el.innerHTML='<div class="card"><h2>// QUIZ</h2>'+
+    (esStaff?'<button class="primary" id="qz-nuevo" style="margin-bottom:14px">+ NUEVO QUIZ</button>':'')+
+    '<div id="qz-form-box"></div>'+
+    '<div id="qz-lista" class="empty">Cargando…</div></div>'+
+    '<div id="qz-rendir-box"></div>'+
+    (esAlumno?'<div class="card"><h2>// MI HISTORIAL</h2><div id="qz-historial" class="empty">Cargando…</div></div>':'');
+  if(esStaff) document.getElementById('qz-nuevo').onclick=()=>formQuiz();
+  await cargarQuizzes();
+  if(esAlumno) await cargarHistorial();
+}
+
+function formQuiz(item,key){
+  const preguntas=(item&&item.preguntas)?JSON.parse(JSON.stringify(item.preguntas)):[];
+  const box=document.getElementById('qz-form-box');
+  function pintar(){
+    box.innerHTML=`
+      <div class="card" style="background:var(--bg2)">
+        <h3>${key?'EDITAR':'NUEVO'} QUIZ</h3>
+        <div class="field"><label>Título</label><input id="qf-titulo" value="${escHtml(item&&item.titulo||'')}"></div>
+        <div class="field"><label>Categoría</label><input id="qf-categoria" value="${escHtml(item&&item.categoria||'')}"></div>
+        <div class="field" style="flex-direction:row;align-items:center;gap:8px">
+          <input type="checkbox" id="qf-obligatorio" ${item&&item.obligatorio?'checked':''}>
+          <label style="text-transform:none;font-size:13px;color:var(--text)">Resolución obligatoria (un solo intento permitido por alumno)</label>
+        </div>
+        <div id="qf-preguntas">${preguntas.map((p,i)=>preguntaHtml(p,i)).join('')}</div>
+        <button id="qf-add-preg" style="margin-bottom:14px">+ AGREGAR PREGUNTA</button>
+        <div class="card" style="background:var(--bg);margin-bottom:14px">
+          <h3>IMPORTAR DESDE JSON</h3>
+          <div class="sub" style="margin-bottom:8px">Esquema esperado: array de objetos <code>{pregunta, opciones:["A) ...","B) ...","C) ..."], respuesta_correcta:"A"}</code>. Agrega las preguntas a las que ya estén cargadas (no las reemplaza).</div>
+          <div class="field"><textarea id="qf-import-txt" rows="4" placeholder="Pegá aquí el JSON completo…"></textarea></div>
+          <button id="qf-import-btn">IMPORTAR</button>
+          <span class="sub" id="qf-import-status" style="margin-left:8px"></span>
+        </div>
+        <div class="row">
+          <button class="primary" id="qf-guardar">GUARDAR QUIZ</button>
+          <button id="qf-cancelar">CANCELAR</button>
+        </div>
+        <span class="sub" id="qf-status" style="margin-left:6px"></span>
+      </div>`;
+    document.getElementById('qf-add-preg').onclick=()=>{ preguntas.push({enunciado:'',opciones:['','','',''],correcta:0}); pintar(); };
+    document.getElementById('qf-import-btn').onclick=()=>{
+      const ist=document.getElementById('qf-import-status');
+      let raw=document.getElementById('qf-import-txt').value.trim();
+      // Tolera fences de markdown (```json ... ```) y CRLF que a veces vienen pegados al copiar.
+      raw=raw.replace(/^```(?:json)?\s*/i,'').replace(/```\s*$/,'').trim();
+      let arr;
+      try{ arr=JSON.parse(raw); }catch(e){ ist.textContent='✗ JSON inválido: '+e.message; ist.style.color='var(--red)'; return; }
+      if(!Array.isArray(arr)){ ist.textContent='✗ Tiene que ser un array de preguntas'; ist.style.color='var(--red)'; return; }
+      const letraIdx={A:0,B:1,C:2,D:3,E:4};
+      let n=0;
+      for(const it of arr){
+        const opciones=(it.opciones||[]).map(o=>String(o).replace(/^\s*[A-Za-z]\)\s*/,'').trim());
+        const correcta=letraIdx[String(it.respuesta_correcta||'A').trim().toUpperCase()]??0;
+        if(!it.pregunta||!opciones.length) continue;
+        preguntas.push({enunciado:String(it.pregunta).trim(),opciones,correcta});
+        n++;
+      }
+      pintar();
+      // pintar() reconstruye todo el box, así que el status se muestra recién en el próximo render;
+      // lo mostramos vía alert para que no se pierda el feedback de cuántas se importaron.
+      if(n) alert('✓ Importadas '+n+' pregunta(s).'); else alert('✗ No se importó ninguna pregunta (revisá el formato).');
+    };
+    box.querySelectorAll('.qf-del-preg').forEach(b=>b.onclick=()=>{ preguntas.splice(+b.dataset.i,1); pintar(); });
+    box.querySelectorAll('.qf-correcta').forEach(r=>r.onchange=()=>{ preguntas[+r.dataset.i].correcta=+r.value; });
+    box.querySelectorAll('.qf-enunciado').forEach(inp=>inp.oninput=()=>{ preguntas[+inp.dataset.i].enunciado=inp.value; });
+    box.querySelectorAll('.qf-opcion').forEach(inp=>inp.oninput=()=>{ preguntas[+inp.dataset.i].opciones[+inp.dataset.j]=inp.value; });
+    document.getElementById('qf-cancelar').onclick=()=>{box.innerHTML='';};
+    document.getElementById('qf-guardar').onclick=async()=>{
+      const st=document.getElementById('qf-status');
+      const titulo=document.getElementById('qf-titulo').value.trim();
+      const categoria=document.getElementById('qf-categoria').value.trim();
+      if(!titulo||!preguntas.length){ st.textContent='✗ Falta título o no hay preguntas'; st.style.color='var(--red)'; return; }
+      for(const p of preguntas){
+        if(!p.enunciado.trim()||p.opciones.some(o=>!o.trim())){ st.textContent='✗ Hay preguntas/opciones vacías'; st.style.color='var(--red)'; return; }
+      }
+      const data={titulo,categoria,preguntas,activo:item?item.activo!==false:true,
+        obligatorio:document.getElementById('qf-obligatorio').checked,autor:userLabel,
+        creado:item&&item.creado||new Date().toLocaleString('es-AR')};
+      try{
+        if(key) await fbUpdate('quizzes/'+key,data);
+        else await fbPush('quizzes',data);
+        box.innerHTML='';
+        await cargarQuizzes();
+      }catch(e){ st.textContent='✗ '+e.message; st.style.color='var(--red)'; }
+    };
+  }
+  pintar();
+}
+
+function preguntaHtml(p,i){
+  return `<div class="card" style="background:var(--bg);margin-bottom:10px">
+    <div class="row" style="align-items:center;justify-content:space-between">
+      <h3 style="margin-bottom:0">PREGUNTA ${i+1}</h3>
+      <button class="danger qf-del-preg" data-i="${i}">QUITAR</button>
+    </div>
+    <div class="field"><label>Enunciado</label><input class="qf-enunciado" data-i="${i}" value="${escHtml(p.enunciado)}"></div>
+    ${p.opciones.map((o,j)=>`
+      <div class="field" style="flex-direction:row;align-items:center;gap:8px">
+        <input type="radio" name="correcta-${i}" class="qf-correcta" data-i="${i}" value="${j}" ${p.correcta===j?'checked':''}>
+        <input class="qf-opcion" data-i="${i}" data-j="${j}" value="${escHtml(o)}" placeholder="Opción ${j+1}" style="flex:1">
+      </div>`).join('')}
+    <div class="sub">Marcá el radio de la opción correcta.</div>
+  </div>`;
+}
+
+async function cargarQuizzes(){
+  const data=await fbGet('quizzes');
+  const cont=document.getElementById('qz-lista');
+  const entries=Object.entries(data||{});
+  if(!entries.length){ cont.innerHTML='<div class="empty">// SIN QUIZZES CARGADOS</div>'; return; }
+  // Para el alumno: sus propios intentos, para mostrar el puntaje y saber si un quiz
+  // obligatorio ya está completado. Para staff: todos los intentos, para el resumen inline.
+  const misIntentos=esAlumno?(await fbGet('intentos_quiz/'+userKey)||{}):{};
+  const todosIntentos=esStaff?(await fbGet('intentos_quiz')||{}):{};
+  function statsDeQuiz(quizKey){
+    let n=0,sumaPct=0;
+    Object.values(todosIntentos).forEach(porQuiz=>{
+      const intentos=porQuiz&&porQuiz[quizKey];
+      if(!intentos) return;
+      Object.values(intentos).forEach(it=>{ if(it.total){ n++; sumaPct+=(it.puntaje/it.total); } });
+    });
+    return {n, prom: n?Math.round(sumaPct/n*100):null};
+  }
+  cont.innerHTML=entries.map(([k,v])=>{
+    const misAttempts=esAlumno?Object.values(misIntentos[k]||{}):[];
+    const ultimoMio=misAttempts.length?misAttempts.slice().sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''))[0]:null;
+    const yaCompletado=esAlumno&&v.obligatorio&&ultimoMio;
+    let statsTxt='';
+    if(esStaff){
+      const st=statsDeQuiz(k);
+      statsTxt = st.n ? ` · ${st.n} intento(s) · Promedio ${st.prom}%` : ' · Sin intentos todavía';
+    }
+    return `
+    <div class="item">
+      <div class="meta">
+        <div class="ttl">${escHtml(v.titulo)} <span class="tag ${v.activo!==false?'ok':'bad'}">${v.activo!==false?'ACTIVO':'INACTIVO'}</span>
+          ${v.obligatorio?'<span class="tag" style="color:var(--amber);border-color:var(--amber)">OBLIGATORIO</span>':''}</div>
+        <div class="sub">${escHtml(v.categoria||'')} · ${(v.preguntas||[]).length} pregunta(s)${(v.preguntas||[]).length>=QZ_BANCO_SIZE?' (banco — se sortean '+QZ_BANCO_SIZE+')':''}${statsTxt}</div>
+      </div>
+      ${esAlumno&&v.activo!==false?(
+        ultimoMio
+          ? `<span class="tag ${ultimoMio.puntaje/ultimoMio.total>=0.7?'ok':'bad'}">${ultimoMio.puntaje}/${ultimoMio.total}</span>`+(yaCompletado?'':`<button class="primary qz-rendir" data-k="${k}">REINTENTAR</button>`)
+          : `<button class="primary qz-rendir" data-k="${k}">RENDIR</button>`
+      ):''}
+      ${esStaff?`
+        <button data-k="${k}" class="qz-toggle">${v.activo!==false?'DESACTIVAR':'ACTIVAR'}</button>
+        <button data-k="${k}" class="qz-edit">EDITAR</button>
+        <button data-k="${k}" class="qz-intentos">INTENTOS</button>
+        <button data-k="${k}" class="danger qz-del">BORRAR</button>`:''}
+    </div>
+    <div id="qz-intentos-${k}"></div>`;}).join('');
+  cont.querySelectorAll('.qz-rendir').forEach(b=>b.onclick=()=>rendirQuiz(data[b.dataset.k],b.dataset.k));
+  if(esStaff){
+    cont.querySelectorAll('.qz-edit').forEach(b=>b.onclick=()=>formQuiz(data[b.dataset.k],b.dataset.k));
+    cont.querySelectorAll('.qz-toggle').forEach(b=>b.onclick=async()=>{
+      await fbUpdate('quizzes/'+b.dataset.k,{activo: data[b.dataset.k].activo===false});
+      await cargarQuizzes();
+    });
+    cont.querySelectorAll('.qz-del').forEach(b=>b.onclick=async()=>{
+      if(!confirm('¿Borrar quiz "'+data[b.dataset.k].titulo+'"? Se pierden los intentos asociados solo en pantalla, no en la BD.'))return;
+      await fbRemove('quizzes/'+b.dataset.k);
+      await cargarQuizzes();
+    });
+    cont.querySelectorAll('.qz-intentos').forEach(b=>b.onclick=()=>verIntentos(b.dataset.k,data[b.dataset.k]));
+  }
+}
+
+async function verIntentos(quizKey,quiz){
+  const box=document.getElementById('qz-intentos-'+quizKey);
+  if(box.innerHTML){ box.innerHTML=''; return; }
+  const todos=await fbGet('intentos_quiz');
+  const filas=[];
+  const completaron=new Set();
+  Object.entries(todos||{}).forEach(([uk,quizzes])=>{
+    Object.entries(quizzes||{}).forEach(([qk,intentos])=>{
+      if(qk!==quizKey) return;
+      completaron.add(uk);
+      Object.values(intentos||{}).forEach(it=>filas.push(it));
+    });
+  });
+  filas.sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
+  let pendientesHtml='';
+  if(quiz&&quiz.obligatorio){
+    const alumnosData=await fbGet('alumnos');
+    const pendientes=Object.entries(alumnosData||{}).filter(([k,v])=>(v.rol||'alumno')==='alumno'&&!completaron.has(k));
+    pendientesHtml=`<div class="card" style="background:var(--bg2)"><h3>PENDIENTES (${pendientes.length})</h3>`+
+      (pendientes.length? pendientes.map(([k,v])=>`<div class="item"><div class="meta"><div class="ttl">${escHtml(v.nombre||v.email||k)}</div></div></div>`).join('')
+        :'<div class="empty">// TODOS LO RINDIERON</div>')+'</div>';
+  }
+  box.innerHTML='<div class="card" style="background:var(--bg)"><h3>INTENTOS</h3>'+
+    (filas.length? filas.map((f,i)=>`
+      <div class="item"><div class="meta"><div class="ttl">${escHtml(f.nombre||'?')}</div>
+        <div class="sub">${escHtml(f.fecha||'')}</div></div>
+        <span class="tag ${f.puntaje/f.total>=0.7?'ok':'bad'}">${f.puntaje}/${f.total}</span>
+        ${f.detalle?`<button class="qzd-toggle" data-i="${i}">VER DETALLE</button>`:''}
+      </div>
+      <div id="qzd-${quizKey}-${i}" style="display:none"></div>`).join('')
+      :'<div class="empty">// SIN INTENTOS</div>')+'</div>'+pendientesHtml;
+  box.querySelectorAll('.qzd-toggle').forEach(b=>b.onclick=()=>{
+    const f=filas[+b.dataset.i];
+    const det=document.getElementById('qzd-'+quizKey+'-'+b.dataset.i);
+    if(det.style.display!=='none'){ det.style.display='none'; return; }
+    det.style.display='block';
+    det.innerHTML=(f.detalle||[]).map((d,j)=>`
+      <div class="item" style="background:var(--bg2)">
+        <div class="meta">
+          <div class="ttl">${j+1}. ${escHtml(d.enunciado)}</div>
+          <div class="sub">Eligió: ${escHtml(d.elegida)}${d.acierto?'':' · Correcta: '+escHtml(d.correcta_texto)}</div>
+        </div>
+        <span class="tag ${d.acierto?'ok':'bad'}">${d.acierto?'✓':'✗'}</span>
+      </div>`).join('');
+  });
+}
+
+const QZ_PAGE_SIZE=10;  // preguntas por página al rendir (solo afecta la vista del alumno)
+const QZ_BANCO_SIZE=50; // si el banco tiene >= esta cantidad, se sortean QZ_BANCO_SIZE al azar
+
+function elegirSubconjunto(bancoCompleto){
+  if(bancoCompleto.length<QZ_BANCO_SIZE) return bancoCompleto;
+  const copia=bancoCompleto.slice();
+  for(let i=copia.length-1;i>0;i--){ // Fisher-Yates
+    const j=Math.floor(Math.random()*(i+1));
+    [copia[i],copia[j]]=[copia[j],copia[i]];
+  }
+  return copia.slice(0,QZ_BANCO_SIZE);
+}
+
+async function rendirQuiz(quiz,key){
+  const box=document.getElementById('qz-rendir-box');
+  if(quiz.obligatorio){
+    const previo=await fbGet('intentos_quiz/'+userKey+'/'+key);
+    if(previo&&Object.keys(previo).length>0){
+      alert('Ya tenés un intento registrado en este cuestionario obligatorio.');
+      await cargarQuizzes();
+      return;
+    }
+  }
+  const bancoCompleto=quiz.preguntas||[];
+  const esBanco=bancoCompleto.length>=QZ_BANCO_SIZE;
+  const preguntas=elegirSubconjunto(bancoCompleto); // sorteo único al abrir, se mantiene fijo durante todo el intento
+  const total=preguntas.length;
+  const totalPaginas=Math.max(1,Math.ceil(total/QZ_PAGE_SIZE));
+  const respuestas=new Array(total).fill(-1); // persiste entre páginas, no se reinicia al repintar
+  let pagina=0;
+
+  function respondidas(){ return respuestas.filter(r=>r!==-1).length; }
+
+  function pintar(){
+    const desde=pagina*QZ_PAGE_SIZE, hasta=Math.min(desde+QZ_PAGE_SIZE,total);
+    box.innerHTML=`<div class="card"><h2>// ${escHtml(quiz.titulo).toUpperCase()}</h2>
+      ${esBanco?`<div class="sub" style="color:var(--amber);margin-bottom:6px">⚠ Banco de ${bancoCompleto.length} preguntas — te tocaron ${total} al azar para este intento.</div>`:''}
+      <div class="sub" style="margin-bottom:12px">Página ${pagina+1} de ${totalPaginas} · Preguntas ${desde+1}–${hasta} de ${total} · Respondidas: ${respondidas()}/${total}</div>
+      <div id="qr-preguntas">${preguntas.slice(desde,hasta).map((p,j)=>{
+        const i=desde+j;
+        return `<div class="card" style="background:var(--bg2)">
+          <h3>${i+1}. ${escHtml(p.enunciado)}</h3>
+          ${p.opciones.map((o,jj)=>`
+            <div class="field" style="flex-direction:row;align-items:center;gap:8px">
+              <input type="radio" name="qr-${i}" value="${jj}" data-i="${i}" ${respuestas[i]===jj?'checked':''}>
+              <label style="text-transform:none;font-size:14px;color:var(--text)">${escHtml(o)}</label>
+            </div>`).join('')}
+        </div>`;
+      }).join('')}</div>
+      <div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap">
+        <div class="row">
+          <button id="qr-prev" ${pagina===0?'disabled':''}>← ANTERIOR</button>
+          ${pagina<totalPaginas-1?'<button class="primary" id="qr-next">SIGUIENTE →</button>':'<button class="primary" id="qr-enviar">ENVIAR</button>'}
+        </div>
+        <button id="qr-cancelar">CANCELAR</button>
+      </div>
+      <div id="qr-resultado"></div>
+    </div>`;
+    box.querySelectorAll('input[type="radio"]').forEach(r=>r.onchange=()=>{ respuestas[+r.dataset.i]=+r.value; });
+    document.getElementById('qr-cancelar').onclick=()=>{box.innerHTML='';};
+    const prevBtn=document.getElementById('qr-prev');
+    if(prevBtn) prevBtn.onclick=()=>{ pagina--; pintar(); };
+    const nextBtn=document.getElementById('qr-next');
+    if(nextBtn) nextBtn.onclick=()=>{ pagina++; pintar(); };
+    const enviarBtn=document.getElementById('qr-enviar');
+    if(enviarBtn) enviarBtn.onclick=async()=>{
+      const faltanIdx=respuestas.findIndex(r=>r===-1);
+      if(faltanIdx!==-1){
+        pagina=Math.floor(faltanIdx/QZ_PAGE_SIZE);
+        pintar();
+        alert('Te faltan responder '+(total-respondidas())+' pregunta(s). Te lleve a la pregunta '+(faltanIdx+1)+'.');
+        return;
+      }
+      // Re-chequeo server-side al momento de enviar (no solo al pintar la lista): cubre el caso
+      // de dos pestañas abiertas o que el alumno haya dejado este formulario abierto un rato.
+      if(quiz.obligatorio){
+        const previo=await fbGet('intentos_quiz/'+userKey+'/'+key);
+        if(previo&&Object.keys(previo).length>0){
+          alert('Este cuestionario es de resolución obligatoria y ya tenés un intento registrado. No se puede volver a rendir.');
+          box.innerHTML=''; await cargarQuizzes(); return;
+        }
+      }
+      const puntaje=respuestas.filter((r,i)=>r===preguntas[i].correcta).length;
+      const detalle=preguntas.map((p,i)=>({
+        enunciado:p.enunciado,
+        elegida:p.opciones[respuestas[i]],
+        correcta_texto:p.opciones[p.correcta],
+        acierto:respuestas[i]===p.correcta
+      }));
+      const intento={respuestas,detalle,puntaje,total,fecha:new Date().toLocaleString('es-AR'),nombre:userLabel};
+      try{
+        await fbPush('intentos_quiz/'+userKey+'/'+key,intento);
+        document.getElementById('qr-resultado').innerHTML=`
+          <div class="card" style="background:var(--bg2);margin-top:14px">
+            <h3>RESULTADO: <span class="tag ${puntaje/total>=0.7?'ok':'bad'}">${puntaje}/${total}</span></h3>
+          </div>`;
+        await cargarHistorial();
+      }catch(e){ alert('Error al guardar el intento: '+e.message); }
+    };
+  }
+  pintar();
+}
+
+async function cargarHistorial(){
+  const data=await fbGet('intentos_quiz/'+userKey);
+  const cont=document.getElementById('qz-historial');
+  const filas=[];
+  Object.entries(data||{}).forEach(([qk,intentos])=>{
+    Object.values(intentos||{}).forEach(it=>filas.push(it));
+  });
+  if(!filas.length){ cont.innerHTML='<div class="empty">// SIN INTENTOS TODAVÍA</div>'; return; }
+  filas.sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
+  cont.innerHTML=filas.map(f=>`
+    <div class="item"><div class="meta"><div class="sub">${escHtml(f.fecha||'')}</div></div>
+      <span class="tag ${f.puntaje/f.total>=0.7?'ok':'bad'}">${f.puntaje}/${f.total}</span></div>`).join('');
+}
+
+/* ============================ FLASHCARDS ============================
+   v1.10. Banco fijo de preguntas/respuestas sobre el LV-OAD (PA-38-112),
+   cargado una sola vez acá (no depende de Firebase ni de ningún editor de
+   staff — es contenido estático curado a mano). Mecánica tipo "mazo":
+   se mezclan al azar, se muestran de una en una con flip 3D pregunta/
+   respuesta, y al responder "la sé" la carta sale del mazo de esta vuelta;
+   "no la sé" la manda al final del mazo para volver a aparecer antes de
+   terminar. No se persiste nada entre sesiones — es solo para repasar. */
+const FLASHCARDS_DATA=[{"q": "¿Cuál es el modelo del motor que equipa al Piper PA-38-112 Tomahawk?", "a": "Lycoming O-235-L2C."}, {"q": "¿Qué potencia máxima y a qué régimen de RPM opera el motor del PA-38-112?", "a": "112 HP a 2600 RPM."}, {"q": "¿Cuál es el grado mínimo de octanaje de combustible aprobado para esta aeronave?", "a": "Nafta de aviación de 100/130 octanos."}, {"q": "¿Cuál es la capacidad total de combustible (incluyendo no utilizable)?", "a": "32 USgal (121.12 litros)."}, {"q": "¿Qué cantidad de combustible se define como 'utilizable' para el planeamiento de vuelo?", "a": "30 USgal (113.55 litros)."}, {"q": "¿Cuál es la capacidad total de aceite del motor Lycoming O-235-L2C?", "a": "6 USqts (5.677 litros)."}, {"q": "¿Cuál es la cantidad mínima de aceite necesaria para una operación segura?", "a": "2 USqts (1.9 litros)."}, {"q": "¿Cuál es el peso máximo aprobado para el despegue y el aterrizaje?", "a": "757 Kg (1670 Lb)."}, {"q": "¿Cuál es la carga máxima permitida en el compartimiento de equipajes?", "a": "45.4 Kg (100 Lb)."}, {"q": "¿Cuál es la Velocidad de Nunca Exceder (Vne) en nudos (KIAS)?", "a": "138 nudos."}, {"q": "¿Cuál es la Velocidad Máxima Estructural de Crucero (Vno) en nudos (KIAS)?", "a": "110 nudos."}, {"q": "¿Cuál es la velocidad máxima permitida con los flaps extendidos (Vfe)?", "a": "89 nudos (KIAS)."}, {"q": "¿Cuál es la velocidad de maniobra (Va) al peso máximo de 757 Kg (1670 Lb)?", "a": "103 nudos (KIAS)."}, {"q": "¿A qué velocidad indicada (IAS) se obtiene el óptimo régimen de ascenso (Vy)?", "a": "70 nudos."}, {"q": "¿A qué velocidad indicada (IAS) se obtiene el mejor ángulo de ascenso (Vx)?", "a": "61 nudos."}, {"q": "¿Cuál es la velocidad de planeo recomendada sin potencia al peso máximo?", "a": "70 nudos (IAS)."}, {"q": "¿Cuál es la velocidad de pérdida configurada con flaps retraídos y peso máximo?", "a": "48 nudos (IAS)."}, {"q": "¿Cuál es la velocidad de pérdida con flaps totalmente extendidos (Vso)?", "a": "47 nudos (IAS)."}, {"q": "¿Cuál es la velocidad de aproximación final recomendada con flaps totalmente extendidos?", "a": "62 nudos (IAS)."}, {"q": "¿Cuál es el componente de viento de través máximo demostrado?", "a": "15 nudos (27 Km/h)."}, {"q": "¿Qué temperatura de aceite marca la línea roja (máxima) en el motor?", "a": "118.3 ° C (245 ° F)."}, {"q": "¿Cuáles son los límites de presión de aceite para la zona verde (operación normal)?", "a": "De 60 a 90 Lb/pulg²."}, {"q": "¿Cuál es el diámetro máximo de la hélice Sensenich 72 CK-0-56?", "a": "72 pulgadas (1828.8 mm)."}, {"q": "En Categoría Normal, ¿qué maniobras acrobáticas están prohibidas?", "a": "Todas, incluyendo las barrenas (spins)."}, {"q": "¿Qué maniobra acrobática está permitida únicamente en Categoría Utilitaria con flaps retraídos?", "a": "Las barrenas (spins)."}, {"q": "¿Cuál es la velocidad de entrada recomendada para un Chandelle en Categoría Utilitaria?", "a": "100 nudos (IAS)."}, {"q": "¿A qué presión se deben inflar las tres cubiertas del tren de aterrizaje?", "a": "26 psi."}, {"q": "¿Cuántas pulgadas debe estar expuesto el pistón del amortiguador de nariz bajo carga estática normal?", "a": "3 pulgadas (7.62 cm)."}, {"q": "¿Cuáles son las especificaciones del alternador del sistema eléctrico?", "a": "14 volts y 60 amperes."}, {"q": "¿Cuál es la capacidad y voltaje de la batería?", "a": "12 volts y 25 amperes-hora."}, {"q": "¿Qué perfil alar de flujo laminar utiliza el Piper PA-38?", "a": "NASA GA(W)-1."}, {"q": "¿Cuál es el rango de RPM indicado por el arco verde en el taquímetro?", "a": "500 a 2600 RPM."}, {"q": "Concepto: Arco Blanco en el velocímetro.", "a": "Representa el rango de operación con flaps extendidos (47 a 89 nudos)."}, {"q": "¿Qué indica la línea roja en el indicador de presión de combustible?", "a": "Mínima de 0.5 PSI y máxima de 8.0 PSI."}, {"q": "Al recuperar de una barrena (spin), ¿hacia dónde debe aplicarse el timón de dirección?", "a": "Todo su recorrido en sentido opuesto a la rotación."}, {"q": "En la recuperación de una barrena, ¿cuál es la acción necesaria con el volante de comandos?", "a": "Llevarlo totalmente hacia adelante (picar la aeronave)."}, {"q": "¿Cuál es el primer paso ante un incendio de motor durante la puesta en marcha?", "a": "Continuar haciendo girar el motor con el arrancador."}, {"q": "¿Qué acción debe tomarse con la mezcla ante un incendio de motor en vuelo?", "a": "Llevarla a la posición MARCHA LENTA - CORTE."}, {"q": "¿Cuándo debe utilizarse la bomba auxiliar eléctrica de combustible?", "a": "En despegues, aterrizajes y cambios de tanque de combustible."}, {"q": "¿Qué riesgo presentan los deslizamientos prolongados con poco combustible?", "a": "La interrupción del flujo de combustible por la forma del tanque."}, {"q": "¿Dónde se encuentra ubicado el Datum de referencia?", "a": "168.275 cm (66.25 pulgadas) por delante del borde de ataque alar."}, {"q": "¿Cuál es la velocidad de rotación (Vr) para un despegue normal?", "a": "53 nudos (IAS)."}, {"q": "¿Qué ajuste de flaps se utiliza para despegues en campos cortos u obstáculos?", "a": "21 ° (Primer escalón)."}, {"q": "¿A qué velocidad se debe ascender para salvar un obstáculo tras un despegue de campo corto?", "a": "61 nudos (IAS)."}, {"q": "¿Cuál es el límite máximo de carga por área en el compartimiento de equipajes?", "a": "122 Kg/m² (25 Lb/pie²)."}, {"q": "¿Qué indica una lectura de vacío inferior a gran altitud o bajas RPM?", "a": "Es una lectura normal y no debe considerarse una falla."}, {"q": "¿Con qué frecuencia debe inspeccionarse y limpiarse el filtro de aire del motor?", "a": "Cada 50 horas de operación (o más frecuentemente en condiciones de polvo)."}, {"q": "¿Qué tipo de líquido hidráulico requiere el sistema de frenos?", "a": "Especificación MIL-H-5606 (mineral)."}, {"q": "¿Cuál es el arco de giro máximo de la rueda de nariz en cada sentido?", "a": "30 ° ± 2 °."}, {"q": "¿A qué RPM se debe realizar la verificación de magnetos en tierra?", "a": "1800 RPM."}, {"q": "¿Cuál es la caída máxima de RPM permitida en un solo magneto?", "a": "175 RPM."}, {"q": "¿Cuál es la diferencia máxima permitida entre ambos magnetos durante la prueba?", "a": "50 RPM."}, {"q": "En una aproximación final, ¿cuál es el ajuste de flaps para el aterrizaje normal?", "a": "Totalmente extendidos (34 °)."}, {"q": "¿Cuál es la velocidad de maniobra (Va) si el peso de la aeronave es de 1277 Lb?", "a": "90 nudos (IAS)."}, {"q": "¿Qué rango de succión debe indicar el vacuómetro para una operación normal?", "a": "5.0 pulg Hg ± 0.1."}, {"q": "¿Qué acción se debe tomar si se detecta humo (fuego eléctrico) en la cabina?", "a": "Llevar la llave maestra a la posición NO (OFF) y cerrar calefacción/desempañador."}, {"q": "¿A qué velocidad se activa la alarma sonora de pérdida?", "a": "Entre 5 y 10 nudos por encima de la velocidad de pérdida."}, {"q": "¿Dónde se encuentra la placa del número de serie de la aeronave?", "a": "Debajo del cono de cola, delante del patín de cola."}, {"q": "¿Cuál es el volumen total del compartimiento de equipajes?", "a": "0.566 m³ (20 pies³)."}, {"q": "¿Qué indica el arco amarillo en el indicador de presión de aceite?", "a": "Rango de rodaje de motor en tierra (90 a 100 Lb/pulg²)."}, {"q": "¿Cómo se detiene el motor correctamente?", "a": "Llevando el control de mezcla a la posición MARCHA LENTA-CORTE."}, {"q": "¿Qué sistema suministra presión para operar el velocímetro, altímetro y variómetro?", "a": "El sistema de toma de aire estático."}, {"q": "¿En qué posición debe estar la llave del ELT durante el vuelo normal?", "a": "ARMADO (ARM)."}, {"q": "¿Cuál es la carga alar especificada para el peso máximo de despegue?", "a": "65.43 Kg/m² (13.39 Lb/pie²)."}, {"q": "¿Qué relación peso-potencia posee la aeronave?", "a": "6.76 Kg/HP (14.9 Lb/HP)."}, {"q": "¿Cuál es la extensión mínima permitida del amortiguador de nariz?", "a": "3 pulgadas (7.62 cm)."}, {"q": "¿Cuándo se debe activar el sistema de calefacción del carburador?", "a": "Cuando se sospeche formación de hielo o en descensos con baja potencia."}, {"q": "En caso de falla del alternador en vuelo, ¿cuál es la primera acción recomendada?", "a": "Reducir la carga eléctrica al mínimo y verificar el interruptor térmico."}, {"q": "La velocidad de pérdida (Vs) con el avión nivelado y bajo control es de _____ nudos.", "a": "48"}, {"q": "El radio mínimo de viraje desde el punto de pivot al extremo del ala es de _____ metros.", "a": "7.8 (26 pies)"}, {"q": "La velocidad máxima de crucero estructural es de _____ nudos.", "a": "110"}, {"q": "Para una puesta en marcha con motor ahogado, la bomba eléctrica debe estar _____.", "a": "Detenida"}, {"q": "El sistema eléctrico del PA-38-112 es de _____ volts.", "a": "14"}, {"q": "La velocidad de mejor ángulo de ascenso es _____ nudos.", "a": "61"}, {"q": "El peso vacío estándar de la aeronave es de aproximadamente _____ Kg.", "a": "493 (1088 Lb)"}];
+
+let fcMazo=[], fcFlipped=false, fcDominadas=0;
+
+function fcShuffle(arr){
+  const c=arr.slice();
+  for(let i=c.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [c[i],c[j]]=[c[j],c[i]]; }
+  return c;
+}
+
+function renderFlashcards(){
+  fcMazo=fcShuffle(FLASHCARDS_DATA.map((_,i)=>i));
+  fcFlipped=false; fcDominadas=0;
+  pintarFlashcard();
+}
+
+function pintarFlashcard(){
+  const el=document.getElementById('screen-flashcards');
+  const total=FLASHCARDS_DATA.length;
+  if(!fcMazo.length){
+    el.innerHTML=`<div class="card"><div class="fc-done">
+      <div class="big">🎉</div>
+      <h2 style="border:none">¡Repasaste las ${total} flashcards!</h2>
+      <p style="font-family:var(--font-mono);color:var(--text2);font-size:13px;margin:10px 0 18px">Dominadas en esta vuelta: ${fcDominadas} / ${total}</p>
+      <button class="fc-btn" onclick="renderFlashcards()">🔀 Repasar de nuevo</button>
+    </div></div>`;
+    return;
+  }
+  const card=FLASHCARDS_DATA[fcMazo[0]];
+  const vistas=total-fcMazo.length+1;
+  el.innerHTML=`
+    <div class="card">
+      <h2>// FLASHCARDS — LV-OAD (PA-38-112)</h2>
+      <div class="fc-progress">Carta ${vistas} de ${total} · Dominadas: ${fcDominadas} · Quedan en el mazo: ${fcMazo.length}</div>
+      <div class="fc-stage">
+        <div class="fc-card" id="fc-card-el" onclick="fcFlip()">
+          <div class="fc-card-inner">
+            <div class="fc-face">
+              <div class="fc-face-tag">Pregunta</div>
+              <div class="fc-face-text">${escHtml(card.q)}</div>
+              <div class="fc-face-hint">▸ Tocá la carta para ver la respuesta</div>
+            </div>
+            <div class="fc-face fc-face-back">
+              <div class="fc-face-tag">Respuesta</div>
+              <div class="fc-face-text">${escHtml(card.a)}</div>
+              <div class="fc-face-hint">▸ Tocá la carta para volver</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="fc-controls">
+        <button class="fc-btn bad-btn" id="fc-no-se" onclick="event.stopPropagation();fcResponder(false)" disabled>✗ No la sé — repasar después</button>
+        <button class="fc-btn ok-btn" id="fc-la-se" onclick="event.stopPropagation();fcResponder(true)" disabled>✓ La sé</button>
+        <button class="fc-btn" onclick="event.stopPropagation();renderFlashcards()">🔀 Mezclar todo de nuevo</button>
+      </div>
+    </div>`;
+}
+
+window.fcFlip=function(){
+  fcFlipped=!fcFlipped;
+  const elCard=document.getElementById('fc-card-el');
+  if(elCard) elCard.classList.toggle('flipped',fcFlipped);
+  const bNo=document.getElementById('fc-no-se'), bSi=document.getElementById('fc-la-se');
+  if(bNo) bNo.disabled=!fcFlipped;
+  if(bSi) bSi.disabled=!fcFlipped;
+};
+
+window.fcResponder=function(sabe){
+  if(!fcFlipped) return;
+  const idx=fcMazo.shift();
+  if(sabe) fcDominadas++; else fcMazo.push(idx);
+  fcFlipped=false;
+  pintarFlashcard();
+};
+
+renderPerfil();
+renderManuales();
+renderQuiz();
+renderFlashcards();
+</script>
+</body>
+</html>
           no tenía forma de cambiarlo desde acá mismo. toggleTheme() idéntica a la
           de turnos.html.
           (2) El título del tab "QUIZ" pasa a "CUESTIONARIOS" (solo el texto del botón
