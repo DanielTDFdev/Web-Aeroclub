@@ -2,6 +2,10 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
+  v3.22 ·  overflow-x:hidden + max-width:100vw en html/body (misma red de seguridad
+           que turnos.html v6.07), preventivo: el mismo sintoma de pinch-zoom-out en
+           celular se reportó en turnos.html y es razonable que afecte por igual a
+           esta pagina, que comparte la misma base de estilos.
   v3.21 ·  Primera pasada mobile (@media max-width:680px). header.bar tenia 6
            elementos en una fila sin flex-wrap (punto, titulo, badge de version,
            link a turnero, reloj de 2 lineas, boton de tema) — desbordaba en
@@ -240,7 +244,7 @@
     --mono:'Share Tech Mono',monospace; --disp:'Rajdhani',sans-serif;
   }
   *{box-sizing:border-box}
-  html,body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--disp)}
+  html,body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--disp);overflow-x:hidden;max-width:100vw}
   body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:50;
     background:repeating-linear-gradient(0deg,rgba(0,0,0,0) 0px,rgba(0,0,0,0) 2px,rgba(0,0,0,.18) 3px,rgba(0,0,0,0) 4px);
     mix-blend-mode:multiply;opacity:.5}
@@ -502,7 +506,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v3.21</span>
+    <span class="ver">v3.22</span>
     <a href="turnos.html" title="Volver al turnero (sin cerrar sesión)" style="font-family:var(--mono);font-size:12px;color:var(--cyan);text-decoration:none;border:1px solid var(--line-hot);border-radius:5px;padding:5px 11px;letter-spacing:1px;transition:.15s" onmouseover="this.style.background='var(--cyan)';this.style.color='#04141a'" onmouseout="this.style.background='transparent';this.style.color='var(--cyan)'">← TURNERO</a>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
