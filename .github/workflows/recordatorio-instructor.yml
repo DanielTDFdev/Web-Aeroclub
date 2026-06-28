@@ -1,4 +1,3 @@
-
 name: Recordatorio instructor
 
 on:
@@ -28,9 +27,9 @@ jobs:
         env:
           # ── Públicos (no secretos): editá si hace falta ──────────────
           FIREBASE_DB_URL: "https://turnos-lv-oad-default-rtdb.firebaseio.com"
-          EMAILJS_SERVICE_ID: "service_yeb4aqb"      # << CONFIRMÁ el service de la cuenta dcamargo70
+          EMAILJS_SERVICE_ID: "service_8yqlptz"      # Cuenta A (club, aeroclubgra@gmail.com) — antes service_yeb4aqb (dcamargo70 personal)
           EMAILJS_TEMPLATE_ID: "template_8awr1zd"
-          EMAILJS_PUBLIC_KEY: "TzbSjqDNPjTGSGdzN"
+          EMAILJS_PUBLIC_KEY: "0IoRm88tZQepkHAdK"     # Public Key de la Cuenta A — antes TzbSjqDNPjTGSGdzN (Cuenta B)
           CLUB_EMAIL: "administracion@aeroclubriogrande.com"   # << PONÉ el mail real del club (Reply-To)
           REMIND_HOURS: "12"
           TZ_OFFSET: "-3"
