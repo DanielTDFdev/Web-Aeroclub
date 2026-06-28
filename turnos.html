@@ -1,5 +1,13 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.11
+  FECHA   : 2026-06-28
+  CAMBIOS : Modal de detalle del turno: nuevo botón "🗑 BORRAR (admin)", visible SOLO
+            para el usuario literal 'admin' (no instructor, no administrador). A
+            diferencia de cancelar/liberar, borra el nodo de /reservas directo con
+            fbRemove, sin importar su estado, y a propósito SIN dejar ningún registro
+            en /auditoria — pedido explícito para poder limpiar turnos de prueba sin
+            ensuciar la auditoría real. Confirm() previo, sin vuelta atrás.
   VERSION : 6.10
   FECHA   : 2026-06-28
   CAMBIOS : Modal "Cargar Turno": el checkbox "Aprobar automáticamente" se reemplaza
@@ -770,7 +778,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.10</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.11</div>
   </div>
 
 </div>
@@ -3016,6 +3024,24 @@ window.abrirModal=function(key){
       nota.textContent='Turno aprobado por '+(aprobador||'otro instructor')+'. Solo esa persona o un administrador puede liberarlo o cancelarlo.';
       actions.appendChild(nota);
     }
+  }
+  // v6.11: BORRAR definitivo — SOLO para el usuario literal 'admin' (no instructor, no
+  // administrador). A pedido explícito: para limpiar turnos de prueba rápido, sin pasar
+  // por cancelar/liberar y SIN dejar registro en /auditoria (a propósito, es justamente
+  // lo que se busca acá). Borra el nodo de /reservas directo con fbRemove, cualquiera sea
+  // su estado (pendiente/aprobado/cancelado/vencido).
+  if(session?.user==='admin'){
+    const bdel=document.createElement('button');
+    bdel.className='danger';
+    bdel.style.cssText='background:rgba(248,81,73,.15);border-color:var(--red)';
+    bdel.textContent='🗑 BORRAR (admin)';
+    bdel.title='Borra el turno de la base directamente, sin auditoría. Para limpiar pruebas.';
+    bdel.onclick=async()=>{
+      if(!confirm('¿BORRAR este turno definitivamente?\n\nLo elimina de la base sin dejar registro en auditoría. No se puede deshacer.'))return;
+      try{ await fbRemove('reservas/'+key); }catch(e){ console.error(e); alert('No se pudo borrar (error de conexión).'); return; }
+      cerrarModal();
+    };
+    actions.appendChild(bdel);
   }
   // Observación post-vuelo: editable por el instructor que aprobó (o admin) en turnos
   // APROBADOS cuya hora ya pasó. Permite anotar qué pasó (ej.: no se voló por meteo).
