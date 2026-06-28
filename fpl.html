@@ -2,6 +2,15 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
+  v3.21 ·  Primera pasada mobile (@media max-width:680px). header.bar tenia 6
+           elementos en una fila sin flex-wrap (punto, titulo, badge de version,
+           link a turnero, reloj de 2 lineas, boton de tema) — desbordaba en
+           celular angosto. Pasa a envolver: titulo mas chico, reloj/badge/link
+           a una segunda fila via flex order. Lista "Mis Planes" (.item) tambien
+           sin flex-wrap, el bloque fecha/hora se apretaba contra la ruta —
+           ahora envuelve. Casilleros del FPL (.row>.field) un poco mas
+           compactos. .cdato (contacto ARO/AIS) con flex-wrap para que un email
+           largo no desborde. Aditivo, no cambia el diseño de escritorio.
   v3.20 ·  FIX critico de auditoria (caso real: 5 planes combinados desde celular, ninguno
            quedo auditado, version v3.18 confirmada en pantalla — no era pestaña vieja).
            En generarPDF() y generarPDFCombinado() el link.click() (dispara la descarga)
@@ -439,6 +448,45 @@
   :root.light button.dgr{color:#b23a3a}
   :root.light button.ghost:hover{color:var(--txt)}
   :root.light #toast{box-shadow:0 6px 22px rgba(0,0,0,.18)}
+
+/* ============================ MOBILE (v3.21) ============================
+   Solo existía el media query de .grid (760px, a una columna). El resto del
+   archivo no se adaptaba. Aditivo, no cambia nada del diseño de escritorio.
+   - header.bar: sin flex-wrap, con 6 elementos en fila (punto, título, badge
+     de versión, link a turnero, reloj de 2 líneas, botón de tema) — en un
+     celu angosto esto desborda horizontalmente. Pasa a envolver, con el
+     título más chico y el reloj/badge pasando a una segunda fila.
+   - .item (lista "Mis Planes"): sin flex-wrap, el bloque de fecha/hora a la
+     derecha podía apretarse contra la ruta. Pasa a envolver.
+   - .row>.field: ya tenía min-width:90px + flex-wrap, se achica un poco más
+     para que entren más casilleros del FPL sin verse tan apretado.
+   - .acdinghy: grid de 3 columnas fijas (70/80/1fr) para los datos de botes
+     — se mantiene (son pocos campos cortos) pero más compacto.
+   - .cdato (contacto ARO/AIS: label+valor+botón copiar): sin flex-wrap, un
+     email largo podía desbordar. Pasa a envolver. */
+@media (max-width:680px){
+  header.bar{flex-wrap:wrap;gap:8px;padding:10px 12px}
+  header.bar h1{font-size:17px;letter-spacing:1.5px}
+  header.bar .clk{margin-left:0;font-size:12px;order:5}
+  header.bar .ver{order:4}
+  header.bar > a{order:3}
+  #banner-version-nueva span{font-size:11px}
+
+  .row{gap:6px}
+  .row>.field{min-width:74px}
+
+  fieldset>legend{font-size:11px;letter-spacing:1px}
+
+  .item{flex-wrap:wrap;gap:6px 12px}
+  .item .rt{font-size:13px;flex:1 1 100%}
+  .item .meta{text-align:left;font-size:11px}
+
+  .acdinghy{grid-template-columns:60px 68px 1fr;gap:6px}
+
+  .cdato{flex-wrap:wrap}
+
+  button{padding:8px 14px}
+}
 </style>
 </head>
 <body>
@@ -454,7 +502,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v3.20</span>
+    <span class="ver">v3.21</span>
     <a href="turnos.html" title="Volver al turnero (sin cerrar sesión)" style="font-family:var(--mono);font-size:12px;color:var(--cyan);text-decoration:none;border:1px solid var(--line-hot);border-radius:5px;padding:5px 11px;letter-spacing:1px;transition:.15s" onmouseover="this.style.background='var(--cyan)';this.style.color='#04141a'" onmouseout="this.style.background='transparent';this.style.color='var(--cyan)'">← TURNERO</a>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
