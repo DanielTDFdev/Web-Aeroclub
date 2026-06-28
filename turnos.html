@@ -1,5 +1,15 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.07
+  FECHA   : 2026-06-27
+  CAMBIOS : overflow-x:hidden + max-width:100vw en html/body. A pesar de la pasada
+            mobile v6.06, en celular real seguia haciendo falta hacer pinch-zoom-out
+            para que entre toda la pagina — sintoma clasico de que ALGUN elemento se
+            escapa unos pocos px del viewport (no se pudo identificar cual exacto
+            por lectura de codigo sin un dispositivo real para probar). Esto corta
+            cualquier desborde horizontal a nivel pagina como red de seguridad, sin
+            afectar el scroll horizontal interno de los contenedores que si lo
+            necesitan (.cal-wrap, .tab-bar, tablas con su propio overflow-x:auto).
   VERSION : 6.06
   FECHA   : 2026-06-27
   CAMBIOS : Primera pasada mobile (@media max-width:680px), antes no existia NINGUN
@@ -394,7 +404,16 @@
   --border:rgba(0,144,160,0.2);--border2:rgba(0,144,160,0.45);
 }
 body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px);pointer-events:none;z-index:9999;}
-body{font-family:var(--font-ui);font-size:15px;color:var(--text);background:var(--bg);min-height:100vh;letter-spacing:.02em;transition:background .25s,color .25s;}
+body{font-family:var(--font-ui);font-size:15px;color:var(--text);background:var(--bg);min-height:100vh;letter-spacing:.02em;transition:background .25s,color .25s;
+  overflow-x:hidden;max-width:100vw;}
+/* v6.07: red de seguridad contra desborde horizontal. Aunque cada elemento ancho
+   (tablas, calendario, etc.) tenga su propio overflow-x:auto interno, alcanza con
+   UN solo elemento que se escape un par de px del viewport para que el navegador
+   del celular agrande el documento entero y obligue a hacer pinch-zoom-out para
+   ver todo. Esto corta cualquier desborde horizontal a nivel pagina sin afectar
+   el scroll horizontal interno de los contenedores que sí lo necesitan
+   (.cal-wrap, .tab-bar, las tablas con overflow-x:auto propio, etc.) */
+html{overflow-x:hidden;max-width:100vw;}
 
 .hero{position:relative;width:100%;height:280px;overflow:hidden;}
 .hero img{width:100%;height:100%;object-fit:cover;object-position:center 60%;filter:brightness(.45) saturate(.7);}
@@ -712,7 +731,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.06</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.07</div>
   </div>
 
 </div>
