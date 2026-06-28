@@ -1,5 +1,18 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.10
+  FECHA   : 2026-06-28
+  CAMBIOS : Modal "Cargar Turno": el checkbox "Aprobar automáticamente" se reemplaza
+            por un dropdown "Aprobado por" con instructores reales (excluye admin/
+            administrador y de vacaciones, mismo filtro que el selector de
+            disponibilidad). Primera opción "— Sin aprobación (queda pendiente) —"
+            como default: no graba aprobado_por/instructor ni manda mail si se deja
+            así. Al elegir un instructor, el turno queda 'aprobado' con ese nombre
+            (no necesariamente el admin que está cargando el turno). FIX de paso:
+            mailAprob() ahora acepta un instructor explícito como segundo argumento
+            (antes siempre ponía session.nombre en el mail, lo cual sería incorrecto
+            si el admin carga un turno a nombre de otro instructor) — default
+            session.nombre si no se pasa, sin romper el resto de los llamadores.
   VERSION : 6.09
   FECHA   : 2026-06-28
   CAMBIOS : FIX critico: el modal de "Cargar Turno" (v6.08) no se abria. Quedo
@@ -757,7 +770,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.09</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.10</div>
   </div>
 
 </div>
@@ -1316,10 +1329,10 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <label>Observaciones <span style="font-size:10px;color:var(--text3)">(opcional)</span></label>
       <textarea id="ct-obs" rows="2" placeholder="Ej: turno coordinado por teléfono"></textarea>
     </div>
-    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;font-family:var(--font-mono);font-size:12px;color:var(--text2);margin-bottom:.85rem">
-      <input type="checkbox" id="ct-aprobar" checked style="accent-color:var(--cyan)">
-      Aprobar automáticamente (ya coordinado con el alumno/piloto)
-    </label>
+    <div class="field">
+      <label>Aprobado por</label>
+      <select id="ct-instructor"><option value="">— Sin aprobación (queda pendiente) —</option></select>
+    </div>
     <div id="ct-err" class="error"></div>
     <div id="ct-ok" class="success-msg"></div>
     <div class="modal-actions">
@@ -1691,7 +1704,7 @@ const EJS_TMPL_CANCEL='template_v4qu4x6', EJS_TMPL_RESET='template_scbsgfg', EJS
 function mailCancel(r,motivo=''){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);const horaTxt=r.horaInicio&&r.horaFin?r.horaInicio+' a '+r.horaFin:(r.hora||'');emailjs.send(EJS_SVC,EJS_TMPL_CANCEL,{to_email:r.email,alumno_nombre:r.nombre,fecha:fmtFechaLinda(r.fecha),hora:horaTxt,avion:r.avion||'LV-OAD',motivo:motivo||'Sin especificar'}).catch(e=>console.warn(e));}
 function mailReset(a,np){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);emailjs.send(EJS_SVC,EJS_TMPL_RESET,{to_email:a.email,alumno_nombre:a.nombre,nueva_password:np}).catch(e=>console.warn(e));}
 function mailNuevoRegistro(nombre,email){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);emailjs.send(EJS_SVC,EJS_TMPL_REGISTRO,{alumno_nombre:nombre,alumno_email:email,email:email,fecha:new Date().toLocaleString('es-AR')}).catch(e=>console.warn('mail-registro:',e));emailjs.send(EJS_SVC,EJS_TMPL_BIENVENIDA,{alumno_nombre:nombre,alumno_email:email}).catch(e=>console.warn('mail-bienvenida:',e));}
-function mailAprob(r){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);const horaTxt=r.horaInicio&&r.horaFin?r.horaInicio+' a '+r.horaFin:(r.hora||'');emailjs.send(EJS_SVC,EJS_TMPL_CONFIRMA,{to_email:r.email,alumno_nombre:r.nombre,fecha:fmtFechaLinda(r.fecha),hora:horaTxt,avion:r.avion||'LV-OAD',instructor:session?.nombre||''}).catch(e=>console.warn('mail-aprob:',e));}
+function mailAprob(r,instructorNombre){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);const horaTxt=r.horaInicio&&r.horaFin?r.horaInicio+' a '+r.horaFin:(r.hora||'');emailjs.send(EJS_SVC,EJS_TMPL_CONFIRMA,{to_email:r.email,alumno_nombre:r.nombre,fecha:fmtFechaLinda(r.fecha),hora:horaTxt,avion:r.avion||'LV-OAD',instructor:instructorNombre||session?.nombre||''}).catch(e=>console.warn('mail-aprob:',e));}
 function mailLiberacion(r){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);const horaTxt=r.horaInicio&&r.horaFin?r.horaInicio+' a '+r.horaFin:(r.hora||'');emailjs.send(EJS_SVC,EJS_TMPL_LIBERA,{to_email:r.email,alumno_nombre:r.nombre,fecha:fmtFechaLinda(r.fecha),hora:horaTxt,avion:r.avion||'LV-OAD'}).catch(e=>console.warn('mail-libera:',e));}
 
 function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');}
@@ -3826,9 +3839,18 @@ async function abrirModalCargarTurno(){
   document.getElementById('ct-hora').value='';
   document.getElementById('ct-horafin').value='';
   document.getElementById('ct-obs').value='';
-  document.getElementById('ct-aprobar').checked=true;
   document.getElementById('ct-avion').value='LV-OAD';
   ctActualizarRango();
+  const selInst=document.getElementById('ct-instructor');
+  selInst.innerHTML='<option value="">— Sin aprobación (queda pendiente) —</option>';
+  const instData=await fbGet('instructores');
+  if(instData){
+    const lista=Object.entries(instData)
+      .filter(([k,v])=>k!=='admin'&&k!=='administrador'&&v.vacaciones!==true)
+      .map(([,v])=>v.nombre||v.user)
+      .sort((a,b)=>a.localeCompare(b));
+    selInst.innerHTML+=lista.map(n=>`<option value="${n}">${n}</option>`).join('');
+  }
   const sel=document.getElementById('ct-alumno');
   sel.innerHTML='<option value="">— Cargando… —</option>';
   const data=await fbGet('alumnos');
@@ -3875,7 +3897,7 @@ window.guardarTurnoManual=async function(){
   const snap=await get(ref(db,'reservas'));
   const taken=slotsTomados(fecha,avion,snap.val());
   if(taken.includes(hora)){showErr('ct-err','Ese avión ya tiene un turno activo a esa fecha/hora. Elegí otro horario.');return;}
-  const aprobar=document.getElementById('ct-aprobar').checked;
+  const instructorSel=document.getElementById('ct-instructor').value;
   const obs=document.getElementById('ct-obs').value.trim();
   const nuevo={
     nombre:alumno.nombre||alumno.email||key,
@@ -3883,20 +3905,20 @@ window.guardarTurnoManual=async function(){
     fecha,hora,
     ...(horaFin?{horaInicio:hora,horaFin}:{}),
     avion,obs,
-    estado:aprobar?'aprobado':'pendiente',
+    estado:instructorSel?'aprobado':'pendiente',
     rol:alumno.rol||'alumno',
     ts:new Date().toISOString(),
     cargado_por:session.nombre||session.user||''   // distingue de una reserva hecha por el propio alumno
   };
-  if(aprobar){ nuevo.instructor=session.nombre; nuevo.aprobado_por=session.nombre; }
+  if(instructorSel){ nuevo.instructor=instructorSel; nuevo.aprobado_por=instructorSel; }
   try{
     await fbPush('reservas',nuevo);
     const labelHora=horaFin?hora+' a '+horaFin+' hs':hora+' hs';
     await registrarAuditoria('alta_turno_manual',session.rol||'instructor','exito',
       (session.nombre||session.user)+' cargó turno — '+avion+' — '+fecha+' '+labelHora+
-      ' — alumno: '+nuevo.nombre+(aprobar?' — aprobado automáticamente':' — pendiente'));
-    if(aprobar&&nuevo.email) mailAprob(nuevo);
-    showOk('ct-ok','// TURNO CARGADO'+(aprobar?' Y APROBADO':' (PENDIENTE)'));
+      ' — alumno: '+nuevo.nombre+(instructorSel?' — aprobado por '+instructorSel:' — pendiente'));
+    if(instructorSel&&nuevo.email) mailAprob(nuevo,instructorSel);
+    showOk('ct-ok','// TURNO CARGADO'+(instructorSel?' Y APROBADO':' (PENDIENTE)'));
     // No hace falta refrescar nada a mano: hay un onValue(ref(db,'reservas')) en vivo
     // que ya re-renderiza toda la pantalla apenas el fbPush escribe el nodo nuevo.
     setTimeout(()=>cerrarModalCargarTurno(),1200);
