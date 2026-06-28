@@ -1,5 +1,21 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.08
+  FECHA   : 2026-06-28
+  CAMBIOS : Nueva herramienta "+ CARGAR TURNO" (boton verde junto a HOY, en la tab
+            Reservas del instructor/admin): permite cargar un turno a nombre de un
+            alumno/piloto sin que ese alumno tenga que loguearse — pensado para
+            turnos coordinados por telefono o en persona. A diferencia del flujo
+            normal de "Pedir Turno": no exige anticipacion minima, no depende de
+            que haya disponibilidad de instructor publicada para ese horario (es
+            carga directa, no reserva contra horarios abiertos); SI sigue
+            chequeando que el avion no este ya tomado a esa fecha/hora (mismo
+            slotsTomados de siempre). Checkbox "Aprobar automaticamente" (tildado
+            por defecto) — si se destilda, queda 'pendiente' como cualquier otro
+            turno. El registro queda con un campo nuevo 'cargado_por' para
+            distinguirlo de una reserva hecha por el propio alumno. Visible para
+            instructor, admin y administrador (no se restringe: el unico lugar
+            donde administrador es solo-lectura son los checkboxes de horarios).
   VERSION : 6.07
   FECHA   : 2026-06-27
   CAMBIOS : overflow-x:hidden + max-width:100vw en html/body. A pesar de la pasada
@@ -699,6 +715,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
      el min-width viene en style="" y gana por especificidad — se anula para que cada
      campo pase a ocupar el ancho completo en vez de quedar apretado a la mitad */
   .field[style*="min-width"]{min-width:0 !important;flex:1 1 100% !important}
+  .row{flex-wrap:wrap}
 
   /* modal: menos padding lateral para aprovechar mejor el ancho real disponible */
   .modal{padding:1.1rem}
@@ -731,7 +748,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.07</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.08</div>
   </div>
 
 </div>
@@ -939,6 +956,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
     <div id="vista-lista">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:.85rem">
         <div class="cal-avion-tabs" id="cal-avion-tabs" style="flex:1;margin-bottom:0"></div>
+        <button id="btn-cargar-turno" onclick="abrirModalCargarTurno()" title="Cargar un turno a nombre de un alumno/piloto (sin pasar por su login)" style="font-family:var(--font-mono);font-size:12px;padding:5px 16px;border:1px solid var(--green);color:var(--green);background:rgba(57,211,83,.08);border-radius:var(--radius);cursor:pointer;letter-spacing:.1em;white-space:nowrap">+ CARGAR TURNO</button>
         <button id="btn-hoy-cal" onclick="centrarHoy()" title="Centrar la grilla en el día de hoy" style="font-family:var(--font-mono);font-size:12px;padding:5px 16px;border:1px solid var(--cyan);color:var(--cyan);background:rgba(0,200,212,.08);border-radius:var(--radius);cursor:pointer;letter-spacing:.12em;white-space:nowrap">◎ HOY</button>
       </div>
       <div class="card" style="padding:1rem">
@@ -1251,6 +1269,56 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         </div>
       </div>
     </div>
+
+<!-- MODAL CARGAR TURNO (instructor/admin, a nombre de un alumno/piloto) -->
+<div class="modal-overlay" id="modal-cargar-turno">
+  <div class="modal">
+    <button class="modal-close" onclick="cerrarModalCargarTurno()">✕</button>
+    <div class="modal-title">◈ Cargar Turno</div>
+    <div class="field">
+      <label>Alumno / Piloto</label>
+      <select id="ct-alumno"><option value="">— Seleccionar —</option></select>
+    </div>
+    <div class="row">
+      <div class="field" style="margin:0;min-width:110px">
+        <label>Avión</label>
+        <select id="ct-avion" onchange="ctActualizarRango()">
+          <option value="LV-OAD">LV-OAD</option>
+          <option value="LV-ART">LV-ART</option>
+          <option value="LV-MPH">LV-MPH</option>
+        </select>
+      </div>
+      <div class="field" style="margin:0;min-width:130px">
+        <label>Fecha</label>
+        <input type="date" id="ct-fecha">
+      </div>
+    </div>
+    <div class="row">
+      <div class="field" style="margin:0;min-width:110px">
+        <label>Hora</label>
+        <input type="time" id="ct-hora">
+      </div>
+      <div class="field" id="ct-horafin-wrap" style="margin:0;min-width:110px;display:none">
+        <label>Hora fin (rango)</label>
+        <input type="time" id="ct-horafin">
+      </div>
+    </div>
+    <div class="field">
+      <label>Observaciones <span style="font-size:10px;color:var(--text3)">(opcional)</span></label>
+      <textarea id="ct-obs" rows="2" placeholder="Ej: turno coordinado por teléfono"></textarea>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;font-family:var(--font-mono);font-size:12px;color:var(--text2);margin-bottom:.85rem">
+      <input type="checkbox" id="ct-aprobar" checked style="accent-color:var(--cyan)">
+      Aprobar automáticamente (ya coordinado con el alumno/piloto)
+    </label>
+    <div id="ct-err" class="error"></div>
+    <div id="ct-ok" class="success-msg"></div>
+    <div class="modal-actions">
+      <button class="primary" onclick="guardarTurnoManual()">GUARDAR TURNO</button>
+      <button onclick="cerrarModalCargarTurno()">Cancelar</button>
+    </div>
+  </div>
+</div>
 
 <!-- MODAL EDITAR INSTRUCTOR -->
 <div class="modal-overlay" id="modal-inst">
@@ -3719,6 +3787,106 @@ window.guardarAlumno=async function(){
 };
 
 document.addEventListener('click',e=>{if(e.target.id==='modal-alumno')cerrarModalAlumno();});
+
+/* ============================ CARGAR TURNO MANUAL (instructor/admin) ============================
+   v6.08. Herramienta para que instructor o admin (NO administrador, que es solo-lectura en
+   horarios) cargue un turno a nombre de un alumno/piloto sin que ese alumno tenga que loguearse
+   y pasar por "Pedir Turno" — pensado para turnos coordinados por teléfono/en persona. A
+   diferencia del flujo normal (confirmarTurno):
+   - NO exige anticipación mínima (okAnticipacion) — quien carga ya coordinó el horario.
+   - NO depende de que haya disponibilidad de instructor abierta para ese horario — es una
+     carga directa, no una reserva por el alumno contra los horarios publicados.
+   - SÍ chequea que el avión no esté ya tomado a esa fecha/hora (mismo slotsTomados que el
+     flujo normal), para no duplicar una reserva por error.
+   - El estado por defecto es "aprobado" (checkbox tildado) ya que típicamente se carga un
+     turno que ya está acordado; se puede destildar para dejarlo "pendiente" como cualquier
+     otro turno a la espera de aprobación. */
+async function abrirModalCargarTurno(){
+  document.getElementById('ct-err').style.display='none';
+  document.getElementById('ct-ok').style.display='none';
+  document.getElementById('ct-fecha').value=new Date().toISOString().slice(0,10);
+  document.getElementById('ct-hora').value='';
+  document.getElementById('ct-horafin').value='';
+  document.getElementById('ct-obs').value='';
+  document.getElementById('ct-aprobar').checked=true;
+  document.getElementById('ct-avion').value='LV-OAD';
+  ctActualizarRango();
+  const sel=document.getElementById('ct-alumno');
+  sel.innerHTML='<option value="">— Cargando… —</option>';
+  const data=await fbGet('alumnos');
+  if(!data){ sel.innerHTML='<option value="">— Sin usuarios registrados —</option>'; }
+  else{
+    const items=Object.entries(data)
+      .filter(([,a])=>a.estado_login!=='suspendido'&&a.estado!=='pendiente_aprobacion')
+      .sort(([,a],[,b])=>(a.nombre||'').localeCompare(b.nombre||''));
+    sel.innerHTML='<option value="">— Seleccionar —</option>'+
+      items.map(([k,a])=>`<option value="${k}">${a.nombre||a.email||k} — ${a.rol==='piloto'?'Piloto':'Alumno'}</option>`).join('');
+    sel._datos=data;   // guardado en el propio elemento, sin tocar _alumnosCache (que es de otra pantalla)
+  }
+  document.getElementById('modal-cargar-turno').classList.add('open');
+}
+window.abrirModalCargarTurno=abrirModalCargarTurno;
+
+window.cerrarModalCargarTurno=function(){
+  document.getElementById('modal-cargar-turno').classList.remove('open');
+};
+document.addEventListener('click',e=>{if(e.target.id==='modal-cargar-turno')cerrarModalCargarTurno();});
+
+// Rango horario (hora fin) visible solo para aviones que no sean LV-OAD — igual criterio
+// que usa el flujo normal de "Pedir Turno" para vuelos largos de piloto.
+window.ctActualizarRango=function(){
+  const esOAD=document.getElementById('ct-avion').value==='LV-OAD';
+  document.getElementById('ct-horafin-wrap').style.display=esOAD?'none':'';
+  if(esOAD) document.getElementById('ct-horafin').value='';
+};
+
+window.guardarTurnoManual=async function(){
+  hideEl('ct-err'); hideEl('ct-ok');
+  const sel=document.getElementById('ct-alumno');
+  const key=sel.value;
+  if(!key){showErr('ct-err','Seleccioná un alumno o piloto.');return;}
+  const alumno=(sel._datos||{})[key];
+  if(!alumno){showErr('ct-err','No se pudo leer los datos del usuario seleccionado. Volvé a abrir el modal.');return;}
+  const avion=document.getElementById('ct-avion').value;
+  const fecha=document.getElementById('ct-fecha').value;
+  const hora=document.getElementById('ct-hora').value;
+  const horaFin=document.getElementById('ct-horafin').value;
+  if(!fecha||!hora){showErr('ct-err','Completá fecha y hora.');return;}
+  if(horaFin&&horaFin<=hora){showErr('ct-err','La hora de fin tiene que ser posterior a la hora de inicio.');return;}
+  // Chequeo de conflicto (mismo avión, mismo horario, alguna reserva activa ya existente)
+  const snap=await get(ref(db,'reservas'));
+  const taken=slotsTomados(fecha,avion,snap.val());
+  if(taken.includes(hora)){showErr('ct-err','Ese avión ya tiene un turno activo a esa fecha/hora. Elegí otro horario.');return;}
+  const aprobar=document.getElementById('ct-aprobar').checked;
+  const obs=document.getElementById('ct-obs').value.trim();
+  const nuevo={
+    nombre:alumno.nombre||alumno.email||key,
+    email:alumno.email||'',
+    fecha,hora,
+    ...(horaFin?{horaInicio:hora,horaFin}:{}),
+    avion,obs,
+    estado:aprobar?'aprobado':'pendiente',
+    rol:alumno.rol||'alumno',
+    ts:new Date().toISOString(),
+    cargado_por:session.nombre||session.user||''   // distingue de una reserva hecha por el propio alumno
+  };
+  if(aprobar){ nuevo.instructor=session.nombre; nuevo.aprobado_por=session.nombre; }
+  try{
+    await fbPush('reservas',nuevo);
+    const labelHora=horaFin?hora+' a '+horaFin+' hs':hora+' hs';
+    await registrarAuditoria('alta_turno_manual',session.rol||'instructor','exito',
+      (session.nombre||session.user)+' cargó turno — '+avion+' — '+fecha+' '+labelHora+
+      ' — alumno: '+nuevo.nombre+(aprobar?' — aprobado automáticamente':' — pendiente'));
+    if(aprobar&&nuevo.email) mailAprob(nuevo);
+    showOk('ct-ok','// TURNO CARGADO'+(aprobar?' Y APROBADO':' (PENDIENTE)'));
+    // No hace falta refrescar nada a mano: hay un onValue(ref(db,'reservas')) en vivo
+    // que ya re-renderiza toda la pantalla apenas el fbPush escribe el nodo nuevo.
+    setTimeout(()=>cerrarModalCargarTurno(),1200);
+  }catch(e){
+    console.error(e);
+    showErr('ct-err','No se pudo guardar el turno (error de conexión). Volvé a intentar.');
+  }
+};
 
 window.eliminarAlumno=async function(k,email){
   if(!confirm('¿Eliminar este usuario? También se eliminarán sus reservas.'))return;
