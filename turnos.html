@@ -1,5 +1,14 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.09
+  FECHA   : 2026-06-28
+  CAMBIOS : FIX critico: el modal de "Cargar Turno" (v6.08) no se abria. Quedo
+            anidado en el HTML dentro de instructor-config (sub-pantalla de
+            Configuracion, display:none salvo que esa sub-tab este activa) — mismo
+            bug de fondo que el modal de motivo de cancelacion (v5.97). El boton que
+            lo abre vive en la tab Reservas, asi que con Config oculta el modal nunca
+            se veia aunque se le pusiera la clase 'open'. Se rescata a document.body
+            al cargar la pagina, mismo patron ya usado para el modal de motivo.
   VERSION : 6.08
   FECHA   : 2026-06-28
   CAMBIOS : Nueva herramienta "+ CARGAR TURNO" (boton verde junto a HOY, en la tab
@@ -748,7 +757,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.08</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.09</div>
   </div>
 
 </div>
@@ -2470,6 +2479,15 @@ function puedeAlumnoCancelar(r){
 // sola vez para que siempre sea visible sin importar qué screen esté activa.
 (function rescatarModalMotivoCancel(){
   const m=document.getElementById('modal-motivo-cancel');
+  if(m&&m.parentElement!==document.body) document.body.appendChild(m);
+})();
+
+// FIX v6.09: mismo bug que el de arriba. #modal-cargar-turno quedó anidado en el HTML
+// dentro de instructor-config (la sub-pantalla de Configuración), que tiene display:none
+// salvo que esa sub-tab esté activa. El botón que lo abre vive en la tab Reservas, así
+// que con la Config oculta el modal nunca se veía aunque se le pusiera la clase 'open'.
+(function rescatarModalCargarTurno(){
+  const m=document.getElementById('modal-cargar-turno');
   if(m&&m.parentElement!==document.body) document.body.appendChild(m);
 })();
 
