@@ -2,6 +2,13 @@
 <!--
 ==================================================================================
   PORTAL ALUMNO — Aeroclub Río Grande
+  v1.11 ·  Primera pasada mobile (@media max-width:680px). header.bar .sp
+           (theme-toggle + nombre + version + volver) sin flex-wrap podia
+           desbordar en celular con nombre largo, mismo patron ya corregido en
+           turnos.html y fpl.html — ahora envuelve. nav.tabs (4 tabs) pasa a
+           scroll horizontal en vez de envolver en 2 filas. Flashcards con
+           texto y padding mas compactos para pantalla angosta. Aditivo, no
+           cambia el diseño de escritorio.
   v1.10 ·  Nueva tab "FLASHCARDS": mazo de 75 preguntas/respuestas sobre el
            LV-OAD (PA-38-112), con flip 3D pregunta/respuesta. Se mezclan al
            azar; "la sé" sale del mazo de la vuelta, "no la sé" va al final
@@ -203,6 +210,41 @@ button.danger{background:rgba(248,81,73,.08);color:var(--red);border-color:var(-
 .fc-btn:disabled{opacity:.35;cursor:default;pointer-events:none}
 .fc-done{text-align:center;padding:2.5rem 1rem}
 .fc-done .big{font-size:34px;margin-bottom:.5rem}
+
+/* ============================ MOBILE (v1.11) ============================
+   Cero @media queries hasta esta version. Aditivo, no cambia el diseño de
+   escritorio.
+   - header.bar: el grupo .sp (theme-toggle + nombre + version + volver) iba
+     con margin-left:auto y SIN flex-wrap — en celular angosto con un nombre
+     largo desborda horizontalmente, mismo patron que se corrigio en
+     turnos.html (top-nav) y fpl.html (header.bar). Pasa a envolver.
+   - nav.tabs/.tabbtn: ya tenia flex-wrap (no se rompia), pero envolver los 4
+     tabs (PERFIL/MANUALES/CUESTIONARIOS/FLASHCARDS) en 2 filas de 2 se ve
+     abarrotado — mismo criterio que turnos.html: pasa a scroll horizontal
+     de una sola fila.
+   - .item .meta: min-width:160px podia forzar el bloque de fecha/meta a
+     ocupar casi todo el ancho disponible en pantallas muy angostas. Se achica.
+   - Flashcards: texto un poco mas chico y stage a ancho completo para que
+     entre comodo en una pantalla de celular en vertical. */
+@media (max-width:680px){
+  header.bar{flex-wrap:wrap;gap:8px;padding:10px 12px}
+  header.bar h1{font-size:16px}
+  header.bar .sp{margin-left:0;flex-wrap:wrap;width:100%;justify-content:flex-start;gap:8px}
+  header.bar .who{max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  nav.tabs{flex-wrap:nowrap;overflow-x:auto;-ms-overflow-style:none;scrollbar-width:none;padding-bottom:2px}
+  nav.tabs::-webkit-scrollbar{display:none}
+  .tabbtn{flex-shrink:0;font-size:11px;padding:7px 13px}
+
+  .item .meta{min-width:0;flex-basis:100%}
+
+  .fc-stage{max-width:100%}
+  .fc-face{padding:20px 16px;min-height:200px}
+  .fc-face-text{font-size:16px}
+  .fc-card,.fc-card-inner{min-height:200px}
+
+  button{padding:7px 14px}
+}
 </style>
 </head>
 <body>
@@ -222,7 +264,7 @@ button.danger{background:rgba(248,81,73,.08);color:var(--red);border-color:var(-
         <span class="theme-toggle-icon">☀️</span>
       </div>
       <span class="who" id="who-label"></span>
-      <span class="ver">v1.10</span>
+      <span class="ver">v1.11</span>
       <a class="back" href="turnos.html">← TURNERO</a>
     </div>
   </header>
