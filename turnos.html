@@ -1,5 +1,14 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.12
+  FECHA   : 2026-06-28
+  CAMBIOS : Boton BORRAR (admin, v6.11) quedaba con el mismo tratamiento visual que
+            CANCELAR TURNO (rojo, contorno) — se prestaba a confusion justo en el
+            boton mas peligroso. Ahora va en su propia fila, separado por un divisor
+            punteado, con caption de advertencia ("Zona de administrador — borrado
+            definitivo, sin auditoria") y estilo SOLIDO invertido (fondo rojo lleno,
+            texto oscuro, ancho completo) en vez de contorno — a proposito lo opuesto
+            a CANCELAR, para que sean inconfundibles a simple vista.
   VERSION : 6.11
   FECHA   : 2026-06-28
   CAMBIOS : Modal de detalle del turno: nuevo botón "🗑 BORRAR (admin)", visible SOLO
@@ -778,7 +787,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.11</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.12</div>
   </div>
 
 </div>
@@ -3025,23 +3034,33 @@ window.abrirModal=function(key){
       actions.appendChild(nota);
     }
   }
-  // v6.11: BORRAR definitivo — SOLO para el usuario literal 'admin' (no instructor, no
-  // administrador). A pedido explícito: para limpiar turnos de prueba rápido, sin pasar
-  // por cancelar/liberar y SIN dejar registro en /auditoria (a propósito, es justamente
-  // lo que se busca acá). Borra el nodo de /reservas directo con fbRemove, cualquiera sea
-  // su estado (pendiente/aprobado/cancelado/vencido).
+  // v6.11/v6.12: BORRAR definitivo — SOLO para el usuario literal 'admin' (no
+  // instructor, no administrador). A pedido explícito: para limpiar turnos de prueba
+  // rápido, sin pasar por cancelar/liberar y SIN dejar registro en /auditoria (a
+  // propósito, es justamente lo que se busca acá). Borra el nodo de /reservas directo
+  // con fbRemove, cualquiera sea su estado (pendiente/aprobado/cancelado/vencido).
+  // v6.12: separado en su propia fila con divisor + caption de advertencia, y con
+  // estilo SÓLIDO invertido (fondo rojo lleno, texto claro) — a propósito lo opuesto
+  // al contorno de CANCELAR TURNO, porque ambos quedaban con el mismo tratamiento
+  // visual (rojo, contorno) y se prestaban a confundirse justo en el botón más
+  // peligroso de los dos.
   if(session?.user==='admin'){
+    const zona=document.createElement('div');
+    zona.style.cssText='width:100%;margin-top:14px;padding-top:12px;border-top:2px dashed var(--red)';
+    const cap=document.createElement('div');
+    cap.style.cssText='font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;color:var(--red);text-transform:uppercase;margin-bottom:7px;opacity:.85';
+    cap.textContent='⚠ Zona de administrador — borrado definitivo, sin auditoría';
     const bdel=document.createElement('button');
-    bdel.className='danger';
-    bdel.style.cssText='background:rgba(248,81,73,.15);border-color:var(--red)';
-    bdel.textContent='🗑 BORRAR (admin)';
+    bdel.style.cssText='background:var(--red);color:#0a0a0a;border:1px solid var(--red);font-weight:700;width:100%;box-shadow:0 0 14px rgba(248,81,73,.35)';
+    bdel.textContent='🗑 BORRAR TURNO DEFINITIVAMENTE';
     bdel.title='Borra el turno de la base directamente, sin auditoría. Para limpiar pruebas.';
     bdel.onclick=async()=>{
       if(!confirm('¿BORRAR este turno definitivamente?\n\nLo elimina de la base sin dejar registro en auditoría. No se puede deshacer.'))return;
       try{ await fbRemove('reservas/'+key); }catch(e){ console.error(e); alert('No se pudo borrar (error de conexión).'); return; }
       cerrarModal();
     };
-    actions.appendChild(bdel);
+    zona.appendChild(cap); zona.appendChild(bdel);
+    actions.appendChild(zona);
   }
   // Observación post-vuelo: editable por el instructor que aprobó (o admin) en turnos
   // APROBADOS cuya hora ya pasó. Permite anotar qué pasó (ej.: no se voló por meteo).
