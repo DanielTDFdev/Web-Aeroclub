@@ -1,5 +1,18 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.06
+  FECHA   : 2026-06-27
+  CAMBIOS : Primera pasada mobile (@media max-width:680px), antes no existia NINGUN
+            media query en todo el archivo. Cubre alumno + instructor/admin: hero
+            achicado (280px->130px), top-nav con flex-wrap (antes podia desbordar y
+            dejar el boton SALIR inalcanzable), tab-bar (alumno/instructor/8 sub-tabs
+            de Configuracion) a scroll horizontal en vez de envolver en varias filas,
+            links-row en columna de ancho completo, campos de formularios con
+            min-width inline forzados a 100% de ancho (!important), tablas anchas
+            mas compactas. Aditivo: no cambia nada del diseño de escritorio. Pendiente
+            (fuera de alcance de esta pasada): rediseño del calendario/disponibilidad
+            a vista de agenda vertical para mobile — por ahora sigue con scroll
+            horizontal, que es un patron mobile aceptado pero no ideal.
   VERSION : 6.05
   FECHA   : 2026-06-26
   CAMBIOS : Nuevo boton "Peso y Balance" en la .links-row de alumno-screen e
@@ -593,6 +606,93 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 .cal-leyenda-item{display:flex;align-items:center;gap:5px;color:var(--text3);}
 .cal-leyenda-dot{width:10px;height:10px;border-radius:2px;}
 .cal-avion-tab.all.active{border-color:var(--cyan);color:var(--cyan);background:rgba(0,200,212,.08);}
+/* ============================ MOBILE (v6.06) ============================
+   Hasta esta version no existia NINGUN @media query en todo el archivo —
+   nada se adaptaba, todo se achicaba proporcionalmente nomas. Este bloque es
+   ADITIVO: solo se activa debajo de 680px, no le cambia nada al diseño de
+   escritorio. Resumen de los puntos mas pesados que se tocan:
+   - .hero: 280px fijo era casi media pantalla de scroll en un celu antes de
+     llegar a cualquier boton. Se achica a 130px.
+   - .top-nav: sin flex-wrap, podia desbordar horizontalmente con nombres de
+     usuario largos, dejando el boton SALIR inalcanzable sin scrollear.
+   - .tab-bar (usado en alumno [3 tabs], instructor [5 tabs] y Configuración
+     [8 sub-tabs]): tenia flex-wrap, asi que no se rompia, pero envolver 8
+     botones de ancho disparejo en varias filas se ve muy abarrotado. Pasa a
+     scroll horizontal de una sola fila (patron "tabs deslizables", nativo de
+     mobile) en vez de envolver.
+   - .links-row (Portal Alumnos / Plan de Vuelo / Peso y Balance): de 3 pills
+     en fila a una columna de botones de ancho completo, mas facil de tocar.
+   - .field con min-width inline (formularios de consultas/auditoria/etc.):
+     el min-width viene en `style=""` asi que gana por especificidad sobre
+     cualquier regla de clase — se anula con !important para que cada campo
+     ocupe el 100% del ancho en vez de quedar a mitad apretado.
+   - Tablas anchas (cal-table y las demas con min-width 480-1400px): se
+     mantienen con scroll horizontal (es un patron mobile aceptado para datos
+     tipo grilla/calendario; reescribirlas a una vista de agenda vertical
+     seria un rediseño mucho mas grande, queda pendiente si se necesita) pero
+     con tipografia y padding mas compactos para que entre mas sin scrollear. */
+@media (max-width:680px){
+  .hero{height:130px}
+  .hero-text{left:1rem;bottom:1rem}
+  .hero-status{top:.75rem;right:.75rem;font-size:10px}
+  .container{padding:.85rem}
+
+  /* top-nav: que envuelva en vez de desbordar; nombre de usuario truncado si no entra */
+  .top-nav{flex-wrap:wrap;padding:.55rem .85rem;row-gap:6px}
+  .nav-brand{font-size:11px}
+  #nav-user-name{max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle}
+
+  /* links-row: pills en columna, ancho completo, mas facil de tocar */
+  .links-row{flex-direction:column;align-items:stretch}
+  .links-row a{justify-content:center;text-align:center}
+
+  /* tab-bar: de "envolver en varias filas" a una sola fila con scroll horizontal */
+  .tab-bar{flex-wrap:nowrap;overflow-x:auto;-ms-overflow-style:none;scrollbar-width:none;padding:.6rem 0;margin-bottom:1rem}
+  .tab-bar::-webkit-scrollbar{display:none}
+  .tab-bar .nav-btn{flex-shrink:0;font-size:11px;padding:6px 12px}
+
+  /* hist-toolbar: chips de filtro mas chicos, sigue envolviendo (son pocos y cortos) */
+  .hist-toolbar{gap:6px}
+  .hist-filter-btn,.hist-sort-btn{font-size:10px;padding:4px 9px}
+  .hist-sort-btn{margin-left:0}
+
+  /* stat-grid: se mantienen las 3 columnas (son solo numeros cortos) pero mas compactas */
+  .stat-grid{gap:6px}
+  .stat-grid .num{font-size:22px}
+  .stat-grid .lbl{font-size:10px}
+
+  /* days-grid: 7 columnas se mantienen (es el selector de dia de la semana, achicarlo
+     a menos columnas rompe el modelo mental de "elegir un dia"), solo se ajusta tamaño */
+  .days-grid{gap:4px}
+  .day-btn{padding:7px 2px;font-size:10px}
+
+  /* avion-selector y cal-avion-tabs: que no se aprieten, gap mas chico */
+  .avion-selector,.cal-avion-tabs{gap:6px}
+  .avion-btn{padding:8px 12px;min-width:84px}
+
+  /* cal-vista-tabs / cal-semana-nav: mismo criterio de scroll horizontal que tab-bar */
+  .cal-vista-tabs{overflow-x:auto;-ms-overflow-style:none;scrollbar-width:none}
+  .cal-vista-tabs::-webkit-scrollbar{display:none}
+  .cal-semana-nav{gap:6px}
+  .cal-semana-nav span{font-size:11px}
+
+  /* filas de campos con min-width inline (consultas, auditoria, borrar-turnos, etc.):
+     el min-width viene en style="" y gana por especificidad — se anula para que cada
+     campo pase a ocupar el ancho completo en vez de quedar apretado a la mitad */
+  .field[style*="min-width"]{min-width:0 !important;flex:1 1 100% !important}
+
+  /* modal: menos padding lateral para aprovechar mejor el ancho real disponible */
+  .modal{padding:1.1rem}
+  .modal-overlay{padding:.6rem}
+
+  /* botones genericos: un poco mas de alto para que el dedo no falle el tap */
+  button{padding:9px 16px}
+
+  /* tablas anchas: se mantiene el scroll horizontal (cal-table, auditoria, etc.) pero
+     mas compactas para que entre mas sin tener que deslizar tanto */
+  .cal-table th,.cal-table td{font-size:10px;padding:3px;min-width:46px}
+  .cal-table th:first-child{width:48px;min-width:48px}
+}
 </style>
 <script>if(localStorage.getItem('lvoad-theme')==='light')document.documentElement.classList.add('light');</script>
 </head>
@@ -612,7 +712,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.05</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.06</div>
   </div>
 
 </div>
