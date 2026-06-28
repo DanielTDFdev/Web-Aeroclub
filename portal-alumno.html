@@ -2,6 +2,8 @@
 <!--
 ==================================================================================
   PORTAL ALUMNO — Aeroclub Río Grande
+  v1.12 ·  overflow-x:hidden + max-width:100vw en html/body (misma red de seguridad
+           que turnos.html v6.07 y fpl.html v3.22), preventivo por el mismo motivo.
   v1.11 ·  Primera pasada mobile (@media max-width:680px). header.bar .sp
            (theme-toggle + nombre + version + volver) sin flex-wrap podia
            desbordar en celular con nombre largo, mismo patron ya corregido en
@@ -134,7 +136,9 @@
   --green:#1a8a30;--red:#c0392b;
   --border:rgba(0,144,160,0.2);--border2:rgba(0,144,160,0.45);
 }
-body{font-family:var(--font-ui);font-size:15px;color:var(--text);background:var(--bg);min-height:100vh;letter-spacing:.02em;transition:background .25s,color .25s;}
+body{font-family:var(--font-ui);font-size:15px;color:var(--text);background:var(--bg);min-height:100vh;letter-spacing:.02em;transition:background .25s,color .25s;
+  overflow-x:hidden;max-width:100vw;}
+html{overflow-x:hidden;max-width:100vw;}
 .wrap{max-width:980px;margin:0 auto;padding:18px 16px 80px}
 header.bar{display:flex;align-items:center;gap:14px;border:1px solid var(--border2);
   background:linear-gradient(180deg,var(--bg3),var(--bg2));padding:12px 16px;border-radius:var(--radius-lg);
@@ -264,7 +268,7 @@ button.danger{background:rgba(248,81,73,.08);color:var(--red);border-color:var(-
         <span class="theme-toggle-icon">☀️</span>
       </div>
       <span class="who" id="who-label"></span>
-      <span class="ver">v1.11</span>
+      <span class="ver">v1.12</span>
       <a class="back" href="turnos.html">← TURNERO</a>
     </div>
   </header>
