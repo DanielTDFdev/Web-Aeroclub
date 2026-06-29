@@ -1,5 +1,17 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.14
+  FECHA   : 2026-06-29
+  CAMBIOS : Tooltip de turnos PENDIENTES (vistas LISTA y SEMANA) ahora agrega quiénes
+            podrían aprobarlo en este momento: "— Puede aprobar: Nicolas, Mariano" según
+            la disponibilidad vigente de TODOS los instructores ese día/horario (excluye
+            instructores de vacaciones), o "— Nadie con disponibilidad cargada para ese
+            horario" si no hay ninguno. Reescribe el helper de v6.13 (cargarMiDisponibilidad
+            → cargarDisponibilidadCompleta) para traer ambas cosas con una sola lectura de
+            /disponibilidad/{fecha} por fecha en vez de dos lecturas separadas. Es el
+            cálculo en VIVO al momento de ver la pantalla — puede no coincidir con quién
+            terminó aprobando si la disponibilidad cambió entremedio. Puramente informativo,
+            no toca la lógica de aprobación.
   VERSION : 6.13
   FECHA   : 2026-06-29
   CAMBIOS : Ayuda visual de disponibilidad propia en el calendario de turnos (vistas LISTA
@@ -802,7 +814,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.13</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.14</div>
   </div>
 
 </div>
@@ -2643,16 +2655,36 @@ function tooltipAccion(r){
 
 // v6.13: disponibilidad propia del instructor logueado, para resaltar en el calendario
 // los turnos pendientes que caen en un día/horario que él mismo cargó como disponible.
-// Solo aplica a instructores reales — admin/administrador no tienen disponibilidad propia.
-async function cargarMiDisponibilidad(fechas){
-  if(!esInstructorReal()) return {};
+// v6.14: ampliado para traer también, por hora, los NOMBRES de TODOS los instructores
+// con disponibilidad cargada ese día (excluyendo vacaciones) — se usa en el tooltip de
+// los turnos pendientes para mostrar quién podría aprobarlos. Una sola lectura de
+// /disponibilidad/{fecha} por fecha (no una por instructor), reutilizada para ambos usos.
+async function cargarDisponibilidadCompleta(fechas){
   const instKey=session?.user;
+  const instData=await fbGet('instructores')||{};
   const out={};
   await Promise.all(fechas.map(async f=>{
-    const saved=await fbGet('disponibilidad/'+f+'/'+instKey);
-    out[f]=new Set(Array.isArray(saved)?saved:[]);
+    const dispData=await fbGet('disponibilidad/'+f)||{};
+    const misHoras=new Set(Array.isArray(dispData[instKey])?dispData[instKey]:[]);
+    const porHora={};
+    Object.entries(dispData).forEach(([k,arr])=>{
+      if(!Array.isArray(arr))return;
+      const instObj=Object.values(instData).find(i=>(i.user||'')===k);
+      if(instObj?.vacaciones===true)return;  // de vacaciones: no cuenta como disponible
+      const nombre=(instObj?.nombre||k).split(' ')[0];
+      arr.forEach(h=>{(porHora[h]=porHora[h]||[]).push(nombre);});
+    });
+    out[f]={misHoras,porHora};
   }));
   return out;
+}
+
+// Texto a agregar al tooltip de un turno PENDIENTE: quiénes podrían aprobarlo ahora mismo,
+// según disponibilidad vigente (puede no coincidir con quien lo aprobó si cambió después).
+function tipQuienesPueden(disp,fecha,hora){
+  const nombres=disp?.[fecha]?.porHora?.[hora]||[];
+  if(!nombres.length) return ' — Nadie con disponibilidad cargada para ese horario';
+  return ' — Puede aprobar: '+nombres.join(', ');
 }
 
 async function renderTodasReservas(data){
@@ -2692,7 +2724,7 @@ async function renderTodasReservas(data){
   const fechasRango=rango.map(({d})=>fmtDate(d));
   let enRango=todas.filter(r=>fechasRango.includes(r.fecha));
   if(calAvionFiltro!=='todos') enRango=enRango.filter(r=>(r.avion||'LV-OAD')===calAvionFiltro);
-  const misDisp=await cargarMiDisponibilidad(fechasRango);
+  const dispCompleta=await cargarDisponibilidadCompleta(fechasRango);
 
   const horasConTurnos=[...new Set(enRango.map(r=>r.hora))].sort();
   if(!horasConTurnos.length){
@@ -2734,12 +2766,13 @@ async function renderTodasReservas(data){
         const estiloExtra=tipo==='pasado'?'text-decoration:line-through;':'';
         const sinInst=r.sinInstructor&&r.estado==='pendiente';
         const aprobPil=(r.rol==='piloto')&&r.estado==='aprobado';
-        const coincideDisp=r.estado==='pendiente'&&misDisp[r.fecha]?.has(r.hora);
+        const coincideDisp=r.estado==='pendiente'&&dispCompleta[r.fecha]?.misHoras?.has(r.hora);
         const colorCls=(sinInst?'sin-instructor':(aprobPil?'aprobado-piloto':r.estado))+(coincideDisp?' mi-disp':'');
         const tipSin=sinInst?' — SIN INSTRUCTOR (pendiente)':(aprobPil?' — turno de piloto':'');
         const tipDisp=coincideDisp?' — ✓ Coincide con tu disponibilidad':'';
+        const tipQuien=r.estado==='pendiente'?tipQuienesPueden(dispCompleta,r.fecha,r.hora):'';
         const badge=coincideDisp?'<span class="mi-disp-badge" title="Coincide con tu disponibilidad">★</span>':'';
-        html+=`<div class="cal-block ${colorCls}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'}${tipSin}${tipDisp}${tooltipAccion(r)}" style="${estiloExtra}">${badge}${avLabel}${rangoLabel}${nombre}</div>`;
+        html+=`<div class="cal-block ${colorCls}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'}${tipSin}${tipDisp}${tipQuien}${tooltipAccion(r)}" style="${estiloExtra}">${badge}${avLabel}${rangoLabel}${nombre}</div>`;
       });
       html+='</td>';
     });
@@ -2816,7 +2849,7 @@ async function renderVistaSemana(){
   const horasSet=new Set(enSemana.map(r=>r.hora));
   if(!horasSet.size){grid.innerHTML='<div class="cal-empty">// SIN RESERVAS ESTA SEMANA</div>';return;}
   const horas=[...horasSet].sort();
-  const misDisp=await cargarMiDisponibilidad(fechas);
+  const dispCompleta=await cargarDisponibilidadCompleta(fechas);
 
   // Color por aeronave
   const avColor={'LV-OAD':'oad','LV-ART':'art','LV-MPH':'mph'};
@@ -2848,12 +2881,13 @@ async function renderVistaSemana(){
         const nombre=r.nombre.split(' ')[0];
         const sinInst=r.sinInstructor&&r.estado==='pendiente';
         const aprobPil=(r.rol==='piloto')&&r.estado==='aprobado';
-        const coincideDisp=r.estado==='pendiente'&&misDisp[ds]?.has(r.hora);
+        const coincideDisp=r.estado==='pendiente'&&dispCompleta[ds]?.misHoras?.has(r.hora);
         const clases=(sinInst?'sin-instructor':(colorCls+' '+estadoCls+(aprobPil?' pil-aprob':'')))+(coincideDisp?' mi-disp':'');
         const tipSin=sinInst?' — SIN INSTRUCTOR':(aprobPil?' — turno de piloto':'');
         const tipDisp=coincideDisp?' — ✓ Coincide con tu disponibilidad':'';
+        const tipQuien=r.estado==='pendiente'?tipQuienesPueden(dispCompleta,ds,r.hora):'';
         const badge=coincideDisp?'<span class="mi-disp-badge" title="Coincide con tu disponibilidad">★</span>':'';
-        html+=`<div class="cal-block ${clases}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'} — ${r.estado}${tipSin}${tipDisp}${tooltipAccion(r)}">
+        html+=`<div class="cal-block ${clases}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'} — ${r.estado}${tipSin}${tipDisp}${tipQuien}${tooltipAccion(r)}">
           ${badge}<span style="font-size:9px;opacity:.8">${r.avion||'LV-OAD'}</span><br>${nombre}
         </div>`;
       });
