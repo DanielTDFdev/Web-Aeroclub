@@ -1,5 +1,4 @@
 name: Recordatorio instructor
-name: Recordatorio instructor
 
 on:
   schedule:
@@ -34,44 +33,6 @@ jobs:
           EMAILJS_SERVICE_ID: "service_yeb4aqb"
           EMAILJS_TEMPLATE_ID: "template_8awr1zd"
           EMAILJS_PUBLIC_KEY: "TzbSjqDNPjTGSGdzN"      # Public Key de la Cuenta B (Gmail dcamargo70)
-          CLUB_EMAIL: "administracion@aeroclubriogrande.com"   # << PONÉ el mail real del club (Reply-To)
-          REMIND_HOURS: "12"
-          TZ_OFFSET: "-3"
-          # ── Secreto: cargado en Settings > Secrets and variables > Actions ──
-          EMAILJS_PRIVATE_KEY: ${{ secrets.EMAILJS_PRIVATE_KEY }}
-          # Para una corrida manual de prueba se respeta el input dry_run
-          DRY_RUN: ${{ github.event.inputs.dry_run || '0' }}
-        run: python recordatorio_instructor.py
-on:
-  schedule:
-    # Cada 15 minutos. OJO: GitHub usa UTC y puede atrasar la ejecución varios
-    # minutos. El script igual cubre eso con la ventana + la marca anti-duplicado.
-    - cron: "*/15 * * * *"
-  workflow_dispatch:        # permite correrlo a mano desde la pestaña Actions
-    inputs:
-      dry_run:
-        description: "Probar sin enviar (1 = sí, 0 = no)"
-        default: "0"
-
-jobs:
-  recordatorio:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Enviar recordatorios
-        env:
-          # ── Públicos (no secretos): editá si hace falta ──────────────
-          FIREBASE_DB_URL: "https://turnos-lv-oad-default-rtdb.firebaseio.com"
-          EMAILJS_SERVICE_ID: "service_8yqlptz"      # Cuenta A (club, aeroclubgra@gmail.com) — antes service_yeb4aqb (dcamargo70 personal)
-          EMAILJS_TEMPLATE_ID: "template_8awr1zd"
-          EMAILJS_PUBLIC_KEY: "0IoRm88tZQepkHAdK"     # Public Key de la Cuenta A — antes TzbSjqDNPjTGSGdzN (Cuenta B)
           CLUB_EMAIL: "administracion@aeroclubriogrande.com"   # << PONÉ el mail real del club (Reply-To)
           REMIND_HOURS: "12"
           TZ_OFFSET: "-3"
