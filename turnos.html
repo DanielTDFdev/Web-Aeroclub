@@ -2868,7 +2868,9 @@ async function renderVistaSemana(){
   const horas=[...horasSet].sort();
   const dispCompleta=await cargarDisponibilidadCompleta(fechas);
 
-  // v6.15: el color ahora es por ESTADO, igual que la vista LISTA (no por aeronave).
+  // v6.15: color por AERONAVE (igual que antes), pero cancelados/vencidos ya no se
+  // filtran — se muestran tachados. Sin-instructor y pil-aprob siguen como override.
+  const avColor={'LV-OAD':'oad','LV-ART':'art','LV-MPH':'mph'};
 
   let html='<table class="cal-table"><thead><tr><th></th>';
   dias.forEach(d=>{
@@ -2895,12 +2897,15 @@ async function renderVistaSemana(){
         const sinInst=r.sinInstructor&&r.estado==='pendiente';
         const aprobPil=(r.rol==='piloto')&&r.estado==='aprobado';
         const coincideDisp=r.estado==='pendiente'&&dispCompleta[ds]?.misHoras?.has(r.hora);
-        const colorCls=(sinInst?'sin-instructor':(aprobPil?'aprobado-piloto':r.estado))+(coincideDisp?' mi-disp':'');
+        const colorBase=avColor[r.avion||'LV-OAD']||'oad';
+        const estadoCls=r.estado==='pendiente'?'pendiente':(r.estado==='cancelado'||r.estado==='vencido'?r.estado:'');
+        const clases=(sinInst?'sin-instructor':(colorBase+' '+estadoCls+(aprobPil?' pil-aprob':'')))+(coincideDisp?' mi-disp':'');
+        const estiloExtra=(r.estado==='cancelado'||r.estado==='vencido')?'text-decoration:line-through;':'';
         const tipSin=sinInst?' — SIN INSTRUCTOR (pendiente)':(aprobPil?' — turno de piloto':'');
         const tipDisp=coincideDisp?' — ✓ Coincide con tu disponibilidad':'';
         const tipQuien=r.estado==='pendiente'?tipQuienesPueden(dispCompleta,ds,r.hora):'';
         const badge=coincideDisp?'<span class="mi-disp-badge" title="Coincide con tu disponibilidad">★</span>':'';
-        html+=`<div class="cal-block ${colorCls}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'}${tipSin}${tipDisp}${tipQuien}${tooltipAccion(r)}">
+        html+=`<div class="cal-block ${clases}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'} — ${r.estado}${tipSin}${tipDisp}${tipQuien}${tooltipAccion(r)}" style="${estiloExtra}">
           ${badge}<span style="font-size:9px;opacity:.8">${r.avion||'LV-OAD'}</span><br>${nombre}
         </div>`;
       });
