@@ -28,13 +28,13 @@ jobs:
         env:
           # ── Públicos (no secretos): editá si hace falta ──────────────
           FIREBASE_DB_URL: "https://turnos-lv-oad-default-rtdb.firebaseio.com"
-          # Cuenta A — club (aeroclubgra@gmail.com), service_8yqlptz. Antes service_yeb4aqb
-          # (Cuenta B, conectada directo al Gmail personal dcamargo70 — por eso las copias
-          # de "Turno Caído" y "Recordatorio" quedaban en los Enviados de dcamargo70).
-          EMAILJS_SERVICE_ID: "service_8yqlptz"
+          # Cuenta B (Gmail personal dcamargo70) — separada a propósito de la Cuenta A
+          # (club, service_8yqlptz, que es la que usa turnos.html desde el navegador).
+          # Los templates de los cron (recordatorio + turno caído) viven SOLO en esta cuenta.
+          EMAILJS_SERVICE_ID: "service_yeb4aqb"
           # Template "Turno Caído" (aviso de vencimiento al alumno)
           EMAILJS_TEMPLATE_ID: "template_4wja6rq"
-          EMAILJS_PUBLIC_KEY: "0IoRm88tZQepkHAdK"
+          EMAILJS_PUBLIC_KEY: "TzbSjqDNPjTGSGdzN"      # Public Key de la Cuenta B (Gmail dcamargo70)
           CLUB_EMAIL: "administracion@aeroclubriogrande.com"   # Reply-To
           EXPIRE_HOURS: "6"      # DEBE ser < 12 (anticipación mínima del alumno)
           TZ_OFFSET: "-3"
