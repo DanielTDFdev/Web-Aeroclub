@@ -1,5 +1,22 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.15
+  FECHA   : 2026-06-29
+  CAMBIOS : Dos ajustes a pedido en el calendario de Reservas.
+            (1) Vista LISTA: el rango de días pasados se acorta de 7 a 3 (antes 7+7+7=21
+            días, ahora 3+7+7=17). Sigue mostrando la semana actual completa + la próxima
+            semana completa, sin cambios ahí.
+            (2) Unificación de esquema entre LISTA y SEMANA: hasta ahora SEMANA coloreaba
+            por AERONAVE (oad/art/mph) y excluía directamente los turnos cancelados del
+            filtro de datos; LISTA en cambio coloreaba por ESTADO (pendiente=ámbar,
+            aprobado=verde, cancelado=rojo tachado, vencido=violeta tachado, sin
+            instructor=rosa punteado, turno de piloto=azul) y sí mostraba los cancelados
+            tachados. Ahora SEMANA usa exactamente el mismo cálculo de clase que LISTA
+            (mismo bloque de código) y ya no filtra cancelados — ambas vistas muestran
+            las mismas reservas con los mismos colores, solo cambia el agrupamiento
+            visual (tabla de 17 días vs. una semana navegable). Las clases .oad/.art/.mph
+            y .pil-aprob quedan en desuso (CSS sin borrar, por si se vuelve a necesitar
+            el color por aeronave en el futuro).
   VERSION : 6.14
   FECHA   : 2026-06-29
   CAMBIOS : Tooltip de turnos PENDIENTES (vistas LISTA y SEMANA) ahora agrega quiénes
@@ -656,7 +673,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 .cal-block.vencido{background:rgba(120,80,200,.18);border:1px solid rgba(120,80,200,.45);color:#c4aef8;text-decoration:line-through;}
 .cal-block.sin-instructor{background:rgba(224,82,156,.18);border:1px dashed rgba(224,82,156,.6);color:var(--pink);}
 .cal-block.aprobado-piloto{background:rgba(77,159,255,.16);border:1px solid rgba(77,159,255,.5);color:var(--blue);}
-.cal-block.pil-aprob{box-shadow:inset 3px 0 0 var(--blue);}
+.cal-block.pil-aprob{box-shadow:inset 3px 0 0 var(--blue);} /* en desuso desde v6.15 (ver changelog); SEMANA ya usa .aprobado-piloto igual que LISTA */
 /* v6.13: ayuda visual — turno PENDIENTE que coincide con la disponibilidad propia del
    instructor logueado. Se suma a cualquier color de estado/avión que ya tenga el bloque. */
 .cal-block.mi-disp{box-shadow:0 0 0 2px var(--green),0 0 7px rgba(57,211,83,.6);}
@@ -814,7 +831,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.14</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.15</div>
   </div>
 
 </div>
@@ -2705,11 +2722,11 @@ async function renderTodasReservas(data){
   const cal=document.getElementById('cal-semanal');
   const hoy=fmtDate(new Date());
 
-  // Rango: 7 pasados + 7 actuales (hoy+6) + 7 futuros = 21 días
+  // Rango: 3 pasados + 7 actuales (hoy+6) + 7 futuros = 17 días
   function buildRango(){
     const dias=[];
     const base=new Date(); base.setHours(12,0,0,0);
-    for(let i=7;i>=1;i--){const d=new Date(base);d.setDate(base.getDate()-i);dias.push({d,tipo:'pasado'});}
+    for(let i=3;i>=1;i--){const d=new Date(base);d.setDate(base.getDate()-i);dias.push({d,tipo:'pasado'});}
     for(let i=0;i<7;i++){const d=new Date(base);d.setDate(base.getDate()+i);dias.push({d,tipo:'actual'});}
     for(let i=7;i<14;i++){const d=new Date(base);d.setDate(base.getDate()+i);dias.push({d,tipo:'futuro'});}
     return dias;
@@ -2728,7 +2745,7 @@ async function renderTodasReservas(data){
 
   const horasConTurnos=[...new Set(enRango.map(r=>r.hora))].sort();
   if(!horasConTurnos.length){
-    cal.innerHTML='<div class="cal-empty">// SIN RESERVAS EN LOS 21 DÍAS VISIBLES</div>';return;
+    cal.innerHTML='<div class="cal-empty">// SIN RESERVAS EN LOS 17 DÍAS VISIBLES</div>';return;
   }
 
   const DIAS_SHORT=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
@@ -2743,7 +2760,7 @@ async function renderTodasReservas(data){
     const feriadoCorto=feriado.length>9?feriado.slice(0,8)+'…':feriado;
     let cls=isHoy?'today-col':(tipo==='pasado'?'col-pasado':(tipo==='futuro'?'col-futuro':''));
     // separador visual al inicio de cada semana
-    if(idx===7||idx===14) cls+=(cls?' ':'')+'col-sep';
+    if(idx===3||idx===10) cls+=(cls?' ':'')+'col-sep';
     const feriadoHtml=feriado?`<span class="cal-th-feriado" title="${feriado}">📅 ${feriadoCorto}</span>`:'';
     html+=`<th class="${cls}">${dow}<br>${num}${feriadoHtml}</th>`;
   });
@@ -2756,7 +2773,7 @@ async function renderTodasReservas(data){
       const ds=fmtDate(d), isHoy=ds===hoy;
       const reservas=enRango.filter(r=>r.fecha===ds&&r.hora===hora);
       let tdCls=isHoy?'today-col':(tipo==='pasado'?'col-pasado':(tipo==='futuro'?'col-futuro':''));
-      if(idx===7||idx===14) tdCls+=(tdCls?' ':'')+'col-sep';
+      if(idx===3||idx===10) tdCls+=(tdCls?' ':'')+'col-sep';
       html+=`<td class="${tdCls}">`;
       reservas.forEach(r=>{
         const nombre=r.nombre.split(' ')[0];
@@ -2838,7 +2855,7 @@ async function renderVistaSemana(){
   const fechas=dias.map(d=>fmtDate(d));
   const snap=await get(ref(db,'reservas'));
   const todas=rArr(snap.val());
-  const enSemana=todas.filter(r=>fechas.includes(r.fecha)&&r.estado!=='cancelado');
+  const enSemana=todas.filter(r=>fechas.includes(r.fecha));
 
   // Feriados
   const años=[...new Set(dias.map(d=>d.getFullYear()))];
@@ -2851,8 +2868,7 @@ async function renderVistaSemana(){
   const horas=[...horasSet].sort();
   const dispCompleta=await cargarDisponibilidadCompleta(fechas);
 
-  // Color por aeronave
-  const avColor={'LV-OAD':'oad','LV-ART':'art','LV-MPH':'mph'};
+  // v6.15: el color ahora es por ESTADO, igual que la vista LISTA (no por aeronave).
 
   let html='<table class="cal-table"><thead><tr><th></th>';
   dias.forEach(d=>{
@@ -2875,19 +2891,16 @@ async function renderVistaSemana(){
       const reservas=enSemana.filter(r=>r.fecha===ds&&r.hora===hora);
       html+=`<td class="${cls}">`;
       reservas.forEach(r=>{
-        const avKey=(r.avion||'LV-OAD').replace('LV-','').toLowerCase().replace('-','');
-        const colorCls=avColor[r.avion||'LV-OAD']||'oad';
-        const estadoCls=r.estado==='pendiente'?'pendiente':'';
         const nombre=r.nombre.split(' ')[0];
         const sinInst=r.sinInstructor&&r.estado==='pendiente';
         const aprobPil=(r.rol==='piloto')&&r.estado==='aprobado';
         const coincideDisp=r.estado==='pendiente'&&dispCompleta[ds]?.misHoras?.has(r.hora);
-        const clases=(sinInst?'sin-instructor':(colorCls+' '+estadoCls+(aprobPil?' pil-aprob':'')))+(coincideDisp?' mi-disp':'');
-        const tipSin=sinInst?' — SIN INSTRUCTOR':(aprobPil?' — turno de piloto':'');
+        const colorCls=(sinInst?'sin-instructor':(aprobPil?'aprobado-piloto':r.estado))+(coincideDisp?' mi-disp':'');
+        const tipSin=sinInst?' — SIN INSTRUCTOR (pendiente)':(aprobPil?' — turno de piloto':'');
         const tipDisp=coincideDisp?' — ✓ Coincide con tu disponibilidad':'';
         const tipQuien=r.estado==='pendiente'?tipQuienesPueden(dispCompleta,ds,r.hora):'';
         const badge=coincideDisp?'<span class="mi-disp-badge" title="Coincide con tu disponibilidad">★</span>':'';
-        html+=`<div class="cal-block ${clases}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'} — ${r.estado}${tipSin}${tipDisp}${tipQuien}${tooltipAccion(r)}">
+        html+=`<div class="cal-block ${colorCls}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'}${tipSin}${tipDisp}${tipQuien}${tooltipAccion(r)}">
           ${badge}<span style="font-size:9px;opacity:.8">${r.avion||'LV-OAD'}</span><br>${nombre}
         </div>`;
       });
