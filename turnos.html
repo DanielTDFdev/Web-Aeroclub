@@ -1,5 +1,16 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.13
+  FECHA   : 2026-06-29
+  CAMBIOS : Ayuda visual de disponibilidad propia en el calendario de turnos (vistas LISTA
+            y SEMANA). Cuando el instructor logueado tiene un turno PENDIENTE que cae en un
+            día/horario que coincide con su propia disponibilidad cargada (/disponibilidad/
+            {fecha}/{su_usuario}), el recuadro del turno ahora muestra un borde verde
+            brillante + una estrellita (★) y el tooltip aclara "Coincide con tu
+            disponibilidad". Solo aplica a instructores reales (esInstructorReal()), no a
+            admin/administrador (que no tienen disponibilidad propia). No cambia ninguna
+            lógica de aprobación, es puramente informativo — el instructor sigue teniendo
+            que abrir el modal y aprobar manualmente.
   VERSION : 6.12
   FECHA   : 2026-06-28
   CAMBIOS : Boton BORRAR (admin, v6.11) quedaba con el mismo tratamiento visual que
@@ -634,6 +645,10 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 .cal-block.sin-instructor{background:rgba(224,82,156,.18);border:1px dashed rgba(224,82,156,.6);color:var(--pink);}
 .cal-block.aprobado-piloto{background:rgba(77,159,255,.16);border:1px solid rgba(77,159,255,.5);color:var(--blue);}
 .cal-block.pil-aprob{box-shadow:inset 3px 0 0 var(--blue);}
+/* v6.13: ayuda visual — turno PENDIENTE que coincide con la disponibilidad propia del
+   instructor logueado. Se suma a cualquier color de estado/avión que ya tenga el bloque. */
+.cal-block.mi-disp{box-shadow:0 0 0 2px var(--green),0 0 7px rgba(57,211,83,.6);}
+.mi-disp-badge{color:var(--green);font-size:10px;margin-right:2px;vertical-align:middle;}
 .cal-empty{font-family:var(--font-mono);font-size:12px;color:var(--text3);padding:.75rem 0;letter-spacing:.05em;}
 /* columnas informativas semana anterior / siguiente */
 .cal-table th.col-pasado{color:var(--text3);opacity:.5;font-style:italic;}
@@ -787,7 +802,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.12</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.13</div>
   </div>
 
 </div>
@@ -2626,6 +2641,20 @@ function tooltipAccion(r){
   return '';
 }
 
+// v6.13: disponibilidad propia del instructor logueado, para resaltar en el calendario
+// los turnos pendientes que caen en un día/horario que él mismo cargó como disponible.
+// Solo aplica a instructores reales — admin/administrador no tienen disponibilidad propia.
+async function cargarMiDisponibilidad(fechas){
+  if(!esInstructorReal()) return {};
+  const instKey=session?.user;
+  const out={};
+  await Promise.all(fechas.map(async f=>{
+    const saved=await fbGet('disponibilidad/'+f+'/'+instKey);
+    out[f]=new Set(Array.isArray(saved)?saved:[]);
+  }));
+  return out;
+}
+
 async function renderTodasReservas(data){
   const todas=rArr(data);
   const nPend=todas.filter(r=>r.estado==='pendiente').length;
@@ -2663,6 +2692,7 @@ async function renderTodasReservas(data){
   const fechasRango=rango.map(({d})=>fmtDate(d));
   let enRango=todas.filter(r=>fechasRango.includes(r.fecha));
   if(calAvionFiltro!=='todos') enRango=enRango.filter(r=>(r.avion||'LV-OAD')===calAvionFiltro);
+  const misDisp=await cargarMiDisponibilidad(fechasRango);
 
   const horasConTurnos=[...new Set(enRango.map(r=>r.hora))].sort();
   if(!horasConTurnos.length){
@@ -2704,9 +2734,12 @@ async function renderTodasReservas(data){
         const estiloExtra=tipo==='pasado'?'text-decoration:line-through;':'';
         const sinInst=r.sinInstructor&&r.estado==='pendiente';
         const aprobPil=(r.rol==='piloto')&&r.estado==='aprobado';
-        const colorCls=sinInst?'sin-instructor':(aprobPil?'aprobado-piloto':r.estado);
+        const coincideDisp=r.estado==='pendiente'&&misDisp[r.fecha]?.has(r.hora);
+        const colorCls=(sinInst?'sin-instructor':(aprobPil?'aprobado-piloto':r.estado))+(coincideDisp?' mi-disp':'');
         const tipSin=sinInst?' — SIN INSTRUCTOR (pendiente)':(aprobPil?' — turno de piloto':'');
-        html+=`<div class="cal-block ${colorCls}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'}${tipSin}${tooltipAccion(r)}" style="${estiloExtra}">${avLabel}${rangoLabel}${nombre}</div>`;
+        const tipDisp=coincideDisp?' — ✓ Coincide con tu disponibilidad':'';
+        const badge=coincideDisp?'<span class="mi-disp-badge" title="Coincide con tu disponibilidad">★</span>':'';
+        html+=`<div class="cal-block ${colorCls}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'}${tipSin}${tipDisp}${tooltipAccion(r)}" style="${estiloExtra}">${badge}${avLabel}${rangoLabel}${nombre}</div>`;
       });
       html+='</td>';
     });
@@ -2783,6 +2816,7 @@ async function renderVistaSemana(){
   const horasSet=new Set(enSemana.map(r=>r.hora));
   if(!horasSet.size){grid.innerHTML='<div class="cal-empty">// SIN RESERVAS ESTA SEMANA</div>';return;}
   const horas=[...horasSet].sort();
+  const misDisp=await cargarMiDisponibilidad(fechas);
 
   // Color por aeronave
   const avColor={'LV-OAD':'oad','LV-ART':'art','LV-MPH':'mph'};
@@ -2814,10 +2848,13 @@ async function renderVistaSemana(){
         const nombre=r.nombre.split(' ')[0];
         const sinInst=r.sinInstructor&&r.estado==='pendiente';
         const aprobPil=(r.rol==='piloto')&&r.estado==='aprobado';
-        const clases=sinInst?'sin-instructor':(colorCls+' '+estadoCls+(aprobPil?' pil-aprob':''));
+        const coincideDisp=r.estado==='pendiente'&&misDisp[ds]?.has(r.hora);
+        const clases=(sinInst?'sin-instructor':(colorCls+' '+estadoCls+(aprobPil?' pil-aprob':'')))+(coincideDisp?' mi-disp':'');
         const tipSin=sinInst?' — SIN INSTRUCTOR':(aprobPil?' — turno de piloto':'');
-        html+=`<div class="cal-block ${clases}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'} — ${r.estado}${tipSin}${tooltipAccion(r)}">
-          <span style="font-size:9px;opacity:.8">${r.avion||'LV-OAD'}</span><br>${nombre}
+        const tipDisp=coincideDisp?' — ✓ Coincide con tu disponibilidad':'';
+        const badge=coincideDisp?'<span class="mi-disp-badge" title="Coincide con tu disponibilidad">★</span>':'';
+        html+=`<div class="cal-block ${clases}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'} — ${r.estado}${tipSin}${tipDisp}${tooltipAccion(r)}">
+          ${badge}<span style="font-size:9px;opacity:.8">${r.avion||'LV-OAD'}</span><br>${nombre}
         </div>`;
       });
       html+='</td>';
