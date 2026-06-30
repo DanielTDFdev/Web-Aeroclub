@@ -1,5 +1,18 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.28
+  FECHA   : 2026-06-30
+  CAMBIOS : Seguimiento de Turnos: un turno aprobado y luego cancelado generaba
+            DOS filas en la tabla (una "APROBÓ", otra "CANCELÓ"), las dos con el
+            mismo avión/hora/alumno — visualmente parecía un turno duplicado.
+            Ahora la tabla muestra UNA fila por turno con la última acción
+            relevante (CANCELÓ si fue cancelado, APROBÓ si no). Las estadísticas
+            de arriba (cantidad de aprobaciones / cancelaciones por instructor)
+            siguen contando AMBAS acciones por separado como antes — eso no
+            cambió, solo se separó el cálculo de stats del armado de filas.
+-->
+<!--
+  ARCHIVO : turnos.html
   VERSION : 6.27
   FECHA   : 2026-06-30
   CAMBIOS : FIX: en el modal de detalle, la fila "CANCELÓ" siempre mostraba
@@ -988,7 +1001,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.27</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.28</div>
   </div>
 
 </div>
@@ -3665,18 +3678,33 @@ window.renderSeguimiento=async function(){
   const data=await fbGet('reservas');
   const lista=rArr(data);
 
-  // Una reserva puede generar hasta dos filas: una por aprobación y otra por cancelación.
+  // Acciones posibles por turno (hasta 2: aprobación y cancelación) — se usan SOLO
+  // para las estadísticas de arriba (cuántas aprobaciones/cancelaciones hizo cada
+  // instructor), no para las filas de la tabla.
+  const acciones=[];
+  lista.forEach(r=>{
+    const apr=segAprobadorDe(r);
+    const can=segCanceladorDe(r);
+    if(apr && (!target||apr===target)) acciones.push({...r,_accion:'aprobado',_actor:apr});
+    if(can && (!target||can===target)) acciones.push({...r,_accion:'cancelado',_actor:can});
+  });
+
+  // Stats sobre el universo completo (antes de filtrar por período)
+  const nApr=acciones.filter(f=>f._accion==='aprobado').length;
+  const nCan=acciones.filter(f=>f._accion==='cancelado').length;
+
+  // Filas de la tabla: UNA por turno, mostrando solo la última acción relevante
+  // (cancelación si la hay, aprobación si no). FIX v6.28: antes se mostraban las
+  // dos filas (aprobó + canceló) para el mismo turno, lo que daba la impresión de
+  // un turno "duplicado" cuando en realidad eran dos eventos del mismo turno.
   const filas=[];
   lista.forEach(r=>{
     const apr=segAprobadorDe(r);
     const can=segCanceladorDe(r);
-    if(apr && (!target||apr===target)) filas.push({...r,_accion:'aprobado',_actor:apr});
     if(can && (!target||can===target)) filas.push({...r,_accion:'cancelado',_actor:can});
+    else if(apr && (!target||apr===target)) filas.push({...r,_accion:'aprobado',_actor:apr});
   });
 
-  // Stats sobre el universo completo (antes de filtrar por período)
-  const nApr=filas.filter(f=>f._accion==='aprobado').length;
-  const nCan=filas.filter(f=>f._accion==='cancelado').length;
   const nFut=filas.filter(f=>!turnoYaPaso(f)).length;
   const elA=document.getElementById('seg-stat-aprob');  if(elA)elA.textContent=nApr;
   const elC=document.getElementById('seg-stat-cancel'); if(elC)elC.textContent=nCan;
