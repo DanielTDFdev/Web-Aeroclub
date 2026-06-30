@@ -1,5 +1,19 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.20
+  FECHA   : 2026-06-30
+  CAMBIOS : Cancelacion por INSTRUCTOR: se invierte el orden de los dos pasos previos
+            a cancelar. Antes: confirm() generico ("¿Cancelar el turno de X?") y RECIEN
+            despues el modal con el select de motivo (v6.18) — quedaba al reves desde
+            que se agrego el select, porque comprometia a cancelar antes de elegir el
+            motivo. Ahora: primero el modal de motivo (con el select tabulado), y solo
+            si se eligio uno valido, el confirm() final, que ahora incluye el motivo
+            elegido en el texto ("¿Cancelar el turno de X? Motivo: Y") para que la
+            confirmacion sea informativa. Si se cierra el modal de motivo sin elegir uno
+            (boton CANCELAR, Escape), no llega a pedirse confirmacion: no pasa nada,
+            igual que antes. Aplica a los 2 botones CANCELAR TURNO del instructor
+            (modal de detalle y modal de Consultas). El flujo del ALUMNO no se toca:
+            ya tenia este orden correcto (motivo opcional primero, sin confirm previo).
   VERSION : 6.19
   FECHA   : 2026-06-30
   CAMBIOS : Nuevo campo 'cancelado_rol' en /reservas ('alumno' | 'instructor'), escrito
@@ -872,7 +886,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.19</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.20</div>
   </div>
 
 </div>
@@ -3179,7 +3193,7 @@ window.abrirModal=function(key){
       actions.appendChild(nota);
     }
     const bc=document.createElement('button');bc.className='danger';bc.textContent='CANCELAR TURNO';
-    bc.onclick=async()=>{if(!confirm('¿Cancelar el turno de '+r.nombre+'?'))return;const motivo=await pedirMotivoCancelacion(true);if(motivo===null)return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre,cancelado_por:session.nombre,cancelado_rol:'instructor'};upd.obs_cancelacion='Cancelado por el instructor — '+motivo;await fbUpdate('reservas/'+key,upd);await registrarAuditoria('cancelacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — '+motivo);if(!turnoYaPaso(rv))mailCancel(rv,motivo);}cerrarModal();};
+    bc.onclick=async()=>{const motivo=await pedirMotivoCancelacion(true);if(motivo===null)return;if(!confirm('¿Cancelar el turno de '+r.nombre+'? Motivo: '+motivo))return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre,cancelado_por:session.nombre,cancelado_rol:'instructor'};upd.obs_cancelacion='Cancelado por el instructor — '+motivo;await fbUpdate('reservas/'+key,upd);await registrarAuditoria('cancelacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — '+motivo);if(!turnoYaPaso(rv))mailCancel(rv,motivo);}cerrarModal();};
     actions.appendChild(bc);
   } else if(r.estado==='aprobado'){
     const aprobador=r.aprobado_por||r.instructor||'';
@@ -3191,7 +3205,7 @@ window.abrirModal=function(key){
       bl.style.cssText='background:rgba(240,165,0,.1);color:var(--amber);border-color:var(--amber)';
       bl.onclick=async()=>{if(!confirm('¿Liberar este turno?\n\nVolverá a estado PENDIENTE y quedará disponible para que otro instructor lo tome. El alumno conserva su reserva y recibirá un aviso por mail.'))return;const rv=await fbGet('reservas/'+key);if(rv){await fbUpdate('reservas/'+key,{estado:'pendiente',instructor:null,aprobado_por:null,recordatorio_inst_enviado:null,recordatorio_inst_ts:null});await registrarAuditoria('liberacion_turno',session.rol||'instructor','exito',(session.nombre||session.user)+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — liberado por '+(rv.aprobado_por||rv.instructor||'?'));mailLiberacion(rv);}cerrarModal();};
       const bc=document.createElement('button');bc.className='danger';bc.textContent='CANCELAR TURNO';
-      bc.onclick=async()=>{if(!confirm('¿Cancelar el turno de '+r.nombre+'?'))return;const motivo=await pedirMotivoCancelacion(true);if(motivo===null)return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre,cancelado_por:session.nombre,cancelado_rol:'instructor'};upd.obs_cancelacion='Cancelado por el instructor — '+motivo;await fbUpdate('reservas/'+key,upd);await registrarAuditoria('cancelacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — '+motivo);if(!turnoYaPaso(rv))mailCancel(rv,motivo);}cerrarModal();};
+      bc.onclick=async()=>{const motivo=await pedirMotivoCancelacion(true);if(motivo===null)return;if(!confirm('¿Cancelar el turno de '+r.nombre+'? Motivo: '+motivo))return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre,cancelado_por:session.nombre,cancelado_rol:'instructor'};upd.obs_cancelacion='Cancelado por el instructor — '+motivo;await fbUpdate('reservas/'+key,upd);await registrarAuditoria('cancelacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — '+motivo);if(!turnoYaPaso(rv))mailCancel(rv,motivo);}cerrarModal();};
       if(puedeLiberar&&!turnoYaPaso(r)) actions.appendChild(bl);
       actions.appendChild(bc);
     } else {
