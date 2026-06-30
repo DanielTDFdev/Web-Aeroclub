@@ -1,5 +1,18 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.23
+  FECHA   : 2026-06-30
+  CAMBIOS : Paridad mobile para la info que solo vivia en el atributo title= del calendario
+            (★ "Coincide con tu disponibilidad" y "Puede aprobar: X, Y" de v6.13/v6.14):
+            en touch no existe hover, asi que ese tooltip era invisible desde el celular.
+            Como tocar cualquier bloque del calendario ya abre el modal de detalle
+            (abrirModal), se completo ESE modal con una fila nueva "DISPONIB." (oculta
+            salvo en pendientes de LV-OAD) que muestra exactamente la misma info que el
+            tooltip de escritorio. Asi en mobile: tap en el bloque -> modal completo con
+            toda la data; en desktop sigue existiendo el tooltip rapido al pasar el mouse,
+            sin duplicar UI nueva. El resto de lo que ya mostraba el title= (quien aprobo/
+            cancelo, "sin instructor") YA estaba cubierto en el modal desde antes
+            (md-inst-row, badge "sin instructor" junto al estado).
   VERSION : 6.22
   FECHA   : 2026-06-30
   CAMBIOS : "Ocultar cancelados" (v6.21) pasa de checkbox simple a un toggle/slider
@@ -919,7 +932,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.22</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.23</div>
   </div>
 
 </div>
@@ -1200,6 +1213,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <div class="modal-row"><span class="modal-lbl">EMAIL</span><span class="modal-val" id="md-email"></span></div>
       <div class="modal-row" id="md-obs-row"><span class="modal-lbl">OBS</span><span class="modal-val" id="md-obs"></span></div>
       <div class="modal-row"><span class="modal-lbl">ESTADO</span><span class="modal-val" id="md-estado"></span></div>
+      <div class="modal-row" id="md-disp-row" style="display:none"><span class="modal-lbl">DISPONIB.</span><span class="modal-val" id="md-disp" style="font-size:11px"></span></div>
       <div class="modal-row"><span class="modal-lbl">SOLICITADO</span><span class="modal-val" id="md-ts" style="color:var(--text3);font-size:11px"></span></div>
       <div class="modal-row" id="md-inst-row"><span class="modal-lbl" id="md-inst-lbl">INSTRUCTOR</span><span class="modal-val" id="md-inst"></span></div>
       <div id="md-obspost-row" style="display:none;flex-direction:column;gap:.45rem;margin:.6rem 0;padding-top:.6rem;border-top:1px solid var(--border)">
@@ -3187,6 +3201,34 @@ window.abrirModal=function(key){
   const _sinInstBadge=(r.sinInstructor&&r.estado==='pendiente')
     ?` <span class="badge" style="background:rgba(224,82,156,.14);color:var(--pink);border:1px solid rgba(224,82,156,.45)">sin instructor</span>`:'';
   document.getElementById('md-estado').innerHTML=`<span class="badge badge-${r.estado}">${r.estado}</span>`+_sinInstBadge;
+  // Fila "DISPONIB." (v6.23): mismo dato que el ★ y el "Puede aprobar: X" del tooltip del
+  // calendario, pero visible también en mobile (donde no existe hover/title). Solo para
+  // pendientes de LV-OAD. Se carga async porque pide /disponibilidad/{fecha} aparte.
+  const dispRow=document.getElementById('md-disp-row'), dispVal=document.getElementById('md-disp');
+  dispRow.style.display='none';
+  if(r.estado==='pendiente'&&(r.avion||'LV-OAD')==='LV-OAD'){
+    (async()=>{
+      let dispDia=null,instData=null;
+      try{dispDia=await fbGet('disponibilidad/'+r.fecha);}catch(_){}
+      try{instData=await fbGet('instructores');}catch(_){}
+      const propioSlots=session?.user&&Array.isArray(dispDia?.[session.user])?dispDia[session.user]:[];
+      const coincideConMiDisp=esInstructorReal()&&propioSlots.includes(r.hora);
+      const nombres=[];
+      if(dispDia){
+        Object.entries(dispDia).forEach(([instKey,arr])=>{
+          if(!Array.isArray(arr)||!arr.includes(r.hora))return;
+          const instObj=instData?Object.values(instData).find(i=>(i.user||'')===instKey):null;
+          if(instObj?.vacaciones===true)return;
+          nombres.push((instObj?.nombre||instKey).split(' ')[0]);
+        });
+      }
+      const partes=[];
+      if(coincideConMiDisp) partes.push('★ Coincide con tu disponibilidad');
+      partes.push(nombres.length?'Puede aprobar: '+[...new Set(nombres)].join(', '):'Nadie con disponibilidad cargada para ese horario');
+      dispVal.textContent=partes.join(' — ');
+      dispRow.style.display='flex';
+    })();
+  }
   if(r.ts){
     const dt=new Date(r.ts);
     const DIAS=['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
