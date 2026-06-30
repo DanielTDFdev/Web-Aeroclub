@@ -1,5 +1,18 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.25
+  FECHA   : 2026-06-30
+  CAMBIOS : Auditoría FPL: agregado botón "✕" por fila (mismo patrón visual y de
+            confirm() que ya existe en la auditoría general vía borrarAuditoria())
+            para poder limpiar registros de prueba sin tener que borrarlos a mano
+            desde Firebase. Nueva función borrarAuditoriaFpl(key) hace fbRemove
+            sobre 'auditoria/'+key y recarga la tabla. Ya estaba doblemente
+            protegido por admin (tab solo visible para admin + chequeo
+            session.user==='admin' al tope de cargarAuditoriaFpl()), así que no
+            se agrega chequeo adicional, solo se reusa la misma gate existente.
+-->
+<!--
+  ARCHIVO : turnos.html
   VERSION : 6.24
   FECHA   : 2026-06-30
   CAMBIOS : "Mis Turnos" (vista alumno/piloto) no mostraba qué instructor habia
@@ -942,7 +955,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.24</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.25</div>
   </div>
 
 </div>
@@ -4300,14 +4313,23 @@ async function cargarAuditoriaFpl(){
   const td=v=>'<td style="padding:7px 8px;color:var(--text2);white-space:nowrap;border-bottom:1px solid var(--border)">'+esc(v)+'</td>';
   let h='<table style="width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:12px;min-width:620px">'+
     '<thead><tr style="border-bottom:1px solid var(--border2)">'+
-    ['Registrado','Usuario','Fecha','Origen','Destino','Hora','T. vuelo','Matrícula','Comandante'].map(th).join('')+
+    ['Registrado','Usuario','Fecha','Origen','Destino','Hora','T. vuelo','Matrícula','Comandante',''].map(th).join('')+
     '</tr></thead><tbody>';
   filas.forEach(r=>{const f=r.fpl||{};
     h+='<tr>'+td(fmtTs(r.ts))+td(r.usuario||'—')+td(fFecha(f.fecha))+td(f.origen)+td(f.destino)+
-       td(f.hora)+td(f.tiempo_vuelo)+td(f.matricula)+td(f.comandante)+'</tr>';});
+       td(f.hora)+td(f.tiempo_vuelo)+td(f.matricula)+td(f.comandante)+
+       '<td style="padding:7px 8px;text-align:center;border-bottom:1px solid var(--border)"><button onclick="borrarAuditoriaFpl(\''+r.key+'\')" title="Borrar esta entrada" style="padding:3px 8px;font-size:12px;background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);color:var(--red);border-radius:var(--radius);cursor:pointer">✕</button></td>'+
+       '</tr>';});
   h+='</tbody></table>';
   el.innerHTML=h;
 }
+
+window.borrarAuditoriaFpl=async function(key){
+  if(session?.user!=='admin')return;
+  if(!confirm('¿Borrar esta entrada de auditoría FPL? Es permanente.'))return;
+  await fbRemove('auditoria/'+key);
+  cargarAuditoriaFpl();
+};
 
 window.filtrarAuditoria=function(){
   const busq=(document.getElementById('audit-search')?.value||'').toLowerCase();
