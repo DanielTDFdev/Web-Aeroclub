@@ -1,5 +1,20 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.26
+  FECHA   : 2026-06-30
+  CAMBIOS : FIX: el botón "ACTUALIZAR" del banner de versión vieja (v6.03) hacía
+            location.reload() a secas, que NO bypassea el caché de disco del
+            navegador (a diferencia del fetch con cache:'no-store' que SÍ usa la
+            detección, línea ~5168, por eso la detección siempre funcionaba pero
+            la recarga no). Resultado: el usuario tenía que apretar ACTUALIZAR
+            varias veces hasta que el caché local venciera solo. Ahora navega a
+            location.pathname+'?_v='+Date.now() — el query string distinto fuerza
+            al navegador a tratarlo como un recurso nuevo y pedirlo de la red sí
+            o sí. Confirmado que ningún lado del código lee location.search, así
+            que el cache-buster no rompe nada.
+-->
+<!--
+  ARCHIVO : turnos.html
   VERSION : 6.25
   FECHA   : 2026-06-30
   CAMBIOS : Auditoría FPL: agregado botón "✕" por fila (mismo patrón visual y de
@@ -955,7 +970,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.25</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.26</div>
   </div>
 
 </div>
@@ -5176,7 +5191,7 @@ async function chequearVersionNueva(){
     }
   }catch(e){console.warn('No se pudo chequear si hay una version nueva:',e);}
 }
-document.getElementById('btn-recargar-version')?.addEventListener('click',()=>location.reload());
+document.getElementById('btn-recargar-version')?.addEventListener('click',()=>{location.href=location.pathname+'?_v='+Date.now();});
 setInterval(chequearVersionNueva,VERSION_POLL_MS);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')chequearVersionNueva();});
 
