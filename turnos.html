@@ -1,5 +1,17 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.31
+  FECHA   : 2026-06-30
+  CAMBIOS : Modal de detalle del turno: cuando estado==='cancelado', además de la
+            fila CANCELÓ (ya corregida en v6.27) ahora se agrega una fila APROBÓ
+            cuando hay un aprobador identificable (segAprobadorDe(r), mismo
+            helper que usa Seguimiento de Turnos) distinto de quien canceló. Si
+            la misma persona aprobó y canceló, o no hay aprobador registrado
+            (turnos viejos sin aprobado_por), la fila APROBÓ no se muestra — no
+            se inventa un dato que no está confirmado en el registro.
+-->
+<!--
+  ARCHIVO : turnos.html
   VERSION : 6.30
   FECHA   : 2026-06-30
   CAMBIOS : Seguimiento de Turnos (fix sobre v6.29): la nota "· aprobado por vos"
@@ -1037,7 +1049,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.30</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.31</div>
   </div>
 
 </div>
@@ -1320,6 +1332,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <div class="modal-row"><span class="modal-lbl">ESTADO</span><span class="modal-val" id="md-estado"></span></div>
       <div class="modal-row" id="md-disp-row" style="display:none"><span class="modal-lbl">DISPONIB.</span><span class="modal-val" id="md-disp" style="font-size:11px"></span></div>
       <div class="modal-row"><span class="modal-lbl">SOLICITADO</span><span class="modal-val" id="md-ts" style="color:var(--text3);font-size:11px"></span></div>
+      <div class="modal-row" id="md-aprobo-row" style="display:none"><span class="modal-lbl">APROBÓ</span><span class="modal-val" id="md-aprobo"></span></div>
       <div class="modal-row" id="md-inst-row"><span class="modal-lbl" id="md-inst-lbl">INSTRUCTOR</span><span class="modal-val" id="md-inst"></span></div>
       <div id="md-obspost-row" style="display:none;flex-direction:column;gap:.45rem;margin:.6rem 0;padding-top:.6rem;border-top:1px solid var(--border)">
         <span class="modal-lbl" style="color:var(--amber)">OBSERVACIÓN POST-VUELO</span>
@@ -3346,6 +3359,7 @@ window.abrirModal=function(key){
     document.getElementById('md-ts').textContent='—';
   }
   const instRow=document.getElementById('md-inst-row');
+  const aprRow=document.getElementById('md-aprobo-row');
   if(r.estado==='cancelado'){
     // FIX v6.27: antes esta fila siempre mostraba r.instructor, que es quien APROBÓ
     // el turno originalmente — no quien lo canceló. Si lo cancelaba el propio alumno
@@ -3360,12 +3374,23 @@ window.abrirModal=function(key){
       document.getElementById('md-inst').textContent=quienCancelo;
       instRow.style.display='flex';
     } else { instRow.style.display='none'; }
+    // FIX v6.31: el modal mostraba SOLO quién canceló, perdiendo quién había aprobado
+    // el turno originalmente (mismo gap que ya se había corregido en Seguimiento de
+    // Turnos v6.30). Usa el mismo helper segAprobadorDe() — solo identifica aprobador
+    // en registros que tienen aprobado_por explícito; turnos viejos sin ese campo no
+    // van a mostrar esta fila (no hay dato confiable para inventar uno).
+    const quienAprobo=segAprobadorDe(r);
+    if(quienAprobo && quienAprobo!==quienCancelo){
+      document.getElementById('md-aprobo').textContent=quienAprobo;
+      aprRow.style.display='flex';
+    } else { aprRow.style.display='none'; }
   } else if(r.instructor){
+    aprRow.style.display='none';
     const lbl={aprobado:'APROBÓ',pendiente:'INSTRUCTOR',vencido:'VENCIÓ'}[r.estado]||'INSTRUCTOR';
     document.getElementById('md-inst-lbl').textContent=lbl;
     document.getElementById('md-inst').textContent=r.instructor;
     instRow.style.display='flex';
-  } else {instRow.style.display='none';}
+  } else {instRow.style.display='none';aprRow.style.display='none';}
   const actions=document.getElementById('md-actions');
   actions.innerHTML='';
   if(r.estado==='pendiente'){
