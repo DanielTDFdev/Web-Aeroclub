@@ -1,5 +1,17 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.33
+  FECHA   : 2026-06-30
+  CAMBIOS : Modal de detalle del turno: ícono 👍 (fondo verde tenue) junto al
+            nombre en la fila APROBÓ, e ícono 👎 (fondo rojo tenue) junto al
+            nombre en la fila CANCELÓ — mismo lenguaje visual de color que ya
+            usa el resto de la app (verde/rojo rgba, igual que los badges
+            ÉXITO/FALLO de auditoría). El ícono rojo solo se muestra cuando la
+            fila dice efectivamente "CANCELÓ" — se oculta en las otras
+            variantes de esa misma fila (APROBÓ/INSTRUCTOR/VENCIÓ).
+-->
+<!--
+  ARCHIVO : turnos.html
   VERSION : 6.32
   FECHA   : 2026-06-30
   CAMBIOS : Modal de detalle del turno: la fila APROBÓ (agregada en v6.31) se
@@ -931,6 +943,9 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 .modal-row{display:flex;gap:8px;margin-bottom:.5rem;font-family:var(--font-mono);font-size:12px;}
 .modal-lbl{color:var(--text3);min-width:80px;letter-spacing:.08em;}
 .modal-val{color:var(--text);}
+.md-ico{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;margin-left:6px;font-size:10px;vertical-align:middle}
+.md-ico-ok{background:rgba(57,211,83,.15)}
+.md-ico-cancel{background:rgba(248,81,73,.15)}
 .modal-actions{display:flex;gap:8px;margin-top:1rem;flex-wrap:wrap;}
 
 /* selector avión en cal instructor */
@@ -1061,7 +1076,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.32</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.33</div>
   </div>
 
 </div>
@@ -1344,8 +1359,8 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <div class="modal-row"><span class="modal-lbl">ESTADO</span><span class="modal-val" id="md-estado"></span></div>
       <div class="modal-row" id="md-disp-row" style="display:none"><span class="modal-lbl">DISPONIB.</span><span class="modal-val" id="md-disp" style="font-size:11px"></span></div>
       <div class="modal-row"><span class="modal-lbl">SOLICITADO</span><span class="modal-val" id="md-ts" style="color:var(--text3);font-size:11px"></span></div>
-      <div class="modal-row" id="md-aprobo-row" style="display:none"><span class="modal-lbl">APROBÓ</span><span class="modal-val" id="md-aprobo"></span></div>
-      <div class="modal-row" id="md-inst-row"><span class="modal-lbl" id="md-inst-lbl">INSTRUCTOR</span><span class="modal-val" id="md-inst"></span></div>
+      <div class="modal-row" id="md-aprobo-row" style="display:none"><span class="modal-lbl">APROBÓ</span><span class="modal-val"><span id="md-aprobo"></span><span class="md-ico md-ico-ok">👍</span></span></div>
+      <div class="modal-row" id="md-inst-row"><span class="modal-lbl" id="md-inst-lbl">INSTRUCTOR</span><span class="modal-val"><span id="md-inst"></span><span id="md-inst-ico" class="md-ico md-ico-cancel" style="display:none">👎</span></span></div>
       <div id="md-obspost-row" style="display:none;flex-direction:column;gap:.45rem;margin:.6rem 0;padding-top:.6rem;border-top:1px solid var(--border)">
         <span class="modal-lbl" style="color:var(--amber)">OBSERVACIÓN POST-VUELO</span>
         <textarea id="md-obspost" rows="3" placeholder="Ej.: no se voló por meteorología…" style="width:100%;box-sizing:border-box;font-family:var(--font-mono);font-size:12px;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);padding:8px;resize:vertical"></textarea>
@@ -3381,11 +3396,13 @@ window.abrirModal=function(key){
     // registros viejos que ya tenían cancelado_rol pero no cancelado_por, usa r.nombre
     // (el propio alumno) como fallback cuando cancelado_rol==='alumno'.
     const quienCancelo=r.cancelado_por||(r.cancelado_rol==='alumno'?r.nombre:r.instructor);
+    const instIco=document.getElementById('md-inst-ico');
     if(quienCancelo){
       document.getElementById('md-inst-lbl').textContent='CANCELÓ';
       document.getElementById('md-inst').textContent=quienCancelo;
       instRow.style.display='flex';
-    } else { instRow.style.display='none'; }
+      if(instIco)instIco.style.display='inline-flex';
+    } else { instRow.style.display='none'; if(instIco)instIco.style.display='none'; }
     // FIX v6.32: v6.31 ocultaba la fila APROBÓ cuando coincidía con quien canceló,
     // asumiendo que era redundante. Pedido explícito de Daniel: mostrar siempre las
     // dos puntas (Aprobó / Canceló) aunque sea la misma persona — más claro para
@@ -3399,11 +3416,17 @@ window.abrirModal=function(key){
     } else { aprRow.style.display='none'; }
   } else if(r.instructor){
     aprRow.style.display='none';
+    const instIco=document.getElementById('md-inst-ico');
+    if(instIco)instIco.style.display='none';
     const lbl={aprobado:'APROBÓ',pendiente:'INSTRUCTOR',vencido:'VENCIÓ'}[r.estado]||'INSTRUCTOR';
     document.getElementById('md-inst-lbl').textContent=lbl;
     document.getElementById('md-inst').textContent=r.instructor;
     instRow.style.display='flex';
-  } else {instRow.style.display='none';aprRow.style.display='none';}
+  } else {
+    instRow.style.display='none';aprRow.style.display='none';
+    const instIco=document.getElementById('md-inst-ico');
+    if(instIco)instIco.style.display='none';
+  }
   const actions=document.getElementById('md-actions');
   actions.innerHTML='';
   if(r.estado==='pendiente'){
