@@ -1,5 +1,23 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.27
+  FECHA   : 2026-06-30
+  CAMBIOS : FIX: en el modal de detalle, la fila "CANCELÓ" siempre mostraba
+            r.instructor — que es quien APROBÓ el turno, no quien lo canceló.
+            Cuando el propio alumno cancelaba su turno (cancelarTurnoAlumno), ese
+            campo quedaba intacto desde la aprobación previa, así que el modal le
+            atribuía la cancelación al instructor en vez de al alumno (caso real
+            reportado: "Cancelación: Cancelado por el usuario" en OBS, pero
+            "Canceló: Daniel Camargo" abajo). Dos cambios:
+            1) cancelarTurnoAlumno ahora setea cancelado_por:session.nombre
+               explícitamente (antes solo guardaba cancelado_rol:'alumno').
+            2) El modal y tooltipAccion() ahora priorizan cancelado_por; si no
+               existe pero cancelado_rol==='alumno' (registros viejos previos a
+               este fix), usan r.nombre como fallback — corrige retroactivamente
+               turnos ya cancelados sin tener que tocar datos en Firebase.
+-->
+<!--
+  ARCHIVO : turnos.html
   VERSION : 6.26
   FECHA   : 2026-06-30
   CAMBIOS : FIX: el botón "ACTUALIZAR" del banner de versión vieja (v6.03) hacía
@@ -970,7 +988,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.26</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.27</div>
   </div>
 
 </div>
@@ -2820,7 +2838,7 @@ window.cancelarTurnoAlumno=async function(key){
   const motivo=await pedirMotivoCancelacion(false);
   try{
     const rv=await fbGet('reservas/'+key);
-    const update={estado:'cancelado',cancelado_rol:'alumno'};
+    const update={estado:'cancelado',cancelado_rol:'alumno',cancelado_por:session.nombre};
     update.obs_cancelacion=motivo?'Cancelado por el usuario — '+motivo:'Cancelado por el usuario';
     await fbUpdate('reservas/'+key,update);
     if(rv){
@@ -2861,6 +2879,7 @@ window.irAPendientes=function(){showInstTab('reservas');setCalVista('lista');con
 // Sufijo del tooltip del calendario: quién aprobó o canceló el turno (si corresponde).
 function tooltipAccion(r){
   if(r.cancelado_por) return ' — Canceló: '+r.cancelado_por;
+  if(r.cancelado_rol==='alumno'&&r.nombre) return ' — Canceló: '+r.nombre;
   if(r.aprobado_por) return ' — Aprobó: '+r.aprobado_por;
   return '';
 }
@@ -3278,8 +3297,22 @@ window.abrirModal=function(key){
     document.getElementById('md-ts').textContent='—';
   }
   const instRow=document.getElementById('md-inst-row');
-  if(r.instructor){
-    const lbl={aprobado:'APROBÓ',cancelado:'CANCELÓ',pendiente:'INSTRUCTOR',vencido:'VENCIÓ'}[r.estado]||'INSTRUCTOR';
+  if(r.estado==='cancelado'){
+    // FIX v6.27: antes esta fila siempre mostraba r.instructor, que es quien APROBÓ
+    // el turno originalmente — no quien lo canceló. Si lo cancelaba el propio alumno
+    // (cancelarTurnoAlumno), instructor quedaba intacto y el modal atribuía la
+    // cancelación al instructor que había aprobado, dando una info falsa. Ahora prioriza
+    // cancelado_por (seteado explícitamente desde v6.27 en cancelarTurnoAlumno) y, para
+    // registros viejos que ya tenían cancelado_rol pero no cancelado_por, usa r.nombre
+    // (el propio alumno) como fallback cuando cancelado_rol==='alumno'.
+    const quienCancelo=r.cancelado_por||(r.cancelado_rol==='alumno'?r.nombre:r.instructor);
+    if(quienCancelo){
+      document.getElementById('md-inst-lbl').textContent='CANCELÓ';
+      document.getElementById('md-inst').textContent=quienCancelo;
+      instRow.style.display='flex';
+    } else { instRow.style.display='none'; }
+  } else if(r.instructor){
+    const lbl={aprobado:'APROBÓ',pendiente:'INSTRUCTOR',vencido:'VENCIÓ'}[r.estado]||'INSTRUCTOR';
     document.getElementById('md-inst-lbl').textContent=lbl;
     document.getElementById('md-inst').textContent=r.instructor;
     instRow.style.display='flex';
