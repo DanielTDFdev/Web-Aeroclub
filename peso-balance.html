@@ -2,6 +2,15 @@
 <!--
 ==================================================================================
   PESO Y BALANCE — Aeroclub Río Grande
+  v1.3 ·  Disclaimer general ("HERRAMIENTA DE PLANIFICACIÓN — no reemplaza el
+          cálculo oficial") ahora se muestra SIEMPRE, para las 3 aeronaves,
+          incluido LV-OAD. Antes solo aparecía el aviso de "PESO VACÍO SIN
+          VERIFICAR" cuando verificado:false (LV-ART/LV-MPH) — LV-OAD, al tener
+          datos reales de planilla, no mostraba ningún aviso y daba la impresión
+          de ser el cálculo "oficial" de la app. Los dos avisos son
+          independientes y pueden convivir: el general (ámbar, .estado-box.info)
+          siempre va primero, el de datos sin verificar (rojo, .estado-box.bad)
+          se agrega debajo solo si corresponde.
   v1.2 ·  LV-ART y LV-MPH agregados con datos reales del POH/TCDS (antes
           "próximamente"). Esquema generalizado de "estaciones" de carga
           (lista de filas/compartimentos con su propio brazo, en vez de los
@@ -101,6 +110,7 @@ h3{font-family:var(--font-mono);font-size:12px;color:var(--amber);letter-spacing
 .estado-box{font-family:var(--font-mono);font-size:13px;letter-spacing:.05em;padding:12px 14px;border-radius:var(--radius);border:1px solid var(--border);margin-bottom:14px;font-weight:700}
 .estado-box.ok{color:var(--green);border-color:var(--green);background:rgba(57,211,83,.08)}
 .estado-box.bad{color:var(--red);border-color:var(--red);background:rgba(248,81,73,.08)}
+.estado-box.info{color:var(--amber);border-color:var(--amber);background:rgba(240,165,0,.08)}
 .kv{display:flex;justify-content:space-between;align-items:baseline;font-family:var(--font-mono);font-size:13px;padding:6px 0;border-bottom:1px dashed var(--border)}
 .kv:last-child{border-bottom:none}
 .kv .k{color:var(--text2)}
@@ -134,7 +144,7 @@ h3{font-family:var(--font-mono);font-size:12px;color:var(--amber);letter-spacing
         <span class="theme-toggle-icon">☀️</span>
       </div>
       <span class="who" id="who-label"></span>
-      <span class="ver">v1.2</span>
+      <span class="ver">v1.3</span>
       <a class="back" href="turnos.html">← TURNERO</a>
     </div>
   </header>
@@ -345,8 +355,15 @@ function renderCalcArea(){
       avión puntual. No usar para vuelo real hasta confirmar contra la planilla de
       pesaje actual de la aeronave.
     </div>`:'';
+  const avisoGeneral=`<div class="estado-box info" style="margin-bottom:14px">
+      ℹ HERRAMIENTA DE PLANIFICACIÓN — este cálculo es una ayuda para estimar peso y
+      balance antes del vuelo, NO reemplaza el cálculo oficial. Verificá siempre contra
+      la planilla de pesaje vigente de la aeronave y la documentación oficial antes de
+      cada vuelo.
+    </div>`;
   area.innerHTML=`<div class="card">
     <h2>// CARGA — ${av.nombre}</h2>
+    ${avisoGeneral}
     ${avisoNoVerificado}
     <div class="wb-grid">
       <div>
