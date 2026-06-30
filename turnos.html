@@ -1,5 +1,16 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.21
+  FECHA   : 2026-06-30
+  CAMBIOS : Toggle "Ocultar cancelados" en la pantalla Reservas (instructor/admin), al
+            lado de los botones LISTA/SEMANA. Filtra los turnos estado:'cancelado' en
+            AMBAS vistas del calendario (renderTodasReservas y renderVistaSemana) con
+            un unico checkbox compartido. Estado persistido en localStorage
+            ('lvoad-ocultar-cancelados'), igual patron que el tema — se mantiene activado
+            entre sesiones en el mismo navegador. No afecta los contadores de arriba
+            (Pendientes/Aprobadas/Total) ni ninguna otra pantalla (Seguimiento, Consultas,
+            Mis Turnos del alumno siguen mostrando todo). Pedido: la vista LISTA con
+            muchos cancelados tachados de fondo distraía la lectura.
   VERSION : 6.20
   FECHA   : 2026-06-30
   CAMBIOS : Cancelacion por INSTRUCTOR: se invierte el orden de los dos pasos previos
@@ -886,7 +897,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.20</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.21</div>
   </div>
 
 </div>
@@ -1087,9 +1098,15 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <div class="stat"><div class="num" id="stat-total">0</div><div class="lbl">Total</div></div>
     </div>
     <!-- selector avión calendario instructor -->
-    <div class="cal-vista-tabs">
-      <button class="cal-vista-tab active" id="vista-tab-lista" onclick="setCalVista('lista')">LISTA</button>
-      <button class="cal-vista-tab" id="vista-tab-semana" onclick="setCalVista('semana')">SEMANA</button>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:.85rem">
+      <div class="cal-vista-tabs" style="margin-bottom:0">
+        <button class="cal-vista-tab active" id="vista-tab-lista" onclick="setCalVista('lista')">LISTA</button>
+        <button class="cal-vista-tab" id="vista-tab-semana" onclick="setCalVista('semana')">SEMANA</button>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:11px;color:var(--text2);letter-spacing:.06em;cursor:pointer;user-select:none;white-space:nowrap">
+        <input type="checkbox" id="chk-ocultar-cancelados" onchange="toggleOcultarCancelados()" style="cursor:pointer;width:14px;height:14px;accent-color:var(--cyan)">
+        Ocultar cancelados
+      </label>
     </div>
     <div id="vista-lista">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:.85rem">
@@ -1821,6 +1838,7 @@ let unsubReservas=null;
 let activeDow=1;
 let activeConfigAvion='LV-OAD';  // avión activo en cfg horarios/días
 let calAvionFiltro='todos';       // filtro en calendario instructor
+let ocultarCancelados=localStorage.getItem('lvoad-ocultar-cancelados')==='1'; // toggle calendario (LISTA+SEMANA), persiste por navegador
 let calMesActual=new Date(); calMesActual.setDate(1);
 
 // ── HELPERS ────────────────────────────────────────────────────
@@ -1888,6 +1906,14 @@ function diasBloqueadosParaAvion(avionKey){
 window.toggleTheme=function(){
   const isLight=document.documentElement.classList.toggle('light');
   localStorage.setItem('lvoad-theme',isLight?'light':'dark');
+};
+
+window.toggleOcultarCancelados=function(){
+  const chk=document.getElementById('chk-ocultar-cancelados');
+  ocultarCancelados=chk.checked;
+  localStorage.setItem('lvoad-ocultar-cancelados',ocultarCancelados?'1':'0');
+  if(calVista==='semana'){ renderVistaSemana(); }
+  else { get(ref(db,'reservas')).then(s=>renderTodasReservas(s.val())); }
 };
 
 
@@ -2798,6 +2824,8 @@ function tipQuienesPueden(disp,fecha,hora){
 }
 
 async function renderTodasReservas(data){
+  const chkOc=document.getElementById('chk-ocultar-cancelados');
+  if(chkOc) chkOc.checked=ocultarCancelados;
   const todas=rArr(data);
   const nPend=todas.filter(r=>r.estado==='pendiente').length;
   document.getElementById('stat-pending').textContent=nPend;
@@ -2834,6 +2862,7 @@ async function renderTodasReservas(data){
   const fechasRango=rango.map(({d})=>fmtDate(d));
   let enRango=todas.filter(r=>fechasRango.includes(r.fecha));
   if(calAvionFiltro!=='todos') enRango=enRango.filter(r=>(r.avion||'LV-OAD')===calAvionFiltro);
+  if(ocultarCancelados) enRango=enRango.filter(r=>r.estado!=='cancelado');
   const dispCompleta=await cargarDisponibilidadCompleta(fechasRango);
 
   const horasConTurnos=[...new Set(enRango.map(r=>r.hora))].sort();
@@ -2948,7 +2977,8 @@ async function renderVistaSemana(){
   const fechas=dias.map(d=>fmtDate(d));
   const snap=await get(ref(db,'reservas'));
   const todas=rArr(snap.val());
-  const enSemana=todas.filter(r=>fechas.includes(r.fecha));
+  let enSemana=todas.filter(r=>fechas.includes(r.fecha));
+  if(ocultarCancelados) enSemana=enSemana.filter(r=>r.estado!=='cancelado');
 
   // Feriados
   const años=[...new Set(dias.map(d=>d.getFullYear()))];
