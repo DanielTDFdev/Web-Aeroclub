@@ -1,5 +1,15 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.24
+  FECHA   : 2026-06-30
+  CAMBIOS : "Mis Turnos" (vista alumno/piloto) no mostraba qué instructor habia
+            aprobado el turno — solo fecha/avion/obs/badge de estado. Se agrega
+            una linea "👤 Instructor: {nombre}" cuando estado==='aprobado',
+            usando aprobado_por (o instructor como fallback), igual fuente que
+            ya usa tooltipAccion() en la vista de instructor.
+-->
+<!--
+  ARCHIVO : turnos.html
   VERSION : 6.23
   FECHA   : 2026-06-30
   CAMBIOS : Paridad mobile para la info que solo vivia en el atributo title= del calendario
@@ -932,7 +942,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.23</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.24</div>
   </div>
 
 </div>
@@ -2654,6 +2664,7 @@ function renderMisTurnos(data){
       <div>
         <div class="reserva-fecha">${fmtFechaLinda(r.fecha)} — ${r.horaInicio&&r.horaFin?r.horaInicio+' a '+r.horaFin+' hs':r.hora+' hs'}</div>
         <div class="reserva-avion">✈ ${r.avion||'LV-OAD'}</div>
+        ${r.estado==='aprobado'&&(r.aprobado_por||r.instructor)?`<div class="reserva-obs">👤 Instructor: ${r.aprobado_por||r.instructor}</div>`:''}
         ${r.obs?`<div class="reserva-obs">${r.obs}</div>`:''}
         ${r.obs_cancelacion?`<div class="reserva-obs-cancel">↳ ${r.obs_cancelacion}</div>`:''}
       </div>
