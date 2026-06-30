@@ -2,6 +2,14 @@
 <!--
 ==================================================================================
   PESO Y BALANCE — Aeroclub Río Grande
+  v1.4 ·  Se saca el cartel rojo "PESO VACÍO SIN VERIFICAR" (estado-box bad) por
+          pedido explícito — quedaba redundante con el disclaimer ámbar general
+          y dos avisos apilados (rojo + ámbar) resultaba excesivo. El flag
+          `verificado` en AERONAVES_WB se MANTIENE intacto en los datos (LV-ART
+          y LV-MPH siguen en false) para no perder esa distinción a futuro;
+          solo se deja de usar para el cartel grande. Sigue usándose en un lugar
+          puntual: el sufijo "(DATOS SIN VERIFICAR)" dentro del cuadro de
+          resultado ok/bad cuando el cálculo da OK — eso no se tocó.
   v1.3 ·  Disclaimer general ("HERRAMIENTA DE PLANIFICACIÓN — no reemplaza el
           cálculo oficial") ahora se muestra SIEMPRE, para las 3 aeronaves,
           incluido LV-OAD. Antes solo aparecía el aviso de "PESO VACÍO SIN
@@ -144,7 +152,7 @@ h3{font-family:var(--font-mono);font-size:12px;color:var(--amber);letter-spacing
         <span class="theme-toggle-icon">☀️</span>
       </div>
       <span class="who" id="who-label"></span>
-      <span class="ver">v1.3</span>
+      <span class="ver">v1.4</span>
       <a class="back" href="turnos.html">← TURNERO</a>
     </div>
   </header>
@@ -349,12 +357,6 @@ function renderCalcArea(){
   const key=$('selAvion').value;
   const av=AERONAVES_WB[key];
   const area=$('calcArea');
-  const avisoNoVerificado=!av.verificado?`<div class="estado-box bad" style="margin-bottom:14px">
-      ⚠ PESO VACÍO SIN VERIFICAR — el peso vacío y su brazo para ${av.nombre} son una
-      ESTIMACIÓN (de catálogo / cálculo indirecto), NO el dato real de pesaje de este
-      avión puntual. No usar para vuelo real hasta confirmar contra la planilla de
-      pesaje actual de la aeronave.
-    </div>`:'';
   const avisoGeneral=`<div class="estado-box info" style="margin-bottom:14px">
       ℹ HERRAMIENTA DE PLANIFICACIÓN — este cálculo es una ayuda para estimar peso y
       balance antes del vuelo, NO reemplaza el cálculo oficial. Verificá siempre contra
@@ -364,7 +366,6 @@ function renderCalcArea(){
   area.innerHTML=`<div class="card">
     <h2>// CARGA — ${av.nombre}</h2>
     ${avisoGeneral}
-    ${avisoNoVerificado}
     <div class="wb-grid">
       <div>
         ${av.estaciones.map(e=>`
