@@ -1,5 +1,26 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.30
+  FECHA   : 2026-06-30
+  CAMBIOS : Seguimiento de Turnos (fix sobre v6.29): la nota "· aprobado por vos"
+            era texto fijo, sin nombrar a la persona real. Esto escondía dos
+            cosas: (1) en filas de cancelación nunca se mostraba quién había
+            aprobado originalmente, aunque fuera otro instructor — Daniel
+            reportó turnos marcados CANCELADO sin nota, asumiendo que todos los
+            había aprobado él, cuando en realidad la nota solo aparecía para el
+            caso contrario (él aprobó, otro canceló); (2) en modo "Todos" (admin,
+            sin filtro de instructor) el texto fijo "por vos" no tenía sentido,
+            porque el actor de cada fila no es necesariamente quien mira la
+            pantalla. Ahora se guarda el actor complementario real
+            (_otroActor: quien aprobó si la fila es de cancelación, o quien
+            canceló si la fila es de aprobación) y se nombra explícitamente
+            ("· aprobado por Fulano" / "· cancelado por Fulano") solo cuando esa
+            persona es distinta del actor principal de la fila. Si la misma
+            persona aprobó Y canceló, no se muestra nota (no hay nada que
+            aclarar).
+-->
+<!--
+  ARCHIVO : turnos.html
   VERSION : 6.29
   FECHA   : 2026-06-30
   CAMBIOS : Seguimiento de Turnos: se saca la columna ACCIÓN (chip APROBÓ/CANCELÓ)
@@ -1016,7 +1037,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.29</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.30</div>
   </div>
 
 </div>
@@ -3716,8 +3737,8 @@ window.renderSeguimiento=async function(){
   lista.forEach(r=>{
     const apr=segAprobadorDe(r);
     const can=segCanceladorDe(r);
-    if(can && (!target||can===target)) filas.push({...r,_accion:'cancelado',_actor:can});
-    else if(apr && (!target||apr===target)) filas.push({...r,_accion:'aprobado',_actor:apr});
+    if(can && (!target||can===target)) filas.push({...r,_accion:'cancelado',_actor:can,_otroActor:apr});
+    else if(apr && (!target||apr===target)) filas.push({...r,_accion:'aprobado',_actor:apr,_otroActor:can});
   });
 
   const nFut=filas.filter(f=>!turnoYaPaso(f)).length;
@@ -3748,16 +3769,19 @@ window.renderSeguimiento=async function(){
       _segLastF=f.fecha;
       header=`<tr><td colspan="${nCols}" style="padding:14px 8px 6px;color:var(--cyan);font-weight:700;letter-spacing:.08em;text-transform:uppercase;border-bottom:1px solid var(--cyan);background:rgba(0,200,212,.07)">▸ ${fmtFechaLinda(f.fecha)}</td></tr>`;
     }
-    // FIX v6.29: la columna ACCIÓN aparte se sacó por ser redundante con ESTADO ACTUAL
-    // en el caso de cancelaciones (ACCIÓN=CANCELÓ implica SIEMPRE estado='cancelado',
-    // no hay forma de que diverjan). Se mantiene SOLO como nota inline junto al badge
-    // cuando SÍ puede divergir: aprobaste un turno que terminó cancelado (por otro
-    // instructor) o vencido — ahí "aprobado por vos" es información real que el badge
-    // solo no transmite.
-    const divergeAprobado = f._accion==='aprobado' && f.estado!=='aprobado';
-    const notaAccion = divergeAprobado
-      ? '<span style="font-family:var(--font-mono);font-size:10px;color:var(--text3);margin-left:6px">· aprobado por vos</span>'
-      : '';
+    // FIX v6.30: la nota anterior decía siempre "· aprobado por vos" en texto fijo —
+    // dos problemas: (1) no distinguía si el que aprobó/canceló del otro lado fuiste
+    // vos u otro instructor (perdía esa info en el caso de cancelaciones, donde nunca
+    // se mostraba nada), y (2) en modo "Todos" (admin) decía "por vos" sin sentido,
+    // porque ahí el actor de la fila no necesariamente es quien está mirando la
+    // pantalla. Ahora se nombra al actor complementario real (_otroActor) cuando
+    // existe y es distinto del actor principal de la fila — sea cancelación o
+    // aprobación — y no se muestra nada si fue la misma persona en las dos puntas.
+    let notaAccion='';
+    if(f._otroActor && f._otroActor!==f._actor){
+      const txt = f._accion==='cancelado' ? 'aprobado por '+f._otroActor : 'cancelado por '+f._otroActor;
+      notaAccion = `<span style="font-family:var(--font-mono);font-size:10px;color:var(--text3);margin-left:6px">· ${txt}</span>`;
+    }
     return header + `<tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="abrirModal('${f.key}')">
         <td style="padding:7px 8px;color:var(--text)">${f.horaInicio&&f.horaFin?f.horaInicio+'–'+f.horaFin:(f.hora||'')} hs</td>
         <td style="padding:7px 8px;color:var(--cyan)">${f.avion||'LV-OAD'}</td>
