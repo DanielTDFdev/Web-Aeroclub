@@ -2,6 +2,9 @@
 <!--
 ==================================================================================
   PORTAL ALUMNO — Aeroclub Río Grande
+  v1.13 · Botón ⏻ SALIR en el header: borra la sesión de sessionStorage y redirige
+          a turnos.html. Mismo comportamiento que "Cerrar sesión" en turnos.html.
+          Estilo rojo translúcido para diferenciarlo del botón "← TURNERO".
   v1.12 ·  overflow-x:hidden + max-width:100vw en html/body (misma red de seguridad
            que turnos.html v6.07 y fpl.html v3.22), preventivo por el mismo motivo.
   v1.11 ·  Primera pasada mobile (@media max-width:680px). header.bar .sp
@@ -268,8 +271,9 @@ button.danger{background:rgba(248,81,73,.08);color:var(--red);border-color:var(-
         <span class="theme-toggle-icon">☀️</span>
       </div>
       <span class="who" id="who-label"></span>
-      <span class="ver">v1.12</span>
+      <span class="ver">v1.13</span>
       <a class="back" href="turnos.html">← TURNERO</a>
+      <button class="back" onclick="cerrarSesion()" style="background:rgba(248,81,73,.15);border-color:rgba(248,81,73,.5);color:var(--red)" title="Cerrar sesión">⏻ SALIR</button>
     </div>
   </header>
 
@@ -332,6 +336,11 @@ let session=null, esAlumno=false, esStaff=false, userKey='', userLabel='';
 // El estado inicial ya se aplica en el <script> del <head> (lee localStorage 'lvoad-theme',
 // la misma clave que usan turnos.html e index.html, así el portal hereda el tema elegido en
 // cualquiera de esas páginas). Esto solo agrega el selector para cambiarlo desde aquí.
+window.cerrarSesion=function(){
+  sessionStorage.removeItem('lvoad-session');
+  location.href='turnos.html';
+};
+
 window.toggleTheme=function(){
   const isLight=document.documentElement.classList.toggle('light');
   localStorage.setItem('lvoad-theme',isLight?'light':'dark');
