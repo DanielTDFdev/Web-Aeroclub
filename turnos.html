@@ -1,5 +1,17 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.16
+  FECHA   : 2026-06-29
+  CAMBIOS : Vista SEMANA: se abandona definitivamente el color por aeronave. La leyenda
+            al pie mostraba LV-OAD=cyan / LV-ART=ambar / LV-MPH=verde, pero esos colores
+            se pisaban con los de estado (verde=aprobado, ambar=pendiente), generando
+            ambigüedad. Solución: color por ESTADO igual que la vista LISTA (pendiente=ambar,
+            aprobado=verde, cancelado=rojo tachado, vencido=violeta tachado, sin-instructor=
+            rosa punteado, turno-piloto=azul). La matricula del avión ya aparecía en chiquito
+            dentro de cada bloque (LV-OAD / LV-ART / LV-MPH) — esa línea es suficiente para
+            identificar el avión sin necesitar el color. La leyenda al pie se actualizó para
+            reflejar los estados, y se sumó la entrada de ★ Mi disponibilidad (v6.13).
+            Las clases CSS .oad/.art/.mph/.pil-aprob se declaran en desuso.
   VERSION : 6.15
   FECHA   : 2026-06-29
   CAMBIOS : Dos ajustes a pedido en el calendario de Reservas.
@@ -831,7 +843,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.15</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.16</div>
   </div>
 
 </div>
@@ -1055,11 +1067,13 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <div class="card" style="padding:1rem">
         <div class="cal-wrap"><div id="cal-semana-grid"></div></div>
         <div class="cal-leyenda">
-          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(0,200,212,.4)"></div>LV-OAD</div>
-          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(240,165,0,.4)"></div>LV-ART</div>
-          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(57,211,83,.4)"></div>LV-MPH</div>
-          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(255,255,255,.15);border:1px dashed rgba(255,255,255,.3)"></div>PENDIENTE</div>
-          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(77,159,255,.15);box-shadow:inset 3px 0 0 var(--blue)"></div>PILOTO (aprob.)</div>
+          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(240,165,0,.4);border:1px dashed rgba(240,165,0,.6)"></div>PENDIENTE</div>
+          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(57,211,83,.4)"></div>APROBADO</div>
+          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(77,159,255,.3)"></div>PILOTO (aprob.)</div>
+          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(224,82,156,.3);border:1px dashed rgba(224,82,156,.6)"></div>SIN INSTRUCTOR</div>
+          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(248,81,73,.3)"></div>CANCELADO</div>
+          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(120,80,200,.3)"></div>VENCIDO</div>
+          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="box-shadow:0 0 0 2px var(--green)"></div>★ Mi disponibilidad</div>
         </div>
       </div>
     </div>
@@ -2897,15 +2911,14 @@ async function renderVistaSemana(){
         const sinInst=r.sinInstructor&&r.estado==='pendiente';
         const aprobPil=(r.rol==='piloto')&&r.estado==='aprobado';
         const coincideDisp=r.estado==='pendiente'&&dispCompleta[ds]?.misHoras?.has(r.hora);
-        const colorBase=avColor[r.avion||'LV-OAD']||'oad';
-        const estadoCls=r.estado==='pendiente'?'pendiente':(r.estado==='cancelado'||r.estado==='vencido'?r.estado:'');
-        const clases=(sinInst?'sin-instructor':(colorBase+' '+estadoCls+(aprobPil?' pil-aprob':'')))+(coincideDisp?' mi-disp':'');
+        // v6.16: color por ESTADO igual que vista LISTA; matricula visible en el bloque
+        const colorCls=(sinInst?'sin-instructor':(aprobPil?'aprobado-piloto':r.estado))+(coincideDisp?' mi-disp':'');
         const estiloExtra=(r.estado==='cancelado'||r.estado==='vencido')?'text-decoration:line-through;':'';
         const tipSin=sinInst?' — SIN INSTRUCTOR (pendiente)':(aprobPil?' — turno de piloto':'');
         const tipDisp=coincideDisp?' — ✓ Coincide con tu disponibilidad':'';
         const tipQuien=r.estado==='pendiente'?tipQuienesPueden(dispCompleta,ds,r.hora):'';
         const badge=coincideDisp?'<span class="mi-disp-badge" title="Coincide con tu disponibilidad">★</span>':'';
-        html+=`<div class="cal-block ${clases}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'} — ${r.estado}${tipSin}${tipDisp}${tipQuien}${tooltipAccion(r)}" style="${estiloExtra}">
+        html+=`<div class="cal-block ${colorCls}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'} — ${r.estado}${tipSin}${tipDisp}${tipQuien}${tooltipAccion(r)}" style="${estiloExtra}">
           ${badge}<span style="font-size:9px;opacity:.8">${r.avion||'LV-OAD'}</span><br>${nombre}
         </div>`;
       });
