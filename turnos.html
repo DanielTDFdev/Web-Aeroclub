@@ -1,5 +1,17 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.32
+  FECHA   : 2026-06-30
+  CAMBIOS : Modal de detalle del turno: la fila APROBÓ (agregada en v6.31) se
+            ocultaba cuando coincidía con quien canceló, asumiendo que era
+            redundante. Pedido explícito de Daniel: mostrar siempre las dos
+            puntas (APROBÓ / CANCELÓ) aunque sea la misma persona en ambas —
+            más claro de un vistazo que tener que inferir "no dice nada, debe
+            haber sido el mismo". Sigue ocultándose solo cuando no hay dato real
+            (turnos viejos sin aprobado_por).
+-->
+<!--
+  ARCHIVO : turnos.html
   VERSION : 6.31
   FECHA   : 2026-06-30
   CAMBIOS : Modal de detalle del turno: cuando estado==='cancelado', además de la
@@ -1049,7 +1061,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.31</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.32</div>
   </div>
 
 </div>
@@ -3374,13 +3386,14 @@ window.abrirModal=function(key){
       document.getElementById('md-inst').textContent=quienCancelo;
       instRow.style.display='flex';
     } else { instRow.style.display='none'; }
-    // FIX v6.31: el modal mostraba SOLO quién canceló, perdiendo quién había aprobado
-    // el turno originalmente (mismo gap que ya se había corregido en Seguimiento de
-    // Turnos v6.30). Usa el mismo helper segAprobadorDe() — solo identifica aprobador
-    // en registros que tienen aprobado_por explícito; turnos viejos sin ese campo no
-    // van a mostrar esta fila (no hay dato confiable para inventar uno).
+    // FIX v6.32: v6.31 ocultaba la fila APROBÓ cuando coincidía con quien canceló,
+    // asumiendo que era redundante. Pedido explícito de Daniel: mostrar siempre las
+    // dos puntas (Aprobó / Canceló) aunque sea la misma persona — más claro para
+    // quien lee el modal de una sola pasada, sin tener que inferir "no dice nada,
+    // entonces debe haber sido el mismo". Solo se sigue ocultando si NO hay dato
+    // (turnos viejos sin aprobado_por).
     const quienAprobo=segAprobadorDe(r);
-    if(quienAprobo && quienAprobo!==quienCancelo){
+    if(quienAprobo){
       document.getElementById('md-aprobo').textContent=quienAprobo;
       aprRow.style.display='flex';
     } else { aprRow.style.display='none'; }
