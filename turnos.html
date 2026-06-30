@@ -1,5 +1,17 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.18
+  FECHA   : 2026-06-30
+  CAMBIOS : Cancelacion por INSTRUCTOR (motivo obligatorio): nuevo select de motivo
+            tabulado en el modal #modal-motivo-cancel, para poder cuantificar
+            cancelaciones a futuro. Opciones: Meteorología Adversa, Técnica de
+            Aeronave, Reprogramación Turno, Solicitado por Alumno, Aeródromo Cerrado,
+            Otros (escribir motivo). Al elegir una categoria fija el textarea se
+            autocompleta y queda read-only; con "Otros" el textarea se habilita para
+            texto libre como antes. No cambia el esquema de Firebase: obs_cancelacion
+            sigue siendo el mismo texto libre de siempre, ahora viene desde una lista
+            tabulada en el caso comun. El motivo del ALUMNO (opcional) no se toca:
+            sigue siendo textarea libre sin el select, como hasta ahora.
   VERSION : 6.17
   FECHA   : 2026-06-29
   CAMBIOS : Icono ⏻ agregado al botón SALIR del top-nav (estética pedida desde
@@ -847,7 +859,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.17</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.18</div>
   </div>
 
 </div>
@@ -1142,6 +1154,15 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <p id="motivo-cancel-desc" style="font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-bottom:.85rem;letter-spacing:.05em">
         Ingresá el motivo. El alumno lo recibirá por mail.
       </p>
+      <select id="motivo-cancel-cat" style="width:100%;box-sizing:border-box;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:var(--font-mono);font-size:12px;padding:.6rem .75rem;margin-bottom:.6rem;display:none">
+        <option value="">— Elegí un motivo —</option>
+        <option value="Meteorología Adversa">Meteorología Adversa</option>
+        <option value="Técnica de Aeronave">Técnica de Aeronave</option>
+        <option value="Reprogramación Turno">Reprogramación Turno</option>
+        <option value="Solicitado por Alumno">Solicitado por Alumno</option>
+        <option value="Aeródromo Cerrado">Aeródromo Cerrado</option>
+        <option value="Otros">Otros (escribir motivo)</option>
+      </select>
       <textarea id="motivo-cancel-input" rows="3" placeholder="Ej: Condiciones meteorológicas adversas..." style="width:100%;box-sizing:border-box;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:var(--font-mono);font-size:12px;padding:.6rem .75rem;resize:vertical;outline:none;letter-spacing:.04em"></textarea>
       <div id="motivo-cancel-err" style="font-family:var(--font-mono);font-size:11px;color:var(--red);margin-top:.4rem;min-height:16px;letter-spacing:.05em"></div>
       <div style="display:flex;gap:8px;margin-top:.85rem;justify-content:flex-end">
@@ -2587,11 +2608,12 @@ function pedirMotivoCancelacion(obligatorio=false){
   return new Promise(resolve=>{
     const overlay=document.getElementById('modal-motivo-cancel');
     const input=document.getElementById('motivo-cancel-input');
+    const cat=document.getElementById('motivo-cancel-cat');
     const err=document.getElementById('motivo-cancel-err');
     const btnConfirmar=document.getElementById('motivo-cancel-btn-confirmar');
     const btnCancelar=document.getElementById('motivo-cancel-btn-cancelar');
     const desc=document.getElementById('motivo-cancel-desc');
-    input.value=''; err.textContent='';
+    input.value=''; err.textContent=''; cat.value='';
     // v6.02: el boton "CANCELAR" generico es ambiguo. Si el motivo es OBLIGATORIO
     // (instructor) cerrar este modal SI aborta la cancelacion del turno, asi que
     // "CANCELAR" es correcto. Si es OPCIONAL (alumno) cerrarlo NO aborta nada, solo
@@ -2599,17 +2621,41 @@ function pedirMotivoCancelacion(obligatorio=false){
     // El texto del modal tambien se ajusta: el original ("el alumno lo recibira por
     // mail") esta escrito para cuando lo abre el instructor; si lo abre el propio
     // alumno (autocancelacion, no manda mail) ese texto no aplica.
+    // v6.18: cuando es OBLIGATORIO (instructor), se agrega un select de motivo
+    // tabulado (Meteorología Adversa / Técnica de Aeronave / Reprogramación Turno /
+    // Solicitado por Alumno / Aeródromo Cerrado / Otros) para poder cuantificar
+    // cancelaciones a futuro. Al elegir una categoría fija, el textarea se
+    // autocompleta y se bloquea (read-only); con "Otros" el textarea queda libre.
+    // El alumno (motivo opcional) NO ve el select, sigue siendo texto libre como antes.
     if(obligatorio){
       btnCancelar.textContent='CANCELAR';
-      desc.textContent='Ingresá el motivo. El alumno lo recibirá por mail.';
+      desc.textContent='Elegí un motivo. El alumno lo recibirá por mail.';
+      cat.style.display='block';
+      input.readOnly=true;
+      input.placeholder='Elegí un motivo arriba…';
     }else{
       btnCancelar.textContent='OMITIR MOTIVO';
       desc.textContent='Opcional: contá el motivo si querés (no es obligatorio). El turno se cancela igual.';
+      cat.style.display='none';
+      input.readOnly=false;
+      input.placeholder='Ej: Condiciones meteorológicas adversas...';
     }
     overlay.classList.add('open');
-    setTimeout(()=>input.focus(),100);
+    setTimeout(()=>{ if(obligatorio) cat.focus(); else input.focus(); },100);
+    const onCatChange=()=>{
+      err.textContent='';
+      if(cat.value==='Otros'){
+        input.readOnly=false; input.value=''; input.placeholder='Escribí el motivo…';
+        setTimeout(()=>input.focus(),50);
+      }else if(cat.value){
+        input.readOnly=true; input.value=cat.value;
+      }else{
+        input.readOnly=true; input.value=''; input.placeholder='Elegí un motivo arriba…';
+      }
+    };
     const confirm=()=>{
       const val=input.value.trim();
+      if(obligatorio&&!cat.value){err.textContent='⚠ Elegí un motivo.';return;}
       if(obligatorio&&!val){err.textContent='⚠ El motivo es obligatorio.';return;}
       overlay.classList.remove('open');
       cleanup();
@@ -2624,10 +2670,12 @@ function pedirMotivoCancelacion(obligatorio=false){
     btnConfirmar.addEventListener('click',confirm);
     btnCancelar.addEventListener('click',cancel);
     input.addEventListener('keydown',onKey);
+    cat.addEventListener('change',onCatChange);
     function cleanup(){
       btnConfirmar.removeEventListener('click',confirm);
       btnCancelar.removeEventListener('click',cancel);
       input.removeEventListener('keydown',onKey);
+      cat.removeEventListener('change',onCatChange);
     }
   });
 }
