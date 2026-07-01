@@ -1,5 +1,16 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.34
+  FECHA   : 2026-07-01
+  CAMBIOS : Ancho máximo del contenedor (.container) sube de 760px a 1280px.
+            En monitores Full HD (1920px) el layout antes ocupaba solo ~40% del
+            ancho — visualmente "todo apretado" con mucho espacio muerto a los
+            costados. 1280px ocupa ~67% de un Full HD, la vista SEMANA gana
+            espacio por columna, y las tablas de Seguimiento/Auditoría se leen
+            sin scroll horizontal innecesario. No hay media query adicional:
+            en celular (430px típico), un max-width de 1280px simplemente no
+            tiene efecto — el contenedor no puede ser más ancho que la pantalla,
+            así que el comportamiento mobile queda idéntico al de antes.
   VERSION : 6.33
   FECHA   : 2026-06-30
   CAMBIOS : Modal de detalle del turno: ícono 👍 (fondo verde tenue) junto al
@@ -774,7 +785,7 @@ html{overflow-x:hidden;max-width:100vw;}
 .cancel-toggle input:checked + .cancel-toggle-track .cancel-toggle-thumb{transform:translateX(16px);background:var(--red);box-shadow:0 0 6px rgba(248,81,73,.5);}
 .cancel-toggle input:focus-visible + .cancel-toggle-track{outline:2px solid var(--cyan);outline-offset:2px;}
 
-.container{max-width:760px;margin:0 auto;padding:1.25rem}
+.container{max-width:1280px;margin:0 auto;padding:1.25rem}
 .screen{display:none}.screen.active{display:block}
 @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .screen.active{animation:fadeIn .25s ease}
@@ -1076,7 +1087,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.33</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.34</div>
   </div>
 
 </div>
