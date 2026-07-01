@@ -2,6 +2,11 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
+  v3.23 ·  Ancho máximo del contenedor (.wrap) sube de 1080px a 1280px, mismo
+           criterio que turnos.html v6.34 y portal-alumno.html v1.14. En pantallas
+           grandes el layout aprovecha mejor el espacio disponible sin afectar
+           mobile (un max-width de 1280px no tiene efecto en celulares de ~430px
+           porque el contenedor no puede superar el ancho de la pantalla).
   v3.22 ·  overflow-x:hidden + max-width:100vw en html/body (misma red de seguridad
            que turnos.html v6.07), preventivo: el mismo sintoma de pinch-zoom-out en
            celular se reportó en turnos.html y es razonable que afecte por igual a
@@ -248,7 +253,7 @@
   body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:50;
     background:repeating-linear-gradient(0deg,rgba(0,0,0,0) 0px,rgba(0,0,0,0) 2px,rgba(0,0,0,.18) 3px,rgba(0,0,0,0) 4px);
     mix-blend-mode:multiply;opacity:.5}
-  .wrap{max-width:1080px;margin:0 auto;padding:18px 16px 80px}
+  .wrap{max-width:1280px;margin:0 auto;padding:18px 16px 80px}
 
   header.bar{display:flex;align-items:center;gap:14px;border:1px solid var(--line-hot);
     background:linear-gradient(180deg,var(--panel2),var(--panel));
@@ -506,7 +511,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v3.22</span>
+    <span class="ver">v3.23</span>
     <a href="turnos.html" title="Volver al turnero (sin cerrar sesión)" style="font-family:var(--mono);font-size:12px;color:var(--cyan);text-decoration:none;border:1px solid var(--line-hot);border-radius:5px;padding:5px 11px;letter-spacing:1px;transition:.15s" onmouseover="this.style.background='var(--cyan)';this.style.color='#04141a'" onmouseout="this.style.background='transparent';this.style.color='var(--cyan)'">← TURNERO</a>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
