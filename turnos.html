@@ -1,5 +1,15 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.41
+  FECHA   : 2026-07-02
+  CAMBIOS : FIX: la card "Disponibilidad de Instructores" (dentro de Configuracion >
+            Horarios, admin) no aparecia al entrar por primera vez a la pantalla de
+            Configuracion, aunque el panel "Horarios" ya estaba visible por default.
+            Causa: showInstTab('config') llamaba a renderConfig() (solo renderHorariosConfig()),
+            nunca a showCfgTab('horarios'), que es donde vive la logica que muestra/carga
+            la card. Recien aparecia si el usuario clickeaba el tab "Horarios" a mano.
+            Se reemplazo el llamado a renderConfig() por showCfgTab('horarios') en ambas
+            ramas (con y sin configs ya cargadas). renderConfig() quedo sin uso y se elimino.
   VERSION : 6.40
   FECHA   : 2026-07-02
   CAMBIOS : Disponibilidad de Instructores (admin): nueva vista "SEMANA" como alternativa
@@ -1136,7 +1146,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.40</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.41</div>
   </div>
 
 </div>
@@ -4027,8 +4037,6 @@ window.showCfgTab=function(tab){
     if(zona) zona.style.display=session?.user==='admin'?'block':'none';
   }
 };
-
-function renderConfig(){renderHorariosConfig();}
 
 function renderToggleAvion(avion){
   const wrap=document.getElementById('avion-toggle-wrap');
