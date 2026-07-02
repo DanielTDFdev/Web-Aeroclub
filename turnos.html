@@ -1,5 +1,10 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.42
+  FECHA   : 2026-07-02
+  CAMBIOS : Disponibilidad de Instructores (LISTA y SEMANA): las celdas ahora tienen
+            recuadro completo (border en cada th/td) en vez de solo la linea inferior
+            de fila. Mejora la lectura en grillas anchas. Sin cambios de datos/logica.
   VERSION : 6.41
   FECHA   : 2026-07-02
   CAMBIOS : FIX: la card "Disponibilidad de Instructores" (dentro de Configuracion >
@@ -1146,7 +1151,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.41</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.42</div>
   </div>
 
 </div>
@@ -5435,8 +5440,8 @@ async function renderAdmDisp(){
   // tabla: filas = días, columnas = slots
   let html='<table style="border-collapse:collapse;font-family:var(--font-mono);font-size:11px;min-width:600px;width:100%">';
   html+='<thead><tr>';
-  html+=`<th style="padding:5px 8px;color:var(--text3);font-weight:500;text-align:left;border-bottom:1px solid var(--border2);position:sticky;left:0;z-index:2;background:var(--bg3);min-width:82px">Día</th>`;
-  slots.forEach(h=>{ html+=`<th style="padding:5px 4px;color:var(--text2);font-weight:500;text-align:center;border-bottom:1px solid var(--border2);white-space:nowrap">${h}</th>`; });
+  html+=`<th style="padding:5px 8px;color:var(--text3);font-weight:500;text-align:left;border:1px solid var(--border2);position:sticky;left:0;z-index:2;background:var(--bg3);min-width:82px">Día</th>`;
+  slots.forEach(h=>{ html+=`<th style="padding:5px 4px;color:var(--text2);font-weight:500;text-align:center;border:1px solid var(--border2);white-space:nowrap">${h}</th>`; });
   html+='</tr></thead><tbody>';
 
   let countDisp=0;
@@ -5447,17 +5452,17 @@ async function renderAdmDisp(){
     const slotsDia=horasParaDia(ds,'LV-OAD');
     const dispSet=dispPor[ds];
     const labelColor=esHoy?'var(--cyan)':finde?'var(--amber)':'var(--text2)';
-    html+='<tr style="border-bottom:1px solid var(--border)">';
-    html+=`<td style="padding:5px 8px;color:${labelColor};font-weight:${esHoy?700:500};position:sticky;left:0;z-index:1;background:var(--bg3);white-space:nowrap">${NM[d.getDay()]} ${fmtD(d)}</td>`;
+    html+='<tr>';
+    html+=`<td style="padding:5px 8px;color:${labelColor};font-weight:${esHoy?700:500};position:sticky;left:0;z-index:1;background:var(--bg3);white-space:nowrap;border:1px solid var(--border)">${NM[d.getDay()]} ${fmtD(d)}</td>`;
     slots.forEach(h=>{
       const existe=slotsDia.includes(h);
-      if(!existe){ html+='<td style="padding:5px 4px;text-align:center;background:var(--bg2)"><span style="color:var(--text3)">—</span></td>'; return; }
+      if(!existe){ html+='<td style="padding:5px 4px;text-align:center;background:var(--bg2);border:1px solid var(--border)"><span style="color:var(--text3)">—</span></td>'; return; }
       const disp=dispSet.has(h);
       if(disp)countDisp++;
       const bg=disp?'rgba(0,200,212,.1)':'var(--bg2)';
       const color=disp?'var(--cyan)':'var(--border)';
       const sym=disp?'✓':'·';
-      html+=`<td style="padding:5px 4px;text-align:center;background:${bg}"><span style="color:${color};font-size:13px;font-weight:700" title="${ds} ${h} — ${disp?'disponible':'no disponible'}">${sym}</span></td>`;
+      html+=`<td style="padding:5px 4px;text-align:center;background:${bg};border:1px solid var(--border)"><span style="color:${color};font-size:13px;font-weight:700" title="${ds} ${h} — ${disp?'disponible':'no disponible'}">${sym}</span></td>`;
     });
     html+='</tr>';
   });
@@ -5508,29 +5513,29 @@ async function renderAdmDispSemana(){
 
   let html='<table style="border-collapse:collapse;font-family:var(--font-mono);font-size:12px;min-width:520px;width:100%">';
   html+='<thead><tr>';
-  html+='<th style="padding:6px 10px;color:var(--text3);font-weight:500;text-align:left;min-width:60px">Hora</th>';
+  html+='<th style="padding:6px 10px;color:var(--text3);font-weight:500;text-align:left;min-width:60px;border:1px solid var(--border2)">Hora</th>';
   dias.forEach(d=>{
     const ds=dispFmtFecha(d);
     const esHoy=ds===dispFmtFecha(hoy);
     const color=esHoy?'var(--cyan)':'var(--text)';
-    html+=`<th style="padding:6px 10px;color:${color};font-weight:${esHoy?700:500};text-align:center;min-width:72px">${dispFmtDisplay(d)}</th>`;
+    html+=`<th style="padding:6px 10px;color:${color};font-weight:${esHoy?700:500};text-align:center;min-width:72px;border:1px solid var(--border2)">${dispFmtDisplay(d)}</th>`;
   });
   html+='</tr></thead><tbody>';
 
   let countDisp=0;
   slots.forEach(h=>{
-    html+='<tr style="border-bottom:1px solid var(--border)">';
-    html+=`<td style="padding:6px 10px;color:var(--text2)">${h}</td>`;
+    html+='<tr>';
+    html+=`<td style="padding:6px 10px;color:var(--text2);border:1px solid var(--border)">${h}</td>`;
     dias.forEach(d=>{
       const ds=dispFmtFecha(d);
       const existe=horasParaDia(ds,'LV-OAD').includes(h);
-      if(!existe){ html+='<td style="padding:6px 10px;text-align:center;background:var(--bg2)"><span style="color:var(--text3)">—</span></td>'; return; }
+      if(!existe){ html+='<td style="padding:6px 10px;text-align:center;background:var(--bg2);border:1px solid var(--border)"><span style="color:var(--text3)">—</span></td>'; return; }
       const disp=dispPor[ds].has(h);
       if(disp)countDisp++;
       const bg=disp?'rgba(0,200,212,.1)':'var(--bg2)';
       const color=disp?'var(--cyan)':'var(--border)';
       const sym=disp?'✓':'·';
-      html+=`<td style="padding:6px 10px;text-align:center;background:${bg}"><span style="color:${color};font-size:13px;font-weight:700" title="${ds} ${h} — ${disp?'disponible':'no disponible'}">${sym}</span></td>`;
+      html+=`<td style="padding:6px 10px;text-align:center;background:${bg};border:1px solid var(--border)"><span style="color:${color};font-size:13px;font-weight:700" title="${ds} ${h} — ${disp?'disponible':'no disponible'}">${sym}</span></td>`;
     });
     html+='</tr>';
   });
