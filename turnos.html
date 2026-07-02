@@ -2758,6 +2758,8 @@ window.confirmarTurno=async function(){
   const snapFinal = await get(ref(db,'reservas'));
   const takenFinal = slotsTomados(selectedDay, selectedAvion, snapFinal.val());
   if(takenFinal.includes(selectedSlot)){showErr('turno-err','Ese horario acaba de ser reservado por otro usuario. Elegí otro.');return;}
+  const rol=session.rol||'alumno';
+  const esPiloto=rol==='piloto';
   // ── CUOTA SEMANAL (v6.35) ──────────────────────────────────────────────────
   // Solo aplica a alumnos (no pilotos ni instructores). Límite: 2 turnos por semana
   // calendario (lunes a domingo). Cuentan: pendiente, aprobado, y cancelado POR EL
@@ -2790,8 +2792,6 @@ window.confirmarTurno=async function(){
     }
   }
   const obs=val('al-obs');
-  const rol=session.rol||'alumno';
-  const esPiloto=rol==='piloto';
   const esOAD=(selectedAvion||'LV-OAD')==='LV-OAD';
   const estado=(esPiloto&&!esOAD)?'aprobado':'pendiente';
   // Marca turnos de piloto en LV-OAD cargados sin instructor con horario ese día.
