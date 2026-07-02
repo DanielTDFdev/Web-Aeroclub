@@ -1,5 +1,14 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.44
+  FECHA   : 2026-07-02
+  CAMBIOS : FIX (v6.43): el toggle LISTA/SEMANA no andaba — "ReferenceError: admDispVista
+            is not defined" al clickear. El onclick inline leia la variable de modulo
+            admDispVista directamente desde el HTML, pero las variables let/const de un
+            script type="module" no quedan expuestas al scope global que usan los atributos
+            onclick (a diferencia de las funciones, que si se expusieron via window.foo=).
+            Se saco la referencia del HTML (onclick="admDispToggleVista()" sin argumento) y
+            la funcion ahora calcula el toggle internamente cuando se la llama sin parametro.
   VERSION : 6.43
   FECHA   : 2026-07-02
   CAMBIOS : Disponibilidad de Instructores: los botones LISTA/SEMANA se reemplazaron por
@@ -1158,7 +1167,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.43</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.44</div>
   </div>
 
 </div>
@@ -1543,7 +1552,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
           <span style="font-family:var(--font-mono);font-size:11px;color:var(--text3)">// Cargando instructores...</span>
         </div>
         <div id="adm-disp-wrap" style="display:none">
-          <div id="adm-disp-vista-toggle" onclick="admDispToggleVista(admDispVista==='lista'?'semana':'lista')" style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;margin-bottom:.85rem;width:fit-content">
+          <div id="adm-disp-vista-toggle" onclick="admDispToggleVista()" style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;margin-bottom:.85rem;width:fit-content">
             <span id="adm-disp-vista-lbl-lista" style="font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;color:var(--cyan);transition:color .2s">LISTA</span>
             <div style="width:40px;height:20px;border-radius:10px;background:rgba(0,200,212,.12);border:1px solid var(--cyan);position:relative;transition:all .25s">
               <div id="adm-disp-vista-knob" style="width:14px;height:14px;border-radius:50%;background:var(--cyan);position:absolute;top:1px;left:2px;transition:left .25s;box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>
@@ -5400,6 +5409,7 @@ function admDispRenderVistaToggleUI(v){
 }
 
 window.admDispToggleVista=function(v){
+  if(v===undefined) v=admDispVista==='lista'?'semana':'lista';
   if(admDispVista===v)return;
   admDispVista=v;
   admDispRenderVistaToggleUI(v);
