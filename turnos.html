@@ -1,5 +1,12 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.39
+  FECHA   : 2026-07-02
+  CAMBIOS : FIX: ReferenceError "Cannot access 'esPiloto' before initialization" en
+            confirmarTurno() que rompia la reserva de turnos para alumnos. La cuota
+            semanal (v6.35) usaba esPiloto/rol antes de su declaracion const mas abajo
+            en la misma funcion (TDZ). Se movio la declaracion de rol/esPiloto al inicio
+            de confirmarTurno, antes del bloque de cuota semanal.
   VERSION : 6.38
   FECHA   : 2026-07-02
   CAMBIOS : Cuota semanal de turnos (v6.35) sube de 2 a 3 por semana.
@@ -1120,7 +1127,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.38</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.39</div>
   </div>
 
 </div>
