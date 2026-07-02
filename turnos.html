@@ -3814,9 +3814,9 @@ window.showInstTab=function(tab){
   if(btnRes) btnRes.style.display=session?.soloUsuarios?'none':'';
   if(tab==='config'){
     if(!Object.keys(configs).length){
-      loadConfig().then(()=>{buildCfgAvionTabs();renderConfig();});
+      loadConfig().then(()=>{buildCfgAvionTabs();showCfgTab('horarios');});
     } else {
-      buildCfgAvionTabs();renderConfig();
+      buildCfgAvionTabs();showCfgTab('horarios');
     }
     const btnSistema=document.getElementById('cfg-tab-sistema');
     if(btnSistema) btnSistema.style.display=(session?.user==='admin'||session?.user==='administrador')?'':'none';
