@@ -1,5 +1,12 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.43
+  FECHA   : 2026-07-02
+  CAMBIOS : Disponibilidad de Instructores: los botones LISTA/SEMANA se reemplazaron por
+            un toggle tipo slider (mismo patron visual que "Estoy de vacaciones"), ya que
+            son dos estados mutuamente excluyentes. admDispToggleVista ahora mueve el knob
+            y colorea el label activo via admDispRenderVistaToggleUI() en vez de togglear
+            clases .active de botones que ya no existen.
   VERSION : 6.42
   FECHA   : 2026-07-02
   CAMBIOS : Disponibilidad de Instructores (LISTA y SEMANA): las celdas ahora tienen
@@ -1151,7 +1158,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.42</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.43</div>
   </div>
 
 </div>
