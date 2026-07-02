@@ -1,5 +1,8 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.38
+  FECHA   : 2026-07-02
+  CAMBIOS : Cuota semanal de turnos (v6.35) sube de 2 a 3 por semana.
   VERSION : 6.37
   FECHA   : 2026-07-02
   CAMBIOS : Modal de detalle: nueva fila "CANCELADO" con el timestamp de cancelacion
@@ -1117,7 +1120,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.37</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.38</div>
   </div>
 
 </div>
@@ -2781,8 +2784,8 @@ window.confirmarTurno=async function(){
       if(r.estado==='cancelado'&&r.cancelado_rol==='instructor') return false;
       return true;
     });
-    if(enSemana.length>=2){
-      showErr('turno-err',`Límite semanal alcanzado: ya tenés ${enSemana.length} turno${enSemana.length===1?'':'s'} esta semana (${semLunes.slice(8)}/${semLunes.slice(5,7)} al ${semDomingo.slice(8)}/${semDomingo.slice(5,7)}). Máximo permitido: 2 por semana.`);
+    if(enSemana.length>=3){
+      showErr('turno-err',`Límite semanal alcanzado: ya tenés ${enSemana.length} turno${enSemana.length===1?'':'s'} esta semana (${semLunes.slice(8)}/${semLunes.slice(5,7)} al ${semDomingo.slice(8)}/${semDomingo.slice(5,7)}). Máximo permitido: 3 por semana.`);
       return;
     }
   }
