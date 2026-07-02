@@ -1,5 +1,19 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.35
+  FECHA   : 2026-07-02
+  CAMBIOS : Cuota semanal de turnos para ALUMNOS (rol:'alumno'). Máximo 2 turnos
+            por semana calendario (lunes a domingo). Si el alumno ya tiene 2 turnos
+            en la semana del slot que está pidiendo, la solicitud se bloquea con
+            mensaje informativo que indica el rango de la semana y cuántos tiene.
+            Qué CUENTA para la cuota: turnos pendiente, aprobado, y cancelado por
+            el propio alumno (cancelado_rol==='alumno' o campo ausente — los
+            registros viejos sin ese campo se tratan conservadoramente como del
+            alumno). Qué NO CUENTA: cancelados por el instructor
+            (cancelado_rol==='instructor', ej. baja por meteorología, mantenimiento)
+            y vencidos. Lógica: si el instructor cancela el turno del alumno, le
+            devuelve el crédito — el alumno no pierde su cuota por algo que no
+            decidió él. No aplica a pilotos ni instructores.
   VERSION : 6.34
   FECHA   : 2026-07-01
   CAMBIOS : Ancho máximo del contenedor (.container) sube de 760px a 1280px.
@@ -1087,7 +1101,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.34</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.35</div>
   </div>
 
 </div>
@@ -2724,6 +2738,37 @@ window.confirmarTurno=async function(){
   const snapFinal = await get(ref(db,'reservas'));
   const takenFinal = slotsTomados(selectedDay, selectedAvion, snapFinal.val());
   if(takenFinal.includes(selectedSlot)){showErr('turno-err','Ese horario acaba de ser reservado por otro usuario. Elegí otro.');return;}
+  // ── CUOTA SEMANAL (v6.35) ──────────────────────────────────────────────────
+  // Solo aplica a alumnos (no pilotos ni instructores). Límite: 2 turnos por semana
+  // calendario (lunes a domingo). Cuentan: pendiente, aprobado, y cancelado POR EL
+  // PROPIO ALUMNO (cancelado_rol==='alumno' o campo ausente — cancelados viejos sin el
+  // campo se tratan conservadoramente como del alumno). NO cuentan: cancelados por el
+  // instructor (cancelado_rol==='instructor'), ni vencidos.
+  if(!esPiloto&&rol==='alumno'){
+    const todasReservas=snapFinal.val()||{};
+    // Calcular lunes y domingo de la semana de selectedDay (UTC-3)
+    const [fy,fm,fd]=selectedDay.split('-').map(Number);
+    const dSel=new Date(fy,fm-1,fd);
+    const dow=dSel.getDay(); // 0=dom..6=sab
+    const diffLunes=dow===0?-6:1-dow;
+    const lunes=new Date(dSel); lunes.setDate(dSel.getDate()+diffLunes);
+    const domingo=new Date(lunes); domingo.setDate(lunes.getDate()+6);
+    const pad=n=>String(n).padStart(2,'0');
+    const fmt=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    const semLunes=fmt(lunes), semDomingo=fmt(domingo);
+    const enSemana=Object.values(todasReservas).filter(r=>{
+      if(!r||typeof r!=='object') return false;
+      if(r.email!==session.email) return false;
+      if(!r.fecha||r.fecha<semLunes||r.fecha>semDomingo) return false;
+      if(r.estado==='vencido') return false;
+      if(r.estado==='cancelado'&&r.cancelado_rol==='instructor') return false;
+      return true;
+    });
+    if(enSemana.length>=2){
+      showErr('turno-err',`Límite semanal alcanzado: ya tenés ${enSemana.length} turno${enSemana.length===1?'':'s'} esta semana (${semLunes.slice(8)}/${semLunes.slice(5,7)} al ${semDomingo.slice(8)}/${semDomingo.slice(5,7)}). Máximo permitido: 2 por semana.`);
+      return;
+    }
+  }
   const obs=val('al-obs');
   const rol=session.rol||'alumno';
   const esPiloto=rol==='piloto';
