@@ -1536,9 +1536,12 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
           <span style="font-family:var(--font-mono);font-size:11px;color:var(--text3)">// Cargando instructores...</span>
         </div>
         <div id="adm-disp-wrap" style="display:none">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:.85rem">
-            <button id="adm-disp-vista-lista" class="nav-btn active" onclick="admDispToggleVista('lista')" style="font-size:11px;padding:5px 12px">LISTA</button>
-            <button id="adm-disp-vista-semana" class="nav-btn" onclick="admDispToggleVista('semana')" style="font-size:11px;padding:5px 12px">SEMANA</button>
+          <div id="adm-disp-vista-toggle" onclick="admDispToggleVista(admDispVista==='lista'?'semana':'lista')" style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;margin-bottom:.85rem;width:fit-content">
+            <span id="adm-disp-vista-lbl-lista" style="font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;color:var(--cyan);transition:color .2s">LISTA</span>
+            <div style="width:40px;height:20px;border-radius:10px;background:rgba(0,200,212,.12);border:1px solid var(--cyan);position:relative;transition:all .25s">
+              <div id="adm-disp-vista-knob" style="width:14px;height:14px;border-radius:50%;background:var(--cyan);position:absolute;top:1px;left:2px;transition:left .25s;box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>
+            </div>
+            <span id="adm-disp-vista-lbl-semana" style="font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;color:var(--text3);transition:color .2s">SEMANA</span>
           </div>
           <div id="adm-disp-lista-wrap">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:.85rem;flex-wrap:wrap">
@@ -4033,7 +4036,7 @@ window.showCfgTab=function(tab){
     buildCfgAvionTabs();renderHorariosConfig();
     const isAdmin=session?.user==='admin'||session?.user==='administrador';
     const cardDisp=document.getElementById('card-disp-instructores');
-    if(cardDisp){ cardDisp.style.display=isAdmin?'block':'none'; if(isAdmin){admDispOffset=0;admDispSemanaOffset=0;admDispVista='lista';admDispInst=null;document.getElementById('adm-disp-vista-lista')?.classList.add('active');document.getElementById('adm-disp-vista-semana')?.classList.remove('active');const lw=document.getElementById('adm-disp-lista-wrap');if(lw)lw.style.display='';const sw=document.getElementById('adm-disp-semana-wrap');if(sw)sw.style.display='none';renderAdmDispSelector();const g=document.getElementById('adm-disp-grid');if(g)g.innerHTML='<div class="empty">// Cargando...</div>';} }
+    if(cardDisp){ cardDisp.style.display=isAdmin?'block':'none'; if(isAdmin){admDispOffset=0;admDispSemanaOffset=0;admDispVista='lista';admDispInst=null;admDispRenderVistaToggleUI('lista');const lw=document.getElementById('adm-disp-lista-wrap');if(lw)lw.style.display='';const sw=document.getElementById('adm-disp-semana-wrap');if(sw)sw.style.display='none';renderAdmDispSelector();const g=document.getElementById('adm-disp-grid');if(g)g.innerHTML='<div class="empty">// Cargando...</div>';} }
   }
   if(tab==='auditoria')cargarAuditoria();
   if(tab==='auditoria-fpl')cargarAuditoriaFpl();
@@ -5380,11 +5383,19 @@ window.admDispSelectInst=function(key){
   if(admDispVista==='lista') renderAdmDisp(); else renderAdmDispSemana();
 };
 
+function admDispRenderVistaToggleUI(v){
+  const knob=document.getElementById('adm-disp-vista-knob');
+  if(knob) knob.style.left=v==='lista'?'2px':'22px';
+  const lblLista=document.getElementById('adm-disp-vista-lbl-lista');
+  const lblSemana=document.getElementById('adm-disp-vista-lbl-semana');
+  if(lblLista) lblLista.style.color=v==='lista'?'var(--cyan)':'var(--text3)';
+  if(lblSemana) lblSemana.style.color=v==='semana'?'var(--cyan)':'var(--text3)';
+}
+
 window.admDispToggleVista=function(v){
   if(admDispVista===v)return;
   admDispVista=v;
-  document.getElementById('adm-disp-vista-lista')?.classList.toggle('active',v==='lista');
-  document.getElementById('adm-disp-vista-semana')?.classList.toggle('active',v==='semana');
+  admDispRenderVistaToggleUI(v);
   const listaWrap=document.getElementById('adm-disp-lista-wrap');
   const semWrap=document.getElementById('adm-disp-semana-wrap');
   if(listaWrap) listaWrap.style.display=v==='lista'?'':'none';
