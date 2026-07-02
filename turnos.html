@@ -1,5 +1,11 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.37
+  FECHA   : 2026-07-02
+  CAMBIOS : Modal de detalle: nueva fila "CANCELADO" con el timestamp de cancelacion
+            (ts_cancelacion, v6.36), formateado igual que la fila "SOLICITADO". Solo
+            aparece en turnos cancelados que tengan el campo (v6.36+); los cancelados
+            anteriores no lo tienen y la fila se oculta.
   VERSION : 6.36
   FECHA   : 2026-07-02
   CAMBIOS : Nuevo campo 'ts_cancelacion' (ISO timestamp) en /reservas, escrito en
@@ -1111,7 +1117,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.36</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.37</div>
   </div>
 
 </div>
@@ -1394,6 +1400,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <div class="modal-row"><span class="modal-lbl">ESTADO</span><span class="modal-val" id="md-estado"></span></div>
       <div class="modal-row" id="md-disp-row" style="display:none"><span class="modal-lbl">DISPONIB.</span><span class="modal-val" id="md-disp" style="font-size:11px"></span></div>
       <div class="modal-row"><span class="modal-lbl">SOLICITADO</span><span class="modal-val" id="md-ts" style="color:var(--text3);font-size:11px"></span></div>
+      <div class="modal-row" id="md-ts-cancel-row" style="display:none"><span class="modal-lbl">CANCELADO</span><span class="modal-val" id="md-ts-cancel" style="color:var(--text3);font-size:11px"></span></div>
       <div class="modal-row" id="md-aprobo-row" style="display:none"><span class="modal-lbl">APROBÓ</span><span class="modal-val"><span id="md-aprobo"></span><span class="md-ico md-ico-ok">👍</span></span></div>
       <div class="modal-row" id="md-inst-row"><span class="modal-lbl" id="md-inst-lbl">INSTRUCTOR</span><span class="modal-val"><span id="md-inst"></span><span id="md-inst-ico" class="md-ico md-ico-cancel" style="display:none">👎</span></span></div>
       <div id="md-obspost-row" style="display:none;flex-direction:column;gap:.45rem;margin:.6rem 0;padding-top:.6rem;border-top:1px solid var(--border)">
@@ -3450,6 +3457,18 @@ window.abrirModal=function(key){
     document.getElementById('md-ts').textContent=fmtTs;
   } else {
     document.getElementById('md-ts').textContent='—';
+  }
+  // Fila CANCELADO (ts_cancelacion) — solo para turnos cancelados con ese campo (v6.36+)
+  const tsCancelRow=document.getElementById('md-ts-cancel-row');
+  const tsCancelVal=document.getElementById('md-ts-cancel');
+  if(r.estado==='cancelado'&&r.ts_cancelacion){
+    const dtc=new Date(r.ts_cancelacion);
+    const DIAS2=['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+    const MESES2=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+    tsCancelVal.textContent=DIAS2[dtc.getDay()]+' '+dtc.getDate()+' de '+MESES2[dtc.getMonth()]+' de '+dtc.getFullYear()+', '+String(dtc.getHours()).padStart(2,'0')+':'+String(dtc.getMinutes()).padStart(2,'0')+' hs';
+    tsCancelRow.style.display='flex';
+  } else {
+    tsCancelRow.style.display='none';
   }
   const instRow=document.getElementById('md-inst-row');
   const aprRow=document.getElementById('md-aprobo-row');
