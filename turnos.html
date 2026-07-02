@@ -1,5 +1,14 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.40
+  FECHA   : 2026-07-02
+  CAMBIOS : Disponibilidad de Instructores (admin): nueva vista "SEMANA" como alternativa
+            a la vista "LISTA" (30 dias, horas en columnas). La vista SEMANA muestra
+            dias lunes-domingo en columnas y horarios en filas, igual formato que "Mi
+            disponibilidad" del propio instructor pero de solo lectura. Toggle LISTA/SEMANA
+            arriba del selector de instructor. Navegacion propia por semana (admDispNavSemana),
+            tope de 51 semanas (~360 dias) adelante igual que la vista LISTA. Mismos simbolos
+            (✓ disponible, · no cargo, — sin horario ese dia) para no introducir info nueva.
   VERSION : 6.39
   FECHA   : 2026-07-02
   CAMBIOS : FIX: ReferenceError "Cannot access 'esPiloto' before initialization" en
@@ -1127,7 +1136,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.39</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.40</div>
   </div>
 
 </div>
@@ -1512,13 +1521,29 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
           <span style="font-family:var(--font-mono);font-size:11px;color:var(--text3)">// Cargando instructores...</span>
         </div>
         <div id="adm-disp-wrap" style="display:none">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:.85rem;flex-wrap:wrap">
-            <button id="adm-disp-prev" onclick="admDispNav(-1)" style="font-family:var(--font-mono);font-size:11px;padding:4px 12px">◀ 30 DÍAS</button>
-            <span id="adm-disp-rango" style="font-family:var(--font-mono);font-size:12px;color:var(--cyan);flex:1;text-align:center;letter-spacing:.08em"></span>
-            <button id="adm-disp-next" onclick="admDispNav(+1)" style="font-family:var(--font-mono);font-size:11px;padding:4px 12px">30 DÍAS ▶</button>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:.85rem">
+            <button id="adm-disp-vista-lista" class="nav-btn active" onclick="admDispToggleVista('lista')" style="font-size:11px;padding:5px 12px">LISTA</button>
+            <button id="adm-disp-vista-semana" class="nav-btn" onclick="admDispToggleVista('semana')" style="font-size:11px;padding:5px 12px">SEMANA</button>
           </div>
-          <div id="adm-disp-grid" style="overflow-x:auto">
-            <div class="empty">// Cargando...</div>
+          <div id="adm-disp-lista-wrap">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:.85rem;flex-wrap:wrap">
+              <button id="adm-disp-prev" onclick="admDispNav(-1)" style="font-family:var(--font-mono);font-size:11px;padding:4px 12px">◀ 30 DÍAS</button>
+              <span id="adm-disp-rango" style="font-family:var(--font-mono);font-size:12px;color:var(--cyan);flex:1;text-align:center;letter-spacing:.08em"></span>
+              <button id="adm-disp-next" onclick="admDispNav(+1)" style="font-family:var(--font-mono);font-size:11px;padding:4px 12px">30 DÍAS ▶</button>
+            </div>
+            <div id="adm-disp-grid" style="overflow-x:auto">
+              <div class="empty">// Cargando...</div>
+            </div>
+          </div>
+          <div id="adm-disp-semana-wrap" style="display:none">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:.85rem;flex-wrap:wrap">
+              <button id="adm-disp-sem-prev" onclick="admDispNavSemana(-1)" style="font-family:var(--font-mono);font-size:11px;padding:4px 12px">◀ SEM.</button>
+              <span id="adm-disp-sem-rango" style="font-family:var(--font-mono);font-size:12px;color:var(--cyan);flex:1;text-align:center;letter-spacing:.08em"></span>
+              <button id="adm-disp-sem-next" onclick="admDispNavSemana(+1)" style="font-family:var(--font-mono);font-size:11px;padding:4px 12px">SEM. ▶</button>
+            </div>
+            <div id="adm-disp-sem-grid" style="overflow-x:auto">
+              <div class="empty">// Cargando...</div>
+            </div>
           </div>
         </div>
       </div>
@@ -2394,7 +2419,7 @@ window.logout=function(){
   _auditoriaCache=[];_auditListaActual=[];_auditPage=0;
   _cqResultados=[];
   configs={};
-  _dispEstado={};dispSemanaOffset=0;admDispOffset=0;admDispInst=null;
+  _dispEstado={};dispSemanaOffset=0;admDispOffset=0;admDispInst=null;admDispSemanaOffset=0;admDispVista='lista';
   _restoreData=null;
   _editAlumnoKey=null;_mcqKey=null;
   // reset filtros/estados de UI
@@ -3993,7 +4018,7 @@ window.showCfgTab=function(tab){
     buildCfgAvionTabs();renderHorariosConfig();
     const isAdmin=session?.user==='admin'||session?.user==='administrador';
     const cardDisp=document.getElementById('card-disp-instructores');
-    if(cardDisp){ cardDisp.style.display=isAdmin?'block':'none'; if(isAdmin){admDispOffset=0;admDispInst=null;renderAdmDispSelector();const g=document.getElementById('adm-disp-grid');if(g)g.innerHTML='<div class="empty">// Cargando...</div>';} }
+    if(cardDisp){ cardDisp.style.display=isAdmin?'block':'none'; if(isAdmin){admDispOffset=0;admDispSemanaOffset=0;admDispVista='lista';admDispInst=null;document.getElementById('adm-disp-vista-lista')?.classList.add('active');document.getElementById('adm-disp-vista-semana')?.classList.remove('active');const lw=document.getElementById('adm-disp-lista-wrap');if(lw)lw.style.display='';const sw=document.getElementById('adm-disp-semana-wrap');if(sw)sw.style.display='none';renderAdmDispSelector();const g=document.getElementById('adm-disp-grid');if(g)g.innerHTML='<div class="empty">// Cargando...</div>';} }
   }
   if(tab==='auditoria')cargarAuditoria();
   if(tab==='auditoria-fpl')cargarAuditoriaFpl();
@@ -5298,6 +5323,9 @@ const ADM_DISP_MAX_PAG=11;        // hasta ~360 días adelante
 let admDispOffset=0;              // página de 30 días (0 = hoy..hoy+29)
 let admDispInst=null;             // {key, dispKey, nombre} del instructor elegido
 let _admDispInstList=[];
+let admDispVista='lista';         // 'lista' | 'semana'
+let admDispSemanaOffset=0;        // semana relativa a hoy (0=actual), para la vista SEMANA
+const ADM_DISP_SEM_MAX=51;        // ~360 días adelante (equivalente a ADM_DISP_MAX_PAG en semanas)
 
 function admDispBase(offset){
   const hoy=new Date(); hoy.setHours(0,0,0,0);
@@ -5334,8 +5362,22 @@ window.admDispSelectInst=function(key){
   if(!inst)return;
   admDispInst=inst;
   admDispOffset=0;
+  admDispSemanaOffset=0;
   document.querySelectorAll('#adm-disp-inst-sel .nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.instkey===key));
-  renderAdmDisp();
+  if(admDispVista==='lista') renderAdmDisp(); else renderAdmDispSemana();
+};
+
+window.admDispToggleVista=function(v){
+  if(admDispVista===v)return;
+  admDispVista=v;
+  document.getElementById('adm-disp-vista-lista')?.classList.toggle('active',v==='lista');
+  document.getElementById('adm-disp-vista-semana')?.classList.toggle('active',v==='semana');
+  const listaWrap=document.getElementById('adm-disp-lista-wrap');
+  const semWrap=document.getElementById('adm-disp-semana-wrap');
+  if(listaWrap) listaWrap.style.display=v==='lista'?'':'none';
+  if(semWrap) semWrap.style.display=v==='semana'?'':'none';
+  if(!admDispInst)return;
+  if(v==='lista') renderAdmDisp(); else renderAdmDispSemana();
 };
 
 window.admDispNav=function(dir){
@@ -5414,6 +5456,79 @@ async function renderAdmDisp(){
   html+='</tbody></table>';
   html+=`<div style="margin-top:.6rem;font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.06em">
     <span style="color:var(--cyan)">✓</span> disponible &nbsp; <span style="color:var(--border)">·</span> no cargó disponibilidad &nbsp; <span style="color:var(--text3)">—</span> sin horario ese día &nbsp;·&nbsp; <span style="color:var(--cyan)">${countDisp}</span> slots disponibles en el período
+  </div>`;
+  grid.innerHTML=html;
+}
+
+window.admDispNavSemana=function(dir){
+  const n=admDispSemanaOffset+dir;
+  if(n<0||n>ADM_DISP_SEM_MAX)return;
+  admDispSemanaOffset=n;
+  renderAdmDispSemana();
+};
+
+// Vista SEMANA: mismo dato que la vista LISTA (disponibilidad del instructor elegido),
+// pero con días en columnas y horas en filas — igual que "Mi disponibilidad" del instructor,
+// solo que de solo lectura y para el instructor que el admin seleccionó arriba.
+async function renderAdmDispSemana(){
+  const grid=document.getElementById('adm-disp-sem-grid');
+  const rangoEl=document.getElementById('adm-disp-sem-rango');
+  const prevBtn=document.getElementById('adm-disp-sem-prev');
+  const nextBtn=document.getElementById('adm-disp-sem-next');
+  if(!grid)return;
+  if(!admDispInst)return;
+  grid.innerHTML='<div class="empty">// Cargando...</div>';
+
+  const lunes=dispLunes(admDispSemanaOffset);
+  const dias=[];
+  for(let i=0;i<7;i++){ const d=new Date(lunes); d.setDate(lunes.getDate()+i); dias.push(d); }
+  const hoy=new Date(); hoy.setHours(0,0,0,0);
+
+  rangoEl.textContent=admDispInst.nombre+'  ·  '+dispFmtDisplay(dias[0])+' — '+dispFmtDisplay(dias[6]);
+  prevBtn.disabled=admDispSemanaOffset<=0;              prevBtn.style.opacity=prevBtn.disabled?'.4':'1';
+  nextBtn.disabled=admDispSemanaOffset>=ADM_DISP_SEM_MAX; nextBtn.style.opacity=nextBtn.disabled?'.4':'1';
+
+  const fechas=dias.map(d=>dispFmtFecha(d));
+  const arrs=await Promise.all(fechas.map(f=>fbGet('disponibilidad/'+f+'/'+admDispInst.dispKey)));
+  const dispPor={};
+  fechas.forEach((f,idx)=>{ dispPor[f]=new Set(Array.isArray(arrs[idx])?arrs[idx]:[]); });
+
+  const todosSlots=new Set();
+  dias.forEach(d=>horasParaDia(dispFmtFecha(d),'LV-OAD').forEach(h=>todosSlots.add(h)));
+  const slots=[...todosSlots].sort();
+  if(!slots.length){ grid.innerHTML='<div class="empty">// No hay horarios configurados para LV-OAD esta semana.</div>'; return; }
+
+  let html='<table style="border-collapse:collapse;font-family:var(--font-mono);font-size:12px;min-width:520px;width:100%">';
+  html+='<thead><tr>';
+  html+='<th style="padding:6px 10px;color:var(--text3);font-weight:500;text-align:left;min-width:60px">Hora</th>';
+  dias.forEach(d=>{
+    const ds=dispFmtFecha(d);
+    const esHoy=ds===dispFmtFecha(hoy);
+    const color=esHoy?'var(--cyan)':'var(--text)';
+    html+=`<th style="padding:6px 10px;color:${color};font-weight:${esHoy?700:500};text-align:center;min-width:72px">${dispFmtDisplay(d)}</th>`;
+  });
+  html+='</tr></thead><tbody>';
+
+  let countDisp=0;
+  slots.forEach(h=>{
+    html+='<tr style="border-bottom:1px solid var(--border)">';
+    html+=`<td style="padding:6px 10px;color:var(--text2)">${h}</td>`;
+    dias.forEach(d=>{
+      const ds=dispFmtFecha(d);
+      const existe=horasParaDia(ds,'LV-OAD').includes(h);
+      if(!existe){ html+='<td style="padding:6px 10px;text-align:center;background:var(--bg2)"><span style="color:var(--text3)">—</span></td>'; return; }
+      const disp=dispPor[ds].has(h);
+      if(disp)countDisp++;
+      const bg=disp?'rgba(0,200,212,.1)':'var(--bg2)';
+      const color=disp?'var(--cyan)':'var(--border)';
+      const sym=disp?'✓':'·';
+      html+=`<td style="padding:6px 10px;text-align:center;background:${bg}"><span style="color:${color};font-size:13px;font-weight:700" title="${ds} ${h} — ${disp?'disponible':'no disponible'}">${sym}</span></td>`;
+    });
+    html+='</tr>';
+  });
+  html+='</tbody></table>';
+  html+=`<div style="margin-top:.6rem;font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.06em">
+    <span style="color:var(--cyan)">✓</span> disponible &nbsp; <span style="color:var(--border)">·</span> no cargó disponibilidad &nbsp; <span style="color:var(--text3)">—</span> sin horario ese día &nbsp;·&nbsp; <span style="color:var(--cyan)">${countDisp}</span> slots disponibles esta semana
   </div>`;
   grid.innerHTML=html;
 }
