@@ -1,5 +1,15 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.47
+  FECHA   : 2026-07-02
+  CAMBIOS : FIX (v6.45): el toggle LISTA/SEMANA de Reservas no andaba — mismo bug que ya
+            se habia corregido en admDispToggleVista (v6.43): "ReferenceError: calVista is
+            not defined" al clickear. El onclick inline leia la variable de modulo calVista
+            directamente desde el HTML, y las variables let/const de un script type="module"
+            no quedan expuestas al scope global de los atributos onclick. Se saco la
+            referencia del HTML (onclick="setCalVista()" sin argumento) y setCalVista ahora
+            calcula el toggle internamente cuando se la llama sin parametro, igual que
+            admDispToggleVista.
   VERSION : 6.46
   FECHA   : 2026-07-02
   CAMBIOS : Pantalla Seguimiento: el segmented control TODOS/PRÓXIMOS/PASADOS (antes tabs
@@ -1189,7 +1199,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.46</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.47</div>
   </div>
 
 </div>
@@ -1391,7 +1401,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
     </div>
     <!-- selector avión calendario instructor -->
     <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:.85rem">
-      <div id="cal-vista-toggle" onclick="setCalVista(calVista==='lista'?'semana':'lista')" style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;width:fit-content">
+      <div id="cal-vista-toggle" onclick="setCalVista()" style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;width:fit-content">
         <span id="cal-vista-lbl-lista" style="font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;color:var(--cyan);transition:color .2s">LISTA</span>
         <div style="width:40px;height:20px;border-radius:10px;background:rgba(0,200,212,.12);border:1px solid var(--cyan);position:relative;transition:all .25s">
           <div id="cal-vista-knob" style="width:14px;height:14px;border-radius:50%;background:var(--cyan);position:absolute;top:1px;left:2px;transition:left .25s;box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>
@@ -3300,6 +3310,7 @@ function getDiasSemana(offset){
 }
 
 window.setCalVista=function(vista){
+  if(vista===undefined) vista=calVista==='lista'?'semana':'lista';
   calVista=vista;
   document.getElementById('vista-lista').style.display=vista==='lista'?'block':'none';
   document.getElementById('vista-semana').style.display=vista==='semana'?'block':'none';
