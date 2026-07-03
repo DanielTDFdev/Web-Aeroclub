@@ -1,5 +1,19 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.49
+  FECHA   : 2026-07-03
+  CAMBIOS : FIX real de la línea de hora actual en vista SEMANA (v6.48 no la
+            resolvió — agregó la llamada pero la función seguía fallando). Dos
+            causas raíz: (1) document.querySelector('.cal-wrap') siempre agarra
+            el PRIMER .cal-wrap del DOM (el de LISTA), aunque se esté mirando
+            SEMANA — se resolvió pasando el wrap correcto como parámetro desde
+            cada caller (cal.parentElement para LISTA, grid.parentElement para
+            SEMANA); el intervalo de 1 min usa el fallback de offsetParent para
+            agarrar el que esté visible. (2) el check "hoy en rango visible"
+            usaba getDays() que es el helper de LISTA — en SEMANA la semana la
+            calcula getLunesDeSemana()+semanaOffset, así que getDays() podía
+            devolver un rango distinto y no encontrar hoy → salía sin dibujar
+            nada. Se reemplazó por th.today-col que ya existe en las dos vistas.
   VERSION : 6.48
   FECHA   : 2026-07-03
   CAMBIOS : FIX: la línea roja de hora actual desapareció de la vista SEMANA.
@@ -1207,7 +1221,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.48</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.49</div>
   </div>
 
 </div>
@@ -3289,7 +3303,7 @@ async function renderTodasReservas(data){
   });
   html+='</tbody></table>';
   cal.innerHTML=html;
-  dibujarLineaHoraActual();
+  dibujarLineaHoraActual(cal.parentElement);
   scrollCalAHoy();
 }
 
@@ -3412,7 +3426,7 @@ async function renderVistaSemana(){
   });
   html+='</tbody></table>';
   grid.innerHTML=html;
-  dibujarLineaHoraActual();
+  dibujarLineaHoraActual(grid.parentElement);
 }
 
 function scrollCalAHoy(behavior){
@@ -3431,8 +3445,9 @@ function scrollCalAHoy(behavior){
 window.centrarHoy=function(){ scrollCalAHoy('smooth'); };
 
 // ── LÍNEA HORA ACTUAL EN CALENDARIO ────────────────────────────
-function dibujarLineaHoraActual(){
-  const wrap=document.querySelector('.cal-wrap');
+function dibujarLineaHoraActual(wrapEl){
+  // Acepta un wrap opcional; si no se pasa, toma el primero visible del DOM.
+  const wrap=wrapEl||Array.from(document.querySelectorAll('.cal-wrap')).find(w=>w.offsetParent!==null);
   const tabla=wrap&&wrap.querySelector('.cal-table');
   if(!tabla)return;
 
@@ -3445,9 +3460,9 @@ function dibujarLineaHoraActual(){
   const minActual=ahora.getMinutes();
   const hoyStr=fmtDate(ahora);
 
-  // verificar que hoy esté en el rango visible
-  const days=getDays();
-  const enRango=days.some(d=>fmtDate(d)===hoyStr);
+  // verificar que hoy esté en el rango visible — busca el th.today-col que ya
+  // existe en ambas vistas (LISTA y SEMANA), sin depender de getDays().
+  const enRango=!!tabla.querySelector('thead th.today-col');
   if(!enRango)return;
 
   // buscar filas de la tabla por hora
