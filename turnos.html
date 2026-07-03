@@ -1,5 +1,17 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.50
+  FECHA   : 2026-07-03
+  CAMBIOS : Tooltip de los turnos ya tomados en el calendario de Reservas (vistas LISTA
+            y SEMANA) ahora agrega, además de los datos que ya mostraba (avión, quién
+            aprobó/canceló, etc.), el "saldo" de cuota semanal del alumno dueño de ese
+            turno: cuántos turnos le quedan esa semana sobre el total de 3, o que ya
+            alcanzó el límite. Solo aplica a turnos de rol alumno (los pilotos no tienen
+            cuota semanal). Nueva función tooltipSaldo(r, todosLosDatos), reutiliza
+            turnosRestantesSemana() (ver v6.50 anterior en este mismo changelog — nota:
+            esa función se generalizó para aceptar un email arbitrario en vez de asumir
+            siempre el usuario logueado, ya que acá el saldo que importa es el del
+            alumno del turno, no el del instructor/admin que está mirando el calendario).
   VERSION : 6.49
   FECHA   : 2026-07-03
   CAMBIOS : FIX real de la línea de hora actual en vista SEMANA (v6.48 no la
@@ -1221,7 +1233,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.49</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.50</div>
   </div>
 
 </div>
@@ -2761,6 +2773,36 @@ function slotsTomados(ds,avion,data){
   return [...taken];
 }
 
+// Cuota semanal (v6.35, extraída a función standalone en v6.50): calcula turnos usados/
+// restantes de la semana calendario (lunes a domingo) que contiene ds, para el email dado
+// (default: usuario logueado). Cuentan: pendiente, aprobado, y cancelado POR EL PROPIO
+// ALUMNO (cancelado_rol==='alumno' o campo ausente). NO cuentan: cancelados por el
+// instructor ni vencidos. Límite actual: 3 por semana. Usada en confirmarTurno() (bloqueo)
+// y en el tooltip de los cal-block de turnos ya tomados (vistas LISTA y SEMANA de Reservas).
+function turnosRestantesSemana(ds,data,email){
+  const LIMITE=3;
+  const targetEmail=email||session?.email;
+  const todasReservas=data||{};
+  const [fy,fm,fd]=ds.split('-').map(Number);
+  const dSel=new Date(fy,fm-1,fd);
+  const dow=dSel.getDay(); // 0=dom..6=sab
+  const diffLunes=dow===0?-6:1-dow;
+  const lunes=new Date(dSel); lunes.setDate(dSel.getDate()+diffLunes);
+  const domingo=new Date(lunes); domingo.setDate(lunes.getDate()+6);
+  const pad=n=>String(n).padStart(2,'0');
+  const fmt=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const semLunes=fmt(lunes), semDomingo=fmt(domingo);
+  const enSemana=Object.values(todasReservas).filter(r=>{
+    if(!r||typeof r!=='object') return false;
+    if(r.email!==targetEmail) return false;
+    if(!r.fecha||r.fecha<semLunes||r.fecha>semDomingo) return false;
+    if(r.estado==='vencido') return false;
+    if(r.estado==='cancelado'&&r.cancelado_rol==='instructor') return false;
+    return true;
+  });
+  return {usados:enSemana.length, restantes:Math.max(0,LIMITE-enSemana.length), limite:LIMITE, semLunes, semDomingo};
+}
+
 // Devuelve un Set con las horas de un día que tienen al menos un instructor
 // disponible (excluyendo instructores de vacaciones). Solo aplica a LV-OAD.
 let _slotsConInstructorDia=new Set();   // cache del último día renderizado
@@ -2787,7 +2829,8 @@ async function renderSlots(ds,data){
   document.getElementById('selected-day-label').textContent=ds.replace(/^(\d{4})-(\d{2})-(\d{2})$/,'$3/$2/$1');
   document.getElementById('slots-section').style.display='block';
   const esOAD=(selectedAvion||'LV-OAD')==='LV-OAD';
-  const esPiloto=(session?.rol||'alumno')==='piloto';
+  const rol=session?.rol||'alumno';
+  const esPiloto=rol==='piloto';
   // Disponibilidad de instructores (solo relevante en LV-OAD)
   const slotsConInstructor=esOAD?await slotsConInstructorParaDia(ds):new Set();
   _slotsConInstructorDia=slotsConInstructor;
@@ -2798,7 +2841,7 @@ async function renderSlots(ds,data){
   const avail=horasParaDia(ds,selectedAvion).filter(h=>okAnticipacion(ds,h)&&(!esOAD||pilotoOADLibre||slotsConInstructor.has(h)));
   if(!avail.length){
     const sinDisp=esOAD&&!pilotoOADLibre&&slotsConInstructor.size===0;
-    grid.innerHTML='<div class="empty">//'+(sinDisp?' SIN INSTRUCTOR DISPONIBLE PARA ESTE DÍA':' SIN DISPONIBILIDAD (se requiere '+(session?.rol==='piloto'?'1 hora':'12 hs')+' de anticipación)')+'</div>';
+    grid.innerHTML='<div class="empty">//'+(sinDisp?' SIN INSTRUCTOR DISPONIBLE PARA ESTE DÍA':' SIN DISPONIBILIDAD (se requiere '+(rol==='piloto'?'1 hora':'12 hs')+' de anticipación)')+'</div>';
     return;
   }
   grid.innerHTML=avail.map(h=>{
@@ -2884,34 +2927,12 @@ window.confirmarTurno=async function(){
   if(takenFinal.includes(selectedSlot)){showErr('turno-err','Ese horario acaba de ser reservado por otro usuario. Elegí otro.');return;}
   const rol=session.rol||'alumno';
   const esPiloto=rol==='piloto';
-  // ── CUOTA SEMANAL (v6.35) ──────────────────────────────────────────────────
-  // Solo aplica a alumnos (no pilotos ni instructores). Límite: 2 turnos por semana
-  // calendario (lunes a domingo). Cuentan: pendiente, aprobado, y cancelado POR EL
-  // PROPIO ALUMNO (cancelado_rol==='alumno' o campo ausente — cancelados viejos sin el
-  // campo se tratan conservadoramente como del alumno). NO cuentan: cancelados por el
-  // instructor (cancelado_rol==='instructor'), ni vencidos.
+  // ── CUOTA SEMANAL (v6.35, refactor v6.50) ───────────────────────────────────
+  // Solo aplica a alumnos (no pilotos ni instructores). Lógica en turnosRestantesSemana().
   if(!esPiloto&&rol==='alumno'){
-    const todasReservas=snapFinal.val()||{};
-    // Calcular lunes y domingo de la semana de selectedDay (UTC-3)
-    const [fy,fm,fd]=selectedDay.split('-').map(Number);
-    const dSel=new Date(fy,fm-1,fd);
-    const dow=dSel.getDay(); // 0=dom..6=sab
-    const diffLunes=dow===0?-6:1-dow;
-    const lunes=new Date(dSel); lunes.setDate(dSel.getDate()+diffLunes);
-    const domingo=new Date(lunes); domingo.setDate(lunes.getDate()+6);
-    const pad=n=>String(n).padStart(2,'0');
-    const fmt=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-    const semLunes=fmt(lunes), semDomingo=fmt(domingo);
-    const enSemana=Object.values(todasReservas).filter(r=>{
-      if(!r||typeof r!=='object') return false;
-      if(r.email!==session.email) return false;
-      if(!r.fecha||r.fecha<semLunes||r.fecha>semDomingo) return false;
-      if(r.estado==='vencido') return false;
-      if(r.estado==='cancelado'&&r.cancelado_rol==='instructor') return false;
-      return true;
-    });
-    if(enSemana.length>=3){
-      showErr('turno-err',`Límite semanal alcanzado: ya tenés ${enSemana.length} turno${enSemana.length===1?'':'s'} esta semana (${semLunes.slice(8)}/${semLunes.slice(5,7)} al ${semDomingo.slice(8)}/${semDomingo.slice(5,7)}). Máximo permitido: 3 por semana.`);
+    const {usados,limite,semLunes,semDomingo}=turnosRestantesSemana(selectedDay,snapFinal.val());
+    if(usados>=limite){
+      showErr('turno-err',`Límite semanal alcanzado: ya tenés ${usados} turno${usados===1?'':'s'} esta semana (${semLunes.slice(8)}/${semLunes.slice(5,7)} al ${semDomingo.slice(8)}/${semDomingo.slice(5,7)}). Máximo permitido: ${limite} por semana.`);
       return;
     }
   }
@@ -3173,6 +3194,18 @@ function tooltipAccion(r){
   return '';
 }
 
+// v6.50: sufijo del tooltip del calendario con el saldo de cuota semanal (turnos
+// restantes esa semana) del alumno dueño del turno. Solo aplica a rol alumno (no
+// pilotos, que no tienen cuota). todosLosDatos es el array/objeto completo de reservas
+// ya cargado por el caller (LISTA: `todas`, SEMANA: `todas`), evita una lectura extra.
+function tooltipSaldo(r,todosLosDatos){
+  if((r.rol||'alumno')!=='alumno') return '';
+  const{restantes,limite}=turnosRestantesSemana(r.fecha,todosLosDatos,r.email);
+  return restantes>0
+    ?` — Saldo: ${restantes}/${limite} turnos esta semana`
+    :` — Saldo: 0/${limite} turnos esta semana (límite alcanzado)`;
+}
+
 // v6.13: disponibilidad propia del instructor logueado, para resaltar en el calendario
 // los turnos pendientes que caen en un día/horario que él mismo cargó como disponible.
 // v6.14: ampliado para traer también, por hora, los NOMBRES de TODOS los instructores
@@ -3295,7 +3328,7 @@ async function renderTodasReservas(data){
         const tipDisp=coincideDisp?' — ✓ Coincide con tu disponibilidad':'';
         const tipQuien=r.estado==='pendiente'?tipQuienesPueden(dispCompleta,r.fecha,r.hora):'';
         const badge=coincideDisp?'<span class="mi-disp-badge" title="Coincide con tu disponibilidad">★</span>':'';
-        html+=`<div class="cal-block ${colorCls}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'}${tipSin}${tipDisp}${tipQuien}${tooltipAccion(r)}" style="${estiloExtra}">${badge}${avLabel}${rangoLabel}${nombre}</div>`;
+        html+=`<div class="cal-block ${colorCls}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'}${tipSin}${tipDisp}${tipQuien}${tooltipAccion(r)}${tooltipSaldo(r,todas)}" style="${estiloExtra}">${badge}${avLabel}${rangoLabel}${nombre}</div>`;
       });
       html+='</td>';
     });
@@ -3416,7 +3449,7 @@ async function renderVistaSemana(){
         const tipDisp=coincideDisp?' — ✓ Coincide con tu disponibilidad':'';
         const tipQuien=r.estado==='pendiente'?tipQuienesPueden(dispCompleta,ds,r.hora):'';
         const badge=coincideDisp?'<span class="mi-disp-badge" title="Coincide con tu disponibilidad">★</span>':'';
-        html+=`<div class="cal-block ${colorCls}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'} — ${r.estado}${tipSin}${tipDisp}${tipQuien}${tooltipAccion(r)}" style="${estiloExtra}">
+        html+=`<div class="cal-block ${colorCls}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'} — ${r.estado}${tipSin}${tipDisp}${tipQuien}${tooltipAccion(r)}${tooltipSaldo(r,todas)}" style="${estiloExtra}">
           ${badge}<span style="font-size:9px;opacity:.8">${r.avion||'LV-OAD'}</span><br>${nombre}
         </div>`;
       });
