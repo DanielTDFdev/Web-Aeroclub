@@ -1,5 +1,15 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.46
+  FECHA   : 2026-07-02
+  CAMBIOS : Pantalla Seguimiento: el segmented control TODOS/PRÓXIMOS/PASADOS (antes tabs
+            .cal-vista-tab con estado .active independiente por boton) ahora tiene una
+            pastilla (.seg-switch-pill) que se desliza detras del boton activo, calculando
+            left/width en JS via offsetLeft/offsetWidth de cada boton (segSwitchUpdatePill).
+            Se llama al abrir la pestana Seguimiento (requestAnimationFrame, porque el
+            contenedor esta display:none hasta ese momento y offsetLeft daria 0) y en
+            window resize. Nuevas clases .seg-switch/.seg-switch-pill, no se toco
+            .cal-vista-tab (sigue sin uso en el archivo, se puede limpiar mas adelante).
   VERSION : 6.45
   FECHA   : 2026-07-02
   CAMBIOS : Pantalla Reservas (instructor/admin): el selector LISTA/SEMANA del calendario
@@ -1056,6 +1066,10 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 .cal-vista-tabs{display:flex;gap:6px;margin-bottom:.85rem;}
 .cal-vista-tab{font-family:var(--font-mono);font-size:12px;padding:5px 14px;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;background:var(--bg2);color:var(--text3);letter-spacing:.1em;transition:all .15s;}
 .cal-vista-tab.active{border-color:var(--cyan);color:var(--cyan);background:rgba(0,200,212,.07);}
+.seg-switch{position:relative;display:inline-flex;gap:0;padding:3px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:.85rem;}
+.seg-switch-pill{position:absolute;top:3px;bottom:3px;left:3px;width:0;background:rgba(0,200,212,.12);border:1px solid var(--cyan);border-radius:calc(var(--radius) - 2px);transition:left .25s,width .25s;z-index:0;}
+.seg-switch button{position:relative;z-index:1;background:transparent;border:none;font-family:var(--font-mono);font-size:12px;padding:5px 14px;color:var(--text3);letter-spacing:.1em;cursor:pointer;transition:color .2s;white-space:nowrap;}
+.seg-switch button.active{color:var(--cyan);}
 .cal-semana-nav{display:flex;align-items:center;gap:10px;margin-bottom:.85rem;flex-wrap:wrap;}
 .cal-semana-nav span{font-family:var(--font-mono);font-size:12px;color:var(--cyan);flex:1;text-align:center;letter-spacing:.1em;}
 .cal-block.oad{background:rgba(0,200,212,.15);border:1px solid rgba(0,200,212,.45);color:var(--cyan);}
@@ -1175,7 +1189,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.45</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.46</div>
   </div>
 
 </div>
@@ -1437,10 +1451,11 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <div class="stat"><div class="num" id="seg-stat-cancel" style="color:var(--red)">0</div><div class="lbl">Cancelados</div></div>
       <div class="stat"><div class="num" id="seg-stat-fut">0</div><div class="lbl">Próximos</div></div>
     </div>
-    <div class="cal-vista-tabs">
-      <button class="cal-vista-tab active" id="seg-per-todos"   onclick="setSegPeriodo('todos')">TODOS</button>
-      <button class="cal-vista-tab"        id="seg-per-futuros" onclick="setSegPeriodo('futuros')">PRÓXIMOS</button>
-      <button class="cal-vista-tab"        id="seg-per-pasados" onclick="setSegPeriodo('pasados')">PASADOS</button>
+    <div class="seg-switch" id="seg-switch">
+      <div class="seg-switch-pill" id="seg-switch-pill"></div>
+      <button class="active" id="seg-per-todos"   onclick="setSegPeriodo('todos')">TODOS</button>
+      <button                id="seg-per-futuros" onclick="setSegPeriodo('futuros')">PRÓXIMOS</button>
+      <button                id="seg-per-pasados" onclick="setSegPeriodo('pasados')">PASADOS</button>
     </div>
     <div class="card" style="padding:1rem">
       <div id="seg-resultado"><div class="empty">// Cargando movimientos...</div></div>
@@ -3857,7 +3872,7 @@ window.showInstTab=function(tab){
   if(dispBtn){ dispBtn.classList.toggle('active',tab==='disponibilidad'); dispBtn.style.display=(session?.soloUsuarios||esAdmin)?'none':''; }
   const segBtn=document.getElementById('inst-tab-seg');
   if(segBtn){ segBtn.classList.toggle('active',tab==='seguimiento'); segBtn.style.display=session?.soloUsuarios?'none':''; }
-  if(tab==='seguimiento'){ renderSeguimiento(); }
+  if(tab==='seguimiento'){ renderSeguimiento(); requestAnimationFrame(segSwitchUpdatePill); }
   if(tab==='disponibilidad'){ dispSemanaOffset=0; renderDisponibilidad(); renderToggleVacaciones(); }
   const btnRes=document.getElementById('inst-tab-res');
   if(btnRes) btnRes.style.display=session?.soloUsuarios?'none':'';
@@ -3894,8 +3909,18 @@ window.setSegPeriodo=function(p){
     const b=document.getElementById('seg-per-'+x);
     if(b)b.classList.toggle('active',x===p);
   });
+  segSwitchUpdatePill();
   renderSeguimiento();
 };
+
+function segSwitchUpdatePill(){
+  const pill=document.getElementById('seg-switch-pill');
+  const btn=document.getElementById('seg-per-'+_segPeriodo);
+  if(!pill||!btn)return;
+  pill.style.left=btn.offsetLeft+'px';
+  pill.style.width=btn.offsetWidth+'px';
+}
+window.addEventListener('resize',segSwitchUpdatePill);
 
 // Devuelve el nombre de quien APROBÓ el turno (o null). Compatibilidad con registros viejos.
 function segAprobadorDe(r){
