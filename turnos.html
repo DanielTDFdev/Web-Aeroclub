@@ -1,5 +1,20 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.52
+  FECHA   : 2026-07-03
+  CAMBIOS : FIX de fondo en el conteo de cuota semanal (turnosRestantesSemana), reportado
+            por Daniel al revisar el caso de un alumno con más turnos activos de los que
+            el saldo mostraba. Causa real: 'vencido' tiene DOS significados distintos en
+            este sistema, ya documentados desde v5.87/5.88 para el editor de observación
+            post-vuelo pero nunca aplicados a la cuota semanal: (1) el cron
+            vencimiento_turnos.py marca vencido un PENDIENTE nunca aprobado (no voló, no
+            debe contar) — sin aprobado_por; (2) vencerTurnosPendientes (cliente) marca
+            vencido cualquier turno YA APROBADO cuya hora pasó (sí voló / debía volar bajo
+            aprobación, debe contar igual que 'aprobado') — con aprobado_por seteado. El
+            filtro de cuota excluía TODO estado==='vencido' sin distinguir, así que estaba
+            ignorando vuelos reales del caso 2 y mostrando saldo disponible de más. Ahora
+            solo excluye vencido SIN aprobado_por (caso 1); vencido CON aprobado_por (caso
+            2) cuenta para la cuota igual que un aprobado.
   VERSION : 6.51
   FECHA   : 2026-07-03
   CAMBIOS : FIX de fondo (reportado por Daniel: alumno con 4 turnos activos en la misma
@@ -1253,7 +1268,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.51</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.52</div>
   </div>
 
 </div>
@@ -2793,12 +2808,21 @@ function slotsTomados(ds,avion,data){
   return [...taken];
 }
 
-// Cuota semanal (v6.35, extraída a función standalone en v6.50): calcula turnos usados/
-// restantes de la semana calendario (lunes a domingo) que contiene ds, para el email dado
-// (default: usuario logueado). Cuentan: pendiente, aprobado, y cancelado POR EL PROPIO
-// ALUMNO (cancelado_rol==='alumno' o campo ausente). NO cuentan: cancelados por el
-// instructor ni vencidos. Límite actual: 3 por semana. Usada en confirmarTurno() (bloqueo)
-// y en el tooltip de los cal-block de turnos ya tomados (vistas LISTA y SEMANA de Reservas).
+// Cuota semanal (v6.35, extraída a función standalone en v6.50, fix v6.52): calcula
+// turnos usados/restantes de la semana calendario (lunes a domingo) que contiene ds, para
+// el email dado (default: usuario logueado). Cuentan: pendiente, aprobado, cancelado POR
+// EL PROPIO ALUMNO (cancelado_rol==='alumno' o campo ausente), y vencido CON aprobador
+// (ver nota). NO cuentan: cancelados por el instructor, ni vencido SIN aprobador.
+// Nota clave (v6.52): 'vencido' tiene doble significado en este sistema (mismo patrón que
+// ya documentaba el changelog de v5.87/5.88 para el editor de observación post-vuelo):
+//  1) cron vencimiento_turnos.py: pendiente que nunca fue aprobado, expiró sin confirmación
+//     del instructor → el vuelo NO ocurrió, no debe contar. aprobado_por es null.
+//  2) vencerTurnosPendientes (cliente): un turno YA APROBADO cuya hora pasó → SÍ es un
+//     vuelo real (ocurrido o que debía ocurrir bajo aprobación), debe contar igual que un
+//     'aprobado'. aprobado_por tiene el nombre del instructor que lo aprobó.
+// Se distinguen por r.aprobado_por: si está seteado, es el caso 2 y cuenta para la cuota.
+// Límite actual: 3 por semana. Usada en confirmarTurno() (bloqueo) y en el tooltip de los
+// cal-block de turnos ya tomados (vistas LISTA y SEMANA de Reservas).
 function turnosRestantesSemana(ds,data,email){
   const LIMITE=3;
   const targetEmail=email||session?.email;
@@ -2816,7 +2840,7 @@ function turnosRestantesSemana(ds,data,email){
     if(!r||typeof r!=='object') return false;
     if(r.email!==targetEmail) return false;
     if(!r.fecha||r.fecha<semLunes||r.fecha>semDomingo) return false;
-    if(r.estado==='vencido') return false;
+    if(r.estado==='vencido'&&!r.aprobado_por) return false; // vencido del cron (nunca aprobado): no cuenta
     if(r.estado==='cancelado'&&r.cancelado_rol==='instructor') return false;
     return true;
   });
