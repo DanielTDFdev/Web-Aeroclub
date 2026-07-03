@@ -1,5 +1,25 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.51
+  FECHA   : 2026-07-03
+  CAMBIOS : FIX de fondo (reportado por Daniel: alumno con 4 turnos activos en la misma
+            semana pese al límite de 3). confirmarTurno() usaba un patrón read-then-write
+            no atómico: leía /reservas, chequeaba slot-tomado + cuota semanal, y recién
+            después escribía con fbPush — dos pasos separados. Un doble-submit (doble tap,
+            dos pestañas abiertas, reintento por red lenta) podía hacer que dos pedidos
+            leyeran el mismo estado (mismo conteo de turnos) ANTES de que cualquiera
+            escribiera, y los dos pasaban el chequeo de cuota. Reemplazado por
+            runTransaction() de Firebase sobre /reservas: el chequeo (slot tomado + cuota
+            semanal vía turnosRestantesSemana) y la escritura del nuevo turno ahora ocurren
+            como una sola operación atómica — si el servidor detecta que el dato cambió
+            durante el intento, reintenta el callback con el valor fresco, así que dos
+            escrituras concurrentes no pueden pasar el chequeo con el mismo conteo. Nota:
+            esto blinda el flujo normal de "Pedir Turno"; NO cubre guardarTurnoManual
+            ("+ CARGAR TURNO", que no chequea cuota por diseño) ni el hecho de que las
+            reglas de Firebase siguen abiertas ({".read":true,".write":true}) — cualquier
+            escritura directa a la REST API sin pasar por la UI sigue sin validación de
+            servidor. Eso requiere el hardening de reglas planeado para la Fase 5 de la
+            migración a Auth.
   VERSION : 6.50
   FECHA   : 2026-07-03
   CAMBIOS : Tooltip de los turnos ya tomados en el calendario de Reservas (vistas LISTA
@@ -1233,7 +1253,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.50</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.51</div>
   </div>
 
 </div>
@@ -2100,7 +2120,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, set, get, update, remove, push, onValue, child }
+import { getDatabase, ref, set, get, update, remove, push, onValue, child, runTransaction }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updatePassword }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -2921,21 +2941,8 @@ window.confirmarTurno=async function(){
   if(!selectedAvion){showErr('turno-err','Seleccioná un avión.');return;}
   if(!selectedDay||!selectedSlot){showErr('turno-err','Seleccioná día y horario.');return;}
   if(!okAnticipacion(selectedDay,selectedSlot)){showErr('turno-err','Se requiere al menos '+(session?.rol==='piloto'?'1 hora':'12 horas')+' de anticipación.');return;}
-  // Re-consulta fresca justo antes de grabar para minimizar colisiones simultáneas
-  const snapFinal = await get(ref(db,'reservas'));
-  const takenFinal = slotsTomados(selectedDay, selectedAvion, snapFinal.val());
-  if(takenFinal.includes(selectedSlot)){showErr('turno-err','Ese horario acaba de ser reservado por otro usuario. Elegí otro.');return;}
   const rol=session.rol||'alumno';
   const esPiloto=rol==='piloto';
-  // ── CUOTA SEMANAL (v6.35, refactor v6.50) ───────────────────────────────────
-  // Solo aplica a alumnos (no pilotos ni instructores). Lógica en turnosRestantesSemana().
-  if(!esPiloto&&rol==='alumno'){
-    const {usados,limite,semLunes,semDomingo}=turnosRestantesSemana(selectedDay,snapFinal.val());
-    if(usados>=limite){
-      showErr('turno-err',`Límite semanal alcanzado: ya tenés ${usados} turno${usados===1?'':'s'} esta semana (${semLunes.slice(8)}/${semLunes.slice(5,7)} al ${semDomingo.slice(8)}/${semDomingo.slice(5,7)}). Máximo permitido: ${limite} por semana.`);
-      return;
-    }
-  }
   const obs=val('al-obs');
   const esOAD=(selectedAvion||'LV-OAD')==='LV-OAD';
   const estado=(esPiloto&&!esOAD)?'aprobado':'pendiente';
@@ -2946,9 +2953,9 @@ window.confirmarTurno=async function(){
     const slotsInst=await slotsConInstructorParaDia(selectedDay);
     sinInstructor=!slotsInst.has(selectedSlot);
   }
-  const horas=horasParaDia(selectedDay,selectedAvion);
   const esRango=esPiloto&&!esOAD&&selectedSlotFin&&selectedSlotFin!==selectedSlot;
-  await fbPush('reservas',{
+  const nuevaKey=push(ref(db,'reservas')).key; // genera un ID único sin escribir (no hace round-trip al server)
+  const nuevoTurno={
     nombre:session.nombre,
     email:session.email,
     fecha:selectedDay,
@@ -2960,7 +2967,41 @@ window.confirmarTurno=async function(){
     rol:session.rol||'alumno',
     ...(sinInstructor?{sinInstructor:true}:{}),
     ts:new Date().toISOString()
+  };
+  // ── Transacción atómica (v6.51) ─────────────────────────────────────────────
+  // Antes: leer /reservas, chequear (slot tomado + cuota semanal), y recién después
+  // escribir con fbPush — dos pasos separados. Un doble-submit (doble tap, dos pestañas,
+  // reintento por red lenta) podía leer el mismo estado en ambos pedidos ANTES de que
+  // cualquiera escribiera, y los dos pasaban el chequeo — así se colaba un 4to turno pese
+  // al límite semanal. runTransaction hace el chequeo + escritura como una sola operación
+  // atómica sobre /reservas: si el servidor detecta que el dato cambió durante el intento,
+  // reintenta el callback con el valor fresco, garantizando que dos escrituras concurrentes
+  // no puedan pasar el chequeo con el mismo conteo. El callback no debe tener efectos
+  // secundarios (puede ejecutarse más de una vez).
+  let motivoAborto=null;
+  const txResult=await runTransaction(ref(db,'reservas'),(data)=>{
+    motivoAborto=null;
+    const actual=data||{};
+    const taken=slotsTomados(selectedDay,selectedAvion,actual);
+    if(taken.includes(selectedSlot)){motivoAborto='slot';return;} // undefined = aborta la transacción
+    if(!esPiloto&&rol==='alumno'){
+      const{usados,limite}=turnosRestantesSemana(selectedDay,actual);
+      if(usados>=limite){motivoAborto='cuota';return;}
+    }
+    actual[nuevaKey]=nuevoTurno;
+    return actual;
   });
+  if(!txResult.committed){
+    if(motivoAborto==='slot'){
+      showErr('turno-err','Ese horario acaba de ser reservado por otro usuario. Elegí otro.');
+    }else if(motivoAborto==='cuota'){
+      const{usados,limite,semLunes,semDomingo}=turnosRestantesSemana(selectedDay,txResult.snapshot?.val());
+      showErr('turno-err',`Límite semanal alcanzado: ya tenés ${usados} turno${usados===1?'':'s'} esta semana (${semLunes.slice(8)}/${semLunes.slice(5,7)} al ${semDomingo.slice(8)}/${semDomingo.slice(5,7)}). Máximo permitido: ${limite} por semana.`);
+    }else{
+      showErr('turno-err','No se pudo confirmar el turno (conflicto de datos). Volvé a intentarlo.');
+    }
+    return;
+  }
   const labelAudit=(esRango?selectedSlot+' a '+selectedSlotFin+' hs':selectedSlot+' hs');
   await registrarAuditoria('alta_turno',session.rol||'alumno','exito',
     session.nombre+' — '+selectedAvion+' — '+selectedDay+' '+labelAudit+(sinInstructor?' — SIN INSTRUCTOR':''));
