@@ -1,5 +1,13 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.48
+  FECHA   : 2026-07-03
+  CAMBIOS : FIX: la línea roja de hora actual desapareció de la vista SEMANA.
+            renderVistaSemana() no llamaba a dibujarLineaHoraActual() al terminar
+            de renderizar — la llamada se perdió durante la refactorización de
+            v6.45/6.47 (conversión del selector a toggle). Agregada al final de
+            renderVistaSemana(), igual que ya existe al final de renderTodasReservas()
+            (vista LISTA). La vista LISTA no se vio afectada.
   VERSION : 6.47
   FECHA   : 2026-07-02
   CAMBIOS : FIX (v6.45): el toggle LISTA/SEMANA de Reservas no andaba — mismo bug que ya
@@ -1199,7 +1207,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.47</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.48</div>
   </div>
 
 </div>
@@ -3404,6 +3412,7 @@ async function renderVistaSemana(){
   });
   html+='</tbody></table>';
   grid.innerHTML=html;
+  dibujarLineaHoraActual();
 }
 
 function scrollCalAHoy(behavior){
