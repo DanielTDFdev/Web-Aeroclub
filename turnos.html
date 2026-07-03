@@ -1,5 +1,13 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.45
+  FECHA   : 2026-07-02
+  CAMBIOS : Pantalla Reservas (instructor/admin): el selector LISTA/SEMANA del calendario
+            (antes dos botones tipo tab) ahora es un toggle switch, igual al de Disponibilidad
+            de Instructores. Mismo patron visual (knob deslizante + labels que cambian de
+            color). setCalVista() actualiza el knob y los labels en vez de togglear clases
+            .active sobre botones. Se elimino el markup .cal-vista-tab de este selector
+            puntual (el de TODOS/PROXIMOS/PASADOS no se toco).
   VERSION : 6.44
   FECHA   : 2026-07-02
   CAMBIOS : FIX (v6.43): el toggle LISTA/SEMANA no andaba — "ReferenceError: admDispVista
@@ -1167,7 +1175,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.44</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.45</div>
   </div>
 
 </div>
@@ -1369,9 +1377,12 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
     </div>
     <!-- selector avión calendario instructor -->
     <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:.85rem">
-      <div class="cal-vista-tabs" style="margin-bottom:0">
-        <button class="cal-vista-tab active" id="vista-tab-lista" onclick="setCalVista('lista')">LISTA</button>
-        <button class="cal-vista-tab" id="vista-tab-semana" onclick="setCalVista('semana')">SEMANA</button>
+      <div id="cal-vista-toggle" onclick="setCalVista(calVista==='lista'?'semana':'lista')" style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;width:fit-content">
+        <span id="cal-vista-lbl-lista" style="font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;color:var(--cyan);transition:color .2s">LISTA</span>
+        <div style="width:40px;height:20px;border-radius:10px;background:rgba(0,200,212,.12);border:1px solid var(--cyan);position:relative;transition:all .25s">
+          <div id="cal-vista-knob" style="width:14px;height:14px;border-radius:50%;background:var(--cyan);position:absolute;top:1px;left:2px;transition:left .25s;box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>
+        </div>
+        <span id="cal-vista-lbl-semana" style="font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;color:var(--text3);transition:color .2s">SEMANA</span>
       </div>
       <label class="cancel-toggle" title="Ocultar/mostrar turnos cancelados en el calendario">
         <input type="checkbox" id="chk-ocultar-cancelados" onchange="toggleOcultarCancelados()">
@@ -3277,8 +3288,12 @@ window.setCalVista=function(vista){
   calVista=vista;
   document.getElementById('vista-lista').style.display=vista==='lista'?'block':'none';
   document.getElementById('vista-semana').style.display=vista==='semana'?'block':'none';
-  document.getElementById('vista-tab-lista').classList.toggle('active',vista==='lista');
-  document.getElementById('vista-tab-semana').classList.toggle('active',vista==='semana');
+  const knob=document.getElementById('cal-vista-knob');
+  if(knob) knob.style.left=vista==='lista'?'2px':'22px';
+  const lblLista=document.getElementById('cal-vista-lbl-lista');
+  const lblSemana=document.getElementById('cal-vista-lbl-semana');
+  if(lblLista) lblLista.style.color=vista==='lista'?'var(--cyan)':'var(--text3)';
+  if(lblSemana) lblSemana.style.color=vista==='semana'?'var(--cyan)':'var(--text3)';
   if(vista==='semana'){semanaOffset=0;renderVistaSemana();}
 };
 
