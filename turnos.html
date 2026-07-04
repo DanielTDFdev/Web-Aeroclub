@@ -1,5 +1,45 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.55
+  FECHA   : 2026-07-04
+  CAMBIOS : Habilitación CMA/PSA (pedido de Daniel). Dos campos nuevos en /alumnos/{key}:
+            vencimiento_cma (psicofísico) y vencimiento_psa (credencial PSA), fecha
+            YYYY-MM-DD. Editables SOLO por instructor/admin (modal EDITAR USUARIO, nuevos
+            inputs #edit-al-cma / #edit-al-psa); de solo lectura para el propio alumno
+            (Mi Perfil, #perfil-cma / #perfil-psa deshabilitados). Restricción aplicada
+            SOLO a rol==='alumno' (pilotos no la tienen — decisión explícita, se podría
+            extender después). Un alumno con CMA o PSA vencido:
+              1) ve un banner de aviso persistente apenas loguea (#al-vencimiento-banner,
+                 tanto en login fresco como al restaurar sesión guardada);
+              2) no puede entrar a la pestaña "Pedir Turno" — se le muestra un bloqueo
+                 (#pedir-turno-bloqueado) en vez del calendario;
+              3) si de alguna forma llega a confirmarTurno(), se revalida ahí también con
+                 dato fresco de Firebase antes de iniciar la runTransaction (defensa en
+                 profundidad — no depende de que el chequeo de la pestaña se haya hecho
+                 con datos actualizados).
+            Nueva función chequearHabilitacionAlumno(alumno) es la fuente de verdad única
+            para las tres instancias. Instructores/admin además ven un badge "⚠ VENCIDO"
+            en la lista de usuarios para detectar de un vistazo quién tiene algo vencido.
+            IMPORTANTE — constante CMA_PSA_VACIO_BLOQUEA=false: hoy NINGÚN alumno tiene
+            estos campos cargados, así que un campo vacío se trata como HABILITADO (no
+            bloquea) para no cortarle el turno a todo el padrón de un día para el otro.
+            Decisión explícita de Daniel: una vez que administración termine de cargar los
+            vencimientos de todos los legajos existentes, cambiar esta constante a `true`
+            para que un campo vacío también bloquee (fail-safe real). Sin cambios en
+            guardarTurnoManual ("+CARGAR TURNO"): igual que con la cuota semanal (v6.53),
+            una carga manual del instructor es una decisión de instructor y no requiere
+            que el alumno esté habilitado — mismo criterio ya documentado.
+  VERSION : 6.54
+  FECHA   : 2026-07-04
+  CAMBIOS : FIX de UX en el modal MOTIVO DE CANCELACIÓN (reportado por Daniel: el
+            textarea de abajo confunde apenas se elige una categoría del select, porque
+            repite en modo read-only lo que el select ya dice). Ahora el textarea
+            (#motivo-cancel-input) queda oculto (display:none) mientras el motivo sea
+            una categoría fija; solo se muestra al elegir "Otros" (ahí sí hace falta
+            texto libre). El valor sigue viajando igual (input.value=cat.value aunque
+            esté oculto), asi que confirm() no cambia. Este comportamiento es exclusivo
+            del flujo OBLIGATORIO (instructor); el flujo OPCIONAL (alumno, sin select)
+            no se tocó — sigue mostrando el textarea de texto libre como siempre.
   VERSION : 6.53
   FECHA   : 2026-07-03
   CAMBIOS : Decisión de diseño explícita de Daniel: un turno cargado por staff vía
@@ -1278,7 +1318,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.53</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.55</div>
   </div>
 
 </div>
@@ -1360,6 +1400,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 
 <!-- USUARIO (alumno / piloto) -->
 <div id="alumno-screen" class="screen">
+  <div id="al-vencimiento-banner" style="display:none;background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.35);color:var(--red);font-family:var(--font-mono);font-size:12px;letter-spacing:.05em;line-height:1.6;padding:.85rem 1rem;border-radius:var(--radius);margin-bottom:1rem"></div>
   <div class="links-row">
     <a href="portal-alumno.html" class="portal-link" id="al-portal-link">🎓 Portal Alumnos</a>
     <a href="fpl.html" class="fpl-link">✈ Plan de Vuelo</a>
@@ -1387,7 +1428,13 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   </div>
   <div id="alumno-pedir-turno" class="screen">
     <h2>◈ Solicitar Turno</h2>
-    <div class="card">
+    <div id="pedir-turno-bloqueado" style="display:none;background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.35);border-radius:var(--radius);padding:1.25rem 1.25rem;font-family:var(--font-mono);font-size:13px;color:var(--red);letter-spacing:.04em;line-height:1.7;text-align:center">
+      <div style="font-size:32px;margin-bottom:.5rem">✕</div>
+      <div style="font-size:15px;margin-bottom:.5rem">NO PODÉS PEDIR TURNO</div>
+      <div id="pedir-turno-bloqueado-detalle"></div>
+      <div style="margin-top:.75rem;color:var(--text3);font-size:11px">Comunicate con administración para regularizar la situación.</div>
+    </div>
+    <div class="card" id="pedir-turno-card">
       <!-- selector avión: visible solo para pilotos -->
       <div id="avion-selector-wrap" style="display:none">
         <div class="section-title">▸ Seleccioná el avión</div>
@@ -1424,6 +1471,8 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <div class="field"><label>Email (no editable)</label><input type="email" id="perfil-email" disabled style="opacity:.5;cursor:not-allowed"></div>
       <div class="field"><label>Nombre</label><input type="text" id="perfil-nombre" placeholder="Tu nombre completo"></div>
       <div class="field"><label>Teléfono</label><input type="tel" id="perfil-tel" placeholder="Ej: +54 9 2964 000000"></div>
+      <div class="field"><label>Vencimiento CMA (Psicofísico) <span style="font-size:10px;color:var(--text3)">— lo carga tu instructor/admin</span></label><input type="text" id="perfil-cma" disabled style="opacity:.6;cursor:not-allowed"></div>
+      <div class="field"><label>Vencimiento Credencial PSA <span style="font-size:10px;color:var(--text3)">— lo carga tu instructor/admin</span></label><input type="text" id="perfil-psa" disabled style="opacity:.6;cursor:not-allowed"></div>
       <div id="perfil-datos-err" class="error"></div>
       <div id="perfil-datos-ok" class="success-msg"></div>
       <div style="margin-bottom:.75rem">
@@ -1816,6 +1865,14 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
             <option value="alumno">Alumno — solo LV-OAD (con aprobación)</option>
             <option value="piloto">Piloto — todos los aviones (aprobación automática)</option>
           </select>
+        </div>
+        <div class="field">
+          <label>Vencimiento CMA (Psicofísico) <span style="font-size:10px;color:var(--text3)">— solo editable por instructor/admin</span></label>
+          <input type="date" id="edit-al-cma">
+        </div>
+        <div class="field">
+          <label>Vencimiento Credencial PSA <span style="font-size:10px;color:var(--text3)">— solo editable por instructor/admin</span></label>
+          <input type="date" id="edit-al-psa">
         </div>
         <div class="field">
           <label>Estado de login</label>
@@ -2283,6 +2340,45 @@ function getDays(cantidad){
   return d;
 }
 function fmtDate(d){const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${dd}`;}
+
+// ── HABILITACIÓN CMA / PSA (v6.55) ──────────────────────────────
+// Un alumno necesita el psicofísico (CMA) y la credencial PSA vigentes para poder
+// pedir turno. Por ahora esta restricción aplica SOLO a rol==='alumno' (decisión
+// explícita de Daniel — los pilotos no la tienen, al menos por el momento).
+//
+// CMA_PSA_VACIO_BLOQUEA: mientras administración todavía no cargó estas fechas para
+// todos los legajos existentes, un campo VACÍO se considera HABILITADO (no bloquea) —
+// si no, al desplegar esto se les corta el turno a todos los alumnos de golpe. Una vez
+// que administración termine de cargar los vencimientos de todos los legajos, cambiar
+// esta constante a `true` para que un campo vacío también bloquee (fail-safe).
+const CMA_PSA_VACIO_BLOQUEA=false;
+
+function chequearHabilitacionAlumno(alumno){
+  if(!alumno||(alumno.rol||'alumno')!=='alumno') return{ok:true,vencidos:[]};
+  const hoy=fmtDate(new Date());
+  const vencidos=[];
+  const cma=alumno.vencimiento_cma||'';
+  const psa=alumno.vencimiento_psa||'';
+  const cmaVencido=cma?(cma<hoy):CMA_PSA_VACIO_BLOQUEA;
+  const psaVencido=psa?(psa<hoy):CMA_PSA_VACIO_BLOQUEA;
+  if(cmaVencido) vencidos.push({tipo:'CMA (Psicofísico)',fecha:cma});
+  if(psaVencido) vencidos.push({tipo:'Credencial PSA',fecha:psa});
+  return{ok:vencidos.length===0,vencidos};
+}
+function fmtFechaCorta(f){ // 'YYYY-MM-DD' -> 'DD/MM/YYYY'
+  if(!f)return'';
+  const[y,m,d]=f.split('-');
+  return `${d}/${m}/${y}`;
+}
+function renderBannerVencimientoAlumno(alumno){
+  const banner=document.getElementById('al-vencimiento-banner');
+  if(!banner)return;
+  const chk=chequearHabilitacionAlumno(alumno);
+  if(chk.ok){banner.style.display='none';banner.innerHTML='';return;}
+  const detalle=chk.vencidos.map(v=>v.fecha?`${v.tipo} vencido el ${fmtFechaCorta(v.fecha)}`:`${v.tipo} sin fecha cargada`).join(' — ');
+  banner.innerHTML=`⚠ TENÉS DOCUMENTACIÓN VENCIDA: ${detalle}. No vas a poder pedir turnos hasta regularizarlo con administración.`;
+  banner.style.display='block';
+}
 function fmtLabel(d){const D=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];return D[d.getDay()]+'\n'+d.getDate()+'/'+(d.getMonth()+1);}
 function ok12h(ds,h){const[y,m,d]=ds.split('-').map(Number);const[hh,mm]=h.split(':').map(Number);return(new Date(y,m-1,d,hh,mm,0)-new Date())>=12*3600*1000;}
 function ok1h(ds,h){const[y,m,d]=ds.split('-').map(Number);const[hh,mm]=h.split(':').map(Number);return(new Date(y,m-1,d,hh,mm,0)-new Date())>=1*3600*1000;}
@@ -2418,6 +2514,7 @@ window.loginAlumno=async function(){
     setNavUser(alumno.nombre,rol);
     await loadConfig();
     showScreen('alumno-screen');
+    renderBannerVencimientoAlumno(alumno);
     initAvionSelector();
     showAlumnoTab('mis-turnos');
     suscribirReservas();
@@ -2734,10 +2831,30 @@ window.showAlumnoTab=function(tab){
     selectedDay=null;selectedSlot=null;
     document.getElementById('slots-section').style.display='none';
     document.getElementById('slot-confirm').style.display='none';
-    initAvionSelector();
     const rol=session?.rol||'alumno';
-    // alumnos ven días directo (avión ya seleccionado); pilotos esperan que elijan avión
-    if(rol==='alumno') renderDaysGrid();
+    // v6.55: chequeo de habilitación CMA/PSA (solo alumnos). Se hace con dato fresco de
+    // Firebase (no con el 'session' de login, que puede tener horas/días de antigüedad y
+    // un instructor pudo haber cargado/actualizado las fechas mientras tanto).
+    if(rol==='alumno'){
+      fbGet('alumnos/'+session.emailKey).then(a=>{
+        renderBannerVencimientoAlumno(a);
+        const chk=chequearHabilitacionAlumno(a);
+        document.getElementById('pedir-turno-bloqueado').style.display=chk.ok?'none':'block';
+        document.getElementById('pedir-turno-card').style.display=chk.ok?'block':'none';
+        if(!chk.ok){
+          document.getElementById('pedir-turno-bloqueado-detalle').textContent=
+            chk.vencidos.map(v=>v.fecha?`${v.tipo} vencido el ${fmtFechaCorta(v.fecha)}`:`${v.tipo} sin fecha cargada`).join(' — ');
+        }else{
+          initAvionSelector();
+          renderDaysGrid();
+        }
+      });
+    }else{
+      document.getElementById('pedir-turno-bloqueado').style.display='none';
+      document.getElementById('pedir-turno-card').style.display='block';
+      initAvionSelector();
+      // pilotos esperan que elijan avión primero, no ven días directo
+    }
   }
   if(tab==='perfil'){
     clearVal('perfil-pass-actual','perfil-pass-nueva','perfil-pass-nueva2');
@@ -2749,6 +2866,9 @@ window.showAlumnoTab=function(tab){
       document.getElementById('perfil-tel').value=a.tel||'';
       const rol=a.rol||'alumno';
       document.getElementById('perfil-rol-badge').innerHTML=`<span class="badge badge-${rol}">${rol}</span>`;
+      document.getElementById('perfil-cma').value=a.vencimiento_cma?fmtFechaCorta(a.vencimiento_cma):'Sin cargar';
+      document.getElementById('perfil-psa').value=a.vencimiento_psa?fmtFechaCorta(a.vencimiento_psa):'Sin cargar';
+      renderBannerVencimientoAlumno(a);
     });
   }
 };
@@ -2984,6 +3104,19 @@ window.confirmarTurno=async function(){
   if(!okAnticipacion(selectedDay,selectedSlot)){showErr('turno-err','Se requiere al menos '+(session?.rol==='piloto'?'1 hora':'12 horas')+' de anticipación.');return;}
   const rol=session.rol||'alumno';
   const esPiloto=rol==='piloto';
+  // v6.55: defensa en profundidad — el bloqueo principal ya se muestra al abrir la
+  // pestaña "Pedir Turno" (showAlumnoTab), pero se revalida aquí con dato fresco por si
+  // la pantalla quedó abierta un rato y mientras tanto un instructor cargó/cambió las
+  // fechas, o el turno se confirma por algún flujo que no pasó por ese chequeo inicial.
+  if(!esPiloto&&rol==='alumno'){
+    const alFresco=await fbGet('alumnos/'+session.emailKey);
+    const chk=chequearHabilitacionAlumno(alFresco);
+    if(!chk.ok){
+      const detalle=chk.vencidos.map(v=>v.fecha?`${v.tipo} vencido el ${fmtFechaCorta(v.fecha)}`:`${v.tipo} sin fecha cargada`).join(' — ');
+      showErr('turno-err','⚠ No podés pedir turno: '+detalle+'. Comunicate con administración.');
+      return;
+    }
+  }
   const obs=val('al-obs');
   const esOAD=(selectedAvion||'LV-OAD')==='LV-OAD';
   const estado=(esPiloto&&!esOAD)?'aprobado':'pendiente';
@@ -3171,12 +3304,14 @@ function pedirMotivoCancelacion(obligatorio=false){
       desc.textContent='Elegí un motivo. El alumno lo recibirá por mail.';
       cat.style.display='block';
       input.readOnly=true;
+      input.style.display='none'; // v6.54: oculto hasta elegir "Otros" — con una categoría fija, mostrarlo (aunque sea read-only) es ruido: repite lo que ya dice el select y confunde.
       input.placeholder='Elegí un motivo arriba…';
     }else{
       btnCancelar.textContent='OMITIR MOTIVO';
       desc.textContent='Opcional: contá el motivo si querés (no es obligatorio). El turno se cancela igual.';
       cat.style.display='none';
       input.readOnly=false;
+      input.style.display='block';
       input.placeholder='Ej: Condiciones meteorológicas adversas...';
     }
     overlay.classList.add('open');
@@ -3185,11 +3320,14 @@ function pedirMotivoCancelacion(obligatorio=false){
       err.textContent='';
       if(cat.value==='Otros'){
         input.readOnly=false; input.value=''; input.placeholder='Escribí el motivo…';
+        input.style.display='block';
         setTimeout(()=>input.focus(),50);
       }else if(cat.value){
         input.readOnly=true; input.value=cat.value;
+        input.style.display='none';
       }else{
         input.readOnly=true; input.value=''; input.placeholder='Elegí un motivo arriba…';
+        input.style.display='none';
       }
     };
     const confirm=()=>{
@@ -4587,6 +4725,8 @@ window.filtrarAlumnosList=function filtrarAlumnosList(){
     aprobados.forEach(([k,a])=>{
       const rol=a.rol||'alumno';
       const tel=a.tel?`<span style="font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-left:8px">☎ ${a.tel}</span>`:'';
+      const chkVenc=chequearHabilitacionAlumno(a);
+      const badgeVenc=chkVenc.ok?'':'<span style="font-family:var(--font-mono);font-size:10px;color:var(--red);background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);border-radius:4px;padding:1px 6px;letter-spacing:.04em" title="'+chkVenc.vencidos.map(v=>v.tipo).join(', ')+' vencido">⚠ VENCIDO</span>';
       html+=`<div class="toggle-row" style="cursor:pointer" onclick="abrirModalAlumno('${k}')">
         <div>
           <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px">
@@ -4596,6 +4736,7 @@ window.filtrarAlumnosList=function filtrarAlumnosList(){
           </div>
           <div style="margin-top:4px;display:flex;align-items:center;gap:8px">
             <span class="badge badge-${rol}">${rol}</span>
+            ${badgeVenc}
             ${a.ts?`<span style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">${(d=>String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear())(new Date(a.ts))}</span>`:''}
           </div>
         </div>
@@ -4638,6 +4779,8 @@ window.abrirModalAlumno=function(key){
     document.getElementById('edit-al-nombre').value=a.nombre||'';
     document.getElementById('edit-al-tel').value=a.tel||'';
     document.getElementById('edit-al-rol').value=a.rol||'alumno';
+    document.getElementById('edit-al-cma').value=a.vencimiento_cma||'';
+    document.getElementById('edit-al-psa').value=a.vencimiento_psa||'';
     document.getElementById('edit-al-estado-login').value=a.estado_login||'normal';
     document.getElementById('edit-al-newpass').value='';
     document.getElementById('edit-al-forzar').checked=false;
@@ -4670,12 +4813,14 @@ window.guardarAlumno=async function(){
   const nombre=document.getElementById('edit-al-nombre').value.trim();
   const tel=document.getElementById('edit-al-tel').value.trim();
   const rol=document.getElementById('edit-al-rol').value;
+  const vencimiento_cma=document.getElementById('edit-al-cma').value||null;
+  const vencimiento_psa=document.getElementById('edit-al-psa').value||null;
   const estado_login=document.getElementById('edit-al-estado-login').value;
   const newpass=document.getElementById('edit-al-newpass').value.trim();
   const forzar=document.getElementById('edit-al-forzar').checked;
   if(!nombre){showErr('edit-al-err','El nombre no puede estar vacío.');return;}
   if(newpass && newpass.length<6){showErr('edit-al-err','La nueva contraseña debe tener al menos 6 caracteres.');return;}
-  const upd={nombre,tel,rol,estado_login};
+  const upd={nombre,tel,rol,estado_login,vencimiento_cma,vencimiento_psa};
   if(newpass) upd.pass=newpass;
   if(forzar) upd.pass_temporal=true;
   else if(newpass) upd.pass_temporal=null;  // clave nueva definitiva, sin forzar cambio
@@ -5274,6 +5419,9 @@ async function restoreSession(){
       setNavUser(s.nombre,s.rol);
       await loadConfig();
       showScreen('alumno-screen');
+      if(s.rol==='alumno'){
+        fbGet('alumnos/'+s.emailKey).then(a=>renderBannerVencimientoAlumno(a));
+      }
       initAvionSelector();
       showAlumnoTab('mis-turnos');
       suscribirReservas();
