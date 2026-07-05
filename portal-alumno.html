@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
 ==================================================================================
-  PORTAL ALUMNO — Aeroclub Río Grande 
+  PORTAL ALUMNO — Aeroclub Río Grande
   v1.16 ·  Timeout de sesión por inactividad (10 minutos), mismo patrón que
            turnos.html (SESSION_TIMEOUT_MS, resetSessionTimer en mousemove/
            mousedown/keydown/touchstart/scroll/click, arranca en el gate al
@@ -337,6 +337,25 @@ async function fbRemove(p){await remove(ref(db,p));}
 // Acceso: rol:'alumno' (NO piloto) o tipo:'instructor' (cubre instructor real,
 // admin y administrador, que entran como tipo:'instructor' con soloUsuarios).
 let session=null, esAlumno=false, esStaff=false, esAdmin=false, userKey='', userLabel='';
+
+// ── TIMEOUT DE SESIÓN (v1.16) ─────────────────────────────────────
+// Mismo patrón que turnos.html: 10 minutos de inactividad cierran la sesión.
+// Declarado ANTES del gate() porque gate() llama a startSessionTimeout() de forma
+// síncrona apenas valida la sesión (si esto fuera let/const declarado después,
+// sería un ReferenceError por temporal dead zone y cortaría todo el módulo ahí).
+const SESSION_TIMEOUT_MS=10*60*1000;
+let _sessionTimer=null;
+function resetSessionTimer(){
+  if(!session)return;
+  clearTimeout(_sessionTimer);
+  _sessionTimer=setTimeout(()=>{ if(session) cerrarSesion(); },SESSION_TIMEOUT_MS);
+}
+function startSessionTimeout(){
+  resetSessionTimer();
+  ['mousemove','mousedown','keydown','touchstart','scroll','click'].forEach(ev=>{
+    document.addEventListener(ev,resetSessionTimer,{passive:true});
+  });
+}
 (function gate(){
   let s=null;
   try{ s=JSON.parse(sessionStorage.getItem('lvoad-session')||'null'); }catch(_){ s=null; }
@@ -353,22 +372,6 @@ let session=null, esAlumno=false, esStaff=false, esAdmin=false, userKey='', user
   document.getElementById('app-wrap').style.display='block';
   startSessionTimeout();
 })();
-
-// ── TIMEOUT DE SESIÓN (v1.16) ─────────────────────────────────────
-// Mismo patrón que turnos.html: 10 minutos de inactividad cierran la sesión.
-const SESSION_TIMEOUT_MS=10*60*1000;
-let _sessionTimer=null;
-function resetSessionTimer(){
-  if(!session)return;
-  clearTimeout(_sessionTimer);
-  _sessionTimer=setTimeout(()=>{ if(session) cerrarSesion(); },SESSION_TIMEOUT_MS);
-}
-function startSessionTimeout(){
-  resetSessionTimer();
-  ['mousemove','mousedown','keydown','touchstart','scroll','click'].forEach(ev=>{
-    document.addEventListener(ev,resetSessionTimer,{passive:true});
-  });
-}
 
 // ── TEMA ─────────────────────────────────────────────────────────
 // El estado inicial ya se aplica en el <script> del <head> (lee localStorage 'lvoad-theme',
