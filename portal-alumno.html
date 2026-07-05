@@ -2,6 +2,17 @@
 <!--
 ==================================================================================
   PORTAL ALUMNO — Aeroclub Río Grande
+  v1.15 ·  Vencimientos CMA (psicofísico) y PSA (credencial) en // FICHA DE ALUMNO
+           (mismos campos vencimiento_cma/vencimiento_psa que turnos.html v6.55,
+           misma regla CMA_PSA_VACIO_BLOQUEA=false para no marcar vencido un campo
+           todavía sin cargar). Alumno: ve sus dos fechas + badge "⚠ VENCIDO" en
+           solo lectura en MI FICHA. Staff no-admin (instructor): mismo campo
+           solo lectura en la ficha del alumno seleccionado. Admin (user==='admin'
+           o 'administrador'): inputs type="date" editables + botón GUARDAR
+           VENCIMIENTOS que hace fbUpdate en alumnos/{emailKey}. Instructores NO
+           pueden editar estos campos desde este portal (sí desde turnos.html,
+           que ya lo permite para instructor/admin — decisión de Daniel: acá el
+           portal es más restrictivo a propósito).
   v1.14 ·  Ancho máximo del contenedor (.wrap) sube de 980px a 1280px, mismo
            criterio que turnos.html v6.34 y fpl.html v3.23. En pantallas grandes
            el layout aprovecha mejor el espacio disponible sin afectar mobile
@@ -275,7 +286,7 @@ button.danger{background:rgba(248,81,73,.08);color:var(--red);border-color:var(-
         <span class="theme-toggle-icon">☀️</span>
       </div>
       <span class="who" id="who-label"></span>
-      <span class="ver">v1.14</span>
+      <span class="ver">v1.15</span>
       <a class="back" href="turnos.html">← TURNERO</a>
       <button class="back" onclick="cerrarSesion()" title="Cerrar sesión">⏻ SALIR</button>
     </div>
@@ -319,12 +330,12 @@ async function fbRemove(p){await remove(ref(db,p));}
 // ── GATE DE SESIÓN ───────────────────────────────────────────────
 // Acceso: rol:'alumno' (NO piloto) o tipo:'instructor' (cubre instructor real,
 // admin y administrador, que entran como tipo:'instructor' con soloUsuarios).
-let session=null, esAlumno=false, esStaff=false, userKey='', userLabel='';
+let session=null, esAlumno=false, esStaff=false, esAdmin=false, userKey='', userLabel='';
 (function gate(){
   let s=null;
   try{ s=JSON.parse(sessionStorage.getItem('lvoad-session')||'null'); }catch(_){ s=null; }
   if(s && s.tipo==='alumno' && s.rol==='alumno'){ session=s; esAlumno=true; }
-  else if(s && s.tipo==='instructor'){ session=s; esStaff=true; }
+  else if(s && s.tipo==='instructor'){ session=s; esStaff=true; esAdmin=(s.user==='admin'||s.user==='administrador'); }
   if(!session){
     document.getElementById('gate-msg').style.display='block';
     setTimeout(()=>{ location.href='turnos.html'; },900);
@@ -362,6 +373,23 @@ window.showTab=function(name){
 // (solo lectura). Staff: selector de alumno + textarea para escribir la nota.
 function escHtml(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 
+// ── CMA / PSA (v1.15) ────────────────────────────────────────────
+// Mismas reglas que turnos.html v6.55: CMA_PSA_VACIO_BLOQUEA=false, un campo
+// vacío hoy NO se marca vencido (todavía no está cargado para todos los legajos).
+const CMA_PSA_VACIO_BLOQUEA=false;
+function fmtDateHoy(){const d=new Date(),y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${dd}`;}
+function fmtFechaCorta(f){ if(!f)return''; const[y,m,d]=f.split('-'); return `${d}/${m}/${y}`; }
+function estadoVenc(fecha){
+  if(!fecha) return CMA_PSA_VACIO_BLOQUEA?'vencido':'sin-cargar';
+  return fecha<fmtDateHoy()?'vencido':'vigente';
+}
+function htmlVencCampo(label, fecha){
+  const st=estadoVenc(fecha);
+  const badge=st==='vencido'?'<span style="font-family:var(--font-mono);font-size:10px;color:var(--red);background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);border-radius:4px;padding:1px 6px;letter-spacing:.04em;margin-left:8px">⚠ VENCIDO</span>':'';
+  const txt=fecha?fmtFechaCorta(fecha):'Sin cargar';
+  return `<div class="field"><label>${label}</label><div>${escHtml(txt)}${badge}</div></div>`;
+}
+
 async function renderPerfil(){
   const el=document.getElementById('screen-perfil');
   if(esAlumno){
@@ -374,6 +402,8 @@ async function renderPerfil(){
       <div class="field"><label>Teléfono</label><div>${escHtml(alumno.tel||'—')}</div></div>
       <div class="field"><label>Usuario</label><div>${escHtml(alumno.username||'—')}</div></div>
       <div class="field"><label>Rol</label><div>${escHtml(session.rol||'alumno')}</div></div>
+      ${htmlVencCampo('Vencimiento Psicofísico (CMA)', alumno.vencimiento_cma)}
+      ${htmlVencCampo('Vencimiento Credencial PSA', alumno.vencimiento_psa)}
     `):'<div class="empty">// NO SE PUDO LEER LA FICHA</div>';
     const nota=await fbGet('notas_alumno/'+session.emailKey);
     document.getElementById('perfil-nota').innerHTML=(nota&&nota.texto)?(`
@@ -402,9 +432,23 @@ async function cargarFichaStaff(emailKey, dataAlumnos){
   if(!emailKey){ body.innerHTML=''; return; }
   const alumno=dataAlumnos[emailKey];
   const nota=await fbGet('notas_alumno/'+emailKey);
+  const vencBloque=esAdmin?`
+    <h3 style="margin-top:14px">// VENCIMIENTOS (CMA / PSA)</h3>
+    <div class="field"><label>Vencimiento Psicofísico (CMA)</label>
+      <input type="date" id="perfil-cma-input" value="${escHtml(alumno.vencimiento_cma||'')}"></div>
+    <div class="field"><label>Vencimiento Credencial PSA</label>
+      <input type="date" id="perfil-psa-input" value="${escHtml(alumno.vencimiento_psa||'')}"></div>
+    <button class="primary" id="perfil-venc-guardar">GUARDAR VENCIMIENTOS</button>
+    <span class="sub" id="perfil-venc-status" style="margin-left:10px"></span>
+  `:`
+    <h3 style="margin-top:14px">// VENCIMIENTOS (CMA / PSA)</h3>
+    ${htmlVencCampo('Vencimiento Psicofísico (CMA)', alumno.vencimiento_cma)}
+    ${htmlVencCampo('Vencimiento Credencial PSA', alumno.vencimiento_psa)}
+  `;
   body.innerHTML=`
     <div class="field"><label>Email</label><div>${escHtml(alumno.email||'')}</div></div>
     <div class="field"><label>Teléfono</label><div>${escHtml(alumno.tel||'—')}</div></div>
+    ${vencBloque}
     <h3 style="margin-top:14px">// NOTA / PROGRESO</h3>
     <div class="field"><textarea id="perfil-nota-txt" rows="5">${escHtml(nota&&nota.texto||'')}</textarea></div>
     <button class="primary" id="perfil-nota-guardar">GUARDAR NOTA</button>
@@ -417,6 +461,19 @@ async function cargarFichaStaff(emailKey, dataAlumnos){
       st.textContent='✓ Guardado'; st.style.color='var(--green)';
     }catch(e){ st.textContent='✗ '+e.message; st.style.color='var(--red)'; }
   };
+  if(esAdmin){
+    document.getElementById('perfil-venc-guardar').onclick=async()=>{
+      const cma=document.getElementById('perfil-cma-input').value||null;
+      const psa=document.getElementById('perfil-psa-input').value||null;
+      const st=document.getElementById('perfil-venc-status');
+      try{
+        await fbUpdate('alumnos/'+emailKey,{vencimiento_cma:cma,vencimiento_psa:psa});
+        dataAlumnos[emailKey].vencimiento_cma=cma;
+        dataAlumnos[emailKey].vencimiento_psa=psa;
+        st.textContent='✓ Guardado'; st.style.color='var(--green)';
+      }catch(e){ st.textContent='✗ '+e.message; st.style.color='var(--red)'; }
+    };
+  }
 }
 
 // ── MANUALES ──────────────────────────────────────────────────────
