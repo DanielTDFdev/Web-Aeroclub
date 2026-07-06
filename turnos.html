@@ -1,6 +1,27 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 6.57 
+  VERSION : 6.58
+  FECHA   : 2026-07-06
+  CAMBIOS : Habilitación diferenciada por edad (menor/mayor de 18 años).
+            Nuevos campos en /alumnos/{key}:
+              - fecha_nac (YYYY-MM-DD): fecha de nacimiento. Editable por
+                instructor/admin en modal EDITAR USUARIO; el alumno la carga
+                al registrarse (obligatorio en registro a partir de esta versión);
+                visible de solo lectura en Mi Perfil.
+              - autorizacion_padres (boolean): reemplaza PSA para menores de 18.
+                Solo editable por instructor/admin en modal EDITAR USUARIO.
+            Nueva función esMenorDeEdad(fecha_nac): calcula edad exacta considerando
+            mes y día del cumpleaños.
+            chequearHabilitacionAlumno() actualizada:
+              - Mayor de 18 (o sin fecha_nac): CMA vigente + PSA vigente (igual que antes)
+              - Menor de 18: CMA vigente + autorizacion_padres=true
+            Mi Perfil: muestra fecha_nac (solo lectura); PSA y autorización de padres
+            se alternan según la edad del alumno (solo se muestra el que aplica).
+            IMPORTANTE: esto NO es retroactivo para fecha_nac — los alumnos ya
+            registrados no tienen el campo; un instructor/admin debe completarlo
+            desde EDITAR USUARIO. Mientras esté vacío, CMA_PSA_VACIO_BLOQUEA=true
+            hace que se traten como mayores de 18 y se les exija PSA.
+  VERSION : 6.57
   FECHA   : 2026-07-06
   CAMBIOS : CMA_PSA_VACIO_BLOQUEA cambia de false a true. A partir de ahora, un alumno
             sin vencimiento_cma o vencimiento_psa cargado en su ficha queda bloqueado
@@ -1340,7 +1361,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.57</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.58</div>
   </div>
 
 </div>
@@ -1382,6 +1403,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <div class="field"><label>Elija Nombre de usuario</label><input type="text" id="reg-user" placeholder="4-10 letras o números" maxlength="10" autocapitalize="off" autocomplete="off"></div>
         <div class="field"><label>Email</label><input type="email" id="reg-email" placeholder="tu@email.com"></div>
         <div class="field"><label>Teléfono (celular)</label><input type="tel" id="reg-tel" placeholder="Ej: +54 9 2964 000000"></div>
+        <div class="field"><label>Fecha de nacimiento</label><input type="date" id="reg-fecha-nac"></div>
         <div class="field"><label>Contraseña</label><input type="password" id="reg-pass" placeholder="mínimo 6 caracteres"></div>
         <div class="field"><label>Confirmar contraseña</label><input type="password" id="reg-pass2" placeholder="repetí la contraseña"></div>
         <div id="reg-err" class="error"></div>
@@ -1494,8 +1516,10 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <div class="field"><label>Email (no editable)</label><input type="email" id="perfil-email" disabled style="opacity:.5;cursor:not-allowed"></div>
       <div class="field"><label>Nombre</label><input type="text" id="perfil-nombre" placeholder="Tu nombre completo"></div>
       <div class="field"><label>Teléfono</label><input type="tel" id="perfil-tel" placeholder="Ej: +54 9 2964 000000"></div>
+      <div class="field"><label>Fecha de nacimiento <span style="font-size:10px;color:var(--text3)">— lo carga tu instructor/admin</span></label><input type="text" id="perfil-fecha-nac" disabled style="opacity:.6;cursor:not-allowed"></div>
       <div class="field"><label>Vencimiento CMA (Psicofísico) <span style="font-size:10px;color:var(--text3)">— lo carga tu instructor/admin</span></label><input type="text" id="perfil-cma" disabled style="opacity:.6;cursor:not-allowed"></div>
-      <div class="field"><label>Vencimiento Credencial PSA <span style="font-size:10px;color:var(--text3)">— lo carga tu instructor/admin</span></label><input type="text" id="perfil-psa" disabled style="opacity:.6;cursor:not-allowed"></div>
+      <div class="field" id="perfil-psa-row"><label>Vencimiento Credencial PSA <span style="font-size:10px;color:var(--text3)">— lo carga tu instructor/admin</span></label><input type="text" id="perfil-psa" disabled style="opacity:.6;cursor:not-allowed"></div>
+      <div class="field" id="perfil-aut-padres-row" style="display:none"><label>Autorización de padres <span style="font-size:10px;color:var(--text3)">— lo carga tu instructor/admin</span></label><input type="text" id="perfil-aut-padres" disabled style="opacity:.6;cursor:not-allowed"></div>
       <div id="perfil-datos-err" class="error"></div>
       <div id="perfil-datos-ok" class="success-msg"></div>
       <div style="margin-bottom:.75rem">
@@ -1896,6 +1920,17 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <div class="field">
           <label>Vencimiento Credencial PSA <span style="font-size:10px;color:var(--text3)">— solo editable por instructor/admin</span></label>
           <input type="date" id="edit-al-psa">
+        </div>
+        <div class="field">
+          <label>Fecha de nacimiento <span style="font-size:10px;color:var(--text3)">— solo editable por instructor/admin</span></label>
+          <input type="date" id="edit-al-fecha-nac">
+        </div>
+        <div class="field" id="edit-al-aut-padres-row">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none">
+            <input type="checkbox" id="edit-al-aut-padres" style="accent-color:var(--cyan);width:15px;height:15px">
+            <span style="font-family:var(--font-mono);font-size:12px;color:var(--text)">Autorización de padres (menor de 18 años)</span>
+          </label>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px;font-family:var(--font-mono);letter-spacing:.04em">Reemplaza PSA para menores — solo editable por instructor/admin</div>
         </div>
         <div class="field">
           <label>Estado de login</label>
@@ -2364,28 +2399,45 @@ function getDays(cantidad){
 }
 function fmtDate(d){const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${dd}`;}
 
-// ── HABILITACIÓN CMA / PSA (v6.55) ──────────────────────────────
-// Un alumno necesita el psicofísico (CMA) y la credencial PSA vigentes para poder
-// pedir turno. Por ahora esta restricción aplica SOLO a rol==='alumno' (decisión
-// explícita de Daniel — los pilotos no la tienen, al menos por el momento).
+// ── HABILITACIÓN CMA / PSA / MENOR DE EDAD (v6.55 / v6.58) ──────────────────
+// Un alumno necesita documentación vigente para poder pedir turno. La restricción
+// depende de la edad (calculada a partir de fecha_nac):
 //
-// CMA_PSA_VACIO_BLOQUEA: mientras administración todavía no cargó estas fechas para
-// todos los legajos existentes, un campo VACÍO se considera HABILITADO (no bloquea) —
-// si no, al desplegar esto se les corta el turno a todos los alumnos de golpe. Una vez
-// que administración termine de cargar los vencimientos de todos los legajos, cambiar
-// esta constante a `true` para que un campo vacío también bloquee (fail-safe).
+//   MAYOR de 18 años (o sin fecha_nac): CMA vigente + PSA vigente
+//   MENOR de 18 años:                  CMA vigente + autorizacion_padres=true
+//
+// Si fecha_nac está ausente, se aplica la lógica de mayor de 18 (conservador).
+// Aplica SOLO a rol==='alumno'. Pilotos no tienen esta restricción.
+//
+// CMA_PSA_VACIO_BLOQUEA: true = campo vacío bloquea (fail-safe activo desde v6.57).
 const CMA_PSA_VACIO_BLOQUEA=true;
+
+function esMenorDeEdad(fecha_nac){
+  if(!fecha_nac) return false;
+  const hoy=new Date();
+  const nac=new Date(fecha_nac+'T00:00:00');
+  let edad=hoy.getFullYear()-nac.getFullYear();
+  const m=hoy.getMonth()-nac.getMonth();
+  if(m<0||(m===0&&hoy.getDate()<nac.getDate())) edad--;
+  return edad<18;
+}
 
 function chequearHabilitacionAlumno(alumno){
   if(!alumno||(alumno.rol||'alumno')!=='alumno') return{ok:true,vencidos:[]};
   const hoy=fmtDate(new Date());
   const vencidos=[];
   const cma=alumno.vencimiento_cma||'';
-  const psa=alumno.vencimiento_psa||'';
   const cmaVencido=cma?(cma<hoy):CMA_PSA_VACIO_BLOQUEA;
-  const psaVencido=psa?(psa<hoy):CMA_PSA_VACIO_BLOQUEA;
   if(cmaVencido) vencidos.push({tipo:'CMA (Psicofísico)',fecha:cma});
-  if(psaVencido) vencidos.push({tipo:'Credencial PSA',fecha:psa});
+  if(esMenorDeEdad(alumno.fecha_nac)){
+    // Menor de 18: requiere autorización de padres en lugar de PSA
+    if(!alumno.autorizacion_padres) vencidos.push({tipo:'Autorización de padres',fecha:''});
+  } else {
+    // Mayor de 18 (o sin fecha de nacimiento): requiere PSA
+    const psa=alumno.vencimiento_psa||'';
+    const psaVencido=psa?(psa<hoy):CMA_PSA_VACIO_BLOQUEA;
+    if(psaVencido) vencidos.push({tipo:'Credencial PSA',fecha:psa});
+  }
   return{ok:vencidos.length===0,vencidos};
 }
 function fmtFechaCorta(f){ // 'YYYY-MM-DD' -> 'DD/MM/YYYY'
@@ -2459,11 +2511,12 @@ window.registrarAlumno=async function(){
   setLoading('btn-registrar',true);
   try{
     hideEl('reg-err');hideEl('reg-ok');
-    const nombre=val('reg-nombre'),username=val('reg-user').toLowerCase(),email=val('reg-email').toLowerCase(),tel=val('reg-tel'),pass=val('reg-pass'),pass2=val('reg-pass2');
-    if(!nombre||!username||!email||!tel||!pass){showErr('reg-err','Completá todos los campos.');return;}
+    const nombre=val('reg-nombre'),username=val('reg-user').toLowerCase(),email=val('reg-email').toLowerCase(),tel=val('reg-tel'),fechaNac=val('reg-fecha-nac'),pass=val('reg-pass'),pass2=val('reg-pass2');
+    if(!nombre||!username||!email||!tel||!fechaNac||!pass){showErr('reg-err','Completá todos los campos.');return;}
     if(!/^[a-z0-9]{4,10}$/.test(username)){showErr('reg-err','El usuario debe tener entre 4 y 10 caracteres, solo letras y números (sin espacios ni símbolos).');return;}
     if(!email.includes('@')){showErr('reg-err','Email inválido.');return;}
     if(tel.replace(/\D/g,'').length<8){showErr('reg-err','Ingresá un teléfono válido (con código de área).');return;}
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(fechaNac)){showErr('reg-err','Ingresá tu fecha de nacimiento.');return;}
     if(pass.length<6){showErr('reg-err','Mínimo 6 caracteres.');return;}
     if(pass!==pass2){showErr('reg-err','Las contraseñas no coinciden.');return;}
     const k=ek(email);
@@ -2471,12 +2524,12 @@ window.registrarAlumno=async function(){
     const todos=await fbGet('alumnos')||{};
     if(Object.values(todos).some(a=>(a.username||'').toLowerCase()===username)){showErr('reg-err','Ese nombre de usuario ya está en uso.');return;}
     // rol por defecto: alumno
-    await fbSet('alumnos/'+k,{nombre,username,email,tel,pass,rol:'alumno',estado:'pendiente_aprobacion',ts:new Date().toISOString()});
+    await fbSet('alumnos/'+k,{nombre,username,email,tel,fecha_nac:fechaNac,pass,rol:'alumno',estado:'pendiente_aprobacion',ts:new Date().toISOString()});
     // Crear también la cuenta en Firebase Auth (no bloquea el registro si el proveedor aún no está habilitado).
     authMigrarAlumno(k,email,pass);
     showOk('reg-ok','¡Cuenta creada! Ya podés ingresar.');
     mailNuevoRegistro(nombre, email);
-    clearVal('reg-nombre','reg-user','reg-email','reg-tel','reg-pass','reg-pass2');
+    clearVal('reg-nombre','reg-user','reg-email','reg-tel','reg-fecha-nac','reg-pass','reg-pass2');
     setTimeout(()=>switchLoginTab('alumno'),1500);
     registrarAuditoria('registro','pendiente','exito',nombre+' ('+email+' / '+username+')');
   }catch(e){showErr('reg-err','Error al crear la cuenta.');console.error(e);}
@@ -2890,8 +2943,16 @@ window.showAlumnoTab=function(tab){
       document.getElementById('perfil-tel').value=a.tel||'';
       const rol=a.rol||'alumno';
       document.getElementById('perfil-rol-badge').innerHTML=`<span class="badge badge-${rol}">${rol}</span>`;
+      document.getElementById('perfil-fecha-nac').value=a.fecha_nac?fmtFechaCorta(a.fecha_nac):'Sin cargar';
       document.getElementById('perfil-cma').value=a.vencimiento_cma?fmtFechaCorta(a.vencimiento_cma):'Sin cargar';
+      // Bifurcar PSA vs autorización de padres según edad
+      const menor=esMenorDeEdad(a.fecha_nac);
+      const psaRow=document.getElementById('perfil-psa-row');
+      const autRow=document.getElementById('perfil-aut-padres-row');
+      if(psaRow) psaRow.style.display=menor?'none':'';
+      if(autRow) autRow.style.display=menor?'':'none';
       document.getElementById('perfil-psa').value=a.vencimiento_psa?fmtFechaCorta(a.vencimiento_psa):'Sin cargar';
+      document.getElementById('perfil-aut-padres').value=menor?(a.autorizacion_padres?'✓ Sí, autorizado':'✗ Sin autorización cargada'):'—';
       renderBannerVencimientoAlumno(a);
     });
   }
@@ -4805,6 +4866,8 @@ window.abrirModalAlumno=function(key){
     document.getElementById('edit-al-rol').value=a.rol||'alumno';
     document.getElementById('edit-al-cma').value=a.vencimiento_cma||'';
     document.getElementById('edit-al-psa').value=a.vencimiento_psa||'';
+    document.getElementById('edit-al-fecha-nac').value=a.fecha_nac||'';
+    document.getElementById('edit-al-aut-padres').checked=!!a.autorizacion_padres;
     document.getElementById('edit-al-estado-login').value=a.estado_login||'normal';
     document.getElementById('edit-al-newpass').value='';
     document.getElementById('edit-al-forzar').checked=false;
@@ -4839,12 +4902,14 @@ window.guardarAlumno=async function(){
   const rol=document.getElementById('edit-al-rol').value;
   const vencimiento_cma=document.getElementById('edit-al-cma').value||null;
   const vencimiento_psa=document.getElementById('edit-al-psa').value||null;
+  const fecha_nac=document.getElementById('edit-al-fecha-nac').value||null;
+  const autorizacion_padres=document.getElementById('edit-al-aut-padres').checked||false;
   const estado_login=document.getElementById('edit-al-estado-login').value;
   const newpass=document.getElementById('edit-al-newpass').value.trim();
   const forzar=document.getElementById('edit-al-forzar').checked;
   if(!nombre){showErr('edit-al-err','El nombre no puede estar vacío.');return;}
   if(newpass && newpass.length<6){showErr('edit-al-err','La nueva contraseña debe tener al menos 6 caracteres.');return;}
-  const upd={nombre,tel,rol,estado_login,vencimiento_cma,vencimiento_psa};
+  const upd={nombre,tel,rol,estado_login,vencimiento_cma,vencimiento_psa,fecha_nac,autorizacion_padres};
   if(newpass) upd.pass=newpass;
   if(forzar) upd.pass_temporal=true;
   else if(newpass) upd.pass_temporal=null;  // clave nueva definitiva, sin forzar cambio
