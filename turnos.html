@@ -1,5 +1,13 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.57
+  FECHA   : 2026-07-06
+  CAMBIOS : CMA_PSA_VACIO_BLOQUEA cambia de false a true. A partir de ahora, un alumno
+            sin vencimiento_cma o vencimiento_psa cargado en su ficha queda bloqueado
+            para pedir turnos (mismo comportamiento que si los tuviera vencidos). Esto
+            fuerza a que administración complete los datos de todos los legajos. La
+            restricción sigue siendo solo para rol==='alumno'; pilotos no se ven
+            afectados. Ver v6.55 para la lógica completa de bloqueo.
   VERSION : 6.56
   FECHA   : 2026-07-05
   CAMBIOS : Pedido de Daniel — el formulario de REGISTRARME ahora exige teléfono
@@ -1332,7 +1340,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.56</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.57</div>
   </div>
 
 </div>
@@ -2366,7 +2374,7 @@ function fmtDate(d){const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,
 // si no, al desplegar esto se les corta el turno a todos los alumnos de golpe. Una vez
 // que administración termine de cargar los vencimientos de todos los legajos, cambiar
 // esta constante a `true` para que un campo vacío también bloquee (fail-safe).
-const CMA_PSA_VACIO_BLOQUEA=false;
+const CMA_PSA_VACIO_BLOQUEA=true;
 
 function chequearHabilitacionAlumno(alumno){
   if(!alumno||(alumno.rol||'alumno')!=='alumno') return{ok:true,vencidos:[]};
