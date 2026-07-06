@@ -1,5 +1,10 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.59
+  FECHA   : 2026-07-06
+  CAMBIOS : Username visible en modal EDITAR USUARIO (solo lectura, igual que email)
+            y en Mi Perfil del alumno (solo lectura). Faltaba en ambos lugares
+            desde la implementación original.
   VERSION : 6.58
   FECHA   : 2026-07-06
   CAMBIOS : Habilitación diferenciada por edad (menor/mayor de 18 años).
@@ -1361,7 +1366,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.58</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.59</div>
   </div>
 
 </div>
@@ -1514,6 +1519,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
     <div class="card">
       <h3>Mis Datos</h3>
       <div class="field"><label>Email (no editable)</label><input type="email" id="perfil-email" disabled style="opacity:.5;cursor:not-allowed"></div>
+      <div class="field"><label>Usuario (no editable)</label><input type="text" id="perfil-username" disabled style="opacity:.5;cursor:not-allowed"></div>
       <div class="field"><label>Nombre</label><input type="text" id="perfil-nombre" placeholder="Tu nombre completo"></div>
       <div class="field"><label>Teléfono</label><input type="tel" id="perfil-tel" placeholder="Ej: +54 9 2964 000000"></div>
       <div class="field"><label>Fecha de nacimiento <span style="font-size:10px;color:var(--text3)">— lo carga tu instructor/admin</span></label><input type="text" id="perfil-fecha-nac" disabled style="opacity:.6;cursor:not-allowed"></div>
@@ -1897,6 +1903,10 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <div class="field">
           <label>Email (solo lectura)</label>
           <input type="email" id="edit-al-email" disabled style="opacity:.5;cursor:not-allowed">
+        </div>
+        <div class="field">
+          <label>Usuario (solo lectura)</label>
+          <input type="text" id="edit-al-username" disabled style="opacity:.5;cursor:not-allowed">
         </div>
         <div class="field">
           <label>Nombre</label>
@@ -2939,6 +2949,7 @@ window.showAlumnoTab=function(tab){
     fbGet('alumnos/'+session.emailKey).then(a=>{
       if(!a)return;
       document.getElementById('perfil-email').value=a.email||'';
+      document.getElementById('perfil-username').value=a.username||'';
       document.getElementById('perfil-nombre').value=a.nombre||'';
       document.getElementById('perfil-tel').value=a.tel||'';
       const rol=a.rol||'alumno';
@@ -4861,6 +4872,7 @@ window.abrirModalAlumno=function(key){
   fbGet('alumnos/'+key).then(a=>{
     if(!a)return;
     document.getElementById('edit-al-email').value=a.email||'';
+    document.getElementById('edit-al-username').value=a.username||'';
     document.getElementById('edit-al-nombre').value=a.nombre||'';
     document.getElementById('edit-al-tel').value=a.tel||'';
     document.getElementById('edit-al-rol').value=a.rol||'alumno';
