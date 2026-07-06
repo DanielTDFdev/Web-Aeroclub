@@ -1,5 +1,19 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.56
+  FECHA   : 2026-07-05
+  CAMBIOS : Pedido de Daniel — el formulario de REGISTRARME ahora exige teléfono
+            (celular) del alumno, con la misma obligatoriedad que el email. Nuevo
+            campo #reg-tel (type="tel", mismo placeholder que el resto del sistema:
+            "Ej: +54 9 2964 000000"). registrarAlumno(): el chequeo de "completá
+            todos los campos" ahora incluye tel; validación adicional de que tenga
+            al menos 8 dígitos (descontando espacios/guiones/+); se persiste como
+            campo `tel` en /alumnos/{key} — mismo nombre de campo que ya usan
+            #perfil-tel, #edit-al-tel, etc., así que no rompe nada existente que lea
+            a.tel. IMPORTANTE: esto NO retroactivamente exige tel a las cuentas ya
+            registradas — solo aplica al alta nueva desde este formulario. Cuentas
+            viejas sin tel simplemente seguirán con a.tel undefined hasta que un
+            instructor/admin lo complete a mano vía modal EDITAR USUARIO.
   VERSION : 6.55 
   FECHA   : 2026-07-04
   CAMBIOS : Habilitación CMA/PSA (pedido de Daniel). Dos campos nuevos en /alumnos/{key}:
@@ -1318,7 +1332,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.55</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.56</div>
   </div>
 
 </div>
@@ -1359,6 +1373,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <div class="field"><label>Nombre y Apellido</label><input type="text" id="reg-nombre" placeholder="Tu nombre"></div>
         <div class="field"><label>Elija Nombre de usuario</label><input type="text" id="reg-user" placeholder="4-10 letras o números" maxlength="10" autocapitalize="off" autocomplete="off"></div>
         <div class="field"><label>Email</label><input type="email" id="reg-email" placeholder="tu@email.com"></div>
+        <div class="field"><label>Teléfono (celular)</label><input type="tel" id="reg-tel" placeholder="Ej: +54 9 2964 000000"></div>
         <div class="field"><label>Contraseña</label><input type="password" id="reg-pass" placeholder="mínimo 6 caracteres"></div>
         <div class="field"><label>Confirmar contraseña</label><input type="password" id="reg-pass2" placeholder="repetí la contraseña"></div>
         <div id="reg-err" class="error"></div>
@@ -2436,10 +2451,11 @@ window.registrarAlumno=async function(){
   setLoading('btn-registrar',true);
   try{
     hideEl('reg-err');hideEl('reg-ok');
-    const nombre=val('reg-nombre'),username=val('reg-user').toLowerCase(),email=val('reg-email').toLowerCase(),pass=val('reg-pass'),pass2=val('reg-pass2');
-    if(!nombre||!username||!email||!pass){showErr('reg-err','Completá todos los campos.');return;}
+    const nombre=val('reg-nombre'),username=val('reg-user').toLowerCase(),email=val('reg-email').toLowerCase(),tel=val('reg-tel'),pass=val('reg-pass'),pass2=val('reg-pass2');
+    if(!nombre||!username||!email||!tel||!pass){showErr('reg-err','Completá todos los campos.');return;}
     if(!/^[a-z0-9]{4,10}$/.test(username)){showErr('reg-err','El usuario debe tener entre 4 y 10 caracteres, solo letras y números (sin espacios ni símbolos).');return;}
     if(!email.includes('@')){showErr('reg-err','Email inválido.');return;}
+    if(tel.replace(/\D/g,'').length<8){showErr('reg-err','Ingresá un teléfono válido (con código de área).');return;}
     if(pass.length<6){showErr('reg-err','Mínimo 6 caracteres.');return;}
     if(pass!==pass2){showErr('reg-err','Las contraseñas no coinciden.');return;}
     const k=ek(email);
@@ -2447,12 +2463,12 @@ window.registrarAlumno=async function(){
     const todos=await fbGet('alumnos')||{};
     if(Object.values(todos).some(a=>(a.username||'').toLowerCase()===username)){showErr('reg-err','Ese nombre de usuario ya está en uso.');return;}
     // rol por defecto: alumno
-    await fbSet('alumnos/'+k,{nombre,username,email,pass,rol:'alumno',estado:'pendiente_aprobacion',ts:new Date().toISOString()});
+    await fbSet('alumnos/'+k,{nombre,username,email,tel,pass,rol:'alumno',estado:'pendiente_aprobacion',ts:new Date().toISOString()});
     // Crear también la cuenta en Firebase Auth (no bloquea el registro si el proveedor aún no está habilitado).
     authMigrarAlumno(k,email,pass);
     showOk('reg-ok','¡Cuenta creada! Ya podés ingresar.');
     mailNuevoRegistro(nombre, email);
-    clearVal('reg-nombre','reg-user','reg-email','reg-pass','reg-pass2');
+    clearVal('reg-nombre','reg-user','reg-email','reg-tel','reg-pass','reg-pass2');
     setTimeout(()=>switchLoginTab('alumno'),1500);
     registrarAuditoria('registro','pendiente','exito',nombre+' ('+email+' / '+username+')');
   }catch(e){showErr('reg-err','Error al crear la cuenta.');console.error(e);}
