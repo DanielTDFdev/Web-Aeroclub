@@ -1,5 +1,14 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.60
+  FECHA   : 2026-07-06
+  CAMBIOS : Badge amarillo "⚠ DOC. PRÓXIMA A VENCER" en lista de USUARIOS REGISTRADOS
+            (panel admin/instructor) cuando CMA o PSA de un alumno vencen dentro de
+            los próximos 30 días (y todavía NO están vencidos — eso sigue mostrando
+            el badge rojo VENCIDO existente). Nueva función chequearProximoAVencer(alumno),
+            constante DIAS_ALERTA_PROXIMO_VENCIMIENTO=30. No aplica a autorizacion_padres
+            (es booleano, sin fecha). Tooltip del badge lista qué documento(s) y en
+            cuántos días vencen.
   VERSION : 6.59 
   FECHA   : 2026-07-06
   CAMBIOS : Username visible en modal EDITAR USUARIO (solo lectura, igual que email)
@@ -1366,7 +1375,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.59</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.60</div>
   </div>
 
 </div>
@@ -2449,6 +2458,30 @@ function chequearHabilitacionAlumno(alumno){
     if(psaVencido) vencidos.push({tipo:'Credencial PSA',fecha:psa});
   }
   return{ok:vencidos.length===0,vencidos};
+}
+// ── DOC. PRÓXIMA A VENCER (v6.60) ───────────────────────────────────────────
+// Alerta amarilla para CMA/PSA que todavía están vigentes pero vencen dentro
+// de 30 días. Solo evalúa campos con fecha cargada y NO vencidos (si ya está
+// vencido, corresponde el badge rojo VENCIDO, no este). No aplica a
+// autorizacion_padres (es booleano, no tiene fecha).
+const DIAS_ALERTA_PROXIMO_VENCIMIENTO=30;
+function chequearProximoAVencer(alumno){
+  if(!alumno||(alumno.rol||'alumno')!=='alumno') return{proximo:false,items:[]};
+  const hoy=new Date(fmtDate(new Date())+'T00:00:00');
+  const items=[];
+  const cma=alumno.vencimiento_cma||'';
+  if(cma){
+    const dias=Math.round((new Date(cma+'T00:00:00')-hoy)/86400000);
+    if(dias>=0&&dias<=DIAS_ALERTA_PROXIMO_VENCIMIENTO) items.push({tipo:'CMA (Psicofísico)',dias});
+  }
+  if(!esMenorDeEdad(alumno.fecha_nac)){
+    const psa=alumno.vencimiento_psa||'';
+    if(psa){
+      const dias=Math.round((new Date(psa+'T00:00:00')-hoy)/86400000);
+      if(dias>=0&&dias<=DIAS_ALERTA_PROXIMO_VENCIMIENTO) items.push({tipo:'Credencial PSA',dias});
+    }
+  }
+  return{proximo:items.length>0,items};
 }
 function fmtFechaCorta(f){ // 'YYYY-MM-DD' -> 'DD/MM/YYYY'
   if(!f)return'';
@@ -4823,6 +4856,8 @@ window.filtrarAlumnosList=function filtrarAlumnosList(){
       const tel=a.tel?`<span style="font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-left:8px">☎ ${a.tel}</span>`:'';
       const chkVenc=chequearHabilitacionAlumno(a);
       const badgeVenc=chkVenc.ok?'':'<span style="font-family:var(--font-mono);font-size:10px;color:var(--red);background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);border-radius:4px;padding:1px 6px;letter-spacing:.04em" title="'+chkVenc.vencidos.map(v=>v.tipo).join(', ')+' vencido">⚠ VENCIDO</span>';
+      const chkProx=chequearProximoAVencer(a);
+      const badgeProx=chkProx.proximo?'<span style="font-family:var(--font-mono);font-size:10px;color:var(--amber);background:rgba(240,165,0,.1);border:1px solid rgba(240,165,0,.3);border-radius:4px;padding:1px 6px;letter-spacing:.04em" title="'+chkProx.items.map(v=>v.tipo+' ('+v.dias+' días)').join(', ')+'">⚠ DOC. PRÓXIMA A VENCER</span>':'';
       html+=`<div class="toggle-row" style="cursor:pointer" onclick="abrirModalAlumno('${k}')">
         <div>
           <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px">
@@ -4833,6 +4868,7 @@ window.filtrarAlumnosList=function filtrarAlumnosList(){
           <div style="margin-top:4px;display:flex;align-items:center;gap:8px">
             <span class="badge badge-${rol}">${rol}</span>
             ${badgeVenc}
+            ${badgeProx}
             ${a.ts?`<span style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">${(d=>String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear())(new Date(a.ts))}</span>`:''}
           </div>
         </div>
