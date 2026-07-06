@@ -1,7 +1,7 @@
 # Documentación técnica — Sistema de Turnos (turnos.html)
 
 **Aeroclub Río Grande (SAWE) — Tierra del Fuego, Argentina**
-Versión documentada: **turnos.html v6.55** · **fpl.html v3.23** · **portal-alumno.html v1.15** · **peso-balance.html v1.5** · Fecha: 2026-07-05
+Versión documentada: **turnos.html v6.56** · **fpl.html v3.23** · **portal-alumno.html v1.16** · **peso-balance.html v1.5** · Fecha: 2026-07-05
 
 > Documento de referencia: describe qué hace cada parte del sistema. Mantener actualizado cuando se agreguen funciones.
 > Además de la app web (`turnos.html`) hay un generador de planes de vuelo (`fpl.html`, §22), un **portal de alumno** (`portal-alumno.html`, §23), una **calculadora de peso y balance** (`peso-balance.html`, §24) y **dos procesos server-side** en GitHub Actions: el recordatorio a instructores (§20) y el vencimiento de pendientes + purga de borradores FPL (§21).
@@ -27,7 +27,7 @@ Aplicación web de página única (SPA) en un solo archivo HTML, para reservar l
 
 ### `/alumnos/{emailKey}`
 Clave = email con `.`→`_` y `@`→`__at__` (función `ek()`).
-- `nombre`, `email`, `username` (único, minúsculas, 4–10 alfanumérico), `tel`
+- `nombre`, `email`, `username` (único, minúsculas, 4–10 alfanumérico), `tel` (obligatorio en el alta desde `registrarAlumno` a partir de v6.56 — ver §7; cuentas de antes de esa versión pueden no tenerlo)
 - `pass` — contraseña en texto plano (se eliminará al final de la migración a Auth)
 - `rol` — `alumno` | `piloto`
 - `estado` — `pendiente_aprobacion` | `aprobado`
@@ -146,7 +146,7 @@ Acepta email o nombre de usuario (autodetecta por la `@`). Verificación: primer
 Busca por usuario; verifica contra Firebase Auth (email sintético `usuario@instructores.aeroclubriogrande.com.ar`) con fallback a clave plana y migración perezosa (`authMigrarInstructor`). `admin`/`administrador` quedan en clave plana (no migran). Respeta `pass_temporal`. Acceso de emergencia: `admin`/`admin123` siempre.
 
 ### Registro (`registrarAlumno`)
-Crea el usuario en `/alumnos` (estado `pendiente_aprobacion`, rol `alumno`) y la cuenta de Auth (best-effort). Exige clave de mínimo 6 caracteres. Envía mails de registro y bienvenida.
+Crea el usuario en `/alumnos` (estado `pendiente_aprobacion`, rol `alumno`) y la cuenta de Auth (best-effort). Exige clave de mínimo 6 caracteres. Desde v6.56, exige también **teléfono/celular** (`#reg-tel`) con la misma obligatoriedad que el email — validación de mínimo 8 dígitos (descontando espacios/guiones/+), se persiste como campo `tel` (mismo nombre que ya usan `#perfil-tel`/`#edit-al-tel`). **No es retroactivo:** cuentas ya registradas sin `tel` quedan así hasta que un instructor/admin lo complete a mano desde el modal EDITAR USUARIO. Envía mails de registro y bienvenida.
 
 ### Cambio forzado de clave (`forzarCambioClave`)
 Modal obligatorio cuando `pass_temporal:true`. Generalizado para alumnos e instructores (recibe el path de DB). Actualiza la clave plana y **sincroniza con Firebase Auth** (`updatePassword`) si hay sesión de Auth activa. El admin puede disparar este flag desde los modales de edición (campo de clave + check "Exigir cambio en el próximo ingreso"); dejar la clave vacía y tildar el check **no borra la clave actual** (fbUpdate hace merge).
@@ -374,8 +374,10 @@ Registro de eventos (`registrarAuditoria`): login (éxito/fallo/bloqueado), regi
 - **UX: textarea de motivo de cancelación oculto por default (HECHO, 2026-07-04, v6.54):** en el modal de cancelación del instructor, el textarea de motivo libre (para la opción "Otros" del select tabulado, ver §8/v6.18) aparecía siempre visible aunque no se hubiera elegido "Otros". Ahora queda oculto por default y solo aparece cuando el usuario selecciona "Otros" en el dropdown. No cambió el flujo interno: `input.value` y el mail siguen igual, es puramente visual.
 - **Habilitación CMA/PSA (HECHO, 2026-07-04, v6.55):** dos campos nuevos por alumno, `vencimiento_cma` y `vencimiento_psa` (pedido de Daniel). Bloquean a `rol==='alumno'` de pedir turno si están vencidos, con tres capas de enforcement (banner, bloqueo de tab, re-chequeo en `confirmarTurno`) y una constante de fail-safe (`CMA_PSA_VACIO_BLOQUEA=false`) para no bloquear de golpe a todos los alumnos mientras administración carga los datos existentes. Ver detalle completo en §6. **Pendiente:** cargar `vencimiento_cma`/`vencimiento_psa` en los legajos existentes antes de flipear la constante a `true`.
 - **Portal de Alumno: vencimientos CMA/PSA (HECHO, 2026-07-05, portal-alumno.html v1.15):** los mismos dos campos ahora se ven en // FICHA DE ALUMNO del portal. Alumno e instructor no-admin: solo lectura (con badge "⚠ VENCIDO"). **Solo admin** (`user==='admin'`/`'administrador'`): inputs `type="date"` editables + botón GUARDAR VENCIMIENTOS. Decisión explícita de Daniel: acá el portal es **más restrictivo** que `turnos.html`, donde instructor/admin pueden editar estos campos vía modal — en el portal, instructor queda en solo lectura. Ver §23.
+- **Teléfono obligatorio en el registro (HECHO, 2026-07-05, turnos.html v6.56):** pedido de Daniel — el form de REGISTRARME exige teléfono/celular con la misma obligatoriedad que el email (campo `#reg-tel`, persiste como `tel`). Validación de mínimo 8 dígitos. **No retroactivo**: cuentas viejas sin `tel` quedan así hasta que instructor/admin lo complete a mano. Ver §7.
+- **Timeout de sesión en el Portal de Alumno (HECHO, 2026-07-05, portal-alumno.html v1.16):** mismo patrón que `turnos.html` (§7/§9) — 10 minutos de inactividad cierran la sesión (`cerrarSesion()`, mismo flujo que el botón ⏻ SALIR). Sin pantalla de aviso previo, igual que en `turnos.html`. **Nota de proceso:** la primera entrega de esta feature tenía un bug propio — `const SESSION_TIMEOUT_MS`/`let _sessionTimer` quedaron declarados *después* del `gate()` de sesión, pero `gate()` llamaba a `startSessionTimeout()` de forma síncrona *antes* de esa línea, lo cual es un `ReferenceError` por temporal dead zone (las `let`/`const` no hoistean como las `function`). El error cortaba la ejecución de todo el módulo ahí mismo — síntoma reportado por Daniel: "no anda nada en el portal, se queda solo mostrando el menú principal" (el header ya se había pintado antes del crash, pero nada del resto se llegó a inicializar). Corregido moviendo las declaraciones antes del `gate()`. **Regla general a aplicar siempre:** si una función se invoca de forma síncrona dentro de una IIFE que corre al cargar el módulo, cualquier `let`/`const` que use por closure debe estar declarada ANTES de esa IIFE en el archivo, no después.
 - **Pendiente (housekeeping, sin urgencia):** las clases CSS `.cal-vista-tab`/`.cal-vista-tabs` quedaron sin ningún uso en el HTML tras v6.45 (el otro selector que las usaba, TODOS/PRÓXIMOS/PASADOS, se migró a `.seg-switch` en v6.46). No se borraron para no mezclar con estos cambios funcionales — limpiar en una pasada de CSS aparte.
-- **Versión de este documento vs. repo (2026-07-05):** turnos.html **v6.55**, fpl.html **v3.23**, portal-alumno.html **v1.15**, peso-balance.html **v1.5**. Este documento queda sincronizado a estas cuatro versiones a la fecha.
+- **Versión de este documento vs. repo (2026-07-05):** turnos.html **v6.56**, fpl.html **v3.23**, portal-alumno.html **v1.16**, peso-balance.html **v1.5**. Este documento queda sincronizado a estas cuatro versiones a la fecha.
 
 ## 19. Limitaciones conocidas
 
@@ -506,6 +508,9 @@ Hereda el tema (claro/oscuro) elegido en `turnos.html` o `index.html`: lee `loca
 ### Botón SALIR (v1.13)
 Botón **⏻ SALIR** en el header (estilo rojo translúcido, para diferenciarlo del botón "← TURNERO"): borra la sesión de `sessionStorage` y redirige a `turnos.html`. Mismo comportamiento que "Cerrar sesión" en turnos.html. Esta estética del ícono ⏻ se implementó primero acá y de ahí se llevó al botón SALIR de turnos.html (v6.17).
 
+### Timeout de sesión (v1.16)
+Mismo patrón que `turnos.html` (§7/§9): `SESSION_TIMEOUT_MS=10*60*1000` (10 minutos), `resetSessionTimer`/`startSessionTimeout`, reseteo en `mousemove`/`mousedown`/`keydown`/`touchstart`/`scroll`/`click`. Al vencer, llama a `cerrarSesion()` — mismo flujo que el botón ⏻ SALIR. Se arranca en `gate()` apenas la sesión valida. Sin pantalla de aviso previo al cierre, igual que en `turnos.html`.
+
 ### Tab PERFIL
 - **Alumno:** ve su propia ficha (de `/alumnos/{emailKey}`: nombre, email, teléfono, usuario, rol) y la nota del instructor (`/notas_alumno/{emailKey}`), ambas **solo lectura**. Desde v1.15 también ve `vencimiento_cma` y `vencimiento_psa` (solo lectura, con badge "⚠ VENCIDO" si corresponde — misma regla `CMA_PSA_VACIO_BLOQUEA` que `turnos.html` §6).
 - **Staff:** selector de alumno (filtra `rol==='alumno'` de `/alumnos`) y un textarea para escribir/editar la nota de ese alumno (`{texto,autor,fecha}`). Desde v1.15, sección aparte "// VENCIMIENTOS (CMA / PSA)": **admin** (`user==='admin'`/`'administrador'`) tiene dos `<input type="date">` + botón GUARDAR VENCIMIENTOS (`fbUpdate` en `alumnos/{emailKey}`); **instructor no-admin** ve los mismos dos campos en solo lectura, igual que el alumno. Decisión explícita de Daniel: en el portal solo admin edita estos campos — es más restrictivo que `turnos.html`, donde el modal EDITAR USUARIO permite editarlos a instructor y admin por igual.
@@ -538,6 +543,9 @@ Mazo de **75 preguntas/respuestas** sobre el LV-OAD (PA-38-112), con flip 3D pre
 
 ### Bug crítico corregido (v1.6)
 `renderPerfil()` y `renderManuales()` nunca se ejecutaban: en cada paso de construcción incremental (v1.0→v1.1→...) se usó la línea de invocación del paso anterior como ancla de edición, pisándola en vez de conservarla, hasta que de las tres llamadas finales solo sobrevivió `renderQuiz()`. Resultado: las tabs PERFIL y MANUALES quedaban completamente vacías. Lección aplicada desde entonces: al hacer ediciones incrementales sobre líneas de invocación al final de un módulo, verificar explícitamente que las llamadas anteriores sigan presentes antes de entregar.
+
+### Bug crítico corregido (v1.16) — temporal dead zone en el timeout de sesión
+La primera entrega de la feature de timeout (ver arriba) declaraba `const SESSION_TIMEOUT_MS`/`let _sessionTimer` **después** del `gate()` de sesión, pero `gate()` llamaba a `startSessionTimeout()` de forma **síncrona** antes de esa línea. Las `let`/`const` no hoistean como las `function` — acceder a ellas antes de su línea de declaración es un `ReferenceError` por temporal dead zone, y ese error cortaba la ejecución de **todo el módulo** ahí mismo. Síntoma reportado por Daniel: "no anda nada en el portal, se queda solo mostrando el menú principal" (el header ya se había pintado antes del crash; nada del resto llegó a inicializarse). Corregido moviendo las declaraciones antes del `gate()`. **Regla general:** si una función se invoca de forma síncrona dentro de una IIFE que corre al cargar el módulo, cualquier `let`/`const` que use por closure debe estar declarada ANTES de esa IIFE en el archivo, no después.
 
 ### Esquema de Firebase
 Ver §3: `/manuales`, `/quizzes`, `/intentos_quiz`, `/notas_alumno`. También lee (solo lectura desde el portal) `/alumnos` e `/instructores`.
