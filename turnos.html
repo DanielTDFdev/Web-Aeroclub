@@ -1,5 +1,15 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.61
+  FECHA   : 2026-07-07
+  CAMBIOS : Texto del tooltip de saldo semanal (tooltipSaldo) cambiado de
+            "Saldo: X/limite turnos esta semana" a "Restan: X turnos esta semana"
+            (y "Límite alcanzado esta semana" cuando restantes=0). Reportado por
+            Daniel: el formato "X/limite" se prestaba a leerse como usados/límite
+            cuando en realidad X es SIEMPRE el restante, no el usado — con 2 turnos
+            tomados de 3, el tooltip mostraba "1/3" y parecía un conteo mal hecho.
+            Cambio puramente de texto, la lógica de turnosRestantesSemana() no se
+            tocó.
   VERSION : 6.60
   FECHA   : 2026-07-06
   CAMBIOS : Badge amarillo "⚠ DOC. PRÓXIMA A VENCER" en lista de USUARIOS REGISTRADOS
@@ -1375,7 +1385,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.60</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.61</div>
   </div>
 
 </div>
@@ -3551,8 +3561,8 @@ function tooltipSaldo(r,todosLosDatos){
   if((r.rol||'alumno')!=='alumno') return '';
   const{restantes,limite}=turnosRestantesSemana(r.fecha,todosLosDatos,r.email);
   return restantes>0
-    ?` — Saldo: ${restantes}/${limite} turnos esta semana`
-    :` — Saldo: 0/${limite} turnos esta semana (límite alcanzado)`;
+    ?` — Restan: ${restantes} turno${restantes===1?'':'s'} esta semana`
+    :` — Límite alcanzado esta semana`;
 }
 
 // v6.13: disponibilidad propia del instructor logueado, para resaltar en el calendario
