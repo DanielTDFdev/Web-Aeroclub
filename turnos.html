@@ -1,5 +1,16 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.62
+  FECHA   : 2026-07-08
+  CAMBIOS : FIX: modal de detalle del turno (#modal-turno) no se abría al clickear
+            un bloque del calendario desde la tab Reservas del instructor. Causa raíz:
+            el nodo HTML de #modal-turno estaba anidado dentro de #instructor-seguimiento
+            (la tab Seguimiento), que tiene display:none cuando otra tab está activa.
+            El JS agregaba la clase 'open' correctamente pero el modal nunca se
+            renderizaba porque un descendiente de un ancestro display:none no se pinta,
+            aunque su propio computedStyle diga display:flex. Fix: rescatado al <body>
+            con appendChild en carga, mismo patrón que modal-motivo-cancel (v5.97) y
+            modal-cargar-turno (v6.09). Bug recurrente documentado en §15 del doc.
   VERSION : 6.61
   FECHA   : 2026-07-07
   CAMBIOS : Texto del tooltip de saldo semanal (tooltipSaldo) cambiado de
@@ -1385,7 +1396,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.61</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.62</div>
   </div>
 
 </div>
@@ -3412,6 +3423,17 @@ function puedeAlumnoCancelar(r){
 // que con la Config oculta el modal nunca se veía aunque se le pusiera la clase 'open'.
 (function rescatarModalCargarTurno(){
   const m=document.getElementById('modal-cargar-turno');
+  if(m&&m.parentElement!==document.body) document.body.appendChild(m);
+})();
+
+// FIX v6.62: mismo bug recurrente. #modal-turno (modal de detalle del turno) estaba
+// anidado dentro de #instructor-seguimiento (la tab Seguimiento), que tiene display:none
+// cuando el instructor está en cualquier otra tab. Al clickear un bloque del calendario
+// en la tab Reservas el JS agregaba la clase 'open' correctamente, pero el modal nunca
+// se pintaba porque vivía dentro de un ancestro invisible. Rescatado al <body> igual
+// que modal-motivo-cancel (v5.97) y modal-cargar-turno (v6.09).
+(function rescatarModalTurno(){
+  const m=document.getElementById('modal-turno');
   if(m&&m.parentElement!==document.body) document.body.appendChild(m);
 })();
 
