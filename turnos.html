@@ -1,5 +1,17 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.66
+  FECHA   : 2026-07-08
+  CAMBIOS : FIX en la vista POR ALUMNO de Consultas (v6.65): la columna "VENCIÓ
+            S/APROBAR" contaba mal todo turno volado ANTES del 2026-06-15, porque
+            el campo aprobado_por recién existe desde v5.52 (ver doc §3) — turnos
+            aprobados y volados antes de esa fecha simplemente no lo tienen, y se
+            clasificaban como "nunca aprobado" sin serlo. Encontrado por Daniel con
+            datos reales de producción (alumnos con historial viejo mostraban
+            números de "venció sin aprobar" absurdamente altos). Fix: se usa
+            `instructor` como fallback de `aprobado_por` — ese campo existe desde
+            antes y se setea igual en la aprobación; solo se pisa en cancelaciones,
+            que no aplica acá (estado vencido, no cancelado).
   VERSION : 6.65
   FECHA   : 2026-07-08
   CAMBIOS : Consultas: nueva vista pivoteada "POR ALUMNO" (toggle junto a BUSCAR/LIMPIAR).
@@ -1428,7 +1440,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.65</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.66</div>
   </div>
 
 </div>
@@ -5473,12 +5485,18 @@ function renderConsultaDetalle(lista){
   document.getElementById('cq-export-wrap').style.display='block';
 }
 
-// ── PIVOT POR ALUMNO (v6.65) ────────────────────────────────────
+// ── PIVOT POR ALUMNO (v6.65, fix v6.66) ─────────────────────────
 // Desglose exhaustivo y mutuamente excluyente: las 6 columnas de resultado
 // siempre suman exacto el total de PEDIDOS (no hay superposición posible).
 // - cargado_por: excluido de "pedidos" — fue carga de staff, no pedido del alumno (mismo criterio que la cuota semanal, v6.53)
-// - vencido CON aprobado_por = voló (vuelo real hecho)
-// - vencido SIN aprobado_por = venció sin que nadie lo aprobara (lo mató el cron)
+// - vencido "voló" = tuvo aprobador. aprobado_por es el campo explícito (existe SOLO
+//   para turnos aprobados desde v5.52, 2026-06-15 en adelante, ver doc §3). Para turnos
+//   vencidos más viejos que no lo tienen, se usa `instructor` como fallback — ese campo
+//   sí existe desde antes y se setea igual en la aprobación; solo se pisa en cancelaciones
+//   (no aplica acá, el estado es vencido, no cancelado). Sin este fallback, TODO turno
+//   volado antes del 15/06 se contaba mal como "venció sin aprobar" (bug real encontrado
+//   por Daniel con datos de producción, corregido acá).
+// - vencido "sin aprobar" = ni aprobado_por ni instructor seteados → nunca tuvo aprobador
 // - cancelado con cancelado_rol==='alumno' (o campo ausente, mismo fallback que la cuota) = decisión del alumno
 // - cancelado con cancelado_rol==='instructor' = no es decisión del alumno
 function calcAlumnoStats(lista){
@@ -5490,7 +5508,7 @@ function calcAlumnoStats(lista){
     const st=map[key];
     st.pedidos++;
     if(r.estado==='vencido'){
-      if(r.aprobado_por) st.volo++; else st.vencioSinAprobar++;
+      if(r.aprobado_por||r.instructor) st.volo++; else st.vencioSinAprobar++;
     }else if(r.estado==='cancelado'){
       if(r.cancelado_rol==='instructor') st.canceloInstructor++; else st.canceloAlumno++;
     }else if(r.estado==='pendiente'){
