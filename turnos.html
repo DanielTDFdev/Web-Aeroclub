@@ -1,6 +1,17 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.63
+  FECHA   : 2026-07-08
+  CAMBIOS : FIX CRÍTICO: el modal de detalle no abría porque vencerTurnosPendientes()
+            crasheaba con "TypeError: Cannot read properties of undefined (reading
+            'split')" al encontrar una reserva en Firebase con r.fecha ausente o null.
+            Ese crash interrumpía el callback de onValue antes de que _reservasCache
+            se poblara, dejando la cache vacía y haciendo que abrirModal() saliera
+            inmediatamente en if(!r)return. Fix: guard en el loop —
+            if(!r.fecha||!r.hora) continue — saltea la reserva sin explotar.
+            La reserva corrupta en Firebase hay que revisarla/borrarla manualmente.
   VERSION : 6.62
+  ARCHIVO : turnos.html
   FECHA   : 2026-07-08
   CAMBIOS : FIX: modal de detalle del turno (#modal-turno) no se abría al clickear
             un bloque del calendario desde la tab Reservas del instructor. Causa raíz:
@@ -1396,7 +1407,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.62</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.63</div>
   </div>
 
 </div>
@@ -4192,7 +4203,9 @@ async function vencerTurnosPendientes(data){
   const ahora=Date.now();
   const promesas=[];
   for(const[k,r] of Object.entries(data)){
+    if(!r||typeof r!=='object') continue;
     if(r.estado!=='pendiente'&&r.estado!=='aprobado')continue;
+    if(!r.fecha||!r.hora) continue;  // v6.63: guard — reserva sin fecha/hora no se puede vencer
     const[y,m,d]=r.fecha.split('-').map(Number);
     const[hh,mm]=(r.hora||'00:00').split(':').map(Number);
     const fechaHoraTurno=new Date(y,m-1,d,hh,mm,0).getTime();
