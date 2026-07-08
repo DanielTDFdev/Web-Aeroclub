@@ -1,5 +1,12 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.64
+  FECHA   : 2026-07-08
+  CAMBIOS : Badge "● HOY" encima del nombre del día en la columna actual, en ambas
+            vistas del calendario (LISTA y SEMANA). Pill chica en cyan sobre fondo
+            cyan oscuro, clase .cal-th-hoy. Complementa el shading celeste de la
+            columna que ya existía, para que sea inmediatamente obvio cuál es el
+            día de hoy sin tener que buscar el tono de fondo.
   VERSION : 6.63
   FECHA   : 2026-07-08
   CAMBIOS : FIX CRÍTICO: el modal de detalle no abría porque vencerTurnosPendientes()
@@ -1230,6 +1237,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 .cal-table{width:100%;border-collapse:collapse;min-width:1400px;}
 .cal-table th{font-family:var(--font-mono);font-size:11px;color:var(--text2);letter-spacing:.1em;text-transform:uppercase;padding:8px 6px;border-bottom:1px solid var(--border2);border-right:1px solid var(--border);text-align:center;background:var(--bg2);min-width:62px;}
 .cal-table th.today-col{color:var(--cyan);border-bottom-color:var(--cyan);}
+.cal-th-hoy{display:inline-block;font-size:9px;font-family:var(--font-mono);letter-spacing:.12em;color:var(--navy,#0B1F3A);background:var(--cyan);border-radius:3px;padding:1px 5px;margin-bottom:3px;font-weight:700;}
 .cal-table th:first-child{width:64px;min-width:64px;color:var(--text3);position:sticky;left:0;z-index:3;background:var(--bg2);}
 .cal-table td{border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:4px;vertical-align:top;background:var(--bg);min-height:36px;min-width:62px;}
 .cal-table td.today-col{background:rgba(0,200,212,.03);}
@@ -1407,7 +1415,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.63</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.64</div>
   </div>
 
 </div>
@@ -3693,7 +3701,8 @@ async function renderTodasReservas(data){
     // separador visual al inicio de cada semana
     if(idx===3||idx===10) cls+=(cls?' ':'')+'col-sep';
     const feriadoHtml=feriado?`<span class="cal-th-feriado" title="${feriado}">📅 ${feriadoCorto}</span>`:'';
-    html+=`<th class="${cls}">${dow}<br>${num}${feriadoHtml}</th>`;
+    const hoyBadge=isHoy?'<span class="cal-th-hoy">● HOY</span><br>':'';
+    html+=`<th class="${cls}">${hoyBadge}${dow}<br>${num}${feriadoHtml}</th>`;
   });
   html+='</tr></thead><tbody>';
 
@@ -3817,8 +3826,9 @@ async function renderVistaSemana(){
     const feriado=feriadosMap[ds]||'';
     const feriadoCorto=feriado.length>9?feriado.slice(0,8)+'…':feriado;
     const feriadoHtml=feriado?`<span class="cal-th-feriado" title="${feriado}">📅 ${feriadoCorto}</span>`:'';
+    const hoyBadge=isHoy?'<span class="cal-th-hoy">● HOY</span><br>':'';
     const cls=isHoy?'today-col':'';
-    html+=`<th class="${cls}">${dow}<br>${num}${feriadoHtml}</th>`;
+    html+=`<th class="${cls}">${hoyBadge}${dow}<br>${num}${feriadoHtml}</th>`;
   });
   html+='</tr></thead><tbody>';
 
