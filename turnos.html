@@ -1,5 +1,26 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.68
+  FECHA   : 2026-07-08
+  CAMBIOS : Consultas, vista POR ALUMNO: nueva columna ROL (Alumno/Piloto), pedido de
+            Daniel para distinguir de un vistazo quién es quién en la tabla (antes
+            mezclaba ambos roles sin marcar diferencia, título de la tabla decía
+            "ALUMNO" pero incluía pilotos). Reusa las clases .badge-alumno/.badge-piloto
+            ya existentes en el resto de la app (misma paleta que el resto del sistema).
+            Sumada a calcAlumnoStats, al render de la tabla, al sort por columna y al
+            CSV export.
+  VERSION : 6.67
+  FECHA   : 2026-07-08
+  CAMBIOS : FIX en la vista POR ALUMNO de Consultas (v6.65/6.66): un turno de PILOTO
+            en LV-ART o LV-MPH se auto-aprueba en confirmarTurno() (estado:'aprobado'
+            directo) sin escribir aprobado_por ni instructor — nadie aprobó nada, el
+            sistema lo hace solo. Al vencer esos turnos quedaban mal contados como
+            "venció sin aprobar" pese a haber volado. Fix: si rol==='piloto' Y el avión
+            NO es LV-OAD, un vencido cuenta como voló aunque no tenga aprobador
+            registrado. Ojo: en LV-OAD el piloto reserva igual que el alumno (sí
+            requiere instructor real, ver §4/§6), ahí NO aplica esta excepción — un
+            piloto en LV-OAD que nunca se aprobó sigue contando como "venció sin
+            aprobar", correctamente.
   VERSION : 6.66
   FECHA   : 2026-07-08
   CAMBIOS : FIX en la vista POR ALUMNO de Consultas (v6.65): la columna "VENCIÓ
@@ -1440,7 +1461,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.66</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.68</div>
   </div>
 
 </div>
@@ -5485,18 +5506,20 @@ function renderConsultaDetalle(lista){
   document.getElementById('cq-export-wrap').style.display='block';
 }
 
-// ── PIVOT POR ALUMNO (v6.65, fix v6.66) ─────────────────────────
+// ── PIVOT POR ALUMNO (v6.65, fix v6.66, fix v6.67) ──────────────
 // Desglose exhaustivo y mutuamente excluyente: las 6 columnas de resultado
 // siempre suman exacto el total de PEDIDOS (no hay superposición posible).
 // - cargado_por: excluido de "pedidos" — fue carga de staff, no pedido del alumno (mismo criterio que la cuota semanal, v6.53)
-// - vencido "voló" = tuvo aprobador. aprobado_por es el campo explícito (existe SOLO
+// - vencido "voló" = tuvo aprobador, O es un piloto en avión que no es LV-OAD (auto-aprobación,
+//   confirmarTurno() setea estado:'aprobado' directo sin escribir aprobado_por/instructor —
+//   ver §4/§6. En LV-OAD el piloto reserva igual que el alumno, sí requiere instructor real,
+//   así que ahí NO aplica este caso especial). aprobado_por es el campo explícito (existe SOLO
 //   para turnos aprobados desde v5.52, 2026-06-15 en adelante, ver doc §3). Para turnos
 //   vencidos más viejos que no lo tienen, se usa `instructor` como fallback — ese campo
 //   sí existe desde antes y se setea igual en la aprobación; solo se pisa en cancelaciones
-//   (no aplica acá, el estado es vencido, no cancelado). Sin este fallback, TODO turno
-//   volado antes del 15/06 se contaba mal como "venció sin aprobar" (bug real encontrado
-//   por Daniel con datos de producción, corregido acá).
-// - vencido "sin aprobar" = ni aprobado_por ni instructor seteados → nunca tuvo aprobador
+//   (no aplica acá, el estado es vencido, no cancelado).
+// - vencido "sin aprobar" = ni aprobado_por ni instructor seteados, y no es el caso de
+//   auto-aprobación de piloto fuera de LV-OAD → nunca tuvo aprobador
 // - cancelado con cancelado_rol==='alumno' (o campo ausente, mismo fallback que la cuota) = decisión del alumno
 // - cancelado con cancelado_rol==='instructor' = no es decisión del alumno
 function calcAlumnoStats(lista){
@@ -5504,11 +5527,13 @@ function calcAlumnoStats(lista){
   lista.forEach(r=>{
     if(r.cargado_por) return; // no es un pedido del alumno
     const key=(r.email||r.nombre||'—').toLowerCase();
-    if(!map[key]) map[key]={nombre:r.nombre||'—',email:r.email||'—',pedidos:0,volo:0,canceloAlumno:0,canceloInstructor:0,vencioSinAprobar:0,pendiente:0,aprobado:0};
+    if(!map[key]) map[key]={nombre:r.nombre||'—',email:r.email||'—',rol:r.rol||'alumno',pedidos:0,volo:0,canceloAlumno:0,canceloInstructor:0,vencioSinAprobar:0,pendiente:0,aprobado:0};
     const st=map[key];
     st.pedidos++;
+    if(r.rol==='piloto') st.rol='piloto'; // si aparece como piloto en cualquier reserva, se muestra como piloto
     if(r.estado==='vencido'){
-      if(r.aprobado_por||r.instructor) st.volo++; else st.vencioSinAprobar++;
+      const autoAprobPiloto=r.rol==='piloto'&&(r.avion||'LV-OAD')!=='LV-OAD';
+      if(r.aprobado_por||r.instructor||autoAprobPiloto) st.volo++; else st.vencioSinAprobar++;
     }else if(r.estado==='cancelado'){
       if(r.cancelado_rol==='instructor') st.canceloInstructor++; else st.canceloAlumno++;
     }else if(r.estado==='pendiente'){
@@ -5525,6 +5550,7 @@ let _cqAlumnoSort={key:'pedidos',dir:'desc'};
 
 const CQ_ALUMNO_COLS=[
   {key:'nombre',label:'ALUMNO',color:'var(--text)'},
+  {key:'rol',label:'ROL',color:'var(--text2)'},
   {key:'pedidos',label:'PEDIDOS',color:'var(--cyan)'},
   {key:'volo',label:'VOLÓ',color:'var(--green)'},
   {key:'canceloAlumno',label:'CANCELÓ ÉL',color:'var(--red)'},
@@ -5567,10 +5593,11 @@ function renderConsultaPorAlumno(lista){
 
   el.innerHTML=`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:12px;min-width:760px">
     <thead><tr style="border-bottom:1px solid var(--border2)">
-      ${CQ_ALUMNO_COLS.map(c=>`<th onclick="sortConsultaAlumno('${c.key}')" style="text-align:${c.key==='nombre'?'left':'right'};padding:6px 8px;color:var(--text3);font-weight:500;letter-spacing:.06em;cursor:pointer;white-space:nowrap;user-select:none">${c.label}${arrow(c.key)}</th>`).join('')}
+      ${CQ_ALUMNO_COLS.map(c=>`<th onclick="sortConsultaAlumno('${c.key}')" style="text-align:${(c.key==='nombre'||c.key==='rol')?'left':'right'};padding:6px 8px;color:var(--text3);font-weight:500;letter-spacing:.06em;cursor:pointer;white-space:nowrap;user-select:none">${c.label}${arrow(c.key)}</th>`).join('')}
     </tr></thead><tbody>
     ${stats.map(s=>`<tr style="border-bottom:1px solid var(--border)">
       <td style="padding:7px 8px;color:var(--text)">${s.nombre}<div style="color:var(--text3);font-size:10px">${s.email}</div></td>
+      <td style="padding:7px 8px"><span class="badge badge-${s.rol}">${s.rol}</span></td>
       <td style="padding:7px 8px;text-align:right;color:var(--cyan);font-weight:600">${s.pedidos}</td>
       <td style="padding:7px 8px;text-align:right;color:var(--green)">${s.volo}</td>
       <td style="padding:7px 8px;text-align:right;color:var(--red)">${s.canceloAlumno}</td>
@@ -5582,6 +5609,7 @@ function renderConsultaPorAlumno(lista){
     </tbody>
     <tfoot><tr style="border-top:2px solid var(--border2)">
       <td style="padding:7px 8px;color:var(--text3);font-weight:600">TOTAL (${stats.length} alumnos)</td>
+      <td style="padding:7px 8px"></td>
       <td style="padding:7px 8px;text-align:right;color:var(--cyan);font-weight:600">${totales.pedidos}</td>
       <td style="padding:7px 8px;text-align:right;color:var(--green)">${totales.volo}</td>
       <td style="padding:7px 8px;text-align:right;color:var(--red)">${totales.canceloAlumno}</td>
@@ -5599,9 +5627,9 @@ function renderConsultaPorAlumno(lista){
 
 window.exportarCSVAlumnos=function(){
   if(!_cqAlumnoStats.length)return;
-  const headers=['Alumno','Email','Pedidos','Voló','Canceló él','Canceló instructor','Venció sin aprobar','Pendiente','Aprobado (futuro)'];
+  const headers=['Alumno','Rol','Email','Pedidos','Voló','Canceló él','Canceló instructor','Venció sin aprobar','Pendiente','Aprobado (futuro)'];
   const rows=_cqAlumnoStats.map(s=>[
-    s.nombre,s.email,s.pedidos,s.volo,s.canceloAlumno,s.canceloInstructor,s.vencioSinAprobar,s.pendiente,s.aprobado
+    s.nombre,s.rol,s.email,s.pedidos,s.volo,s.canceloAlumno,s.canceloInstructor,s.vencioSinAprobar,s.pendiente,s.aprobado
   ].map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(','));
   const csv='\uFEFF'+[headers.join(','),...rows].join('\n');
   const a=document.createElement('a');
