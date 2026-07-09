@@ -1,5 +1,16 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.69
+  FECHA   : 2026-07-08
+  CAMBIOS : Consultas, vista POR ALUMNO: click en cualquier fila abre un modal nuevo
+            (#modal-alumno-chart) con un gráfico de torta 3D (Google Charts,
+            is3D:true, cargado en diferido vía CDN gstatic recién al primer click —
+            nadie paga esa carga si nunca usa la vista) del desglose de ESE alumno:
+            Voló / Canceló él / Canceló instructor / Venció s/aprobar / Pendiente /
+            Aprobado (futuro), con la misma paleta de colores que las columnas de la
+            tabla. Rescatado al <body> preventivamente por el mismo bug recurrente de
+            modal-anidado-en-tab-oculta (v5.97/v6.09/v6.62). Funciones nuevas:
+            cargarGoogleCharts, abrirModalAlumnoChart, cerrarModalAlumnoChart.
   VERSION : 6.68
   FECHA   : 2026-07-08
   CAMBIOS : Consultas, vista POR ALUMNO: nueva columna ROL (Alumno/Piloto), pedido de
@@ -1085,6 +1096,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script src="https://www.gstatic.com/charts/loader.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -1461,7 +1473,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.68</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.69</div>
   </div>
 
 </div>
@@ -1987,6 +1999,22 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
           <button class="primary" onclick="guardarCqReserva()" style="flex:1">GUARDAR</button>
           <button class="danger"  onclick="eliminarCqReserva()" style="flex:1">ELIMINAR</button>
         </div>
+      </div>
+    </div>
+
+    <!-- MODAL GRÁFICO POR ALUMNO (v6.69) -->
+    <div class="modal-overlay" id="modal-alumno-chart">
+      <div class="modal" style="max-width:560px">
+        <button class="modal-close" onclick="cerrarModalAlumnoChart()">✕</button>
+        <div class="modal-title">◈ Estadística de turnos</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:.25rem">
+          <div id="mac-nombre" style="font-family:var(--font-ui);font-size:16px;color:var(--text);font-weight:600"></div>
+          <div id="mac-rol"></div>
+        </div>
+        <div id="mac-email" style="font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-bottom:.15rem"></div>
+        <div id="mac-total" style="font-family:var(--font-mono);font-size:12px;color:var(--cyan);margin-bottom:.5rem"></div>
+        <div id="mac-loading" style="font-family:var(--font-mono);font-size:12px;color:var(--text3);text-align:center;padding:2.5rem 0">// Cargando gráfico...</div>
+        <div id="mac-chart" style="width:100%;height:340px;display:none"></div>
       </div>
     </div>
 
@@ -3501,6 +3529,15 @@ function puedeAlumnoCancelar(r){
 // que modal-motivo-cancel (v5.97) y modal-cargar-turno (v6.09).
 (function rescatarModalTurno(){
   const m=document.getElementById('modal-turno');
+  if(m&&m.parentElement!==document.body) document.body.appendChild(m);
+})();
+
+// FIX preventivo v6.69: mismo patrón de bug recurrente (v5.97/v6.09/v6.62). El modal
+// del gráfico por alumno vive dentro de la tab Consultas, que puede estar oculta con
+// display:none según qué tab tenga activa el instructor. Se rescata al <body> por las
+// dudas, igual que los otros tres modales de arriba.
+(function rescatarModalAlumnoChart(){
+  const m=document.getElementById('modal-alumno-chart');
   if(m&&m.parentElement!==document.body) document.body.appendChild(m);
 })();
 
@@ -5595,7 +5632,7 @@ function renderConsultaPorAlumno(lista){
     <thead><tr style="border-bottom:1px solid var(--border2)">
       ${CQ_ALUMNO_COLS.map(c=>`<th onclick="sortConsultaAlumno('${c.key}')" style="text-align:${(c.key==='nombre'||c.key==='rol')?'left':'right'};padding:6px 8px;color:var(--text3);font-weight:500;letter-spacing:.06em;cursor:pointer;white-space:nowrap;user-select:none">${c.label}${arrow(c.key)}</th>`).join('')}
     </tr></thead><tbody>
-    ${stats.map(s=>`<tr style="border-bottom:1px solid var(--border)">
+    ${stats.map((s,i)=>`<tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="abrirModalAlumnoChart(${i})" title="Ver gráfico">
       <td style="padding:7px 8px;color:var(--text)">${s.nombre}<div style="color:var(--text3);font-size:10px">${s.email}</div></td>
       <td style="padding:7px 8px"><span class="badge badge-${s.rol}">${s.rol}</span></td>
       <td style="padding:7px 8px;text-align:right;color:var(--cyan);font-weight:600">${s.pedidos}</td>
@@ -5636,6 +5673,90 @@ window.exportarCSVAlumnos=function(){
   a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
   a.download='turnos_por_alumno_'+new Date().toISOString().slice(0,10)+'.csv';
   a.click();
+};
+
+// ── GRÁFICO POR ALUMNO (v6.69) ──────────────────────────────────
+// Google Charts (loader.js, CDN gstatic) porque es la vía más directa a un pie chart
+// con perspectiva 3D real (is3D:true) sin sumar un build step ni una librería pesada
+// tipo Chart.js+plugin. Se carga en diferido, recién al primer click en una fila —
+// nadie paga el costo de red si nunca abre esta vista.
+let _gchartsPromise=null;
+function cargarGoogleCharts(){
+  if(_gchartsPromise) return _gchartsPromise;
+  _gchartsPromise=new Promise((resolve,reject)=>{
+    if(!window.google||!google.charts){reject(new Error('Google Charts no cargó (¿bloqueado por adblock/red?)'));return;}
+    google.charts.load('current',{packages:['corechart']});
+    google.charts.setOnLoadCallback(resolve);
+  });
+  return _gchartsPromise;
+}
+
+// Paleta idéntica a la de las columnas de la tabla (mismos hex que las variables CSS
+// del tema, Google Charts no puede leer var(--x) directamente).
+const MAC_COLORES={
+  volo:'#39d353', canceloAlumno:'#f85149', canceloInstructor:'#3d5a72',
+  vencioSinAprobar:'#a07ef0', pendiente:'#f0a500', aprobado:'#4d9fff'
+};
+const MAC_LABELS={
+  volo:'Voló', canceloAlumno:'Canceló él', canceloInstructor:'Canceló instructor',
+  vencioSinAprobar:'Venció s/aprobar', pendiente:'Pendiente', aprobado:'Aprobado (futuro)'
+};
+
+window.abrirModalAlumnoChart=async function(idx){
+  const s=_cqAlumnoStats[idx];
+  if(!s)return;
+  document.getElementById('mac-nombre').textContent=s.nombre;
+  document.getElementById('mac-rol').innerHTML=`<span class="badge badge-${s.rol}">${s.rol}</span>`;
+  document.getElementById('mac-email').textContent=s.email;
+  document.getElementById('mac-total').textContent=`Total pedidos: ${s.pedidos}`;
+
+  const overlay=document.getElementById('modal-alumno-chart');
+  const chartEl=document.getElementById('mac-chart');
+  const loadingEl=document.getElementById('mac-loading');
+  overlay.classList.add('open');
+  chartEl.style.display='none';
+  chartEl.innerHTML='';
+  loadingEl.style.display='block';
+  loadingEl.textContent='// Cargando gráfico...';
+
+  const filas=Object.keys(MAC_LABELS).map(k=>[MAC_LABELS[k],s[k],MAC_COLORES[k]]).filter(f=>f[1]>0);
+
+  if(!filas.length){
+    loadingEl.textContent='// Sin datos para graficar (0 pedidos resueltos).';
+    return;
+  }
+
+  try{
+    await cargarGoogleCharts();
+  }catch(e){
+    loadingEl.textContent='// No se pudo cargar el gráfico: '+e.message;
+    return;
+  }
+  // El alumno pudo haber cerrado el modal mientras cargaba la librería
+  if(!overlay.classList.contains('open'))return;
+
+  loadingEl.style.display='none';
+  chartEl.style.display='block';
+
+  const data=new google.visualization.DataTable();
+  data.addColumn('string','Categoría');
+  data.addColumn('number','Cantidad');
+  data.addRows(filas.map(f=>[f[0],f[1]]));
+
+  const options={
+    is3D:true,
+    backgroundColor:'transparent',
+    colors:filas.map(f=>f[2]),
+    legend:{position:'right',textStyle:{color:'#c8d8e8',fontName:'Share Tech Mono',fontSize:11}},
+    chartArea:{left:0,top:10,width:'96%',height:'88%'},
+    pieSliceTextStyle:{color:'#0a0c0f',fontName:'Share Tech Mono',fontSize:11},
+    tooltip:{textStyle:{fontName:'Share Tech Mono',fontSize:12}}
+  };
+  new google.visualization.PieChart(chartEl).draw(data,options);
+};
+
+window.cerrarModalAlumnoChart=function(){
+  document.getElementById('modal-alumno-chart').classList.remove('open');
 };
 
 window.limpiarConsulta=function(){
