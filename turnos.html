@@ -1,5 +1,23 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.70
+  FECHA   : 2026-07-10
+  CAMBIOS : Log privado del alumno (a pedido de Daniel): notas de instructores/admin
+            sobre el progreso de un alumno, NUNCA visibles para el alumno, separadas
+            del campo obs público existente. Nuevo botón "◈ VER LOG DEL ALUMNO" en el
+            modal de detalle de turno (modal-turno), visible solo si session.tipo===
+            'instructor' (cubre instructor común, admin y administrador). Abre un
+            modal nuevo (#modal-log-alumno) con: (1) textarea + botón "GUARDAR NOTA"
+            para agregar una entrada referenciando el vuelo sobre el que se hizo click,
+            y (2) historial completo de ese alumno ordenado de más nueva a más vieja,
+            con autor y fecha de cada nota. Vive en un nodo nuevo de Firebase
+            /logs_alumno/{emailKey} (independiente de /reservas) para que el historial
+            se vea completo desde cualquier turno del alumno, no solo el que lo originó.
+            Sin registro en /auditoria (decisión explícita: se edita seguido, sería
+            ruido). Rescatado al <body> preventivamente por el mismo bug recurrente de
+            modal-anidado-en-tab-oculta (v5.97/v6.09/v6.62/v6.69). Funciones nuevas:
+            abrirLogAlumno, renderLogAlumno, guardarNotaLogAlumno, cerrarModalLogAlumno,
+            fmtTsLindo.
   VERSION : 6.69
   FECHA   : 2026-07-08
   CAMBIOS : Consultas, vista POR ALUMNO: click en cualquier fila abre un modal nuevo
@@ -1473,7 +1491,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.69</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.70</div>
   </div>
 
 </div>
@@ -1777,6 +1795,10 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <div class="modal-row" id="md-ts-cancel-row" style="display:none"><span class="modal-lbl">CANCELADO</span><span class="modal-val" id="md-ts-cancel" style="color:var(--text3);font-size:11px"></span></div>
       <div class="modal-row" id="md-aprobo-row" style="display:none"><span class="modal-lbl">APROBÓ</span><span class="modal-val"><span id="md-aprobo"></span><span class="md-ico md-ico-ok">👍</span></span></div>
       <div class="modal-row" id="md-inst-row"><span class="modal-lbl" id="md-inst-lbl">INSTRUCTOR</span><span class="modal-val"><span id="md-inst"></span><span id="md-inst-ico" class="md-ico md-ico-cancel" style="display:none">👎</span></span></div>
+      <div class="modal-row" id="md-log-row" style="display:none">
+        <span class="modal-lbl">ALUMNO</span>
+        <span class="modal-val"><button id="md-log-btn" style="font-family:var(--font-mono);font-size:11px;padding:5px 12px;background:rgba(0,200,212,.08);border:1px solid var(--cyan);color:var(--cyan);border-radius:var(--radius);cursor:pointer">◈ VER LOG DEL ALUMNO</button></span>
+      </div>
       <div id="md-obspost-row" style="display:none;flex-direction:column;gap:.45rem;margin:.6rem 0;padding-top:.6rem;border-top:1px solid var(--border)">
         <span class="modal-lbl" style="color:var(--amber)">OBSERVACIÓN POST-VUELO</span>
         <textarea id="md-obspost" rows="3" placeholder="Ej.: no se voló por meteorología…" style="width:100%;box-sizing:border-box;font-family:var(--font-mono);font-size:12px;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);padding:8px;resize:vertical"></textarea>
@@ -1786,6 +1808,31 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         </div>
       </div>
       <div class="modal-actions" id="md-actions"></div>
+    </div>
+  </div>
+
+  <!-- MODAL LOG DEL ALUMNO (v6.70) — notas privadas de instructores/admin sobre el
+       progreso de un alumno. NUNCA visible para el alumno. Vive en /logs_alumno/{emailKey},
+       independiente de /reservas, para poder ver el historial completo desde un solo lugar. -->
+  <div class="modal-overlay" id="modal-log-alumno" style="z-index:1150">
+    <div class="modal" style="max-width:520px">
+      <button class="modal-close" onclick="cerrarModalLogAlumno()">✕</button>
+      <div class="modal-title">◈ Log del Alumno</div>
+      <div id="mla-nombre" style="font-family:var(--font-ui);font-size:15px;color:var(--text);font-weight:600;margin-bottom:.15rem"></div>
+      <div id="mla-email" style="font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-bottom:.85rem"></div>
+
+      <div class="panel" style="margin-bottom:1rem">
+        <div class="section-title">▸ Nueva nota — sobre el vuelo <span id="mla-ref-vuelo" style="color:var(--amber)"></span></div>
+        <textarea id="mla-texto" rows="3" placeholder="Progreso, novedades, warnings…" style="width:100%;box-sizing:border-box;font-family:var(--font-mono);font-size:12px;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);padding:8px;resize:vertical"></textarea>
+        <div style="display:flex;align-items:center;gap:.7rem;margin-top:.5rem">
+          <button id="mla-guardar" onclick="guardarNotaLogAlumno()">GUARDAR NOTA</button>
+          <span id="mla-msg" style="font-family:var(--font-mono);font-size:11px;color:var(--text3)"></span>
+        </div>
+      </div>
+
+      <div class="section-title" style="margin-bottom:.5rem">▸ Historial (más nueva primero)</div>
+      <div id="mla-lista" style="max-height:340px;overflow-y:auto;display:flex;flex-direction:column;gap:.6rem"></div>
+      <div id="mla-vacio" style="display:none;font-family:var(--font-mono);font-size:12px;color:var(--text3);text-align:center;padding:1.5rem 0">// Sin notas todavía</div>
     </div>
   </div>
 
@@ -3541,6 +3588,14 @@ function puedeAlumnoCancelar(r){
   if(m&&m.parentElement!==document.body) document.body.appendChild(m);
 })();
 
+// FIX preventivo v6.70: mismo patrón de bug recurrente (v5.97/v6.09/v6.62/v6.69).
+// #modal-log-alumno vive anidado junto a #modal-turno dentro de la tab Seguimiento,
+// que puede estar oculta con display:none. Se rescata al <body> por las dudas.
+(function rescatarModalLogAlumno(){
+  const m=document.getElementById('modal-log-alumno');
+  if(m&&m.parentElement!==document.body) document.body.appendChild(m);
+})();
+
 function pedirMotivoCancelacion(obligatorio=false){
   return new Promise(resolve=>{
     const overlay=document.getElementById('modal-motivo-cancel');
@@ -4059,6 +4114,88 @@ function turnoYaPaso(r){
   return new Date(y,m-1,d,hh,mm,0).getTime()<Date.now();
 }
 
+// ── LOG PRIVADO DEL ALUMNO (v6.70) ──────────────────────────────
+// Notas de instructores sobre el progreso de un alumno (log, warnings, etc.),
+// NUNCA visibles para el alumno. Vive en /logs_alumno/{emailKey}, separado de
+// /reservas, para que desde cualquier turno de ese alumno se vea el historial
+// completo escrito por todos los instructores, ordenado de más nueva a más vieja.
+// Cada entrada referencia el vuelo sobre el que se hizo click al escribirla.
+// Sin registro en /auditoria (decisión explícita de Daniel — se edita seguido,
+// sería ruido en la auditoría).
+let _logAlumnoCtx=null; // {emailKey, nombre, email, reservaRef:{fecha,hora,avion}}
+
+function fmtTsLindo(ts){
+  const dt=new Date(ts);
+  const DIAS=['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  const MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  return DIAS[dt.getDay()]+' '+dt.getDate()+' '+MESES[dt.getMonth()]+' '+dt.getFullYear()+' '+String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0');
+}
+
+window.abrirLogAlumno=async function(){
+  if(!_logAlumnoCtx)return;
+  document.getElementById('mla-nombre').textContent=_logAlumnoCtx.nombre;
+  document.getElementById('mla-email').textContent=_logAlumnoCtx.email;
+  const rv=_logAlumnoCtx.reservaRef;
+  document.getElementById('mla-ref-vuelo').textContent=fmtFechaLinda(rv.fecha)+' — '+rv.hora+' hs — '+(rv.avion||'LV-OAD');
+  document.getElementById('mla-texto').value='';
+  document.getElementById('mla-msg').textContent='';
+  document.getElementById('modal-log-alumno').classList.add('open');
+  await renderLogAlumno();
+};
+
+async function renderLogAlumno(){
+  const cont=document.getElementById('mla-lista');
+  const vacio=document.getElementById('mla-vacio');
+  cont.innerHTML='<div style="font-family:var(--font-mono);font-size:11px;color:var(--text3)">// Cargando…</div>';
+  let data=null;
+  try{ data=await fbGet('logs_alumno/'+_logAlumnoCtx.emailKey); }catch(e){}
+  const entradas=rArr(data).sort((a,b)=>(b.ts||'').localeCompare(a.ts||''));
+  cont.innerHTML='';
+  if(!entradas.length){ vacio.style.display='block'; return; }
+  vacio.style.display='none';
+  entradas.forEach(e=>{
+    const ref=e.reserva?(fmtFechaLinda(e.reserva.fecha)+' '+e.reserva.hora+' hs '+(e.reserva.avion||'')):'—';
+    const div=document.createElement('div');
+    div.style.cssText='padding:.6rem .75rem;background:var(--bg3);border:1px solid var(--border);border-left:3px solid var(--cyan);border-radius:var(--radius)';
+    const head=document.createElement('div');
+    head.style.cssText='display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.05em;margin-bottom:.3rem';
+    const izq=document.createElement('span'); izq.textContent=(e.autor||'—')+' — '+(e.ts?fmtTsLindo(e.ts):'');
+    const der=document.createElement('span'); der.style.color='var(--amber)'; der.textContent='✈ '+ref;
+    head.appendChild(izq); head.appendChild(der);
+    const cuerpo=document.createElement('div');
+    cuerpo.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--text2);white-space:pre-wrap;line-height:1.5';
+    cuerpo.textContent=e.texto||'';
+    div.appendChild(head); div.appendChild(cuerpo);
+    cont.appendChild(div);
+  });
+}
+
+window.guardarNotaLogAlumno=async function(){
+  if(!_logAlumnoCtx)return;
+  const ta=document.getElementById('mla-texto');
+  const btn=document.getElementById('mla-guardar');
+  const msg=document.getElementById('mla-msg');
+  const texto=ta.value.trim();
+  if(!texto){ msg.style.color='var(--red)'; msg.textContent='Escribí algo antes de guardar.'; return; }
+  btn.disabled=true; msg.style.color='var(--text3)'; msg.textContent='Guardando…';
+  try{
+    await fbPush('logs_alumno/'+_logAlumnoCtx.emailKey,{
+      texto,
+      autor:session.nombre||session.user||'—',
+      ts:new Date().toISOString(),
+      reserva:{..._logAlumnoCtx.reservaRef}
+    });
+    ta.value=''; msg.style.color='var(--green)'; msg.textContent='✓ Nota guardada';
+    await renderLogAlumno();
+  }catch(e){ console.error(e); msg.style.color='var(--red)'; msg.textContent='✗ Error al guardar'; }
+  finally{ btn.disabled=false; }
+};
+
+window.cerrarModalLogAlumno=function(){
+  document.getElementById('modal-log-alumno').classList.remove('open');
+};
+document.addEventListener('click',e=>{if(e.target.id==='modal-log-alumno')cerrarModalLogAlumno();});
+
 window.abrirModal=function(key){
   const r=_reservasCache[key];if(!r)return;
   document.getElementById('md-avion').textContent=r.avion||'LV-OAD';
@@ -4283,6 +4420,20 @@ window.abrirModal=function(key){
         r.obs_post=val||''; msg.style.color='var(--green)'; msg.textContent='✓ Guardado';
       }catch(e){ console.error(e); msg.style.color='var(--red)'; msg.textContent='✗ Error al guardar'; }
       finally{ btn.disabled=false; }
+    };
+  })();
+  // LOG DEL ALUMNO (v6.70): visible solo para instructores/admin — session.tipo==='instructor'
+  // cubre instructor común, admin y administrador (todos loguean con ese tipo). El alumno
+  // nunca tiene tipo==='instructor', así que para él esta fila queda oculta siempre.
+  (function(){
+    const row=document.getElementById('md-log-row');
+    const btn=document.getElementById('md-log-btn');
+    if(!row||!btn)return;
+    if(session?.tipo!=='instructor'){ row.style.display='none'; btn.onclick=null; return; }
+    row.style.display='flex';
+    btn.onclick=()=>{
+      _logAlumnoCtx={emailKey:ek(r.email),nombre:r.nombre,email:r.email,reservaRef:{fecha:r.fecha,hora:r.hora,avion:r.avion||'LV-OAD'}};
+      abrirLogAlumno();
     };
   })();
   document.getElementById('modal-turno').classList.add('open');
