@@ -1,6 +1,24 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 6.74 
+  VERSION : 6.75
+  FECHA   : 2026-07-10
+  CAMBIOS : Carga inicial de horas/aterrizajes previos al sistema (pedido de Daniel:
+            hoy el total del Log de Vuelos arranca en 0 aunque el alumno ya tenga
+            horas reales voladas antes de que existiera este registro). Dos campos
+            nuevos en /alumnos/{emailKey}: horas_iniciales, aterrizajes_iniciales —
+            editables desde el modal EDITAR USUARIO (Config→Usuarios) por cualquier
+            instructor, mismo criterio que el resto del modal. Se suman al total del
+            Log de Vuelos (renderNotasPrivadasAlumno) FUNDIDOS con lo registrado por
+            vuelo, sin distinguir origen en el número final — decisión explícita de
+            Daniel, no se muestra como línea separada. No se creó ninguna herramienta
+            de carga masiva todavía (Daniel confirmó que aún no tiene los datos
+            históricos juntados en una planilla) — cuando los tenga, la carga en serie
+            se resuelve con un script Python del mismo patrón que el resto del proyecto
+            (dry-run + --aplicar, vía REST API de Firebase), no agregando UI nueva a
+            turnos.html para algo que se hace una sola vez. Sin cambios al modelo de
+            /reservas ni a obs_privada — la carga inicial vive aparte, a nivel alumno,
+            justamente para no ensuciar estadísticas que ya recorren /reservas.
+  VERSION : 6.74
   FECHA   : 2026-07-10
   CAMBIOS : El propio alumno accede a su Log de Vuelos (solo lectura), pedido de
             Daniel: "que vea lo mismo, excepto la observación privada (esa solo la
@@ -1563,7 +1581,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.74</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.75</div>
   </div>
 
 </div>
@@ -2208,6 +2226,17 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
           </label>
           <div style="font-size:11px;color:var(--text3);margin-top:4px;font-family:var(--font-mono);letter-spacing:.04em">Reemplaza PSA para menores — solo editable por instructor/admin</div>
         </div>
+        <div class="row">
+          <div class="field" style="margin:0;min-width:140px">
+            <label>Horas iniciales <span style="font-size:10px;color:var(--text3)">(previas al sistema)</span></label>
+            <input type="number" id="edit-al-horas-iniciales" step="0.1" min="0" placeholder="Ej: 12.5">
+          </div>
+          <div class="field" style="margin:0;min-width:130px">
+            <label>Aterrizajes iniciales <span style="font-size:10px;color:var(--text3)">(previos)</span></label>
+            <input type="number" id="edit-al-aterrizajes-iniciales" step="1" min="0" placeholder="Ej: 30">
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin:-.4rem 0 .85rem;font-family:var(--font-mono);letter-spacing:.04em">Se suman al total de horas/aterrizajes del Log de Vuelos del alumno (carga manual, sin vínculo a un turno puntual).</div>
         <div class="field">
           <label>Estado de login</label>
           <div id="edit-al-estado-login-toggle" onclick="toggleEstadoLoginModal()" style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;padding:8px 0">
@@ -4272,6 +4301,9 @@ window.abrirLogAlumno=async function(){
   document.getElementById('mla-ref-vuelo').textContent=fmtFechaLinda(rv.fecha)+' — '+rv.hora+' hs — '+(rv.avion||'LV-OAD');
   document.getElementById('mla-msg').textContent='';
   document.getElementById('modal-log-alumno').classList.add('open');
+  const al=await fbGet('alumnos/'+_logAlumnoCtx.emailKey);
+  _logAlumnoCtx.horasIniciales=al?.horas_iniciales||0;
+  _logAlumnoCtx.aterrizajesIniciales=al?.aterrizajes_iniciales||0;
   renderObsPublicasAlumno();
   renderFormObsPrivada();
   renderNotasPrivadasAlumno();
@@ -4294,6 +4326,9 @@ window.abrirMiLogVuelos=async function(){
   document.getElementById('mla-nombre').textContent=_logAlumnoCtx.nombre;
   document.getElementById('mla-email').textContent=_logAlumnoCtx.email;
   document.getElementById('modal-log-alumno').classList.add('open');
+  const al=await fbGet('alumnos/'+_logAlumnoCtx.emailKey);
+  _logAlumnoCtx.horasIniciales=al?.horas_iniciales||0;
+  _logAlumnoCtx.aterrizajesIniciales=al?.aterrizajes_iniciales||0;
   renderObsPublicasAlumno();
   renderNotasPrivadasAlumno();
 };
@@ -4349,16 +4384,19 @@ function renderNotasPrivadasAlumno(){
     .sort((a,b)=>(b.fecha+' '+b.hora).localeCompare(a.fecha+' '+a.hora));
   cont.innerHTML='';
   // Totales acumulados (v6.72, ahora sin riesgo de duplicado desde v6.73: como es UN
-  // registro por vuelo, cada turno aporta a lo sumo una vez a la suma).
-  let totalHs=0, totalAter=0;
+  // registro por vuelo, cada turno aporta a lo sumo una vez a la suma). v6.75: se suma
+  // además la "carga inicial" (horas_iniciales/aterrizajes_iniciales del alumno,
+  // /alumnos/{emailKey} — histórico previo al sistema, cargado a mano en EDITAR USUARIO)
+  // fusionada al total sin distinguir de dónde sale, a pedido explícito de Daniel.
+  let totalHs=_logAlumnoCtx.horasIniciales||0, totalAter=_logAlumnoCtx.aterrizajesIniciales||0;
   turnos.forEach(r=>{
     if(r.obs_privada_tiempo_vuelo!=null)totalHs+=Number(r.obs_privada_tiempo_vuelo);
     if(r.obs_privada_aterrizajes!=null)totalAter+=Number(r.obs_privada_aterrizajes);
   });
-  const conDatos=turnos.some(r=>r.obs_privada_tiempo_vuelo!=null||r.obs_privada_aterrizajes!=null);
+  const conDatos=totalHs>0||totalAter>0;
   if(conDatos){
     totalesBox.style.display='block';
-    totalesBox.textContent='✈ Total registrado: '+totalHs.toFixed(1)+' hs de vuelo — '+totalAter+' aterrizajes ('+turnos.filter(r=>r.obs_privada_tiempo_vuelo!=null||r.obs_privada_aterrizajes!=null).length+' vuelos con datos)';
+    totalesBox.textContent='✈ Total: '+totalHs.toFixed(1)+' hs de vuelo — '+totalAter+' aterrizajes';
   } else {
     totalesBox.style.display='none';
   }
@@ -5454,6 +5492,8 @@ window.abrirModalAlumno=function(key){
     document.getElementById('edit-al-psa').value=a.vencimiento_psa||'';
     document.getElementById('edit-al-fecha-nac').value=a.fecha_nac||'';
     document.getElementById('edit-al-aut-padres').checked=!!a.autorizacion_padres;
+    document.getElementById('edit-al-horas-iniciales').value=a.horas_iniciales!=null?a.horas_iniciales:'';
+    document.getElementById('edit-al-aterrizajes-iniciales').value=a.aterrizajes_iniciales!=null?a.aterrizajes_iniciales:'';
     document.getElementById('edit-al-estado-login').value=a.estado_login||'normal';
     document.getElementById('edit-al-newpass').value='';
     document.getElementById('edit-al-forzar').checked=false;
@@ -5490,12 +5530,18 @@ window.guardarAlumno=async function(){
   const vencimiento_psa=document.getElementById('edit-al-psa').value||null;
   const fecha_nac=document.getElementById('edit-al-fecha-nac').value||null;
   const autorizacion_padres=document.getElementById('edit-al-aut-padres').checked||false;
+  const horasIniInput=document.getElementById('edit-al-horas-iniciales').value.trim();
+  const aterIniInput=document.getElementById('edit-al-aterrizajes-iniciales').value.trim();
+  const horas_iniciales=horasIniInput!==''?Number(horasIniInput):null;
+  const aterrizajes_iniciales=aterIniInput!==''?Number(aterIniInput):null;
+  if(horas_iniciales!=null&&(isNaN(horas_iniciales)||horas_iniciales<0)){showErr('edit-al-err','Horas iniciales inválidas.');return;}
+  if(aterrizajes_iniciales!=null&&(isNaN(aterrizajes_iniciales)||aterrizajes_iniciales<0)){showErr('edit-al-err','Aterrizajes iniciales inválidos.');return;}
   const estado_login=document.getElementById('edit-al-estado-login').value;
   const newpass=document.getElementById('edit-al-newpass').value.trim();
   const forzar=document.getElementById('edit-al-forzar').checked;
   if(!nombre){showErr('edit-al-err','El nombre no puede estar vacío.');return;}
   if(newpass && newpass.length<6){showErr('edit-al-err','La nueva contraseña debe tener al menos 6 caracteres.');return;}
-  const upd={nombre,tel,rol,estado_login,vencimiento_cma,vencimiento_psa,fecha_nac,autorizacion_padres};
+  const upd={nombre,tel,rol,estado_login,vencimiento_cma,vencimiento_psa,fecha_nac,autorizacion_padres,horas_iniciales,aterrizajes_iniciales};
   if(newpass) upd.pass=newpass;
   if(forzar) upd.pass_temporal=true;
   else if(newpass) upd.pass_temporal=null;  // clave nueva definitiva, sin forzar cambio
