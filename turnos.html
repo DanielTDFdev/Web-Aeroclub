@@ -1,5 +1,12 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.76
+  FECHA   : 2026-07-10
+  CAMBIOS : FIX visual v6.75 — el texto de ayuda debajo de HORAS/ATERRIZAJES INICIALES
+            ("Se suman al total...") tenía margin-top negativo (-.4rem) para acercarlo
+            a los inputs; en la práctica lo tiraba tanto para arriba que se montaba
+            sobre el borde inferior de las cajas de texto (reportado por Daniel con
+            captura). Sacado el margen negativo, vuelve a la separación normal.
   VERSION : 6.75
   FECHA   : 2026-07-10
   CAMBIOS : Carga inicial de horas/aterrizajes previos al sistema (pedido de Daniel:
@@ -1581,7 +1588,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.75</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.76</div>
   </div>
 
 </div>
@@ -2236,7 +2243,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
             <input type="number" id="edit-al-aterrizajes-iniciales" step="1" min="0" placeholder="Ej: 30">
           </div>
         </div>
-        <div style="font-size:11px;color:var(--text3);margin:-.4rem 0 .85rem;font-family:var(--font-mono);letter-spacing:.04em">Se suman al total de horas/aterrizajes del Log de Vuelos del alumno (carga manual, sin vínculo a un turno puntual).</div>
+        <div style="font-size:11px;color:var(--text3);margin:0 0 .85rem;font-family:var(--font-mono);letter-spacing:.04em">Se suman al total de horas/aterrizajes del Log de Vuelos del alumno (carga manual, sin vínculo a un turno puntual).</div>
         <div class="field">
           <label>Estado de login</label>
           <div id="edit-al-estado-login-toggle" onclick="toggleEstadoLoginModal()" style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;padding:8px 0">
