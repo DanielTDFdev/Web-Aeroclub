@@ -1,5 +1,32 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.73
+  FECHA   : 2026-07-10
+  CAMBIOS : Obs. privada — cambio de modelo, pedido explícito de Daniel: "si el vuelo
+            ya tiene una obs privada/horas/aterrizajes cargados, no debe dejar que
+            nadie más cargue nada más a este vuelo. Solo el instructor que hizo la
+            obs privada puede editarlo." Se abandona el log abierto de v6.70-6.72
+            (/logs_alumno, fbPush, múltiples entradas libres) por un modelo de UN
+            registro por vuelo, dueño único: campos nuevos directo en /reservas/{key}
+            — obs_privada, obs_privada_tiempo_vuelo, obs_privada_aterrizajes,
+            obs_privada_autor, obs_privada_ts. Mientras nadie cargó nada, el form está
+            abierto para cualquier instructor (primero en guardar se queda con el
+            registro). Una vez cargado, el modal muestra bloque de solo lectura con
+            candado 🔒 ("Ya cargada por {autor}") para cualquier otro instructor; el
+            autor original (o admin/administrador, mismo criterio que cancelar/liberar
+            en abrirModal) sigue pudiendo editarlo, con el form pre-poblado y botón
+            "ACTUALIZAR". Chequeo en frío contra Firebase justo antes de escribir
+            (fbGet fresco) para cubrir el caso de dos instructores abriendo el mismo
+            turno al mismo tiempo — el segundo en guardar se entera del conflicto real,
+            no solo del estado visual ya desactualizado. El historial y los totales
+            (suma de tiempo_vuelo/aterrizajes) ahora se arman recorriendo /reservas del
+            alumno (mismo patrón que renderObsPublicasAlumno) en vez de leer un log
+            aparte — como es un registro por vuelo, el total queda sin riesgo
+            estructural de doble conteo (el problema que se había señalado en v6.72).
+            El nodo /logs_alumno queda sin uso desde esta versión (no se migra ni se
+            borra data vieja — a la fecha no se había desplegado a producción).
+            Funciones nuevas: renderFormObsPrivada, renderNotasPrivadasAlumno,
+            guardarObsPrivada. Reemplazan a renderLogAlumno/guardarNotaLogAlumno (v6.70).
   VERSION : 6.72
   FECHA   : 2026-07-10
   CAMBIOS : Log del Alumno — dos campos numéricos nuevos, opcionales, en "Nueva nota
@@ -1519,7 +1546,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.72</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.73</div>
   </div>
 
 </div>
@@ -1854,29 +1881,32 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <div id="mla-obs-pub-vacio" style="display:none;font-family:var(--font-mono);font-size:11px;color:var(--text3);text-align:center;padding:.85rem 0">// Sin observaciones públicas cargadas</div>
       <div style="border-top:1px solid var(--border);margin:1rem 0"></div>
 
-      <div class="panel" style="margin-bottom:1rem">
-        <div class="section-title">▸ Nueva nota privada — sobre el vuelo <span id="mla-ref-vuelo" style="color:var(--amber)"></span></div>
-        <textarea id="mla-texto" rows="3" placeholder="Progreso, novedades, warnings…" style="width:100%;box-sizing:border-box;font-family:var(--font-mono);font-size:12px;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);padding:8px;resize:vertical"></textarea>
-        <div class="row" style="margin-top:.5rem">
-          <div class="field" style="margin:0;min-width:140px">
-            <label style="font-size:10px">Tiempo real de vuelo (hs)</label>
-            <input type="number" id="mla-tiempo-vuelo" step="0.1" min="0" placeholder="Ej: 1.2">
+      <div class="panel" style="margin-bottom:1rem" id="mla-obspriv-panel">
+        <div class="section-title">▸ Observación privada — vuelo <span id="mla-ref-vuelo" style="color:var(--amber)"></span></div>
+        <div id="mla-obspriv-lock" style="display:none;font-family:var(--font-mono);font-size:12px;color:var(--text2);line-height:1.7;padding:.6rem .75rem;background:var(--bg3);border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:var(--radius)"></div>
+        <div id="mla-obspriv-form">
+          <textarea id="mla-texto" rows="3" placeholder="Progreso, novedades, warnings…" style="width:100%;box-sizing:border-box;font-family:var(--font-mono);font-size:12px;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);padding:8px;resize:vertical"></textarea>
+          <div class="row" style="margin-top:.5rem">
+            <div class="field" style="margin:0;min-width:140px">
+              <label style="font-size:10px">Tiempo real de vuelo (hs)</label>
+              <input type="number" id="mla-tiempo-vuelo" step="0.1" min="0" placeholder="Ej: 1.2">
+            </div>
+            <div class="field" style="margin:0;min-width:110px">
+              <label style="font-size:10px">Aterrizajes</label>
+              <input type="number" id="mla-aterrizajes" step="1" min="0" placeholder="Ej: 4">
+            </div>
           </div>
-          <div class="field" style="margin:0;min-width:110px">
-            <label style="font-size:10px">Aterrizajes</label>
-            <input type="number" id="mla-aterrizajes" step="1" min="0" placeholder="Ej: 4">
+          <div style="display:flex;align-items:center;gap:.7rem;margin-top:.5rem">
+            <button id="mla-guardar" onclick="guardarObsPrivada()">GUARDAR</button>
+            <span id="mla-msg" style="font-family:var(--font-mono);font-size:11px;color:var(--text3)"></span>
           </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:.7rem;margin-top:.5rem">
-          <button id="mla-guardar" onclick="guardarNotaLogAlumno()">GUARDAR NOTA</button>
-          <span id="mla-msg" style="font-family:var(--font-mono);font-size:11px;color:var(--text3)"></span>
         </div>
       </div>
 
       <div id="mla-totales" style="display:none;font-family:var(--font-mono);font-size:12px;color:var(--cyan);letter-spacing:.05em;padding:.6rem .8rem;background:rgba(0,200,212,.06);border:1px solid rgba(0,200,212,.3);border-radius:var(--radius);margin-bottom:.75rem"></div>
-      <div class="section-title" style="margin-bottom:.5rem">▸ Notas privadas (más nueva primero)</div>
+      <div class="section-title" style="margin-bottom:.5rem">▸ Historial privado (más nuevo primero)</div>
       <div id="mla-lista" style="max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:.6rem"></div>
-      <div id="mla-vacio" style="display:none;font-family:var(--font-mono);font-size:12px;color:var(--text3);text-align:center;padding:1.5rem 0">// Sin notas todavía</div>
+      <div id="mla-vacio" style="display:none;font-family:var(--font-mono);font-size:12px;color:var(--text3);text-align:center;padding:1.5rem 0">// Sin observaciones privadas cargadas todavía</div>
     </div>
   </div>
 
@@ -4213,68 +4243,107 @@ window.abrirLogAlumno=async function(){
   document.getElementById('mla-email').textContent=_logAlumnoCtx.email;
   const rv=_logAlumnoCtx.reservaRef;
   document.getElementById('mla-ref-vuelo').textContent=fmtFechaLinda(rv.fecha)+' — '+rv.hora+' hs — '+(rv.avion||'LV-OAD');
-  document.getElementById('mla-texto').value='';
-  document.getElementById('mla-tiempo-vuelo').value='';
-  document.getElementById('mla-aterrizajes').value='';
   document.getElementById('mla-msg').textContent='';
   document.getElementById('modal-log-alumno').classList.add('open');
   renderObsPublicasAlumno();
-  await renderLogAlumno();
+  renderFormObsPrivada();
+  renderNotasPrivadasAlumno();
 };
 
-async function renderLogAlumno(){
+// v6.73: la obs privada pasa a ser UN registro por vuelo (vive directo en el turno,
+// no en un log aparte) con dueño — pedido explícito de Daniel: "si el vuelo ya tiene
+// una obs privada/horas/aterrizajes cargados, no debe dejar que nadie más cargue nada
+// más a este vuelo. Solo el instructor que hizo la obs privada puede editarlo."
+// esAdminGlobal (admin/administrador) puede editar cualquiera, igual que puede
+// cancelar/liberar cualquier turno en el resto de la app — mismo criterio ya usado
+// en abrirModal. Si esto no es lo que Daniel quiere, hay que sacarle la excepción.
+function renderFormObsPrivada(){
+  const r=_reservasCache[_logAlumnoCtx.reservaKey];
+  const lockBox=document.getElementById('mla-obspriv-lock');
+  const form=document.getElementById('mla-obspriv-form');
+  const ta=document.getElementById('mla-texto');
+  const tvInput=document.getElementById('mla-tiempo-vuelo');
+  const atInput=document.getElementById('mla-aterrizajes');
+  const btn=document.getElementById('mla-guardar');
+  const yo=session.nombre||session.user||'—';
+  const esAdminGlobal=session?.user==='admin'||session?.user==='administrador';
+  const autor=r?.obs_privada_autor||null;
+  const esDueño=autor&&(autor===yo||esAdminGlobal);
+  if(autor&&!esDueño){
+    // cargada por OTRO instructor: solo lectura, sin form
+    lockBox.style.display='block';
+    form.style.display='none';
+    const partes=[];
+    if(r.obs_privada_tiempo_vuelo!=null)partes.push('⏱ '+Number(r.obs_privada_tiempo_vuelo).toFixed(1)+' hs');
+    if(r.obs_privada_aterrizajes!=null)partes.push('⬇ '+r.obs_privada_aterrizajes+' aterrizajes');
+    lockBox.innerHTML='🔒 Ya cargada por <b>'+autor+'</b>'+(r.obs_privada_ts?' — '+fmtTsLindo(r.obs_privada_ts):'')+'.'
+      +(partes.length?'<br>'+partes.join(' · '):'')
+      +(r.obs_privada?'<br>"'+r.obs_privada.replace(/</g,'&lt;')+'"':'')
+      +'<br><span style="color:var(--text3);font-size:11px">Solo '+autor+' (o un administrador) puede editarla.</span>';
+    return;
+  }
+  // vacía, o ya es mía/admin: form editable
+  lockBox.style.display='none';
+  form.style.display='block';
+  ta.value=r?.obs_privada||'';
+  tvInput.value=r?.obs_privada_tiempo_vuelo!=null?r.obs_privada_tiempo_vuelo:'';
+  atInput.value=r?.obs_privada_aterrizajes!=null?r.obs_privada_aterrizajes:'';
+  btn.textContent=autor?'ACTUALIZAR':'GUARDAR';
+}
+
+function renderNotasPrivadasAlumno(){
   const cont=document.getElementById('mla-lista');
   const vacio=document.getElementById('mla-vacio');
   const totalesBox=document.getElementById('mla-totales');
-  cont.innerHTML='<div style="font-family:var(--font-mono);font-size:11px;color:var(--text3)">// Cargando…</div>';
-  totalesBox.style.display='none';
-  let data=null;
-  try{ data=await fbGet('logs_alumno/'+_logAlumnoCtx.emailKey); }catch(e){}
-  const entradas=rArr(data).sort((a,b)=>(b.ts||'').localeCompare(a.ts||''));
+  const email=_logAlumnoCtx.email;
+  const turnos=Object.values(_reservasCache)
+    .filter(r=>r.email===email&&(r.obs_privada||r.obs_privada_tiempo_vuelo!=null||r.obs_privada_aterrizajes!=null))
+    .sort((a,b)=>(b.fecha+' '+b.hora).localeCompare(a.fecha+' '+a.hora));
   cont.innerHTML='';
-  // Totales acumulados (v6.72): suma de tiempo_vuelo/aterrizajes de TODAS las entradas
-  // del alumno, no solo las visibles — da una idea de horas reales de vuelo/aterrizajes
-  // registrados a mano por los instructores, independiente de lo que diga /reservas.
-  let totalHs=0, totalAter=0, conDatos=0;
-  entradas.forEach(e=>{
-    const hs=Number(e.tiempo_vuelo), at=Number(e.aterrizajes);
-    if(!isNaN(hs)&&e.tiempo_vuelo!=null){totalHs+=hs;conDatos++;}
-    if(!isNaN(at)&&e.aterrizajes!=null){totalAter+=at;conDatos++;}
+  // Totales acumulados (v6.72, ahora sin riesgo de duplicado desde v6.73: como es UN
+  // registro por vuelo, cada turno aporta a lo sumo una vez a la suma).
+  let totalHs=0, totalAter=0;
+  turnos.forEach(r=>{
+    if(r.obs_privada_tiempo_vuelo!=null)totalHs+=Number(r.obs_privada_tiempo_vuelo);
+    if(r.obs_privada_aterrizajes!=null)totalAter+=Number(r.obs_privada_aterrizajes);
   });
+  const conDatos=turnos.some(r=>r.obs_privada_tiempo_vuelo!=null||r.obs_privada_aterrizajes!=null);
   if(conDatos){
     totalesBox.style.display='block';
-    totalesBox.textContent='✈ Total registrado: '+totalHs.toFixed(1)+' hs de vuelo — '+totalAter+' aterrizajes ('+entradas.filter(e=>e.tiempo_vuelo!=null||e.aterrizajes!=null).length+' entradas con datos)';
+    totalesBox.textContent='✈ Total registrado: '+totalHs.toFixed(1)+' hs de vuelo — '+totalAter+' aterrizajes ('+turnos.filter(r=>r.obs_privada_tiempo_vuelo!=null||r.obs_privada_aterrizajes!=null).length+' vuelos con datos)';
+  } else {
+    totalesBox.style.display='none';
   }
-  if(!entradas.length){ vacio.style.display='block'; return; }
+  if(!turnos.length){ vacio.style.display='block'; return; }
   vacio.style.display='none';
-  entradas.forEach(e=>{
-    const ref=e.reserva?(fmtFechaLinda(e.reserva.fecha)+' '+e.reserva.hora+' hs '+(e.reserva.avion||'')):'—';
+  turnos.forEach(r=>{
+    const ref=fmtFechaLinda(r.fecha)+' '+r.hora+' hs '+(r.avion||'LV-OAD');
     const div=document.createElement('div');
     div.style.cssText='padding:.6rem .75rem;background:var(--bg3);border:1px solid var(--border);border-left:3px solid var(--cyan);border-radius:var(--radius)';
     const head=document.createElement('div');
     head.style.cssText='display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.05em;margin-bottom:.3rem';
-    const izq=document.createElement('span'); izq.textContent=(e.autor||'—')+' — '+(e.ts?fmtTsLindo(e.ts):'');
+    const izq=document.createElement('span'); izq.textContent=(r.obs_privada_autor||'—')+' — '+(r.obs_privada_ts?fmtTsLindo(r.obs_privada_ts):'');
     const der=document.createElement('span'); der.style.color='var(--amber)'; der.textContent='✈ '+ref;
     head.appendChild(izq); head.appendChild(der);
     div.appendChild(head);
-    if(e.tiempo_vuelo!=null||e.aterrizajes!=null){
+    if(r.obs_privada_tiempo_vuelo!=null||r.obs_privada_aterrizajes!=null){
       const datos=document.createElement('div');
       datos.style.cssText='display:flex;gap:10px;flex-wrap:wrap;font-family:var(--font-mono);font-size:11px;color:var(--cyan);margin-bottom:.3rem';
-      if(e.tiempo_vuelo!=null){const s=document.createElement('span');s.textContent='⏱ '+Number(e.tiempo_vuelo).toFixed(1)+' hs';datos.appendChild(s);}
-      if(e.aterrizajes!=null){const s=document.createElement('span');s.textContent='⬇ '+e.aterrizajes+' aterrizajes';datos.appendChild(s);}
+      if(r.obs_privada_tiempo_vuelo!=null){const s=document.createElement('span');s.textContent='⏱ '+Number(r.obs_privada_tiempo_vuelo).toFixed(1)+' hs';datos.appendChild(s);}
+      if(r.obs_privada_aterrizajes!=null){const s=document.createElement('span');s.textContent='⬇ '+r.obs_privada_aterrizajes+' aterrizajes';datos.appendChild(s);}
       div.appendChild(datos);
     }
-    if(e.texto){
+    if(r.obs_privada){
       const cuerpo=document.createElement('div');
       cuerpo.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--text2);white-space:pre-wrap;line-height:1.5';
-      cuerpo.textContent=e.texto;
+      cuerpo.textContent=r.obs_privada;
       div.appendChild(cuerpo);
     }
     cont.appendChild(div);
   });
 }
 
-window.guardarNotaLogAlumno=async function(){
+window.guardarObsPrivada=async function(){
   if(!_logAlumnoCtx)return;
   const ta=document.getElementById('mla-texto');
   const tvInput=document.getElementById('mla-tiempo-vuelo');
@@ -4284,23 +4353,39 @@ window.guardarNotaLogAlumno=async function(){
   const texto=ta.value.trim();
   const tiempoVuelo=tvInput.value.trim()!==''?Number(tvInput.value):null;
   const aterrizajes=atInput.value.trim()!==''?Number(atInput.value):null;
-  // v6.72: los 3 campos son opcionales (texto/tiempo de vuelo/aterrizajes), pero hace
-  // falta cargar AL MENOS uno — guardar una entrada completamente vacía no tiene sentido.
   if(!texto&&tiempoVuelo==null&&aterrizajes==null){ msg.style.color='var(--red)'; msg.textContent='Cargá al menos un dato antes de guardar.'; return; }
   if(tiempoVuelo!=null&&(isNaN(tiempoVuelo)||tiempoVuelo<0)){ msg.style.color='var(--red)'; msg.textContent='Tiempo de vuelo inválido.'; return; }
   if(aterrizajes!=null&&(isNaN(aterrizajes)||aterrizajes<0)){ msg.style.color='var(--red)'; msg.textContent='Aterrizajes inválido.'; return; }
+  const yo=session.nombre||session.user||'—';
+  const esAdminGlobal=session?.user==='admin'||session?.user==='administrador';
   btn.disabled=true; msg.style.color='var(--text3)'; msg.textContent='Guardando…';
   try{
-    await fbPush('logs_alumno/'+_logAlumnoCtx.emailKey,{
-      texto:texto||null,
-      tiempo_vuelo:tiempoVuelo,
-      aterrizajes:aterrizajes,
-      autor:session.nombre||session.user||'—',
-      ts:new Date().toISOString(),
-      reserva:{..._logAlumnoCtx.reservaRef}
+    // chequeo en frío justo antes de escribir (v6.73): protege contra dos instructores
+    // abriendo el mismo turno al mismo tiempo — el más rápido en guardar se queda con
+    // el registro, el segundo se entera acá, no solo por el estado visual ya viejo.
+    const fresh=await fbGet('reservas/'+_logAlumnoCtx.reservaKey);
+    const autorFresh=fresh?.obs_privada_autor||null;
+    if(autorFresh&&autorFresh!==yo&&!esAdminGlobal){
+      msg.style.color='var(--red)';
+      msg.textContent='Ya la cargó '+autorFresh+' mientras tanto — no se guardó.';
+      renderFormObsPrivada();
+      return;
+    }
+    await fbUpdate('reservas/'+_logAlumnoCtx.reservaKey,{
+      obs_privada:texto||null,
+      obs_privada_tiempo_vuelo:tiempoVuelo,
+      obs_privada_aterrizajes:aterrizajes,
+      obs_privada_autor:autorFresh||yo,
+      obs_privada_ts:new Date().toISOString()
     });
-    ta.value=''; tvInput.value=''; atInput.value=''; msg.style.color='var(--green)'; msg.textContent='✓ Nota guardada';
-    await renderLogAlumno();
+    msg.style.color='var(--green)'; msg.textContent='✓ Guardado';
+    // _reservasCache se actualiza solo vía el listener onValue de /reservas; refrescamos
+    // igual acá con el dato recién escrito por si el listener todavía no llegó.
+    if(_reservasCache[_logAlumnoCtx.reservaKey]){
+      Object.assign(_reservasCache[_logAlumnoCtx.reservaKey],{obs_privada:texto||null,obs_privada_tiempo_vuelo:tiempoVuelo,obs_privada_aterrizajes:aterrizajes,obs_privada_autor:autorFresh||yo,obs_privada_ts:new Date().toISOString()});
+    }
+    renderFormObsPrivada();
+    renderNotasPrivadasAlumno();
   }catch(e){ console.error(e); msg.style.color='var(--red)'; msg.textContent='✗ Error al guardar'; }
   finally{ btn.disabled=false; }
 };
@@ -4546,7 +4631,7 @@ window.abrirModal=function(key){
     if(session?.tipo!=='instructor'){ row.style.display='none'; btn.onclick=null; return; }
     row.style.display='flex';
     btn.onclick=()=>{
-      _logAlumnoCtx={emailKey:ek(r.email),nombre:r.nombre,email:r.email,reservaRef:{fecha:r.fecha,hora:r.hora,avion:r.avion||'LV-OAD'}};
+      _logAlumnoCtx={emailKey:ek(r.email),nombre:r.nombre,email:r.email,reservaKey:key,reservaRef:{fecha:r.fecha,hora:r.hora,avion:r.avion||'LV-OAD'}};
       abrirLogAlumno();
     };
   })();
