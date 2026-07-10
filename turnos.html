@@ -1,5 +1,12 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.77
+  FECHA   : 2026-07-10
+  CAMBIOS : FIX estético — el botón "VER MI LOG DE VUELOS" en Mi Perfil del alumno
+            (v6.74) quedó con el estilo de botón default (gris, transparente, apagado)
+            en vez del estilo destacado (gradiente cyan + glow) que ya usan el resto
+            de las acciones principales del sistema. Se le agregó class="primary".
+            Reportado por Daniel con captura ("el botón me parece demasiado dull").
   VERSION : 6.76
   FECHA   : 2026-07-10
   CAMBIOS : FIX visual v6.75 — el texto de ayuda debajo de HORAS/ATERRIZAJES INICIALES
@@ -1588,7 +1595,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.76</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.77</div>
   </div>
 
 </div>
@@ -1741,7 +1748,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
     <div class="card">
       <h3>Mi Log de Vuelos</h3>
       <p style="font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.05em;line-height:1.6;margin-bottom:.75rem">Observaciones de tus vuelos y el total de horas/aterrizajes que tus instructores fueron registrando.</p>
-      <button onclick="abrirMiLogVuelos()">◈ VER MI LOG DE VUELOS</button>
+      <button class="primary" onclick="abrirMiLogVuelos()">◈ VER MI LOG DE VUELOS</button>
     </div>
     <div class="card">
       <h3>Mis Datos</h3>
