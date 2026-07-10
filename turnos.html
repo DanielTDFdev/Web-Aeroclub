@@ -1,5 +1,22 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.74
+  FECHA   : 2026-07-10
+  CAMBIOS : El propio alumno accede a su Log de Vuelos (solo lectura), pedido de
+            Daniel: "que vea lo mismo, excepto la observación privada (esa solo la
+            ven los instructores). Sí que totalice horas y aterrizajes." Botón nuevo
+            "◈ VER MI LOG DE VUELOS" en Mi Perfil (alumno-perfil), función nueva
+            abrirMiLogVuelos. Reusa el mismo modal #modal-log-alumno que ya usa el
+            instructor, en un modo restringido (_logAlumnoModoAlumno=true): oculta
+            por completo el panel de carga/edición (mla-obspriv-panel, el alumno
+            nunca escribe nada acá) y, en el historial, omite el texto libre de
+            obs_privada — pero conserva fecha/avión del vuelo, autor, y los datos
+            numéricos (tiempo de vuelo/aterrizajes) por turno, más la barra de
+            totales acumulados (sin cambios en el cálculo, ya no puede duplicarse
+            desde v6.73). Título del modal y del header del historial cambian según
+            el modo (mla-modal-title, mla-lista-titulo). La sección de observaciones
+            PÚBLICAS (renderObsPublicasAlumno, v6.71) se ve igual en los dos modos,
+            sin cambios — ya era información que el alumno podía ver turno por turno.
   VERSION : 6.73
   FECHA   : 2026-07-10
   CAMBIOS : Obs. privada — cambio de modelo, pedido explícito de Daniel: "si el vuelo
@@ -1546,7 +1563,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.73</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.74</div>
   </div>
 
 </div>
@@ -1696,6 +1713,11 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   </div>
   <div id="alumno-perfil" class="screen">
     <h2>◈ Mi Perfil</h2>
+    <div class="card">
+      <h3>Mi Log de Vuelos</h3>
+      <p style="font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.05em;line-height:1.6;margin-bottom:.75rem">Observaciones de tus vuelos y el total de horas/aterrizajes que tus instructores fueron registrando.</p>
+      <button onclick="abrirMiLogVuelos()">◈ VER MI LOG DE VUELOS</button>
+    </div>
     <div class="card">
       <h3>Mis Datos</h3>
       <div class="field"><label>Email (no editable)</label><input type="email" id="perfil-email" disabled style="opacity:.5;cursor:not-allowed"></div>
@@ -1872,7 +1894,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="modal-overlay" id="modal-log-alumno" style="z-index:1150">
     <div class="modal" style="max-width:520px;max-height:85vh;overflow-y:auto">
       <button class="modal-close" onclick="cerrarModalLogAlumno()">✕</button>
-      <div class="modal-title">◈ Log del Alumno</div>
+      <div class="modal-title" id="mla-modal-title">◈ Log del Alumno</div>
       <div id="mla-nombre" style="font-family:var(--font-ui);font-size:15px;color:var(--text);font-weight:600;margin-bottom:.15rem"></div>
       <div id="mla-email" style="font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-bottom:.85rem"></div>
 
@@ -1904,7 +1926,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       </div>
 
       <div id="mla-totales" style="display:none;font-family:var(--font-mono);font-size:12px;color:var(--cyan);letter-spacing:.05em;padding:.6rem .8rem;background:rgba(0,200,212,.06);border:1px solid rgba(0,200,212,.3);border-radius:var(--radius);margin-bottom:.75rem"></div>
-      <div class="section-title" style="margin-bottom:.5rem">▸ Historial privado (más nuevo primero)</div>
+      <div class="section-title" style="margin-bottom:.5rem" id="mla-lista-titulo">▸ Historial privado (más nuevo primero)</div>
       <div id="mla-lista" style="max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:.6rem"></div>
       <div id="mla-vacio" style="display:none;font-family:var(--font-mono);font-size:12px;color:var(--text3);text-align:center;padding:1.5rem 0">// Sin observaciones privadas cargadas todavía</div>
     </div>
@@ -4196,7 +4218,8 @@ function turnoYaPaso(r){
 // Cada entrada referencia el vuelo sobre el que se hizo click al escribirla.
 // Sin registro en /auditoria (decisión explícita de Daniel — se edita seguido,
 // sería ruido en la auditoría).
-let _logAlumnoCtx=null; // {emailKey, nombre, email, reservaRef:{fecha,hora,avion}}
+let _logAlumnoCtx=null; // {emailKey, nombre, email, reservaKey, reservaRef:{fecha,hora,avion}}
+let _logAlumnoModoAlumno=false; // true cuando lo abre el propio alumno (solo lectura, sin panel de carga ni texto de obs_privada)
 
 function fmtTsLindo(ts){
   const dt=new Date(ts);
@@ -4239,6 +4262,10 @@ function renderObsPublicasAlumno(){
 
 window.abrirLogAlumno=async function(){
   if(!_logAlumnoCtx)return;
+  _logAlumnoModoAlumno=false;
+  document.getElementById('mla-modal-title').textContent='◈ Log del Alumno';
+  document.getElementById('mla-obspriv-panel').style.display='block';
+  document.getElementById('mla-lista-titulo').textContent='▸ Historial privado (más nuevo primero)';
   document.getElementById('mla-nombre').textContent=_logAlumnoCtx.nombre;
   document.getElementById('mla-email').textContent=_logAlumnoCtx.email;
   const rv=_logAlumnoCtx.reservaRef;
@@ -4247,6 +4274,27 @@ window.abrirLogAlumno=async function(){
   document.getElementById('modal-log-alumno').classList.add('open');
   renderObsPublicasAlumno();
   renderFormObsPrivada();
+  renderNotasPrivadasAlumno();
+};
+
+// v6.74: entrada del propio alumno a su log — pedido de Daniel: "que vea lo mismo,
+// excepto la observación privada (esa solo la ven los instructores). Sí que totalice
+// horas y aterrizajes." Reusa el mismo modal (#modal-log-alumno) en modo restringido:
+// sin panel de carga/edición (mla-obspriv-panel oculto, el alumno nunca escribe nada
+// acá) y sin el texto libre de obs_privada en el historial (renderNotasPrivadasAlumno
+// lo omite cuando _logAlumnoModoAlumno=true) — pero SÍ ve fecha/avión, autor, y los
+// datos numéricos (tiempo de vuelo/aterrizajes) por vuelo, más el total acumulado.
+window.abrirMiLogVuelos=async function(){
+  if(session?.tipo!=='alumno')return;
+  _logAlumnoModoAlumno=true;
+  _logAlumnoCtx={emailKey:session.emailKey||ek(session.email),nombre:session.nombre,email:session.email,reservaKey:null,reservaRef:null};
+  document.getElementById('mla-modal-title').textContent='◈ Mi Log de Vuelos';
+  document.getElementById('mla-obspriv-panel').style.display='none';
+  document.getElementById('mla-lista-titulo').textContent='▸ Horas y aterrizajes registrados (más nuevo primero)';
+  document.getElementById('mla-nombre').textContent=_logAlumnoCtx.nombre;
+  document.getElementById('mla-email').textContent=_logAlumnoCtx.email;
+  document.getElementById('modal-log-alumno').classList.add('open');
+  renderObsPublicasAlumno();
   renderNotasPrivadasAlumno();
 };
 
@@ -4333,7 +4381,7 @@ function renderNotasPrivadasAlumno(){
       if(r.obs_privada_aterrizajes!=null){const s=document.createElement('span');s.textContent='⬇ '+r.obs_privada_aterrizajes+' aterrizajes';datos.appendChild(s);}
       div.appendChild(datos);
     }
-    if(r.obs_privada){
+    if(r.obs_privada&&!_logAlumnoModoAlumno){
       const cuerpo=document.createElement('div');
       cuerpo.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--text2);white-space:pre-wrap;line-height:1.5';
       cuerpo.textContent=r.obs_privada;
