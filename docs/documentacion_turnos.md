@@ -1,7 +1,7 @@
 # Documentación técnica — Sistema de Turnos (turnos.html)
 
 **Aeroclub Río Grande (SAWE) — Tierra del Fuego, Argentina**
-Versión documentada: **turnos.html v6.69** · **fpl.html v3.23** · **portal-alumno.html v1.16** · **peso-balance.html v1.5** · Fecha: 2026-07-08
+Versión documentada: **turnos.html v6.77** · **fpl.html v3.23** · **portal-alumno.html v1.16** · **peso-balance.html v1.5** · Fecha: 2026-07-10
 
 > Documento de referencia: describe qué hace cada parte del sistema. Mantener actualizado cuando se agreguen funciones.
 > Además de la app web (`turnos.html`) hay un generador de planes de vuelo (`fpl.html`, §22), un **portal de alumno** (`portal-alumno.html`, §23), una **calculadora de peso y balance** (`peso-balance.html`, §24) y **dos procesos server-side** en GitHub Actions: el recordatorio a instructores (§20) y el vencimiento de pendientes + purga de borradores FPL (§21).
@@ -37,6 +37,7 @@ Clave = email con `.`→`_` y `@`→`__at__` (función `ek()`).
 - `fecha_nac` (v6.58, `YYYY-MM-DD`) — fecha de nacimiento. Obligatoria en el registro a partir de esta versión; editable por instructor/admin en EDITAR USUARIO; solo lectura en Mi Perfil. **No retroactivo**: alumnos registrados antes de v6.58 no tienen el campo. Usada por `esMenorDeEdad()` para decidir qué documentación exigir (ver §6).
 - `autorizacion_padres` (v6.58, boolean) — reemplaza al PSA como requisito para alumnos **menores de 18 años**. Solo editable por instructor/admin en EDITAR USUARIO (nunca por el alumno).
 - `vencimiento_cma`, `vencimiento_psa` (v6.55) — fecha `YYYY-MM-DD` de vencimiento del psicofísico (CMA) y de la credencial PSA. Solo se usan para bloquear a `rol==='alumno'` (pilotos no tienen esta restricción, decisión explícita de Daniel). Editables por instructor/admin desde `turnos.html` (modal EDITAR USUARIO); en `portal-alumno.html` v1.15 **solo admin** puede editarlos (instructor los ve, no los edita — más restrictivo a propósito, ver §23). Ver §6 para la regla de habilitación, la diferenciación por edad y `CMA_PSA_VACIO_BLOQUEA`.
+- `horas_iniciales`, `aterrizajes_iniciales` (v6.75, number|null) — "carga inicial": horas de vuelo y aterrizajes reales del alumno **previos a la existencia de este sistema** (no están atados a ningún turno de `/reservas`). Editables por **cualquier** instructor/admin desde el modal EDITAR USUARIO (mismo criterio que el resto del modal, sin restricción de autor). Se suman al total del Log de Vuelos del alumno (ver bloque "Observación privada" más abajo), **fusionados sin distinguir origen** en el número final (decisión explícita de Daniel — no se muestra como línea separada). Carga manual, sin herramienta de importación masiva todavía (Daniel no tenía los datos históricos juntados a la fecha de esta versión; cuando los tenga, la vía prevista es un script Python del mismo patrón que el resto del proyecto — dry-run + `--aplicar` — no una UI nueva en turnos.html).
 - `ts` — fecha de alta (ISO)
 
 ### `/instructores/{user}`
@@ -66,6 +67,11 @@ Clave = nombre de usuario.
 - `recordatorio_inst_ts` — timestamp ISO del envío del recordatorio.
 - `obs_post` — observación post-vuelo cargada por el instructor que aprobó (o admin) sobre un turno ya pasado (ej. "no se voló por meteo"). Editable desde el modal; se audita como `obs_post_turno` (v5.87/v5.88).
 - `cargado_por` (v6.08) — presente solo si el turno se creó con la herramienta "Cargar Turno" (staff, no el propio alumno): nombre de quien lo cargó. Distingue una carga manual de una reserva hecha por el propio alumno/piloto.
+- `obs_privada` (v6.73, string|null) — observación privada del instructor sobre el alumno/vuelo, **nunca visible para el alumno**. Ver detalle completo (candado por autor, form de carga, totales) en el bloque dedicado más abajo, después de `/logs_alumno`.
+- `obs_privada_tiempo_vuelo` (v6.73, number|null) — horas reales de vuelo, decimal (ej. `1.2`). Opcional, mismo candado que `obs_privada`.
+- `obs_privada_aterrizajes` (v6.73, number|null) — cantidad de aterrizajes. Opcional, mismo candado.
+- `obs_privada_autor` (v6.73, string|null) — instructor "dueño" del registro. Se setea con el primero en guardar cualquiera de los 3 campos de arriba; desde ese momento **solo ese instructor (o admin/administrador) puede volver a editarlos** — cualquier otro instructor los ve de solo lectura.
+- `obs_privada_ts` (v6.73, string|null) — fecha/hora ISO de la última edición.
 - `ts` — fecha de solicitud (ISO)
 
 ### `/config/{avionKey}`
@@ -103,7 +109,30 @@ Cuestionarios del portal de alumno (§23): `{titulo,categoria,activo,obligatorio
 Cada intento de un alumno en un cuestionario: `{respuestas,detalle:[{enunciado,elegida,correcta_texto,acierto}],puntaje,total,fecha,nombre}`.
 
 ### `/notas_alumno/{emailKey}`
-Nota libre del instructor/admin sobre un alumno (visible para el alumno, solo lectura): `{texto,autor,fecha}`.
+Nota libre del instructor/admin sobre un alumno (visible para el alumno, solo lectura): `{texto,autor,fecha}`. **Vive en `portal-alumno.html`**, no en `turnos.html` — `fbSet` (una sola nota, se pisa cada vez que se edita, no es histórico). **No confundir con `/logs_alumno` de abajo**: son dos features distintas y a propósito no comparten path — esta es pública (la lee el alumno), la otra es privada.
+
+### Observación privada — modelo v6.73, con vista de alumno v6.74 y carga inicial v6.75
+Los campos `obs_privada`/`obs_privada_tiempo_vuelo`/`obs_privada_aterrizajes`/`obs_privada_autor`/`obs_privada_ts` viven **directo en `/reservas/{pushKey}`** (ver bloque de arriba), no en un nodo aparte. **Un solo registro por vuelo, con dueño**: mientras nadie cargó nada, cualquier instructor puede completar el form; en cuanto alguien guarda algo, `obs_privada_autor` queda seteado y **nadie más puede editar ese turno** — solo ese instructor puntual, o un admin/administrador (mismo criterio de excepción que cancelar/liberar en `abrirModal`; si Daniel no quiere esa excepción para admin, hay que sacarla de `renderFormObsPrivada`/`guardarObsPrivada`).
+
+Todo vive en el mismo modal (`#modal-log-alumno`), con **tres puntos de entrada y tres modos** según quién lo abre:
+
+1. **Instructor, desde un turno puntual** — botón "◈ VER LOG DEL ALUMNO" en el modal de detalle de turno (`abrirModal`/`modal-turno`), visible solo si `session.tipo==='instructor'`. Abre `abrirLogAlumno`, título "Log del Alumno". Muestra:
+   - Panel de carga/edición de la obs privada del **vuelo puntual clickeado** (`renderFormObsPrivada`) — form abierto si nadie cargó nada; pre-poblado + botón "ACTUALIZAR" si el dueño (o admin) vuelve a entrar; bloqueado con 🔒 y de solo lectura si lo cargó otro instructor.
+   - Sección de observaciones **públicas** de todos los turnos del alumno (`obs`/`obs_cancelacion`/`obs_post`, `renderObsPublicasAlumno`, lee `_reservasCache` — las mismas que ya ve el alumno turno por turno).
+   - **Historial privado** (`renderNotasPrivadasAlumno`): un item por cada turno del alumno con algo de `obs_privada*` cargado, más nuevo primero (fecha/avión, autor, tiempo/aterrizajes, texto completo).
+   - Barra de **totales**, fusionando `horas_iniciales`/`aterrizajes_iniciales` del alumno (v6.75) con la suma de `obs_privada_tiempo_vuelo`/`obs_privada_aterrizajes` de todos sus turnos — **sin distinguir origen** en el número mostrado.
+2. **El propio alumno, desde Mi Perfil** — botón "◈ VER MI LOG DE VUELOS" (v6.74, `class="primary"` desde v6.77), función `abrirMiLogVuelos`. Reusa el mismo modal en modo restringido (`_logAlumnoModoAlumno=true`), título "Mi Log de Vuelos":
+   - **Sin** panel de carga/edición (`mla-obspriv-panel` oculto — el alumno nunca escribe nada acá).
+   - Misma sección de observaciones **públicas** que ve el instructor.
+   - Historial privado con **el mismo detalle que el instructor, excepto el texto libre de `obs_privada`** — sí ve fecha/avión del vuelo, quién cargó el dato y los números de tiempo/aterrizajes; no ve la nota escrita. Decisión explícita de Daniel: mantener visible el autor (interpretado como que "la observación privada" es específicamente el texto, no el resto de la metadata) — si en algún momento Daniel prefiere que el alumno tampoco sepa qué instructor cargó cada vuelo, es sacar una línea en `renderNotasPrivadasAlumno`.
+   - Misma barra de totales fusionados (carga inicial + registrado).
+3. **Instructor, corrigiendo la carga inicial de un alumno** — modal EDITAR USUARIO (Config→Usuarios), campos `horas_iniciales`/`aterrizajes_iniciales`. No pasa por `modal-log-alumno`.
+
+Detalles técnicos comunes a los tres puntos de entrada:
+- `guardarObsPrivada` hace un `fbGet` fresco de la reserva justo antes de escribir (no confía solo en el estado ya pintado en pantalla) para cubrir el caso de dos instructores editando el mismo turno al mismo tiempo — el segundo en guardar se entera del conflicto real en ese momento, no accede a pisar el dato del primero.
+- Como es un registro por vuelo (no un log abierto), el total **no tiene riesgo de doble conteo** por turno — cada turno aporta a lo sumo una vez. La carga inicial (v6.75) es un número aparte a nivel alumno, tampoco duplicable.
+- Sin registro en `/auditoria`, ni para la obs privada por vuelo ni para la carga inicial (decisión explícita de Daniel: se editan seguido, sería ruido).
+- **`/logs_alumno/{emailKey}/{pushKey}` (v6.70-6.72) queda sin uso desde v6.73** — no se migró ni se borró data vieja porque a la fecha del cambio no se había desplegado a producción. Si en algún momento aparece data ahí, es de pruebas de esta sesión de trabajo, no de uso real.
 
 ## 4. Roles y permisos
 
@@ -192,6 +221,85 @@ Modo **sombra**: Auth corre en paralelo, la clave plana es la red de seguridad y
 
 ## 9. Pantallas y navegación
 
+### Árbol de menús y accesos (turnos.html)
+
+```
+LOGIN (switchLoginTab) — pantalla inicial, sin sesión
+├─ Ingresar (alumno/piloto) — loginAlumno
+├─ Registrarme — registrarAlumno (→ Pendiente de aprobación)
+├─ Inst-Admin (instructor/admin/administrador) — loginInstructor
+└─ Olvidé mi contraseña — olvideClave
+
+PENDIENTE DE APROBACIÓN — pantalla de espera para alumnos recién registrados
+  (estado:'pendiente_aprobacion' en /alumnos; sin acceso a nada más hasta que
+  un instructor/admin lo apruebe desde Config→Usuarios)
+
+═══ ALUMNO / PILOTO (session.tipo==='alumno') — showAlumnoTab ═══
+├─ Mis Turnos (default) — renderMisTurnos, filtro por estado (setHistFiltro),
+│  orden (toggleHistOrden), cancelar turno propio (cancelarTurnoAlumno)
+│    └─ [click en un turno] → modal-turno (abrirModal, MISMO modal que usa el
+│       instructor) — el alumno ve fecha/hora/avión/obs/estado, pero NO ve el
+│       botón "VER LOG DEL ALUMNO" ni ninguna acción de aprobar/cancelar ajena
+├─ Pedir Turno — selector de avión (pilotos), grilla de días (renderDaysGrid),
+│  slots (renderSlots), confirmar (confirmarTurno)
+└─ Mi Perfil
+    ├─ Mi Log de Vuelos (v6.74) — botón "◈ VER MI LOG DE VUELOS" (primary, v6.77)
+    │  → abrirMiLogVuelos → modal-log-alumno EN MODO ALUMNO (solo lectura):
+    │  obs públicas de todos sus turnos + historial de horas/aterrizajes SIN el
+    │  texto de obs_privada + total fusionado (incl. carga inicial) — ver §3
+    ├─ Mis Datos — guardarDatosPerfil
+    └─ Cambiar Contraseña — cambiarClave
+Link superior (fuera de las tabs): 🎓 Portal Alumno — oculto para rol:'piloto',
+  visible para alumno/instructor/admin/administrador → portal-alumno.html (§23)
+
+═══ INSTRUCTOR / ADMIN / ADMINISTRADOR (session.tipo==='instructor') — showInstTab ═══
+  Visibilidad de cada tab según el tipo de cuenta (código exacto en showInstTab).
+  Dos flags independientes deciden todo: `soloUsuarios` (boolean en /instructores/{user})
+  y `esAdminGlobal` (session.user==='admin'||'administrador'). La cuenta 'administrador'
+  tiene los DOS a la vez (soloUsuarios:true Y esAdminGlobal:true), así que combina las
+  dos reglas de abajo — no es un tercer caso aparte:
+  - soloUsuarios:true → oculta Reservas, Seguimiento, Mi Disponibilidad, y dentro de
+    Config: Horarios, Bloq.Aviones, Instructores, Consultas. Deja Usuarios SIEMPRE
+    visible (nunca se gatea) — es la única función pensada para esta cuenta.
+  - esAdminGlobal (admin O administrador) → oculta Mi Disponibilidad (no
+    vuela/instruye) y, dentro de Config, MUESTRA Auditoría y Sistema (gateados
+    únicamente por este flag, sin relación con soloUsuarios). Audit.FPL se gatea
+    aparte, solo para el usuario literal 'admin' (ni administrador ni instructor común).
+  - Con esto: 'administrador' termina viendo solo Config→Usuarios/Auditoría/Sistema
+    (nada de Reservas/Seguimiento/Disponibilidad/Horarios/Bloq.Aviones/Instructores/
+    Consultas/Audit.FPL). 'admin' ve todo excepto Mi Disponibilidad. Un instructor
+    común ve todo excepto Auditoría/Sistema/Audit.FPL.
+│
+├─ Reservas (default, oculto si soloUsuarios) — calendario LISTA/SEMANA, banner
+│  de turnos pendientes (irAPendientes), botón "+ CARGAR TURNO"
+│    ├─ [click en un turno] → modal-turno (abrirModal) — aprobar/cancelar/liberar
+│    │    └─ botón "◈ VER LOG DEL ALUMNO" (solo session.tipo==='instructor') →
+│    │       modal-log-alumno EN MODO INSTRUCTOR (abrirLogAlumno) — ver §3
+│    └─ botón "+ CARGAR TURNO" → modal-cargar-turno (guardarTurnoManual)
+├─ Seguimiento (oculto si soloUsuarios) — renderSeguimiento, agrupado por día,
+│  selector TODOS/PRÓXIMOS/PASADOS (setSegPeriodo), selector de instructor (admin)
+├─ Mi Disponibilidad (oculto si soloUsuarios O esAdminGlobal) — grilla semanal
+│  de slots propios + toggle de vacaciones (toggleVacaciones)
+├─ Configuración (showCfgTab) — ver árbol de sub-tabs en §10
+│    ├─ Horarios (oculto si soloUsuarios)
+│    ├─ Bloq.Aviones (oculto si soloUsuarios)
+│    ├─ Instructores (oculto si soloUsuarios) → modal-inst (agregar/editar)
+│    ├─ Usuarios (SIEMPRE visible, incl. soloUsuarios — es su función) →
+│    │  modal-alumno "EDITAR USUARIO", incl. horas/aterrizajes iniciales (v6.75)
+│    ├─ Consultas (oculto si soloUsuarios; visible para cualquier instructor,
+│    │  NO es exclusivo de admin) → modal-cq-reserva, modal-alumno-chart (gráfico
+│    │  de torta 3D por alumno, v6.69)
+│    ├─ Auditoría (SOLO admin/administrador)
+│    ├─ Audit. FPL (SOLO el usuario literal 'admin')
+│    └─ Sistema (SOLO admin/administrador) — backup/restore/borrado masivo
+└─ Mi Perfil — nombre/contraseña del instructor (cambiarClaveInstructor,
+   guardarNombreInstructor)
+
+Modal de nivel raíz, fuera del árbol de tabs (accesible desde el login):
+  modal-forzar-clave — cambio de contraseña obligatorio si pass_temporal:true,
+  aparece encima de cualquier pantalla incl. login.
+```
+
 - **Login** (`switchLoginTab`): pestañas Ingresar / Registrarme / Inst-Admin / Olvidé.
 - **Pendiente de aprobación**: pantalla de espera para usuarios nuevos.
 - **Usuario (alumno/piloto)** — pestañas (`showAlumnoTab`):
@@ -228,7 +336,7 @@ Cierra sesión (`logout`): borra `sessionStorage 'lvoad-session'` y vuelve a la 
 - **Horarios**: por avión y día de semana (`renderHorariosConfig`, `toggleHorario`, `marcarTodas`); toggle de avión activo/inactivo (`toggleActivoAvion`). administrador = solo lectura. Incluye vista de disponibilidad de instructores (solo admin, solo lectura): selector por instructor + grilla de 30 días paginada (`renderAdmDisp`).
 - **Bloq.Aviones**: calendario mensual por avión para bloquear días (`renderCalMes`, `toggleBloqueoDia`); muestra feriados.
 - **Instructores**: alta (`agregarInstructor`, exige clave ≥6), edición (`abrirModalInst`/`guardarInstructor`, con check de cambio forzado), baja, y toggle de vacaciones por instructor para admin (`toggleVacacionesAdmin`). El alta y la edición incluyen **email** (para el recordatorio, §20) y **celular**; la lista marca "⚠ sin mail" a quienes no tengan email. El propio instructor también puede cargar/editar su email y celular desde Mi Perfil (`guardarNombreInstructor`).
-- **Usuarios**: lista con filtros (texto/rol/estado); aprobar (`aprobarUsuario`, asigna rol) o rechazar (`rechazarUsuario`) pendientes; editar (`abrirModalAlumno`/`guardarAlumno`: nombre, tel, rol, estado_login, reseteo de clave + cambio forzado); eliminar.
+- **Usuarios**: lista con filtros (texto/rol/estado); aprobar (`aprobarUsuario`, asigna rol) o rechazar (`rechazarUsuario`) pendientes; editar (`abrirModalAlumno`/`guardarAlumno`: nombre, tel, rol, estado_login, reseteo de clave + cambio forzado, y desde v6.75 `horas_iniciales`/`aterrizajes_iniciales` — carga inicial de horas/aterrizajes previos al sistema, ver §3); eliminar.
 - **Consultas**: búsqueda de turnos por usuario/fechas/avión/estado (`ejecutarConsulta`), estadísticas, exportar CSV (`exportarCSV`), y edición de reserva (`abrirModalCqReserva`/`guardarCqReserva`, solo admin; la opción "Aprobado" está deshabilitada para no-instructores).
 - **Auditoría**: tabla paginada con filtros (`cargarAuditoria`/`filtrarAuditoria`/`renderAuditoria`); borrado por fila solo para `admin` (`borrarAuditoria`). **Excluye** los registros `rol:'fpl'`.
 - **Audit. FPL** (solo `admin`, no `administrador`, v5.84): lista los registros que escribe `fpl.html` al generar un PDF (`rol:'fpl'`), con columnas fecha del vuelo (dd/mm/aaaa, v5.85)/origen/destino/hora/tiempo de vuelo/matrícula/comandante (+ registrado y usuario). Separada de la auditoría de turnos: nada se mezcla. **Borrado por fila** (v6.25, `borrarAuditoriaFpl`): mismo patrón visual y de `confirm()` que `borrarAuditoria`, pensado para limpiar registros de prueba sin tocar Firebase a mano. Reusa la gate de admin que ya tenía la función.
@@ -312,6 +420,7 @@ Registro de eventos (`registrarAuditoria`): login (éxito/fallo/bloqueado), regi
 - `irAPendientes` — botón del banner de turnos pendientes: lleva a Reservas/LISTA (el banner persiste hasta que no queden pendientes).
 - `abrirModal`/`cerrarModal` — modal de detalle del turno (aprobar/cancelar/liberar). Cuando `estado==='cancelado'` (v6.27/6.31/6.32/6.33), muestra **las dos puntas** de la historia del turno: fila **CANCELÓ** (prioriza `cancelado_por`; fallback a `r.nombre` si `cancelado_rol==='alumno'` y es un registro previo a v6.27) y fila **APROBÓ** (vía `segAprobadorDe`, mismo helper que usa Seguimiento) — se muestran **siempre que haya dato**, aunque sea la misma persona en ambas puntas (decisión explícita de Daniel: prefiere ver las dos filas siempre antes que inferir "no dice nada, debe ser el mismo"). Cada fila lleva un ícono de color (👍 verde junto a APROBÓ, 👎 rojo junto a CANCELÓ) con el mismo lenguaje visual de las clases CSS verde/rojo del resto de la app.
 - `tooltipAccion(r)` — sufijo del tooltip del calendario con quién aprobó/canceló. `tooltipSaldo(r, todosLosDatos)` (v6.50, texto revisado en v6.61 — ver §6) — sufijo adicional con el saldo de cuota semanal del alumno dueño del turno (solo si `r.rol==='alumno'`), reusa `turnosRestantesSemana`.
+- `abrirLogAlumno`/`cerrarModalLogAlumno` (v6.70) — abre/cierra el modal Log del Alumno en modo instructor. `abrirMiLogVuelos` (v6.74) — abre el mismo modal en modo alumno (solo lectura, sin panel de carga, sin texto de obs_privada). `renderObsPublicasAlumno` (v6.71) — sección de observaciones públicas, común a ambos modos. `renderFormObsPrivada`/`guardarObsPrivada`/`renderNotasPrivadasAlumno` (v6.73, totales con carga inicial desde v6.75) — panel de obs privada (candado por autor, un registro por vuelo) y su historial+totales, ver §3.
 - `abrirModalCargarTurno`/`cerrarModalCargarTurno`/`ctActualizarRango`/`guardarTurnoManual` (v6.08-6.10) — herramienta "Cargar Turno" (ver §8).
 - `vencerTurnosPendientes` — vencimiento perezoso. `suscribirReservas`/`suscribirPendientes` — listeners.
 
@@ -401,7 +510,16 @@ Registro de eventos (`registrarAuditoria`): login (éxito/fallo/bloqueado), regi
 - **Columna ROL en la vista POR ALUMNO (HECHO, 2026-07-08, v6.68):** resuelve la nota abierta de arriba — se agregó columna ROL (Alumno/Piloto) a la tabla, con las clases `.badge-alumno`/`.badge-piloto` ya existentes en el resto de la app. La tabla sigue sin filtrar por rol (alumnos y pilotos conviven), pero ahora se distinguen a simple vista. Sumada a `calcAlumnoStats`, `renderConsultaPorAlumno` (header, filas, fila de totales), `sortConsultaAlumno` (ordena por rol como string) y `exportarCSVAlumnos`.
 - **Modal de gráfico por alumno (HECHO, 2026-07-08, v6.69):** click en cualquier fila de la vista POR ALUMNO abre `#modal-alumno-chart` con un gráfico de torta 3D (Google Charts corechart, `is3D:true`) del desglose de ese alumno puntual — mismas 6 categorías y mismos colores que las columnas de la tabla. Se eligió Google Charts (CDN `gstatic.com/charts/loader.js`, sumado junto al script de EmailJS) por ser la vía más directa a un pie 3D real sin agregar build tooling ni una librería pesada; se carga en diferido recién al primer click (`cargarGoogleCharts`, cachea la promesa para clicks siguientes). Modal rescatado al `<body>` preventivamente (mismo bug recurrente de modal-anidado-en-tab-oculta que ya se dio 3 veces, ver v5.97/v6.09/v6.62 — acá se previno antes de que pase). Funciones nuevas: `cargarGoogleCharts`, `abrirModalAlumnoChart`, `cerrarModalAlumnoChart`. Cierra solo con el botón ✕, igual que el resto de los modales del archivo (no hay ninguno que cierre clickeando el fondo).
 - **Nota técnica:** las categorías con valor 0 se excluyen del gráfico (Google Charts las mostraría como una porción invisible sin aportar nada). Si un alumno tiene los 6 en cero (no debería pasar salvo un registro corrupto, ya que pedidos siempre es la suma), el modal muestra "Sin datos para graficar" en vez de intentar dibujar un gráfico vacío.
-- **Versión de este documento vs. repo (2026-07-08):** turnos.html **v6.69**, fpl.html **v3.23**, portal-alumno.html **v1.16**, peso-balance.html **v1.5**. Este documento queda sincronizado a estas cuatro versiones a la fecha.
+- **Log privado del alumno (HECHO, 2026-07-10, v6.70):** pedido de Daniel tras evaluar (y descartar, ver nota de arquitectura más abajo) partir `turnos.html` en una página aparte para instructores — la necesidad real era un lugar para que los instructores dejen notas de progreso/warnings sobre un alumno, sin que el alumno las vea nunca. Se resolvió sin tocar la arquitectura: nodo nuevo `/logs_alumno/{emailKey}` (histórico acumulativo vía `fbPush`, separado del campo `obs` público y de `/notas_alumno` que sí ve el alumno — ver §3), botón "◈ VER LOG DEL ALUMNO" nuevo dentro del modal de detalle de turno existente (`abrirModal`), gateado a `session.tipo==='instructor'`. Cada nota queda con autor, fecha y referencia al vuelo sobre el que se hizo click al escribirla, pero el log es del **alumno** (se ve completo desde cualquiera de sus turnos), no del turno puntual. Sin registro en `/auditoria` (decisión explícita: demasiado ruido para algo que se edita seguido). Modal nuevo (`#modal-log-alumno`) rescatado al `<body>` preventivamente, mismo patrón recurrente que v5.97/v6.09/v6.62/v6.69.
+- **Nota de arquitectura (2026-07-10, sin cambio de código):** se evaluó partir `turnos.html` en una página aparte para instructores (`instructores.html`) para desclutterizar el menú de Config/Consultas/Auditoría/Sistema. Análisis de grafo de llamadas mostró que la vista de reserva del alumno y la de Reservas/Seguimiento del instructor comparten el mismo motor de calendario/turno (~65-70 funciones centrales: calendario, modal de turno, `pedirMotivoCancelacion`, `turnosRestantesSemana`, `turnoYaPaso`, Seguimiento, tooltips). Partirlo implicaba extraer ese motor a un módulo compartido, riesgoso para un sistema en producción sin ganancia real (el objetivo — un lugar para features nuevas de instructor — se resuelve más barato agregando a las pantallas existentes con gating por rol, como el log de arriba). **Decisión: NO se parte el archivo.** Si el tab-bar de Config se siente saturado a futuro, la solución barata es agrupar sus 8 sub-tabs en categorías visuales, no partir el archivo.
+- **FIX/completar log del alumno — faltaban las obs públicas (HECHO, 2026-07-10, v6.71):** Daniel revisó la entrega de v6.70 y señaló que el modal solo mostraba el log privado (vacío en ese momento) y no traía nada de las observaciones públicas existentes (`obs`/`obs_cancelacion`/`obs_post`), que es justamente lo primero que un instructor querría ver de un vistazo antes de volar. Se agregó sección "Observaciones públicas (todos sus turnos)" arriba de la parte de notas privadas: un item por turno del alumno con alguna obs cargada, más nuevo primero, reusando `_reservasCache` (sin pedir nada nuevo a Firebase). Modal ampliado a `max-height:85vh` + scroll propio.
+- **Log del Alumno — tiempo real de vuelo + aterrizajes, con totales (HECHO, 2026-07-10, v6.72):** pedido de Daniel — poder cuantificar horas reales de vuelo y aterrizajes por alumno más allá de lo que dice `/reservas`. Dos campos numéricos nuevos y opcionales (`tiempo_vuelo` en hs decimales, `aterrizajes` entero) en el formulario de "Nueva nota privada" del log — se guardan junto al texto en la misma entrada de `/logs_alumno` (los 3 campos son independientes, con al menos uno obligatorio para poder guardar). El historial de notas muestra estos valores por entrada cuando están cargados, y una barra de **totales** arriba del historial suma `tiempo_vuelo`/`aterrizajes` de todas las entradas del alumno (no solo las visibles en pantalla), oculta si no hay ninguna entrada con estos datos. **Sin deduplicación**: cargar el mismo vuelo dos veces suma dos veces — a tener en cuenta si en algún momento este total se usa para algo formal (ej. horas para un chequeo de progreso), ver §3.
+- **Obs. privada — cambio a un registro por vuelo con dueño (HECHO, 2026-07-10, v6.73):** Daniel revisó v6.72 (el log abierto con totales) y pidió explícitamente que, una vez que un vuelo tiene obs privada/horas/aterrizajes cargados, nadie más pueda agregar nada a ese turno — solo el instructor que la cargó (o admin) puede editarla. Se abandona `/logs_alumno` (log libre, múltiples entradas) por campos directos en `/reservas/{key}` con `obs_privada_autor` como dueño — ver detalle completo en §3. De paso resuelve la limitación que se había señalado en v6.72 (double-counting en los totales): al ser un registro por vuelo, no por evento, el total ya no puede duplicarse estructuralmente.
+- **El alumno accede a su Log de Vuelos, solo lectura (HECHO, 2026-07-10, v6.74):** botón "◈ VER MI LOG DE VUELOS" nuevo en Mi Perfil del alumno (`abrirMiLogVuelos`). Reusa el mismo `#modal-log-alumno` que ya usa el instructor, en un modo restringido (`_logAlumnoModoAlumno=true`): sin panel de carga/edición, y el historial omite el texto libre de `obs_privada` — pero conserva fecha/avión, autor y los datos numéricos (tiempo de vuelo/aterrizajes) por turno, más el total acumulado. La sección de observaciones públicas se ve igual en los dos modos (ya era información que el alumno podía ver turno por turno). Ver detalle completo en §3.
+- **Carga inicial de horas/aterrizajes previos al sistema (HECHO, 2026-07-10, v6.75):** pedido de Daniel — el total del Log de Vuelos arrancaba en 0 aunque el alumno ya tuviera horas reales voladas antes de que existiera este registro. Dos campos nuevos en `/alumnos/{emailKey}` (`horas_iniciales`, `aterrizajes_iniciales`), editables desde EDITAR USUARIO por cualquier instructor, fusionados sin distinguir origen en el total final (decisión explícita de Daniel). Sin herramienta de carga masiva todavía — Daniel confirmó que aún no tiene los datos históricos juntados en una planilla; cuando los tenga, la vía prevista es un script Python del mismo patrón que el resto del proyecto (dry-run + `--aplicar`), no una UI nueva. Ver §3.
+- **FIX visual — texto de ayuda montado sobre los inputs de carga inicial (HECHO, 2026-07-10, v6.76):** el texto "Se suman al total…" bajo HORAS/ATERRIZAJES INICIALES (v6.75) tenía `margin-top:-.4rem` para acercarlo a los inputs; en la práctica se montaba sobre el borde inferior de las cajas de texto (reportado por Daniel con captura). Sacado el margen negativo.
+- **FIX estético — botón "VER MI LOG DE VUELOS" apagado (HECHO, 2026-07-10, v6.77):** el botón nuevo de v6.74 quedó con el estilo default (gris, transparente) en vez del estilo destacado (gradiente cyan + glow, `class="primary"`) que ya usan las demás acciones principales del sistema. Reportado por Daniel con captura ("el botón me parece demasiado dull").
+- **Versión de este documento vs. repo (2026-07-10):** turnos.html **v6.77**, fpl.html **v3.23**, portal-alumno.html **v1.16**, peso-balance.html **v1.5**. Este documento queda sincronizado a estas cuatro versiones a la fecha.
 
 ## 19. Limitaciones conocidas
 
