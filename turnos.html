@@ -1,5 +1,18 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.79
+  FECHA   : 2026-07-12
+  CAMBIOS : Pedido de Daniel con captura. (1) El textarea de observación post-vuelo en
+            el modal DETALLE DEL TURNO ahora dice "OBSERVACIÓN POST-VUELO PARA EL
+            ALUMNO" (antes solo "OBSERVACIÓN POST-VUELO") para que quede claro que ese
+            campo (obs_post) es público y el alumno lo ve en su historial — a diferencia
+            de la observación privada del Log del Alumno, que nunca ve. (2) El recuadro
+            de observación privada en el modal LOG DEL ALUMNO (mla-obspriv-panel) no
+            tenía ningún estilo propio (la clase "panel" no existe en el CSS, quedaba
+            como un div sin borde ni fondo, indistinguible del resto del modal). Se le
+            agregó clase .obspriv-box con borde/fondo rojizo + candado 🔒 para que se
+            note a simple vista que es contenido restringido a instructores/admin. Texto
+            cambiado de "Observación privada" a "OBSERVACIÓN PARA INSTRUCTORES".
   VERSION : 6.78
   FECHA   : 2026-07-11
   CAMBIOS : El modal EDITAR USUARIO (Config→Usuarios) se quedaba sin entrar en pantalla,
@@ -1312,6 +1325,12 @@ html{overflow-x:hidden;max-width:100vw;}
 h2{font-family:var(--font-mono);font-size:14px;color:var(--cyan);letter-spacing:.18em;text-transform:uppercase;margin-bottom:1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);}
 h3{font-family:var(--font-mono);font-size:12px;color:var(--amber);letter-spacing:.15em;text-transform:uppercase;margin-bottom:.75rem;}
 .section-title{font-family:var(--font-mono);font-size:10px;color:var(--text2);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.6rem;}
+/* recuadro de Observación para Instructores (ex "privada") — se distingue a propósito
+   del resto del modal Log del Alumno con borde/fondo rojizo + candado, para que quede
+   clarísimo que ese contenido nunca lo ve el alumno (a diferencia de las obs. públicas
+   que se listan arriba en el mismo modal) */
+.obspriv-box{border:1px solid rgba(248,81,73,.4);background:rgba(248,81,73,.05);border-radius:var(--radius-lg);padding:.9rem 1rem;}
+.obspriv-box .section-title{color:var(--red);font-size:11px;display:flex;align-items:center;gap:6px;}
 
 .field{margin-bottom:.85rem}
 .field label{display:block;font-family:var(--font-mono);font-size:11px;color:var(--text2);letter-spacing:.12em;text-transform:uppercase;margin-bottom:5px;}
@@ -1610,7 +1629,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.78</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.79</div>
   </div>
 
 </div>
@@ -1924,7 +1943,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <span class="modal-val"><button id="md-log-btn" style="font-family:var(--font-mono);font-size:11px;padding:5px 12px;background:rgba(0,200,212,.08);border:1px solid var(--cyan);color:var(--cyan);border-radius:var(--radius);cursor:pointer">◈ VER LOG DEL ALUMNO</button></span>
       </div>
       <div id="md-obspost-row" style="display:none;flex-direction:column;gap:.45rem;margin:.6rem 0;padding-top:.6rem;border-top:1px solid var(--border)">
-        <span class="modal-lbl" style="color:var(--amber)">OBSERVACIÓN POST-VUELO</span>
+        <span class="modal-lbl" style="color:var(--amber)">OBSERVACIÓN POST-VUELO PARA EL ALUMNO</span>
         <textarea id="md-obspost" rows="3" placeholder="Ej.: no se voló por meteorología…" style="width:100%;box-sizing:border-box;font-family:var(--font-mono);font-size:12px;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);padding:8px;resize:vertical"></textarea>
         <div style="display:flex;align-items:center;gap:.7rem">
           <button id="md-obspost-save" style="font-family:var(--font-mono);font-size:12px;padding:7px 16px">GUARDAR OBSERVACIÓN</button>
@@ -1950,8 +1969,8 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <div id="mla-obs-pub-vacio" style="display:none;font-family:var(--font-mono);font-size:11px;color:var(--text3);text-align:center;padding:.85rem 0">// Sin observaciones públicas cargadas</div>
       <div style="border-top:1px solid var(--border);margin:1rem 0"></div>
 
-      <div class="panel" style="margin-bottom:1rem" id="mla-obspriv-panel">
-        <div class="section-title">▸ Observación privada — vuelo <span id="mla-ref-vuelo" style="color:var(--amber)"></span></div>
+      <div class="obspriv-box" style="margin-bottom:1rem" id="mla-obspriv-panel">
+        <div class="section-title">🔒 OBSERVACIÓN PARA INSTRUCTORES — vuelo <span id="mla-ref-vuelo" style="color:var(--amber)"></span></div>
         <div id="mla-obspriv-lock" style="display:none;font-family:var(--font-mono);font-size:12px;color:var(--text2);line-height:1.7;padding:.6rem .75rem;background:var(--bg3);border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:var(--radius)"></div>
         <div id="mla-obspriv-form">
           <textarea id="mla-texto" rows="3" placeholder="Progreso, novedades, warnings…" style="width:100%;box-sizing:border-box;font-family:var(--font-mono);font-size:12px;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);padding:8px;resize:vertical"></textarea>
