@@ -2,6 +2,22 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
+  v3.24 ·  Reportado por Daniel con capturas (PC y celular): 1) fieldset "Aeronave ·
+           plantilla" quedaba apretado — dropdown de elegir aeronave ilegible y
+           botones Nueva/Editar/Borrar mal posicionados en pantallas angostas; se
+           separó en dos grupos (select y botones) que ahora se apilan en filas
+           propias en mobile en vez de amontonarse. 2) fieldset "Aeronave · 7 · 9 ·
+           10" reorganizado (Matrícula+Nº, Tipo+Estela, Equipo+Vigilancia) con clase
+           .ac79 que en mobile fuerza cada campo a su propia fila — antes el select
+           de Estela quedaba con max-width:130px fijo y el texto de las opciones
+           ("Ligera"/"Pesada") se cortaba. 3) "Presentado por (Filed by)" deja de
+           precargarse con el usuario logueado (limpiar() y carga inicial) y se
+           sacó el aviso no bloqueante "Falta Presentado por" — a pedido de Daniel,
+           no hace falta precargar ni validar ese campo. 4) Reordenados los campos
+           de "Información suplementaria · 19": A/ Color y marcas queda solo, C/
+           Comandante se movió al final del fieldset (con el hint que aclara que
+           puede ser distinto de quien presenta el plan justo debajo), quedando
+           inmediatamente antes del fieldset "Firma del comandante".
   v3.23 ·  Ancho máximo del contenedor (.wrap) sube de 1080px a 1280px, mismo
            criterio que turnos.html v6.34 y portal-alumno.html v1.14. En pantallas
            grandes el layout aprovecha mejor el espacio disponible sin afectar
@@ -280,16 +296,18 @@
   .span2{grid-column:1 / -1}
   /* selector de aeronave (plantilla) */
   .selavion{border-color:var(--cyan-dim);box-shadow:0 0 18px rgba(34,211,238,.08)}
-  .selavion select{max-width:300px;font-size:16px;color:var(--cyan)}
   .selavion label{color:var(--txt-dim)}
-  .selavion-row{display:flex;align-items:center;gap:9px}
+  .selavion-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .selavion-select-wrap{display:flex;align-items:center;gap:9px;flex:1 1 220px;min-width:200px}
+  .selavion-select-wrap select{flex:1;min-width:0;max-width:none;font-size:16px;color:var(--cyan)}
   .selavion-row .plane-ico{flex:0 0 auto;color:var(--cyan);filter:drop-shadow(0 0 4px rgba(34,211,238,.45))}
+  .selavion-btns{display:flex;gap:8px;flex-wrap:wrap;flex:0 0 auto}
   /* ===== editor de aeronaves (modal EDIT AIRCRAFT) ===== */
-  .selavion-row .acbtn{flex:0 0 auto;font-family:var(--mono);font-size:12px;letter-spacing:.4px;
+  .selavion-btns .acbtn{flex:0 0 auto;font-family:var(--mono);font-size:12px;letter-spacing:.4px;
     background:transparent;border:1px solid var(--line-hot);color:var(--cyan);border-radius:5px;
     padding:6px 10px;cursor:pointer;transition:.15s;text-transform:none;font-weight:400}
-  .selavion-row .acbtn:hover{background:var(--cyan);color:var(--bg)}
-  .selavion-row .acbtn[disabled]{opacity:.4;cursor:not-allowed}
+  .selavion-btns .acbtn:hover{background:var(--cyan);color:var(--bg)}
+  .selavion-btns .acbtn[disabled]{opacity:.4;cursor:not-allowed}
   .acbtn.danger{border-color:var(--bad);color:var(--bad)}
   .acbtn.danger:hover{background:var(--bad);color:var(--bg)}
   #acOverlay{position:fixed;inset:0;z-index:80;background:rgba(2,6,11,.72);
@@ -484,6 +502,13 @@
   .row{gap:6px}
   .row>.field{min-width:74px}
 
+  .ac79 .row{flex-direction:column}
+  .ac79 .field{flex:1 1 100% !important;max-width:none !important}
+
+  .selavion-select-wrap{flex:1 1 100%}
+  .selavion-btns{flex:1 1 100%}
+  .selavion-btns .acbtn{flex:1 1 auto;text-align:center;justify-content:center;padding:8px 10px}
+
   fieldset>legend{font-size:11px;letter-spacing:1px}
 
   .item{flex-wrap:wrap;gap:6px 12px}
@@ -511,7 +536,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v3.23</span>
+    <span class="ver">v3.24</span>
     <a href="turnos.html" title="Volver al turnero (sin cerrar sesión)" style="font-family:var(--mono);font-size:12px;color:var(--cyan);text-decoration:none;border:1px solid var(--line-hot);border-radius:5px;padding:5px 11px;letter-spacing:1px;transition:.15s" onmouseover="this.style.background='var(--cyan)';this.style.color='#04141a'" onmouseout="this.style.background='transparent';this.style.color='var(--cyan)'">← TURNERO</a>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
@@ -533,11 +558,15 @@
     <div class="body">
       <label>Elegí la aeronave: se completan matrícula, tipo, estela, equipo, velocidad y color (editables)</label>
       <div class="selavion-row">
-        <svg class="plane-ico" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L11 19v-5.5z"/></svg>
-        <select id="selAvion"><option value="">— Cargando flota —</option></select>
-        <button type="button" class="acbtn" id="acNew" title="Crear una aeronave personal">＋ Nueva</button>
-        <button type="button" class="acbtn" id="acEdit" title="Editar la aeronave personal seleccionada" disabled>✎ Editar</button>
-        <button type="button" class="acbtn danger" id="acDel" title="Borrar la aeronave personal seleccionada" disabled>🗑</button>
+        <div class="selavion-select-wrap">
+          <svg class="plane-ico" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L11 19v-5.5z"/></svg>
+          <select id="selAvion"><option value="">— Cargando flota —</option></select>
+        </div>
+        <div class="selavion-btns">
+          <button type="button" class="acbtn" id="acNew" title="Crear una aeronave personal">＋ Nueva</button>
+          <button type="button" class="acbtn" id="acEdit" title="Editar la aeronave personal seleccionada" disabled>✎ Editar</button>
+          <button type="button" class="acbtn danger" id="acDel" title="Borrar la aeronave personal seleccionada" disabled>🗑</button>
+        </div>
       </div>
       <div class="hint" id="acHint" style="margin-top:6px">Las 3 del club + las tuyas. Solo vos ves tus aeronaves personales.</div>
     </div>
@@ -545,17 +574,19 @@
 
   <div class="grid">
 
-    <fieldset class="span2">
+    <fieldset class="span2 ac79">
       <legend>Aeronave · 7 · 9 · 10</legend>
       <div class="body">
         <div class="row">
-          <div class="field"><label>7 · Matrícula / ID</label>
+          <div class="field" style="flex:2 1 160px"><label>7 · Matrícula / ID</label>
             <input id="f7" placeholder="LVOAD" maxlength="7"></div>
-          <div class="field" style="max-width:90px"><label>9 · Nº</label>
+          <div class="field" style="flex:0 0 70px"><label>9 · Nº</label>
             <input id="f9n" value="1" maxlength="2"></div>
-          <div class="field"><label>9 · Tipo (OACI)</label>
+        </div>
+        <div class="row">
+          <div class="field" style="flex:2 1 140px"><label>9 · Tipo (OACI)</label>
             <input id="f9t" placeholder="C172" maxlength="4"></div>
-          <div class="field" style="max-width:130px"><label>9 · Estela</label>
+          <div class="field" style="flex:1 1 150px"><label>9 · Estela</label>
             <select id="f9w">
               <option value="L">L · Ligera</option>
               <option value="M">M · Media</option>
@@ -689,8 +720,6 @@
         <div class="row">
           <div class="field"><label>A/ Color y marcas</label>
             <input id="f19a" placeholder="WHITE BLUE"></div>
-          <div class="field"><label>C/ Comandante (firma el plan)</label>
-            <input id="f19c" placeholder="Apellido, Nombre"></div>
         </div>
         <div class="row">
           <div class="field"><label>Presentado por (Filed by)</label>
@@ -705,6 +734,10 @@
         </div>
         <div class="checks" style="margin-top:4px">
           <label><input type="checkbox" id="f19dcov">D/ Con cubierta (C)</label>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <div class="field"><label>C/ Comandante (firma el plan)</label>
+            <input id="f19c" placeholder="Apellido, Nombre"></div>
         </div>
         <div class="hint">El comandante (C/) puede ser distinto de quien presenta el plan (p. ej. instructor en vuelo de instrucción). "Presentado por" se imprime en el casillero "Filed by" al pie del formulario.</div>
       </div>
@@ -1051,7 +1084,6 @@ function validar(){
   }
   const esLocal = !!vU('f13a') && vU('f13a')===vU('f16d');
   if(!esLocal && !v('f16a1')) A.push('16 · Sin aeródromo alternativo (recomendado en vuelo no local)');
-  if(!v('ffiledby')) A.push('Falta "Presentado por" (Filed by) — se imprimirá en blanco');
   if(/^\d{4}$/.test(v('f19e')) && /^\d{4}$/.test(v('f16eet'))){
     const min=s=>(+s.slice(0,2))*60+(+s.slice(2));
     if(min(v('f19e'))<=min(v('f16eet'))) A.push('Autonomía (E/) no supera el tiempo de vuelo (EET) — revisá');
@@ -1146,7 +1178,7 @@ function limpiar(){
   $('f13fecha').value=hoyLocal();
   setChecks('r19','E'); setChecks('s19',''); setChecks('j19','');
   $('f19dn').value=''; $('f19dc').value=''; $('f19dcol').value=''; $('f19dcov').checked=false;
-  $('ffiledby').value=(USUARIO.indexOf('externo')!==0)?USUARIO_LABEL:'';
+  $('ffiledby').value='';
   borrarFirma();
   pintarValidacion([],[],[]);
   refrescarPreview(); toast('Formulario limpio');
@@ -1781,7 +1813,6 @@ $('f19e').addEventListener('blur',()=>{ fmtHHMM('f19e'); refrescarPreview(); });
 setChecks('r19','E');
 syncThemeIcon();
 if(!$('f13fecha').value) $('f13fecha').value=hoyLocal();
-if(!$('ffiledby').value && USUARIO.indexOf('externo')!==0) $('ffiledby').value=USUARIO_LABEL;
 const _utag=$('fpl-usuario-tag'); if(_utag) _utag.textContent='Usuario: '+USUARIO_LABEL+(USUARIO.indexOf('externo')===0?' (no logueado · borradores de esta sesión, se depuran tras 1 h)':'');
 refrescarPreview(); cargarFlota(); cargarAerodromos(); cargarLista(); reloj(); setInterval(reloj,1000);
 flushAuditQueue();   // por si quedó algo pendiente de una sesión anterior con error de red
