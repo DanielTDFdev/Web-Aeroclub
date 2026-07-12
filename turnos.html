@@ -2,17 +2,23 @@
   ARCHIVO : turnos.html
   VERSION : 6.79
   FECHA   : 2026-07-12
-  CAMBIOS : Pedido de Daniel con captura. (1) El textarea de observación post-vuelo en
-            el modal DETALLE DEL TURNO ahora dice "OBSERVACIÓN POST-VUELO PARA EL
-            ALUMNO" (antes solo "OBSERVACIÓN POST-VUELO") para que quede claro que ese
-            campo (obs_post) es público y el alumno lo ve en su historial — a diferencia
-            de la observación privada del Log del Alumno, que nunca ve. (2) El recuadro
-            de observación privada en el modal LOG DEL ALUMNO (mla-obspriv-panel) no
-            tenía ningún estilo propio (la clase "panel" no existe en el CSS, quedaba
-            como un div sin borde ni fondo, indistinguible del resto del modal). Se le
-            agregó clase .obspriv-box con borde/fondo rojizo + candado 🔒 para que se
-            note a simple vista que es contenido restringido a instructores/admin. Texto
-            cambiado de "Observación privada" a "OBSERVACIÓN PARA INSTRUCTORES".
+  CAMBIOS : Pedido de Daniel con capturas, sobre el modal LOG DEL ALUMNO. (1) El textarea
+            de observación post-vuelo en el modal DETALLE DEL TURNO ahora dice
+            "OBSERVACIÓN POST-VUELO PARA EL ALUMNO" (antes solo "OBSERVACIÓN POST-VUELO")
+            para que quede claro que ese campo (obs_post) es público y el alumno lo ve en
+            su historial — a diferencia de la observación privada del Log del Alumno, que
+            nunca ve. (2) Nueva clase .obspriv-box (borde/fondo rojizo + candado 🔒) para
+            marcar visualmente contenido restringido a instructores/admin — antes usaba
+            class="panel", que no existe en el CSS, así que ni el panel de carga ni el
+            historial tenían ningún estilo propio, indistinguibles del resto del modal.
+            Se aplicó a los DOS bloques: el panel de carga/edición ("Observación privada"
+            → "🔒 OBSERVACIÓN PARA INSTRUCTORES — vuelo X") y el historial de abajo
+            ("Historial privado" → "🔒 Historial para instructores"), para que queden
+            consistentes entre sí. (3) OJO: el historial (mla-hist-box) también lo ve el
+            alumno en modo "Mi Log de Vuelos" (abrirMiLogVuelos), con sus propios datos —
+            ahí NO correspondía pintarlo de "restringido", así que se sacó la clase
+            .obspriv-box por JS en ese modo (se agrega en abrirLogAlumno/instructor, se
+            saca en abrirMiLogVuelos/alumno).
   VERSION : 6.78
   FECHA   : 2026-07-11
   CAMBIOS : El modal EDITAR USUARIO (Config→Usuarios) se quedaba sin entrar en pantalla,
@@ -1328,7 +1334,10 @@ h3{font-family:var(--font-mono);font-size:12px;color:var(--amber);letter-spacing
 /* recuadro de Observación para Instructores (ex "privada") — se distingue a propósito
    del resto del modal Log del Alumno con borde/fondo rojizo + candado, para que quede
    clarísimo que ese contenido nunca lo ve el alumno (a diferencia de las obs. públicas
-   que se listan arriba en el mismo modal) */
+   que se listan arriba en el mismo modal). Se aplica tanto al panel de carga/edición
+   como al historial de abajo — pero SOLO en modo instructor: en modo "Mi Log de
+   Vuelos" (el alumno viendo su propio historial) esta clase se saca por JS, porque
+   ahí el contenido es del propio alumno y no tiene sentido pintarlo como restringido. */
 .obspriv-box{border:1px solid rgba(248,81,73,.4);background:rgba(248,81,73,.05);border-radius:var(--radius-lg);padding:.9rem 1rem;}
 .obspriv-box .section-title{color:var(--red);font-size:11px;display:flex;align-items:center;gap:6px;}
 
@@ -1992,9 +2001,11 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       </div>
 
       <div id="mla-totales" style="display:none;font-family:var(--font-mono);font-size:12px;color:var(--cyan);letter-spacing:.05em;padding:.6rem .8rem;background:rgba(0,200,212,.06);border:1px solid rgba(0,200,212,.3);border-radius:var(--radius);margin-bottom:.75rem"></div>
-      <div class="section-title" style="margin-bottom:.5rem" id="mla-lista-titulo">▸ Historial privado (más nuevo primero)</div>
-      <div id="mla-lista" style="max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:.6rem"></div>
-      <div id="mla-vacio" style="display:none;font-family:var(--font-mono);font-size:12px;color:var(--text3);text-align:center;padding:1.5rem 0">// Sin observaciones privadas cargadas todavía</div>
+      <div class="obspriv-box" id="mla-hist-box">
+        <div class="section-title" style="margin-bottom:.5rem" id="mla-lista-titulo">🔒 Historial para instructores (más nuevo primero)</div>
+        <div id="mla-lista" style="max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:.6rem"></div>
+        <div id="mla-vacio" style="display:none;font-family:var(--font-mono);font-size:12px;color:var(--text3);text-align:center;padding:1.5rem 0">// Sin observaciones privadas cargadas todavía</div>
+      </div>
     </div>
   </div>
 
@@ -4357,7 +4368,8 @@ window.abrirLogAlumno=async function(){
   _logAlumnoModoAlumno=false;
   document.getElementById('mla-modal-title').textContent='◈ Log del Alumno';
   document.getElementById('mla-obspriv-panel').style.display='block';
-  document.getElementById('mla-lista-titulo').textContent='▸ Historial privado (más nuevo primero)';
+  document.getElementById('mla-hist-box').classList.add('obspriv-box');
+  document.getElementById('mla-lista-titulo').textContent='🔒 Historial para instructores (más nuevo primero)';
   document.getElementById('mla-nombre').textContent=_logAlumnoCtx.nombre;
   document.getElementById('mla-email').textContent=_logAlumnoCtx.email;
   const rv=_logAlumnoCtx.reservaRef;
@@ -4385,6 +4397,7 @@ window.abrirMiLogVuelos=async function(){
   _logAlumnoCtx={emailKey:session.emailKey||ek(session.email),nombre:session.nombre,email:session.email,reservaKey:null,reservaRef:null};
   document.getElementById('mla-modal-title').textContent='◈ Mi Log de Vuelos';
   document.getElementById('mla-obspriv-panel').style.display='none';
+  document.getElementById('mla-hist-box').classList.remove('obspriv-box');
   document.getElementById('mla-lista-titulo').textContent='▸ Horas y aterrizajes registrados (más nuevo primero)';
   document.getElementById('mla-nombre').textContent=_logAlumnoCtx.nombre;
   document.getElementById('mla-email').textContent=_logAlumnoCtx.email;
