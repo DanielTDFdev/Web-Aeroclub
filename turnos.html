@@ -1,5 +1,19 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.81
+  FECHA   : 2026-07-13
+  CAMBIOS : Pedido de Daniel: en la pestaña "Observaciones al Alumno" del modal LOG DEL
+            ALUMNO (v6.80) también deben salir las horas y aterrizajes de cada vuelo.
+            renderObsPublicasAlumno ahora también incluye obs_privada_tiempo_vuelo/
+            obs_privada_aterrizajes por turno (badges ⏱/⬇, mismo estilo que ya se usaba
+            en el historial de instructores) — el texto de la obs privada en sí sigue sin
+            mostrarse acá, solo en 🔒 Log de Instructores. Cambia también el filtro: un
+            turno entra a la lista si tiene obs pública Y/O esos datos numéricos (antes
+            solo entraba con obs pública).
+-->
+
+<!--
+  ARCHIVO : turnos.html
   VERSION : 6.80
   FECHA   : 2026-07-13
   CAMBIOS : Pedido de Daniel: el modal LOG DEL ALUMNO tenía todo apilado en un solo
@@ -1655,7 +1669,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.80</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.81</div>
   </div>
 
 </div>
@@ -4359,6 +4373,12 @@ function fmtTsLindo(ts){
 // turnos, no solo el que se clickeó) — misma fuente que abrirModal, reusa _reservasCache
 // (ya tiene todo /reservas en vivo vía suscribirReservas, sin pedir nada nuevo a Firebase).
 // A diferencia del log privado de abajo, esto es lo que ya ve el propio alumno.
+// v6.81: pedido de Daniel — en la pestaña "Observaciones al Alumno" también deben salir
+// las horas y aterrizajes de cada vuelo (obs_privada_tiempo_vuelo/obs_privada_aterrizajes).
+// Esos dos campos NO son el texto de la obs privada (eso sigue sin mostrarse acá, solo
+// en la pestaña 🔒 Log de Instructores) — son datos numéricos, mismo criterio ya usado en
+// abrirMiLogVuelos (el propio alumno ya los ve). Por eso ahora el turno entra a esta lista
+// si tiene obs pública Y/O esos datos numéricos cargados (antes solo entraba con obs pública).
 function renderObsPublicasAlumno(){
   const cont=document.getElementById('mla-obs-pub-lista');
   const vacio=document.getElementById('mla-obs-pub-vacio');
@@ -4367,7 +4387,7 @@ function renderObsPublicasAlumno(){
   const turnos=Object.values(_reservasCache)
     .filter(r=>r.email===email)
     .map(r=>({r,obsTexto:[r.obs?r.obs:'',r.obs_cancelacion?'Cancelación: '+r.obs_cancelacion:'',r.obs_post?'Post-vuelo: '+r.obs_post:''].filter(Boolean).join(' — ')}))
-    .filter(x=>x.obsTexto)
+    .filter(x=>x.obsTexto||x.r.obs_privada_tiempo_vuelo!=null||x.r.obs_privada_aterrizajes!=null)
     .sort((a,b)=>(b.r.fecha+' '+b.r.hora).localeCompare(a.r.fecha+' '+a.r.hora));
   if(!turnos.length){ vacio.style.display='block'; return; }
   vacio.style.display='none';
@@ -4379,10 +4399,20 @@ function renderObsPublicasAlumno(){
     const izq=document.createElement('span'); izq.textContent=fmtFechaLinda(r.fecha)+' — '+(r.hora||'')+' hs — '+(r.avion||'LV-OAD');
     const badge=document.createElement('span'); badge.className='badge badge-'+r.estado; badge.style.fontSize='9px'; badge.textContent=r.estado;
     head.appendChild(izq); head.appendChild(badge);
-    const cuerpo=document.createElement('div');
-    cuerpo.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--text2);white-space:pre-wrap;line-height:1.5';
-    cuerpo.textContent=obsTexto;
-    div.appendChild(head); div.appendChild(cuerpo);
+    div.appendChild(head);
+    if(r.obs_privada_tiempo_vuelo!=null||r.obs_privada_aterrizajes!=null){
+      const datos=document.createElement('div');
+      datos.style.cssText='display:flex;gap:10px;flex-wrap:wrap;font-family:var(--font-mono);font-size:11px;color:var(--cyan);margin-bottom:.3rem';
+      if(r.obs_privada_tiempo_vuelo!=null){const s=document.createElement('span');s.textContent='⏱ '+Number(r.obs_privada_tiempo_vuelo).toFixed(1)+' hs';datos.appendChild(s);}
+      if(r.obs_privada_aterrizajes!=null){const s=document.createElement('span');s.textContent='⬇ '+r.obs_privada_aterrizajes+' aterrizajes';datos.appendChild(s);}
+      div.appendChild(datos);
+    }
+    if(obsTexto){
+      const cuerpo=document.createElement('div');
+      cuerpo.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--text2);white-space:pre-wrap;line-height:1.5';
+      cuerpo.textContent=obsTexto;
+      div.appendChild(cuerpo);
+    }
     cont.appendChild(div);
   });
 }
