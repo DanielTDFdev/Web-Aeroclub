@@ -1,5 +1,82 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.87
+  FECHA   : 2026-07-13
+  CAMBIOS : FIX real reportado por Daniel: usando "+CARGAR TURNO" en una compu con la fecha
+            del sistema mal seteada, cargó un turno para "hoy domingo" y quedó guardado el
+            sábado anterior. Causa — abrirModalCargarTurno() prellenaba #ct-fecha con
+            `new Date().toISOString().slice(0,10)`, que tenía DOS problemas apilados:
+            (1) new Date() depende del reloj del cliente (el motivo original del pedido de
+            Daniel, v6.85/6.86); (2) toISOString() SIEMPRE devuelve la fecha en UTC, no en
+            hora local — en Argentina (UTC-3), después de las 21:00 hora local ya es "mañana"
+            en UTC, así que ese default mostraba el día siguiente incorrecto INCLUSO con el
+            reloj perfectamente bien puesto. Con un reloj además atrasado, el corrimiento se
+            agrava. Fix: `fmtDate(ahoraServidor())` — fmtDate() arma la fecha con
+            getFullYear/getMonth/getDate (componentes LOCALES, no UTC) y ahoraServidor()
+            corrige el reloj contra el offset de Firebase (v6.85). Se revisaron los demás
+            <input type="date"> del archivo (fecha_nac, CMA, PSA, filtros de auditoría/borrado)
+            — ninguno tiene default automático, se completan a mano, no están afectados.
+-->
+
+<!--
+  ARCHIVO : turnos.html
+  VERSION : 6.86
+  FECHA   : 2026-07-13
+  CAMBIOS : Segunda parte del pedido de Daniel sobre hora del servidor (v6.85): los campos
+            que se GUARDAN como registro pasan de new Date().toISOString() (reloj del
+            cliente) a serverTimestamp() de Firebase RTDB — un sentinel que el propio
+            servidor de Firebase reemplaza por su epoch (ms) al momento de escribir, sin
+            pasar por el reloj del cliente en absoluto (más confiable incluso que
+            ahoraServidor(), que corrige pero sigue siendo un cálculo hecho en el cliente).
+            Aplicado a: ts_cancelacion (3 sitios: cancelarTurnoAlumno, y 2 cancelaciones de
+            instructor — bc.onclick x2 — más la cancelación automática por falta de
+            disponibilidad del instructor), obs_post_ts, y obs_privada_ts (guardarObsPrivada).
+            El espejo local en _reservasCache que hace guardarObsPrivada justo después de
+            escribir usa ahoraServidor() en vez del sentinel (un sentinel no sirve como
+            valor real hasta que el servidor lo resuelve; el listener onValue trae el valor
+            definitivo un instante después).
+            OJO — alcance deliberadamente acotado, NO se tocó el campo genérico 'ts' que
+            usan /reservas (creación de turno), /alumnos (registro) y /auditoria: la vista
+            de Auditoría (renderAuditoria) y el filtro por rango de fechas (Consultas)
+            comparan ese campo como STRING (b.ts.localeCompare(a.ts), r.ts>=desde,
+            r.ts<=hasta+'T23:59:59') — pasarlo a un número epoch rompe esas comparaciones
+            en silencio (ej: 'r.ts>=desde' con desde='2026-07-01' compara string contra
+            número, JS convierte el string a NaN, el filtro deja de funcionar y no tira
+            error). Para migrar ese campo también hay que reescribir esos 3 puntos de
+            lectura a la vez — pendiente, no incluido en este cambio. Tampoco se verificó
+            si los cron de Python (vencimiento_turnos.py, recordatorio_instructor.py) leen
+            'ts' esperando formato ISO string — si migramos ese campo hay que revisar esos
+            scripts también antes de tocarlo.
+-->
+
+<!--
+  ARCHIVO : turnos.html
+  VERSION : 6.85
+  FECHA   : 2026-07-13
+  CAMBIOS : Pedido de Daniel: toda la lógica de fecha/hora "actual" dependía del reloj del
+            sistema del cliente — si un alumno tenía mal seteada la fecha/hora de su
+            máquina, podía terminar reservando o cancelando fuera de ventana sin que el
+            sistema lo detectara. Se agrega ahoraServidor(), que usa el path especial de
+            Firebase RTDB .info/serverTimeOffset (diferencia en ms entre el reloj del
+            servidor de Firebase y el del cliente, sin Cloud Functions ni endpoint propio)
+            para corregir Date.now(). Se reemplazaron TODOS los usos de new Date()/
+            Date.now() que se usan para DECIDIR algo con la hora/fecha actual: getDays
+            (días disponibles para pedir turno), esMenorDeEdad/chequearHabilitacionAlumno/
+            chequearProximoAVencer (gating CMA/PSA/menor de edad), ok12h/ok1h/
+            okAnticipacion (ventana de cancelación por anticipación), puedeAlumnoCancelar
+            (ventana de 2hs), turnoYaPaso, vencerTurnosPendientes (vencimiento automático
+            en el cliente), año para feriados, y el resaltado de "hoy"/línea de hora actual
+            en los 3 calendarios (semanal instructor, vista semana, disponibilidad
+            instructor/admin). NO se tocaron los timestamps que se GUARDAN como registro
+            (ts, ts_cancelacion, obs_privada_ts, obs_post_ts, fecha de mails, nombres de
+            archivo CSV/backup) — quedan con new Date() del cliente, es una mejora aparte
+            (ServerValue.TIMESTAMP) fuera de alcance de este cambio. OJO: el cron de Python
+            (vencimiento_turnos.py, GitHub Actions) corre en servidor y ya usa su propio
+            reloj — no depende de este fix, que es solo para el cliente/navegador.
+-->
+
+<!--
+  ARCHIVO : turnos.html
   VERSION : 6.84
   FECHA   : 2026-07-13
   CAMBIOS : FIX estético (v6.83): la pestaña "Cambiar Contraseña" en Mi Perfil del alumno
@@ -1710,7 +1787,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.84</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.87</div>
   </div>
 
 </div>
@@ -2731,7 +2808,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, set, get, update, remove, push, onValue, child, runTransaction }
+import { getDatabase, ref, set, get, update, remove, push, onValue, child, runTransaction, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updatePassword }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -2794,6 +2871,22 @@ async function fbUpdate(p,v){await update(ref(db,p),v);}
 async function fbPush(p,v){return await push(ref(db,p),v);}
 async function fbRemove(p){await remove(ref(db,p));}
 
+// ── HORA DEL SERVIDOR (v6.85) ───────────────────────────────────
+// Pedido de Daniel: si el reloj del sistema del cliente está mal seteado, toda la lógica
+// que dependía de `new Date()` (bloqueo de horarios pasados, ventana de cancelación 1h/12h,
+// cuota semanal, vencimiento CMA/PSA, resaltado de "hoy" en los calendarios) quedaba
+// rota — un alumno con la fecha mal podía reservar/cancelar fuera de ventana sin que el
+// sistema se diera cuenta. `.info/serverTimeOffset` es un path especial de Firebase RTDB:
+// Firebase empuja la diferencia (ms) entre el reloj de SU servidor y el reloj del cliente,
+// sin necesidad de Cloud Functions ni de un endpoint propio. ahoraServidor() reemplaza a
+// `new Date()` en todos los lugares donde se decide algo con la hora/fecha actual.
+// NO se tocaron los timestamps que se GUARDAN como registro (ts, ts_cancelacion,
+// obs_privada_ts, etc.) — eso es otra mejora aparte (ServerValue.TIMESTAMP), fuera de
+// alcance de este cambio.
+let _serverOffsetMs=0;
+onValue(ref(db,'.info/serverTimeOffset'), snap=>{ _serverOffsetMs=snap.val()||0; });
+function ahoraServidor(){ return new Date(Date.now()+_serverOffsetMs); }
+
 // ── AVIONES ────────────────────────────────────────────────────
 // Definición local; en el futuro puede venir de Firebase /aviones
 const AVIONES=[
@@ -2833,7 +2926,7 @@ let activeDow=1;
 let activeConfigAvion='LV-OAD';  // avión activo en cfg horarios/días
 let calAvionFiltro='todos';       // filtro en calendario instructor
 let ocultarCancelados=localStorage.getItem('lvoad-ocultar-cancelados')==='1'; // toggle calendario (LISTA+SEMANA), persiste por navegador
-let calMesActual=new Date(); calMesActual.setDate(1);
+let calMesActual=ahoraServidor(); calMesActual.setDate(1);
 
 // ── HELPERS ────────────────────────────────────────────────────
 // EmailJS unificado: una sola cuenta (correo del club) — service_8yqlptz
@@ -2864,7 +2957,7 @@ function genPass(){const c='ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz234567
 function getDays(cantidad){
   // Alumnos: 7 días | Pilotos: 30 días
   const max=cantidad||(session?.rol==='piloto'?30:7);
-  const d=[],n=new Date();
+  const d=[],n=ahoraServidor();
   for(let i=0;i<max;i++){const x=new Date(n);x.setDate(n.getDate()+i);d.push(x);}
   return d;
 }
@@ -2885,7 +2978,7 @@ const CMA_PSA_VACIO_BLOQUEA=true;
 
 function esMenorDeEdad(fecha_nac){
   if(!fecha_nac) return false;
-  const hoy=new Date();
+  const hoy=ahoraServidor();
   const nac=new Date(fecha_nac+'T00:00:00');
   let edad=hoy.getFullYear()-nac.getFullYear();
   const m=hoy.getMonth()-nac.getMonth();
@@ -2895,7 +2988,7 @@ function esMenorDeEdad(fecha_nac){
 
 function chequearHabilitacionAlumno(alumno){
   if(!alumno||(alumno.rol||'alumno')!=='alumno') return{ok:true,vencidos:[]};
-  const hoy=fmtDate(new Date());
+  const hoy=fmtDate(ahoraServidor());
   const vencidos=[];
   const cma=alumno.vencimiento_cma||'';
   const cmaVencido=cma?(cma<hoy):CMA_PSA_VACIO_BLOQUEA;
@@ -2919,7 +3012,7 @@ function chequearHabilitacionAlumno(alumno){
 const DIAS_ALERTA_PROXIMO_VENCIMIENTO=30;
 function chequearProximoAVencer(alumno){
   if(!alumno||(alumno.rol||'alumno')!=='alumno') return{proximo:false,items:[]};
-  const hoy=new Date(fmtDate(new Date())+'T00:00:00');
+  const hoy=new Date(fmtDate(ahoraServidor())+'T00:00:00');
   const items=[];
   const cma=alumno.vencimiento_cma||'';
   if(cma){
@@ -2950,8 +3043,8 @@ function renderBannerVencimientoAlumno(alumno){
   banner.style.display='block';
 }
 function fmtLabel(d){const D=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];return D[d.getDay()]+'\n'+d.getDate()+'/'+(d.getMonth()+1);}
-function ok12h(ds,h){const[y,m,d]=ds.split('-').map(Number);const[hh,mm]=h.split(':').map(Number);return(new Date(y,m-1,d,hh,mm,0)-new Date())>=12*3600*1000;}
-function ok1h(ds,h){const[y,m,d]=ds.split('-').map(Number);const[hh,mm]=h.split(':').map(Number);return(new Date(y,m-1,d,hh,mm,0)-new Date())>=1*3600*1000;}
+function ok12h(ds,h){const[y,m,d]=ds.split('-').map(Number);const[hh,mm]=h.split(':').map(Number);return(new Date(y,m-1,d,hh,mm,0)-ahoraServidor())>=12*3600*1000;}
+function ok1h(ds,h){const[y,m,d]=ds.split('-').map(Number);const[hh,mm]=h.split(':').map(Number);return(new Date(y,m-1,d,hh,mm,0)-ahoraServidor())>=1*3600*1000;}
 function okAnticipacion(ds,h){return(session?.rol==='piloto')?ok1h(ds,h):ok12h(ds,h);}
 function esAdminRO(){return session?.user==='administrador';}  // acceso completo pero solo lectura en horarios
 function esAdminROHorarios(){return session?.user==='administrador';}  // solo lectura en checkboxes de horarios (no en toggle avión)
@@ -3487,7 +3580,7 @@ async function renderDaysGrid(){
   const grid=document.getElementById('days-grid');
   if(!grid)return;
   const days=getDays();
-  const año=new Date().getFullYear();
+  const año=ahoraServidor().getFullYear();
   const feriados=await getFeriados(año);
   const bloqueados=diasBloqueadosParaAvion(selectedAvion);
   grid.innerHTML='';
@@ -3849,7 +3942,7 @@ function puedeAlumnoCancelar(r){
   const[y,m,d]=r.fecha.split('-').map(Number);
   const[hh,mm]=(r.hora||'00:00').split(':').map(Number);
   const fechaTurno=new Date(y,m-1,d,hh,mm,0).getTime();
-  return (fechaTurno - Date.now()) >= 2*60*60*1000;
+  return (fechaTurno - (Date.now()+_serverOffsetMs)) >= 2*60*60*1000;
 }
 
 // FIX v5.97: el modal de motivo de cancelación estaba anidado dentro de
@@ -3992,7 +4085,7 @@ window.cancelarTurnoAlumno=async function(key){
   const motivo=await pedirMotivoCancelacion(false);
   try{
     const rv=await fbGet('reservas/'+key);
-    const update={estado:'cancelado',cancelado_rol:'alumno',cancelado_por:session.nombre,ts_cancelacion:new Date().toISOString()};
+    const update={estado:'cancelado',cancelado_rol:'alumno',cancelado_por:session.nombre,ts_cancelacion:serverTimestamp()};
     update.obs_cancelacion=motivo?'Cancelado por el usuario — '+motivo:'Cancelado por el usuario';
     await fbUpdate('reservas/'+key,update);
     if(rv){
@@ -4102,12 +4195,12 @@ async function renderTodasReservas(data){
   }
 
   const cal=document.getElementById('cal-semanal');
-  const hoy=fmtDate(new Date());
+  const hoy=fmtDate(ahoraServidor());
 
   // Rango: 3 pasados + 7 actuales (hoy+6) + 7 futuros = 17 días
   function buildRango(){
     const dias=[];
-    const base=new Date(); base.setHours(12,0,0,0);
+    const base=ahoraServidor(); base.setHours(12,0,0,0);
     for(let i=3;i>=1;i--){const d=new Date(base);d.setDate(base.getDate()-i);dias.push({d,tipo:'pasado'});}
     for(let i=0;i<7;i++){const d=new Date(base);d.setDate(base.getDate()+i);dias.push({d,tipo:'actual'});}
     for(let i=7;i<14;i++){const d=new Date(base);d.setDate(base.getDate()+i);dias.push({d,tipo:'futuro'});}
@@ -4190,7 +4283,7 @@ let calVista='lista';
 let semanaOffset=0; // 0=semana actual, -1=anterior, +1=siguiente
 
 function getLunesDeSemana(offset){
-  const hoy=new Date(); hoy.setHours(12,0,0,0);
+  const hoy=ahoraServidor(); hoy.setHours(12,0,0,0);
   const dow=hoy.getDay(); // 0=dom
   const diffLunes=dow===0?-6:1-dow;
   const lunes=new Date(hoy);
@@ -4231,7 +4324,7 @@ window.semanaNav=function(dir){
 async function renderVistaSemana(){
   const dias=getDiasSemana(semanaOffset);
   const DIAS_NOMBRE=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
-  const hoy=fmtDate(new Date());
+  const hoy=fmtDate(ahoraServidor());
 
   // Rango label
   const fmt=d=>`${d.getDate()}/${d.getMonth()+1}`;
@@ -4334,7 +4427,7 @@ function dibujarLineaHoraActual(wrapEl){
   const anterior=wrap.querySelector('.cal-now-line');
   if(anterior)anterior.remove();
 
-  const ahora=new Date();
+  const ahora=ahoraServidor();
   const horaActual=ahora.getHours();
   const minActual=ahora.getMinutes();
   const hoyStr=fmtDate(ahora);
@@ -4415,7 +4508,7 @@ let _reservasCache={};
 function turnoYaPaso(r){
   const[y,m,d]=r.fecha.split('-').map(Number);
   const[hh,mm]=(r.hora||'00:00').split(':').map(Number);
-  return new Date(y,m-1,d,hh,mm,0).getTime()<Date.now();
+  return new Date(y,m-1,d,hh,mm,0).getTime()<(Date.now()+_serverOffsetMs);
 }
 
 // ── LOG PRIVADO DEL ALUMNO (v6.70) ──────────────────────────────
@@ -4675,13 +4768,16 @@ window.guardarObsPrivada=async function(){
       obs_privada_tiempo_vuelo:tiempoVuelo,
       obs_privada_aterrizajes:aterrizajes,
       obs_privada_autor:autorFresh||yo,
-      obs_privada_ts:new Date().toISOString()
+      obs_privada_ts:serverTimestamp()
     });
     msg.style.color='var(--green)'; msg.textContent='✓ Guardado';
     // _reservasCache se actualiza solo vía el listener onValue de /reservas; refrescamos
-    // igual acá con el dato recién escrito por si el listener todavía no llegó.
+    // igual acá con el dato recién escrito por si el listener todavía no llegó. OJO (v6.86):
+    // esto es un espejo LOCAL en memoria, no una escritura a Firebase — no puede usar el
+    // sentinel serverTimestamp() (eso solo lo resuelve el servidor al escribir). Se usa
+    // ahoraServidor() como mejor aproximación hasta que el listener traiga el valor real.
     if(_reservasCache[_logAlumnoCtx.reservaKey]){
-      Object.assign(_reservasCache[_logAlumnoCtx.reservaKey],{obs_privada:texto||null,obs_privada_tiempo_vuelo:tiempoVuelo,obs_privada_aterrizajes:aterrizajes,obs_privada_autor:autorFresh||yo,obs_privada_ts:new Date().toISOString()});
+      Object.assign(_reservasCache[_logAlumnoCtx.reservaKey],{obs_privada:texto||null,obs_privada_tiempo_vuelo:tiempoVuelo,obs_privada_aterrizajes:aterrizajes,obs_privada_autor:autorFresh||yo,obs_privada_ts:ahoraServidor().getTime()});
     }
     renderFormObsPrivada();
     renderNotasPrivadasAlumno();
@@ -4844,7 +4940,7 @@ window.abrirModal=function(key){
       actions.appendChild(nota);
     }
     const bc=document.createElement('button');bc.className='danger';bc.textContent='CANCELAR TURNO';
-    bc.onclick=async()=>{const motivo=await pedirMotivoCancelacion(true);if(motivo===null)return;if(!confirm('¿Cancelar el turno de '+r.nombre+'? Motivo: '+motivo))return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre,cancelado_por:session.nombre,cancelado_rol:'instructor',ts_cancelacion:new Date().toISOString()};upd.obs_cancelacion='Cancelado por el instructor — '+motivo;await fbUpdate('reservas/'+key,upd);await registrarAuditoria('cancelacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — '+motivo);if(!turnoYaPaso(rv))mailCancel(rv,motivo);}cerrarModal();};
+    bc.onclick=async()=>{const motivo=await pedirMotivoCancelacion(true);if(motivo===null)return;if(!confirm('¿Cancelar el turno de '+r.nombre+'? Motivo: '+motivo))return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre,cancelado_por:session.nombre,cancelado_rol:'instructor',ts_cancelacion:serverTimestamp()};upd.obs_cancelacion='Cancelado por el instructor — '+motivo;await fbUpdate('reservas/'+key,upd);await registrarAuditoria('cancelacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — '+motivo);if(!turnoYaPaso(rv))mailCancel(rv,motivo);}cerrarModal();};
     actions.appendChild(bc);
   } else if(r.estado==='aprobado'){
     const aprobador=r.aprobado_por||r.instructor||'';
@@ -4856,7 +4952,7 @@ window.abrirModal=function(key){
       bl.style.cssText='background:rgba(240,165,0,.1);color:var(--amber);border-color:var(--amber)';
       bl.onclick=async()=>{if(!confirm('¿Liberar este turno?\n\nVolverá a estado PENDIENTE y quedará disponible para que otro instructor lo tome. El alumno conserva su reserva y recibirá un aviso por mail.'))return;const rv=await fbGet('reservas/'+key);if(rv){await fbUpdate('reservas/'+key,{estado:'pendiente',instructor:null,aprobado_por:null,recordatorio_inst_enviado:null,recordatorio_inst_ts:null});await registrarAuditoria('liberacion_turno',session.rol||'instructor','exito',(session.nombre||session.user)+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — liberado por '+(rv.aprobado_por||rv.instructor||'?'));mailLiberacion(rv);}cerrarModal();};
       const bc=document.createElement('button');bc.className='danger';bc.textContent='CANCELAR TURNO';
-      bc.onclick=async()=>{const motivo=await pedirMotivoCancelacion(true);if(motivo===null)return;if(!confirm('¿Cancelar el turno de '+r.nombre+'? Motivo: '+motivo))return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre,cancelado_por:session.nombre,cancelado_rol:'instructor',ts_cancelacion:new Date().toISOString()};upd.obs_cancelacion='Cancelado por el instructor — '+motivo;await fbUpdate('reservas/'+key,upd);await registrarAuditoria('cancelacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — '+motivo);if(!turnoYaPaso(rv))mailCancel(rv,motivo);}cerrarModal();};
+      bc.onclick=async()=>{const motivo=await pedirMotivoCancelacion(true);if(motivo===null)return;if(!confirm('¿Cancelar el turno de '+r.nombre+'? Motivo: '+motivo))return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre,cancelado_por:session.nombre,cancelado_rol:'instructor',ts_cancelacion:serverTimestamp()};upd.obs_cancelacion='Cancelado por el instructor — '+motivo;await fbUpdate('reservas/'+key,upd);await registrarAuditoria('cancelacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — '+motivo);if(!turnoYaPaso(rv))mailCancel(rv,motivo);}cerrarModal();};
       if(puedeLiberar&&!turnoYaPaso(r)) actions.appendChild(bl);
       actions.appendChild(bc);
     } else {
@@ -4913,7 +5009,7 @@ window.abrirModal=function(key){
       const val=ta.value.trim();
       btn.disabled=true; msg.style.color='var(--text3)'; msg.textContent='Guardando…';
       try{
-        await fbUpdate('reservas/'+key,{obs_post:val||null,obs_post_por:(session.nombre||session.user),obs_post_ts:new Date().toISOString()});
+        await fbUpdate('reservas/'+key,{obs_post:val||null,obs_post_por:(session.nombre||session.user),obs_post_ts:serverTimestamp()});
         await registrarAuditoria('obs_post_turno',session.rol||'instructor','exito',(session.nombre||session.user)+' — '+(r.avion||'LV-OAD')+' — '+r.fecha+' '+r.hora+' hs — alumno: '+r.nombre+' — obs: '+(val||'(vacía)'));
         r.obs_post=val||''; msg.style.color='var(--green)'; msg.textContent='✓ Guardado';
       }catch(e){ console.error(e); msg.style.color='var(--red)'; msg.textContent='✗ Error al guardar'; }
@@ -4944,7 +5040,7 @@ document.addEventListener('click',e=>{if(e.target.id==='modal-turno')cerrarModal
 // Un turno vence cuando la hora del turno ya pasó (estado pendiente o aprobado).
 async function vencerTurnosPendientes(data){
   if(!data)return;
-  const ahora=Date.now();
+  const ahora=Date.now()+_serverOffsetMs;
   const promesas=[];
   for(const[k,r] of Object.entries(data)){
     if(!r||typeof r!=='object') continue;
@@ -5293,7 +5389,7 @@ window.showCfgTab=function(tab){
   });
   if(tab==='instructores')renderInstructoresList();
   if(tab==='usuarios')renderAlumnosList();
-  if(tab==='dias'){calMesActual=new Date();calMesActual.setDate(1);buildCfgAvionTabs();renderToggleAvion(activeDiasAvion);renderCalMes();}
+  if(tab==='dias'){calMesActual=ahoraServidor();calMesActual.setDate(1);buildCfgAvionTabs();renderToggleAvion(activeDiasAvion);renderCalMes();}
   if(tab==='horarios'){
     buildCfgAvionTabs();renderHorariosConfig();
     const isAdmin=session?.user==='admin'||session?.user==='administrador';
@@ -5410,7 +5506,7 @@ window.selectDiasAvion=function(key){
 async function renderCalMes(){
   const año=calMesActual.getFullYear(), mes=calMesActual.getMonth();
   document.getElementById('cal-mes-label').textContent=MESES_NOMBRE[mes]+' '+año;
-  const hoy=fmtDate(new Date());
+  const hoy=fmtDate(ahoraServidor());
   const primerDow=(new Date(año,mes,1).getDay()+6)%7;
   const diasEnMes=new Date(año,mes+1,0).getDate();
   const grid=document.getElementById('cal-mes-grid');
@@ -5792,7 +5888,7 @@ document.addEventListener('click',e=>{if(e.target.id==='modal-alumno')cerrarModa
 async function abrirModalCargarTurno(){
   document.getElementById('ct-err').style.display='none';
   document.getElementById('ct-ok').style.display='none';
-  document.getElementById('ct-fecha').value=new Date().toISOString().slice(0,10);
+  document.getElementById('ct-fecha').value=fmtDate(ahoraServidor());
   document.getElementById('ct-hora').value='';
   document.getElementById('ct-horafin').value='';
   document.getElementById('ct-obs').value='';
@@ -6649,7 +6745,7 @@ let dispSemanaOffset=0;   // 0 = semana actual, 1 = siguiente, etc.
 let _dispEstado={};       // { 'YYYY-MM-DD': Set(["09:00","10:00",...]) }
 
 function dispLunes(offset){
-  const hoy=new Date();
+  const hoy=ahoraServidor();
   const dow=hoy.getDay();           // 0=dom
   const diffLunes=dow===0?-6:1-dow; // días hasta el lunes de esta semana
   const lunes=new Date(hoy);
@@ -6671,7 +6767,7 @@ window.dispNavSemana=function(dir){
   if(dispSemanaOffset+dir<0)return;
   // No permitir ir más allá de 30 días adelante
   const lunaNueva=dispLunes(dispSemanaOffset+dir);
-  const hoy=new Date(); hoy.setHours(0,0,0,0);
+  const hoy=ahoraServidor(); hoy.setHours(0,0,0,0);
   const diffDias=Math.round((lunaNueva-hoy)/(1000*60*60*24));
   if(diffDias>30)return;
   dispSemanaOffset+=dir;
@@ -6686,7 +6782,7 @@ async function renderDisponibilidad(){
   if(!grid)return;
 
   const lunes=dispLunes(dispSemanaOffset);
-  const hoy=new Date(); hoy.setHours(0,0,0,0);
+  const hoy=ahoraServidor(); hoy.setHours(0,0,0,0);
   const diffDesdeHoy=Math.round((lunes-hoy)/(1000*60*60*24));
 
   // Calcular los 7 días de la semana
@@ -6861,7 +6957,7 @@ window.dispToggle=async function(cb){
       const [rk,r]=conflicto;
       const ok=confirm(`⚠ Hay un turno aprobado en este horario:\n  ${r.fecha} ${r.hora}hs — ${r.nombre}\n\n¿Cancelarlo y quitar tu disponibilidad?`);
       if(!ok){cb.checked=true;return;}
-      await fbUpdate('reservas/'+rk,{estado:'cancelado',instructor:session.nombre,cancelado_por:session.nombre,cancelado_rol:'instructor',ts_cancelacion:new Date().toISOString(),obs_cancelacion:'Instructor sin disponibilidad en este horario'});
+      await fbUpdate('reservas/'+rk,{estado:'cancelado',instructor:session.nombre,cancelado_por:session.nombre,cancelado_rol:'instructor',ts_cancelacion:serverTimestamp(),obs_cancelacion:'Instructor sin disponibilidad en este horario'});
       mailCancel(r);
     }
   }
@@ -6899,7 +6995,7 @@ let admDispSemanaOffset=0;        // semana relativa a hoy (0=actual), para la v
 const ADM_DISP_SEM_MAX=51;        // ~360 días adelante (equivalente a ADM_DISP_MAX_PAG en semanas)
 
 function admDispBase(offset){
-  const hoy=new Date(); hoy.setHours(0,0,0,0);
+  const hoy=ahoraServidor(); hoy.setHours(0,0,0,0);
   const base=new Date(hoy);
   base.setDate(hoy.getDate()+offset*ADM_DISP_DIAS);
   return base;
@@ -6979,7 +7075,7 @@ async function renderAdmDisp(){
   grid.innerHTML='<div class="empty">// Cargando...</div>';
 
   const base=admDispBase(admDispOffset);
-  const hoy=new Date(); hoy.setHours(0,0,0,0);
+  const hoy=ahoraServidor(); hoy.setHours(0,0,0,0);
 
   const dias=[];
   for(let i=0;i<ADM_DISP_DIAS;i++){ const d=new Date(base); d.setDate(base.getDate()+i); dias.push(d); }
@@ -7062,7 +7158,7 @@ async function renderAdmDispSemana(){
   const lunes=dispLunes(admDispSemanaOffset);
   const dias=[];
   for(let i=0;i<7;i++){ const d=new Date(lunes); d.setDate(lunes.getDate()+i); dias.push(d); }
-  const hoy=new Date(); hoy.setHours(0,0,0,0);
+  const hoy=ahoraServidor(); hoy.setHours(0,0,0,0);
 
   rangoEl.textContent=admDispInst.nombre+'  ·  '+dispFmtDisplay(dias[0])+' — '+dispFmtDisplay(dias[6]);
   prevBtn.disabled=admDispSemanaOffset<=0;              prevBtn.style.opacity=prevBtn.disabled?'.4':'1';
