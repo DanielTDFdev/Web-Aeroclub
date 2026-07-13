@@ -1,5 +1,15 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.84
+  FECHA   : 2026-07-13
+  CAMBIOS : FIX estético (v6.83): la pestaña "Cambiar Contraseña" en Mi Perfil del alumno
+            quedaba cortada en mobile (3 pestañas no entran en el ancho de pantalla). Se
+            acorta el label del botón a "Contraseña" — sin cambios de comportamiento, el
+            id (ap-tabbtn-pass) y la función (showAlumnoPerfilTab) quedan igual.
+-->
+
+<!--
+  ARCHIVO : turnos.html
   VERSION : 6.83
   FECHA   : 2026-07-13
   CAMBIOS : Pedido de Daniel: la pantalla "Mi Perfil" del alumno (alumno-perfil) tenía las
@@ -1700,7 +1710,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.83</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.84</div>
   </div>
 
 </div>
@@ -1853,7 +1863,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
     <div class="tab-bar">
       <button class="nav-btn active" id="ap-tabbtn-log"  onclick="showAlumnoPerfilTab('log')">Log de Vuelos</button>
       <button class="nav-btn"        id="ap-tabbtn-datos" onclick="showAlumnoPerfilTab('datos')">Datos Personales</button>
-      <button class="nav-btn"        id="ap-tabbtn-pass"  onclick="showAlumnoPerfilTab('pass')">Cambiar Contraseña</button>
+      <button class="nav-btn"        id="ap-tabbtn-pass"  onclick="showAlumnoPerfilTab('pass')">Contraseña</button>
     </div>
     <div id="ap-panel-log">
       <div class="card">
