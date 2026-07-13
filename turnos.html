@@ -1,5 +1,22 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.83
+  FECHA   : 2026-07-13
+  CAMBIOS : Pedido de Daniel: la pantalla "Mi Perfil" del alumno (alumno-perfil) tenía las
+            3 cards (Mi Log de Vuelos, Mis Datos, Cambiar Contraseña) apiladas en un solo
+            scroll largo. Se separó en pestañas con el mismo patrón .tab-bar/.nav-btn que
+            ya usa el resto de la app (instructor-screen, EDITAR USUARIO): "Log de Vuelos" /
+            "Datos Personales" / "Cambiar Contraseña". Función nueva
+            window.showAlumnoPerfilTab(tab). showAlumnoTab() ahora resetea a la pestaña
+            "log" cada vez que el alumno entra a "Mi Perfil" desde la navegación principal.
+            Ningún ID de campo existente cambió (perfil-email, perfil-nombre, etc.) — solo
+            se envolvió cada card en un div ap-panel-{log|datos|pass}, así que
+            guardarDatosPerfil/cambiarClave/renderPerfilAlumno (o como se llame el render
+            que llena estos campos) siguen funcionando sin tocar nada más.
+-->
+
+<!--
+  ARCHIVO : turnos.html
   VERSION : 6.82
   FECHA   : 2026-07-13
   CAMBIOS : Corrección de rumbo sobre v6.81: Daniel no quería los badges ⏱/⬇ por turno
@@ -1683,7 +1700,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.82</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.83</div>
   </div>
 
 </div>
@@ -1833,37 +1850,48 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   </div>
   <div id="alumno-perfil" class="screen">
     <h2>◈ Mi Perfil</h2>
-    <div class="card">
-      <h3>Mi Log de Vuelos</h3>
-      <p style="font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.05em;line-height:1.6;margin-bottom:.75rem">Observaciones de tus vuelos y el total de horas/aterrizajes que tus instructores fueron registrando.</p>
-      <button class="primary" onclick="abrirMiLogVuelos()">◈ VER MI LOG DE VUELOS</button>
+    <div class="tab-bar">
+      <button class="nav-btn active" id="ap-tabbtn-log"  onclick="showAlumnoPerfilTab('log')">Log de Vuelos</button>
+      <button class="nav-btn"        id="ap-tabbtn-datos" onclick="showAlumnoPerfilTab('datos')">Datos Personales</button>
+      <button class="nav-btn"        id="ap-tabbtn-pass"  onclick="showAlumnoPerfilTab('pass')">Cambiar Contraseña</button>
     </div>
-    <div class="card">
-      <h3>Mis Datos</h3>
-      <div class="field"><label>Email (no editable)</label><input type="email" id="perfil-email" disabled style="opacity:.5;cursor:not-allowed"></div>
-      <div class="field"><label>Usuario (no editable)</label><input type="text" id="perfil-username" disabled style="opacity:.5;cursor:not-allowed"></div>
-      <div class="field"><label>Nombre</label><input type="text" id="perfil-nombre" placeholder="Tu nombre completo"></div>
-      <div class="field"><label>Teléfono</label><input type="tel" id="perfil-tel" placeholder="Ej: +54 9 2964 000000"></div>
-      <div class="field"><label>Fecha de nacimiento <span style="font-size:10px;color:var(--text3)">— lo carga tu instructor/admin</span></label><input type="text" id="perfil-fecha-nac" disabled style="opacity:.6;cursor:not-allowed"></div>
-      <div class="field"><label>Vencimiento CMA (Psicofísico) <span style="font-size:10px;color:var(--text3)">— lo carga tu instructor/admin</span></label><input type="text" id="perfil-cma" disabled style="opacity:.6;cursor:not-allowed"></div>
-      <div class="field" id="perfil-psa-row"><label>Vencimiento Credencial PSA <span style="font-size:10px;color:var(--text3)">— lo carga tu instructor/admin</span></label><input type="text" id="perfil-psa" disabled style="opacity:.6;cursor:not-allowed"></div>
-      <div class="field" id="perfil-aut-padres-row" style="display:none"><label>Autorización de padres <span style="font-size:10px;color:var(--text3)">— lo carga tu instructor/admin</span></label><input type="text" id="perfil-aut-padres" disabled style="opacity:.6;cursor:not-allowed"></div>
-      <div id="perfil-datos-err" class="error"></div>
-      <div id="perfil-datos-ok" class="success-msg"></div>
-      <div style="margin-bottom:.75rem">
-        <span style="font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.1em">CATEGORÍA: </span>
-        <span id="perfil-rol-badge"></span>
+    <div id="ap-panel-log">
+      <div class="card">
+        <h3>Mi Log de Vuelos</h3>
+        <p style="font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.05em;line-height:1.6;margin-bottom:.75rem">Observaciones de tus vuelos y el total de horas/aterrizajes que tus instructores fueron registrando.</p>
+        <button class="primary" onclick="abrirMiLogVuelos()">◈ VER MI LOG DE VUELOS</button>
       </div>
-      <button class="primary" onclick="guardarDatosPerfil()">GUARDAR DATOS</button>
     </div>
-    <div class="card">
-      <h3>Cambiar Contraseña</h3>
-      <div class="field"><label>Contraseña actual</label><input type="password" id="perfil-pass-actual"></div>
-      <div class="field"><label>Nueva contraseña</label><input type="password" id="perfil-pass-nueva" placeholder="mínimo 6 caracteres"></div>
-      <div class="field"><label>Confirmar nueva contraseña</label><input type="password" id="perfil-pass-nueva2"></div>
-      <div id="perfil-err" class="error"></div>
-      <div id="perfil-ok" class="success-msg"></div>
-      <button class="primary" onclick="cambiarClave()">ACTUALIZAR CONTRASEÑA</button>
+    <div id="ap-panel-datos" style="display:none">
+      <div class="card">
+        <h3>Mis Datos</h3>
+        <div class="field"><label>Email (no editable)</label><input type="email" id="perfil-email" disabled style="opacity:.5;cursor:not-allowed"></div>
+        <div class="field"><label>Usuario (no editable)</label><input type="text" id="perfil-username" disabled style="opacity:.5;cursor:not-allowed"></div>
+        <div class="field"><label>Nombre</label><input type="text" id="perfil-nombre" placeholder="Tu nombre completo"></div>
+        <div class="field"><label>Teléfono</label><input type="tel" id="perfil-tel" placeholder="Ej: +54 9 2964 000000"></div>
+        <div class="field"><label>Fecha de nacimiento <span style="font-size:10px;color:var(--text3)">— lo carga tu instructor/admin</span></label><input type="text" id="perfil-fecha-nac" disabled style="opacity:.6;cursor:not-allowed"></div>
+        <div class="field"><label>Vencimiento CMA (Psicofísico) <span style="font-size:10px;color:var(--text3)">— lo carga tu instructor/admin</span></label><input type="text" id="perfil-cma" disabled style="opacity:.6;cursor:not-allowed"></div>
+        <div class="field" id="perfil-psa-row"><label>Vencimiento Credencial PSA <span style="font-size:10px;color:var(--text3)">— lo carga tu instructor/admin</span></label><input type="text" id="perfil-psa" disabled style="opacity:.6;cursor:not-allowed"></div>
+        <div class="field" id="perfil-aut-padres-row" style="display:none"><label>Autorización de padres <span style="font-size:10px;color:var(--text3)">— lo carga tu instructor/admin</span></label><input type="text" id="perfil-aut-padres" disabled style="opacity:.6;cursor:not-allowed"></div>
+        <div id="perfil-datos-err" class="error"></div>
+        <div id="perfil-datos-ok" class="success-msg"></div>
+        <div style="margin-bottom:.75rem">
+          <span style="font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.1em">CATEGORÍA: </span>
+          <span id="perfil-rol-badge"></span>
+        </div>
+        <button class="primary" onclick="guardarDatosPerfil()">GUARDAR DATOS</button>
+      </div>
+    </div>
+    <div id="ap-panel-pass" style="display:none">
+      <div class="card">
+        <h3>Cambiar Contraseña</h3>
+        <div class="field"><label>Contraseña actual</label><input type="password" id="perfil-pass-actual"></div>
+        <div class="field"><label>Nueva contraseña</label><input type="password" id="perfil-pass-nueva" placeholder="mínimo 6 caracteres"></div>
+        <div class="field"><label>Confirmar nueva contraseña</label><input type="password" id="perfil-pass-nueva2"></div>
+        <div id="perfil-err" class="error"></div>
+        <div id="perfil-ok" class="success-msg"></div>
+        <button class="primary" onclick="cambiarClave()">ACTUALIZAR CONTRASEÑA</button>
+      </div>
     </div>
   </div>
 </div>
@@ -3356,11 +3384,26 @@ window.seleccionarAvion=function(key){
 };
 
 // ── TABS USUARIO ───────────────────────────────────────────────
+// v6.83: pedido de Daniel — "Mi Perfil" del alumno pasa a tener pestañas (mismo patrón
+// .tab-bar/.nav-btn que ya usa el resto de la app): Log de Vuelos / Datos Personales /
+// Cambiar Contraseña, en vez de las 3 cards apiladas en un solo scroll largo.
+window.showAlumnoPerfilTab=function(tab){
+  ['log','datos','pass'].forEach(t=>{
+    const panel=document.getElementById('ap-panel-'+t);
+    const btn=document.getElementById('ap-tabbtn-'+t);
+    if(panel)panel.style.display=t===tab?'block':'none';
+    if(btn)btn.classList.toggle('active',t===tab);
+  });
+};
+
 window.showAlumnoTab=function(tab){
   ['mis-turnos','pedir-turno','perfil'].forEach(t=>document.getElementById('alumno-'+t).classList.toggle('active',t===tab));
   document.getElementById('al-tab-mis').classList.toggle('active',tab==='mis-turnos');
   document.getElementById('al-tab-pedir').classList.toggle('active',tab==='pedir-turno');
   document.getElementById('al-tab-perfil').classList.toggle('active',tab==='perfil');
+  if(tab==='perfil'){
+    showAlumnoPerfilTab('log');
+  }
   if(tab==='pedir-turno'){
     selectedDay=null;selectedSlot=null;
     document.getElementById('slots-section').style.display='none';
