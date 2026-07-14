@@ -1,5 +1,24 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.88
+  FECHA   : 2026-07-14
+  CAMBIOS : FIX reportado por Daniel: en iPad Safari la sesión nunca cerraba por inactividad
+            (en PC sí funcionaba). Causa — resetSessionTimer() dependía 100% de que el
+            setTimeout de 10 min siguiera corriendo sin interrupción; en iOS Safari ese timer
+            se pausa o se pierde cuando la pestaña queda en background (pantalla bloqueada,
+            cambio de app) o el SO la descarga por memoria. Peor: restoreSession() (se ejecuta
+            en cada recarga/restauración de sesión desde sessionStorage) llamaba a
+            startSessionTimeout(), que arrancaba un timer NUEVO de 10 min limpios sin chequear
+            cuánto tiempo real había pasado — cada recarga regalaba una ventana fresca de
+            inactividad, indefinidamente. Fix: se persiste el timestamp de última actividad en
+            sessionStorage (lvoad-last-activity) y se agregó chequearInactividadAbsoluta(), que
+            valida tiempo transcurrido real (no solo si el timer llegó a disparar) en
+            visibilitychange, pageshow, login y restoreSession — si ya se pasó el umbral,
+            desloguea al toque en vez de dar minutos gratis.
+-->
+
+<!--
+  ARCHIVO : turnos.html
   VERSION : 6.87
   FECHA   : 2026-07-13
   CAMBIOS : FIX real reportado por Daniel: usando "+CARGAR TURNO" en una compu con la fecha
@@ -1787,7 +1806,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.87</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.88</div>
   </div>
 
 </div>
@@ -3343,29 +3362,60 @@ window.logout=function(){
 };
 
 // ── TIMEOUT DE SESIÓN ──────────────────────────────────────────
+// v6.88: en iOS Safari el setTimeout se pausa/pierde cuando la pestaña queda en
+// background (pantalla bloqueada, cambio de app) o el SO descarga la pestaña por
+// memoria. Al volver, restoreSession() rearmaba un timer de 10 min limpios sin
+// chequear cuánto tiempo real había pasado, dejando la sesión abierta indefinidamente.
+// Fix: se persiste el timestamp de última actividad y se valida tiempo absoluto
+// transcurrido cada vez que la pestaña recupera foco/visibilidad o se restaura la sesión.
 const SESSION_TIMEOUT_MS=10*60*1000; // 10 minutos de inactividad
 let _sessionTimer=null;
 
+function _guardarUltimaActividad(){
+  try{ sessionStorage.setItem('lvoad-last-activity',String(Date.now())); }catch(e){}
+}
+
 function resetSessionTimer(){
   if(!session)return;
+  _guardarUltimaActividad();
   clearTimeout(_sessionTimer);
   _sessionTimer=setTimeout(()=>{if(session)logout();},SESSION_TIMEOUT_MS);
 }
 
+// Chequea tiempo absoluto transcurrido desde la última actividad registrada.
+// Si ya se pasó el umbral, desloguea de inmediato en vez de regalar un timer
+// nuevo de 10 minutos (que es lo que pasaba al recargar/restaurar en iOS).
+function chequearInactividadAbsoluta(){
+  if(!session)return;
+  let ultima=0;
+  try{ ultima=parseInt(sessionStorage.getItem('lvoad-last-activity')||'0',10); }catch(e){ ultima=0; }
+  if(!ultima){ resetSessionTimer(); return; }
+  const transcurrido=Date.now()-ultima;
+  if(transcurrido>=SESSION_TIMEOUT_MS){
+    logout();
+  }else{
+    resetSessionTimer();
+  }
+}
+
 function startSessionTimeout(){
-  resetSessionTimer();
   ['mousemove','mousedown','keydown','touchstart','scroll','click'].forEach(ev=>{
     document.addEventListener(ev,resetSessionTimer,{passive:true});
   });
+  chequearInactividadAbsoluta();
 }
 
 function stopSessionTimeout(){
   clearTimeout(_sessionTimer);
   _sessionTimer=null;
+  try{ sessionStorage.removeItem('lvoad-last-activity'); }catch(e){}
   ['mousemove','mousedown','keydown','touchstart','scroll','click'].forEach(ev=>{
     document.removeEventListener(ev,resetSessionTimer);
   });
 }
+
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')chequearInactividadAbsoluta();});
+window.addEventListener('pageshow',()=>{chequearInactividadAbsoluta();});
 
 // ── CONFIGURACIÓN (por avión) ──────────────────────────────────
 // sanitiza un array de horas: descarta valores que no sean HH:MM válidos
