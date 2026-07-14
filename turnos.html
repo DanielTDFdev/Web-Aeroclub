@@ -1,5 +1,17 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.90
+  FECHA   : 2026-07-14
+  CAMBIOS : Pedido de Daniel: en la pestaña "🔒 Log" de EDITAR USUARIO (agregada en v6.89)
+            los botones GUARDAR/Cancelar quedaban visibles igual que en el resto del modal,
+            pero esa pestaña es de solo lectura (el botón adentro abre otro modal, no hay
+            nada que guardar) — se prestaba a confusión. Se ocultan GUARDAR/Cancelar
+            (id nuevo eal-actions) cuando la pestaña activa es 'log', se muestran de nuevo
+            en Datos/Documentación/Acceso. El botón ✕ del modal sigue disponible para cerrar.
+-->
+
+<!--
+  ARCHIVO : turnos.html
   VERSION : 6.89
   FECHA   : 2026-07-14
   CAMBIOS : Pedido de Daniel: el log privado del alumno (VER LOG DEL ALUMNO) solo era
@@ -1824,7 +1836,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.89</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.90</div>
   </div>
 
 </div>
@@ -2541,7 +2553,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 
         <div id="edit-al-err" class="error"></div>
         <div id="edit-al-ok" class="success-msg"></div>
-        <div class="modal-actions">
+        <div class="modal-actions" id="eal-actions">
           <button class="primary" onclick="guardarAlumno()">GUARDAR</button>
           <button onclick="cerrarModalAlumno()">Cancelar</button>
         </div>
@@ -5936,6 +5948,10 @@ window.showEditAlTab=function(tab){
     if(panel)panel.style.display=t===tab?'block':'none';
     if(btn)btn.classList.toggle('active',t===tab);
   });
+  // v6.90: pestaña Log es de solo lectura (el botón adentro abre otro modal, no guarda
+  // nada acá) — GUARDAR/Cancelar quedaban visibles igual y prestaban a confusión.
+  const acciones=document.getElementById('eal-actions');
+  if(acciones)acciones.style.display=tab==='log'?'none':'flex';
 };
 
 function renderEstadoLoginToggle(){
