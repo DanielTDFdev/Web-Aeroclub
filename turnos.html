@@ -1,5 +1,19 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.91
+  FECHA   : 2026-07-17
+  CAMBIOS : Reportado por Daniel: un turno 'vencido' no daba ningún indicio visual de POR QUÉ
+            venció, ni siquiera en el modal de detalle — confuso sobre todo con turnos LV-OAD
+            vencidos por el cron (vencimiento_turnos.py) ANTES de la hora del vuelo, que
+            parecían un error del sistema. El modal (abrirModal) ya distinguía internamente
+            los dos orígenes de 'vencido' (aprobado_por presente = voló y venció por hora
+            pasada; ausente = cron lo cayó por falta de confirmación de instructor) pero nunca
+            se lo mostraba al usuario. Se agrega nota explicativa en la zona de acciones del
+            modal para estado==='vencido', con el texto correspondiente a cada caso.
+-->
+
+<!--
+  ARCHIVO : turnos.html
   VERSION : 6.90
   FECHA   : 2026-07-14
   CAMBIOS : Pedido de Daniel: en la pestaña "🔒 Log" de EDITAR USUARIO (agregada en v6.89)
@@ -1836,7 +1850,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.90</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.91</div>
   </div>
 
 </div>
@@ -5082,6 +5096,22 @@ window.abrirModal=function(key){
       nota.textContent='Turno aprobado por '+(aprobador||'otro instructor')+'. Solo esa persona o un administrador puede liberarlo o cancelarlo.';
       actions.appendChild(nota);
     }
+  } else if(r.estado==='vencido'){
+    // v6.91: el modal no explicaba por qué un turno figuraba vencido, lo que confundía
+    // sobre todo cuando el vencimiento era ANTES de la hora del vuelo (vencido_auto del
+    // cron, por falta de confirmación) — se leía como si el sistema estuviera adelantado
+    // o roto. 'vencido' tiene dos orígenes distintos y hay que decir cuál fue:
+    //  (a) cron (vencido_auto:true / sin aprobado_por): nunca lo confirmó un instructor
+    //      dentro de la ventana de EXPIRE_HOURS antes del vuelo → se cae solo.
+    //  (b) turno que SÍ fue aprobado y cuyo horario ya pasó (vencerTurnosPendientes del
+    //      cliente lo pasa de 'aprobado' a 'vencido' una vez que la hora quedó atrás).
+    const fueAprobado=!!(r.aprobado_por||r.instructor);
+    const nota=document.createElement('div');
+    nota.style.cssText='font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.04em;line-height:1.5';
+    nota.textContent=fueAprobado
+      ?'Turno aprobado por '+(r.aprobado_por||r.instructor)+'. Quedó "vencido" porque el horario del vuelo ya pasó — es un vuelo cerrado, no una falla.'
+      :'Venció automáticamente: ningún instructor lo confirmó dentro del plazo antes del vuelo, así que el horario quedó liberado. No hace falta que el horario del vuelo ya haya pasado.';
+    actions.appendChild(nota);
   }
   // v6.11/v6.12: BORRAR definitivo — SOLO para el usuario literal 'admin' (no
   // instructor, no administrador). A pedido explícito: para limpiar turnos de prueba
