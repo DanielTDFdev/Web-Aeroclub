@@ -1,5 +1,22 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.93
+  FECHA   : 2026-07-17
+  CAMBIOS : FIX reportado por Daniel sobre v6.92: los turnos de PILOTO en LV-ART/LV-MPH
+            (auto-aprobados por confirmarTurno, sin escribir aprobado_por ni instructor —
+            no requieren confirmación de nadie) aparecían mal pintados como "vencido-sin-
+            confirmar" (naranja punteado) al vencer, cuando en realidad volaron sin
+            problema. claseVencido() ahora contempla el caso 'autoAprobPiloto' (mismo
+            criterio que ya usaba Consultas desde v6.67 para 'vencioSinAprobar'): rol
+            piloto + avión distinto de LV-OAD ⇒ se pinta morado (.vencido) igual que un
+            turno aprobado por instructor. En LV-OAD el piloto reserva igual que el alumno
+            (si requiere instructor real) y ahí NO aplica la excepción. Se corrige también
+            abrirModal (v6.91), que tenía su propio chequeo inline con el mismo bug — ahora
+            reutiliza claseVencido() para que calendario y modal coincidan siempre.
+-->
+
+<!--
+  ARCHIVO : turnos.html
   VERSION : 6.92
   FECHA   : 2026-07-17
   CAMBIOS : Pedido de Daniel: en el calendario (vista LISTA y vista SEMANA de Reservas) los
@@ -1867,7 +1884,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.92</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.93</div>
   </div>
 
 </div>
@@ -4259,15 +4276,24 @@ function tooltipAccion(r){
   return '';
 }
 
-// v6.92: 'vencido' tiene dos orígenes bien distintos (ver nota extensa en abrirModal /
+// v6.92/6.93: 'vencido' tiene dos orígenes bien distintos (ver nota extensa en abrirModal /
 // v6.91) y hasta ahora se pintaban igual en el calendario, sin forma de distinguirlos
 // a simple vista. claseVencido() devuelve la clase CSS + el sufijo de tooltip según cuál
-// de los dos sea: (a) 'vencido' (voló) = fue aprobado y su hora ya pasó; (b) 'vencido-
-// sin-confirmar' = el cron lo cayó porque ningún instructor lo confirmó a tiempo.
+// de los dos sea: (a) 'vencido' (voló) = fue aprobado (por instructor, o piloto
+// auto-aprobado) y su hora ya pasó; (b) 'vencido-sin-confirmar' = el cron lo cayó porque
+// ningún instructor lo confirmó a tiempo.
+// FIX v6.93 (reportado por Daniel): un turno de PILOTO en LV-ART/LV-MPH se auto-aprueba en
+// confirmarTurno() (estado:'aprobado' directo) SIN escribir aprobado_por ni instructor —
+// nadie aprobó nada, el sistema lo hace solo. Sin este caso especial, claseVencido() los
+// tomaba por "sin confirmar" (naranja) al vencer, cuando en realidad volaron sin necesitar
+// aprobación de nadie. Mismo criterio 'autoAprobPiloto' que ya usa Consultas (ver v6.67,
+// vencioSinAprobar). En LV-OAD el piloto reserva igual que el alumno (sí requiere
+// instructor real) y ahí NO aplica la excepción.
 function claseVencido(r){
-  const fueAprobado=!!(r.aprobado_por||r.instructor);
+  const autoAprobPiloto=r.rol==='piloto'&&(r.avion||'LV-OAD')!=='LV-OAD';
+  const fueAprobado=!!(r.aprobado_por||r.instructor)||autoAprobPiloto;
   return fueAprobado
-    ?{cls:'vencido',tip:' — VENCIDO (voló, aprobado por '+(r.aprobado_por||r.instructor)+')'}
+    ?{cls:'vencido',tip:autoAprobPiloto&&!(r.aprobado_por||r.instructor)?' — VENCIDO (voló, turno de piloto autoaprobado)':' — VENCIDO (voló, aprobado por '+(r.aprobado_por||r.instructor)+')'}
     :{cls:'vencido-sin-confirmar',tip:' — VENCIDO (sin confirmar: ningún instructor lo aprobó a tiempo)'};
 }
 
@@ -5142,16 +5168,18 @@ window.abrirModal=function(key){
     // v6.91: el modal no explicaba por qué un turno figuraba vencido, lo que confundía
     // sobre todo cuando el vencimiento era ANTES de la hora del vuelo (vencido_auto del
     // cron, por falta de confirmación) — se leía como si el sistema estuviera adelantado
-    // o roto. 'vencido' tiene dos orígenes distintos y hay que decir cuál fue:
-    //  (a) cron (vencido_auto:true / sin aprobado_por): nunca lo confirmó un instructor
-    //      dentro de la ventana de EXPIRE_HOURS antes del vuelo → se cae solo.
-    //  (b) turno que SÍ fue aprobado y cuyo horario ya pasó (vencerTurnosPendientes del
-    //      cliente lo pasa de 'aprobado' a 'vencido' una vez que la hora quedó atrás).
-    const fueAprobado=!!(r.aprobado_por||r.instructor);
+    // o roto. 'vencido' tiene dos orígenes distintos y hay que decir cuál fue.
+    // v6.93: usa claseVencido() (mismo criterio que el calendario) en vez de un chequeo
+    // propio — el chequeo inline anterior (!!(r.aprobado_por||r.instructor)) no contemplaba
+    // los turnos de PILOTO auto-aprobados (sin aprobado_por/instructor) y los mostraba acá
+    // también como "sin confirmar" siendo que volaron sin necesitar aprobación de nadie.
+    const venc=claseVencido(r);
     const nota=document.createElement('div');
     nota.style.cssText='font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.04em;line-height:1.5';
-    nota.textContent=fueAprobado
-      ?'Turno aprobado por '+(r.aprobado_por||r.instructor)+'. Quedó "vencido" porque el horario del vuelo ya pasó — es un vuelo cerrado, no una falla.'
+    nota.textContent=venc.cls==='vencido'
+      ?(r.aprobado_por||r.instructor
+        ?'Turno aprobado por '+(r.aprobado_por||r.instructor)+'. Quedó "vencido" porque el horario del vuelo ya pasó — es un vuelo cerrado, no una falla.'
+        :'Turno de piloto autoaprobado (no requiere confirmación de instructor). Quedó "vencido" porque el horario del vuelo ya pasó — es un vuelo cerrado, no una falla.')
       :'Venció automáticamente: ningún instructor lo confirmó dentro del plazo antes del vuelo, así que el horario quedó liberado. No hace falta que el horario del vuelo ya haya pasado.';
     actions.appendChild(nota);
   }
