@@ -1,5 +1,15 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.95
+  FECHA   : 2026-07-17
+  CAMBIOS : Cambio estético pedido por Daniel: en el selector de avión de "Pedir Turno",
+            el subtítulo de LV-ART y LV-MPH pasa de "Turismo" a "Particular/Inst." — desde
+            v6.94 el piloto puede pedir instrucción en cualquiera de los dos, "Turismo" ya
+            no describía bien la opción. LV-OAD sigue diciendo "Instrucción" (sin cambios).
+-->
+
+<!--
+  ARCHIVO : turnos.html
   VERSION : 6.94
   FECHA   : 2026-07-17
   CAMBIOS : Pedido de Daniel: nuevo campo tipo_vuelo ('particular'/'instruccion') en cada
@@ -1910,7 +1920,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.94</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.95</div>
   </div>
 
 </div>
@@ -3038,8 +3048,8 @@ function ahoraServidor(){ return new Date(Date.now()+_serverOffsetMs); }
 // Definición local; en el futuro puede venir de Firebase /aviones
 const AVIONES=[
   {key:'LV-OAD', mat:'LV-OAD', tipo:'Instrucción'},
-  {key:'LV-ART', mat:'LV-ART', tipo:'Turismo'},
-  {key:'LV-MPH', mat:'LV-MPH', tipo:'Turismo'},
+  {key:'LV-ART', mat:'LV-ART', tipo:'Particular/Inst.'},
+  {key:'LV-MPH', mat:'LV-MPH', tipo:'Particular/Inst.'},
 ];
 
 // Devuelve los aviones que puede reservar el usuario según su rol
