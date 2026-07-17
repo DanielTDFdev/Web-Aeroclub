@@ -1,5 +1,22 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.96
+  FECHA   : 2026-07-17
+  CAMBIOS : Reportado por Daniel: en el calendario de Reservas (instructor), un turno de
+            piloto APROBADO se pintaba azul ('aprobado-piloto') sin distinguir si fue
+            autoaprobado (particular) o si de verdad lo aprobó un instructor (instruccion,
+            desde v6.94 sigue el mismo flujo real de aprobación que un alumno) — visualmente
+            idénticos, solo se notaba la diferencia en el texto del tooltip. Ahora el azul
+            queda reservado exclusivamente para 'particular' (tipoVueloDe(r)==='particular');
+            un piloto con instrucción aprobada se pinta verde, igual que cualquier turno
+            aprobado por un instructor real. Aplicado en renderTodasReservas y
+            renderVistaSemana (mismo criterio en ambas vistas). Leyenda actualizada:
+            "PILOTO (aprob.)" → "PILOTO PARTICULAR (aprob.)", para que quede claro que ya
+            no incluye los de instrucción.
+-->
+
+<!--
+  ARCHIVO : turnos.html
   VERSION : 6.95
   FECHA   : 2026-07-17
   CAMBIOS : Cambio estético pedido por Daniel: en el selector de avión de "Pedir Turno",
@@ -1920,7 +1937,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.95</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.96</div>
   </div>
 
 </div>
@@ -2183,7 +2200,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <div class="cal-leyenda">
           <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(240,165,0,.4);border:1px dashed rgba(240,165,0,.6)"></div>PENDIENTE</div>
           <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(57,211,83,.4)"></div>APROBADO</div>
-          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(77,159,255,.3)"></div>PILOTO (aprob.)</div>
+          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(77,159,255,.3)"></div>PILOTO PARTICULAR (aprob.)</div>
           <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(224,82,156,.3);border:1px dashed rgba(224,82,156,.6)"></div>SIN INSTRUCTOR</div>
           <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(248,81,73,.3)"></div>CANCELADO</div>
           <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(120,80,200,.3)"></div>VENCIDO (voló)</div>
@@ -2203,7 +2220,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <div class="cal-leyenda">
           <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(240,165,0,.4);border:1px dashed rgba(240,165,0,.6)"></div>PENDIENTE</div>
           <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(57,211,83,.4)"></div>APROBADO</div>
-          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(77,159,255,.3)"></div>PILOTO (aprob.)</div>
+          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(77,159,255,.3)"></div>PILOTO PARTICULAR (aprob.)</div>
           <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(224,82,156,.3);border:1px dashed rgba(224,82,156,.6)"></div>SIN INSTRUCTOR</div>
           <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(248,81,73,.3)"></div>CANCELADO</div>
           <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(120,80,200,.3)"></div>VENCIDO (voló)</div>
@@ -4544,11 +4561,17 @@ async function renderTodasReservas(data){
         // reservas pasadas: tachadas
         const estiloExtra=tipo==='pasado'?'text-decoration:line-through;':'';
         const sinInst=r.sinInstructor&&r.estado==='pendiente';
-        const aprobPil=(r.rol==='piloto')&&r.estado==='aprobado';
+        // v6.96: antes CUALQUIER turno de piloto aprobado se pintaba azul ('aprobado-
+        // piloto'), sin distinguir si fue autoaprobado (particular) o si de verdad lo
+        // aprobó un instructor (instruccion, desde v6.94 sigue el mismo flujo que un
+        // alumno). Ahora el azul queda solo para 'particular' — un piloto en instrucción
+        // aprobada se ve igual (verde) que un turno aprobado de alumno, porque pasó por
+        // el mismo proceso real de aprobación.
+        const aprobPil=(r.rol==='piloto')&&r.estado==='aprobado'&&tipoVueloDe(r)==='particular';
         const coincideDisp=r.estado==='pendiente'&&dispCompleta[r.fecha]?.misHoras?.has(r.hora);
         const venc=r.estado==='vencido'?claseVencido(r):null;
         const colorCls=(sinInst?'sin-instructor':(aprobPil?'aprobado-piloto':(venc?venc.cls:r.estado)))+(coincideDisp?' mi-disp':'');
-        const tipSin=sinInst?' — SIN INSTRUCTOR (pendiente)':(aprobPil?' — turno de piloto':(venc?venc.tip:''));
+        const tipSin=sinInst?' — SIN INSTRUCTOR (pendiente)':(aprobPil?' — turno de piloto (particular)':(venc?venc.tip:''));
         const tipDisp=coincideDisp?' — ✓ Coincide con tu disponibilidad':'';
         const tipQuien=r.estado==='pendiente'?tipQuienesPueden(dispCompleta,r.fecha,r.hora):'';
         const badge=coincideDisp?'<span class="mi-disp-badge" title="Coincide con tu disponibilidad">★</span>':'';
@@ -4665,13 +4688,16 @@ async function renderVistaSemana(){
       reservas.forEach(r=>{
         const nombre=r.nombre.split(' ')[0];
         const sinInst=r.sinInstructor&&r.estado==='pendiente';
-        const aprobPil=(r.rol==='piloto')&&r.estado==='aprobado';
+        // v6.96: mismo criterio que renderTodasReservas — azul solo para piloto
+        // 'particular' (autoaprobado); instrucción aprobada se ve verde, como cualquier
+        // aprobado real.
+        const aprobPil=(r.rol==='piloto')&&r.estado==='aprobado'&&tipoVueloDe(r)==='particular';
         const coincideDisp=r.estado==='pendiente'&&dispCompleta[ds]?.misHoras?.has(r.hora);
         // v6.16: color por ESTADO igual que vista LISTA; matricula visible en el bloque
         const venc=r.estado==='vencido'?claseVencido(r):null;
         const colorCls=(sinInst?'sin-instructor':(aprobPil?'aprobado-piloto':(venc?venc.cls:r.estado)))+(coincideDisp?' mi-disp':'');
         const estiloExtra=(r.estado==='cancelado'||r.estado==='vencido')?'text-decoration:line-through;':'';
-        const tipSin=sinInst?' — SIN INSTRUCTOR (pendiente)':(aprobPil?' — turno de piloto':(venc?venc.tip:''));
+        const tipSin=sinInst?' — SIN INSTRUCTOR (pendiente)':(aprobPil?' — turno de piloto (particular)':(venc?venc.tip:''));
         const tipDisp=coincideDisp?' — ✓ Coincide con tu disponibilidad':'';
         const tipQuien=r.estado==='pendiente'?tipQuienesPueden(dispCompleta,ds,r.hora):'';
         const badge=coincideDisp?'<span class="mi-disp-badge" title="Coincide con tu disponibilidad">★</span>':'';
