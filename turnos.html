@@ -1,5 +1,21 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.92
+  FECHA   : 2026-07-17
+  CAMBIOS : Pedido de Daniel: en el calendario (vista LISTA y vista SEMANA de Reservas) los
+            dos orígenes de 'vencido' se pintaban con el mismo color morado, sin forma de
+            distinguirlos a simple vista. Se agrega la clase .cal-block.vencido-sin-confirmar
+            (naranja, borde punteado) para los vencidos del cron (nunca confirmados por un
+            instructor) — el morado .vencido queda reservado para los que SÍ fueron
+            aprobados y su hora ya pasó. Nueva función claseVencido() centraliza el criterio
+            (mismo que ya usaba abrirModal desde v6.91) y se usa en renderTodasReservas y
+            renderVistaSemana. Se actualiza el tooltip de cada bloque acorde, y se agrega/
+            actualiza la leyenda (.cal-leyenda) en ambas vistas — antes solo existía en
+            SEMANA, la vista LISTA (la que se usa por defecto) no tenía leyenda.
+-->
+
+<!--
+  ARCHIVO : turnos.html
   VERSION : 6.91
   FECHA   : 2026-07-17
   CAMBIOS : Reportado por Daniel: un turno 'vencido' no daba ningún indicio visual de POR QUÉ
@@ -1681,6 +1697,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 .cal-block.aprobado{background:rgba(57,211,83,.15);border:1px solid rgba(57,211,83,.45);color:var(--green);}
 .cal-block.cancelado{background:rgba(248,81,73,.18);border:1px solid rgba(248,81,73,.45);color:var(--red);text-decoration:line-through;}
 .cal-block.vencido{background:rgba(120,80,200,.18);border:1px solid rgba(120,80,200,.45);color:#c4aef8;text-decoration:line-through;}
+.cal-block.vencido-sin-confirmar{background:rgba(200,110,40,.16);border:1px dashed rgba(200,110,40,.55);color:#e0a373;text-decoration:line-through;}
 .cal-block.sin-instructor{background:rgba(224,82,156,.18);border:1px dashed rgba(224,82,156,.6);color:var(--pink);}
 .cal-block.aprobado-piloto{background:rgba(77,159,255,.16);border:1px solid rgba(77,159,255,.5);color:var(--blue);}
 .cal-block.pil-aprob{box-shadow:inset 3px 0 0 var(--blue);} /* en desuso desde v6.15 (ver changelog); SEMANA ya usa .aprobado-piloto igual que LISTA */
@@ -1850,7 +1867,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.91</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.92</div>
   </div>
 
 </div>
@@ -2103,6 +2120,16 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       </div>
       <div class="card" style="padding:1rem">
         <div class="cal-wrap"><div id="cal-semanal"></div></div>
+        <div class="cal-leyenda">
+          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(240,165,0,.4);border:1px dashed rgba(240,165,0,.6)"></div>PENDIENTE</div>
+          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(57,211,83,.4)"></div>APROBADO</div>
+          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(77,159,255,.3)"></div>PILOTO (aprob.)</div>
+          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(224,82,156,.3);border:1px dashed rgba(224,82,156,.6)"></div>SIN INSTRUCTOR</div>
+          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(248,81,73,.3)"></div>CANCELADO</div>
+          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(120,80,200,.3)"></div>VENCIDO (voló)</div>
+          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(200,110,40,.3);border:1px dashed rgba(200,110,40,.55)"></div>VENCIDO (sin confirmar)</div>
+          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="box-shadow:0 0 0 2px var(--green)"></div>★ Mi disponibilidad</div>
+        </div>
       </div>
     </div>
     <div id="vista-semana" style="display:none">
@@ -2119,7 +2146,8 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
           <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(77,159,255,.3)"></div>PILOTO (aprob.)</div>
           <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(224,82,156,.3);border:1px dashed rgba(224,82,156,.6)"></div>SIN INSTRUCTOR</div>
           <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(248,81,73,.3)"></div>CANCELADO</div>
-          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(120,80,200,.3)"></div>VENCIDO</div>
+          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(120,80,200,.3)"></div>VENCIDO (voló)</div>
+          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(200,110,40,.3);border:1px dashed rgba(200,110,40,.55)"></div>VENCIDO (sin confirmar)</div>
           <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="box-shadow:0 0 0 2px var(--green)"></div>★ Mi disponibilidad</div>
         </div>
       </div>
@@ -4231,6 +4259,18 @@ function tooltipAccion(r){
   return '';
 }
 
+// v6.92: 'vencido' tiene dos orígenes bien distintos (ver nota extensa en abrirModal /
+// v6.91) y hasta ahora se pintaban igual en el calendario, sin forma de distinguirlos
+// a simple vista. claseVencido() devuelve la clase CSS + el sufijo de tooltip según cuál
+// de los dos sea: (a) 'vencido' (voló) = fue aprobado y su hora ya pasó; (b) 'vencido-
+// sin-confirmar' = el cron lo cayó porque ningún instructor lo confirmó a tiempo.
+function claseVencido(r){
+  const fueAprobado=!!(r.aprobado_por||r.instructor);
+  return fueAprobado
+    ?{cls:'vencido',tip:' — VENCIDO (voló, aprobado por '+(r.aprobado_por||r.instructor)+')'}
+    :{cls:'vencido-sin-confirmar',tip:' — VENCIDO (sin confirmar: ningún instructor lo aprobó a tiempo)'};
+}
+
 // v6.50: sufijo del tooltip del calendario con el saldo de cuota semanal (turnos
 // restantes esa semana) del alumno dueño del turno. Solo aplica a rol alumno (no
 // pilotos, que no tienen cuota). todosLosDatos es el array/objeto completo de reservas
@@ -4361,8 +4401,9 @@ async function renderTodasReservas(data){
         const sinInst=r.sinInstructor&&r.estado==='pendiente';
         const aprobPil=(r.rol==='piloto')&&r.estado==='aprobado';
         const coincideDisp=r.estado==='pendiente'&&dispCompleta[r.fecha]?.misHoras?.has(r.hora);
-        const colorCls=(sinInst?'sin-instructor':(aprobPil?'aprobado-piloto':r.estado))+(coincideDisp?' mi-disp':'');
-        const tipSin=sinInst?' — SIN INSTRUCTOR (pendiente)':(aprobPil?' — turno de piloto':'');
+        const venc=r.estado==='vencido'?claseVencido(r):null;
+        const colorCls=(sinInst?'sin-instructor':(aprobPil?'aprobado-piloto':(venc?venc.cls:r.estado)))+(coincideDisp?' mi-disp':'');
+        const tipSin=sinInst?' — SIN INSTRUCTOR (pendiente)':(aprobPil?' — turno de piloto':(venc?venc.tip:''));
         const tipDisp=coincideDisp?' — ✓ Coincide con tu disponibilidad':'';
         const tipQuien=r.estado==='pendiente'?tipQuienesPueden(dispCompleta,r.fecha,r.hora):'';
         const badge=coincideDisp?'<span class="mi-disp-badge" title="Coincide con tu disponibilidad">★</span>':'';
@@ -4482,9 +4523,10 @@ async function renderVistaSemana(){
         const aprobPil=(r.rol==='piloto')&&r.estado==='aprobado';
         const coincideDisp=r.estado==='pendiente'&&dispCompleta[ds]?.misHoras?.has(r.hora);
         // v6.16: color por ESTADO igual que vista LISTA; matricula visible en el bloque
-        const colorCls=(sinInst?'sin-instructor':(aprobPil?'aprobado-piloto':r.estado))+(coincideDisp?' mi-disp':'');
+        const venc=r.estado==='vencido'?claseVencido(r):null;
+        const colorCls=(sinInst?'sin-instructor':(aprobPil?'aprobado-piloto':(venc?venc.cls:r.estado)))+(coincideDisp?' mi-disp':'');
         const estiloExtra=(r.estado==='cancelado'||r.estado==='vencido')?'text-decoration:line-through;':'';
-        const tipSin=sinInst?' — SIN INSTRUCTOR (pendiente)':(aprobPil?' — turno de piloto':'');
+        const tipSin=sinInst?' — SIN INSTRUCTOR (pendiente)':(aprobPil?' — turno de piloto':(venc?venc.tip:''));
         const tipDisp=coincideDisp?' — ✓ Coincide con tu disponibilidad':'';
         const tipQuien=r.estado==='pendiente'?tipQuienesPueden(dispCompleta,ds,r.hora):'';
         const badge=coincideDisp?'<span class="mi-disp-badge" title="Coincide con tu disponibilidad">★</span>':'';
