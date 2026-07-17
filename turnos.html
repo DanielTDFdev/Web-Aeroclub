@@ -1,5 +1,31 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.94
+  FECHA   : 2026-07-17
+  CAMBIOS : Pedido de Daniel: nuevo campo tipo_vuelo ('particular'/'instruccion') en cada
+            reserva, explícito en vez de inferido del avión. ALUMNO: siempre 'instruccion'
+            (solo puede pedir LV-OAD, sin cambios de UI). PILOTO en LV-OAD: siempre
+            'instruccion' forzado, sin dropdown (LV-OAD sigue requiriendo aprobación sin
+            importar el rol, regla sin cambios). PILOTO en LV-ART/LV-MPH: nuevo dropdown
+            "Tipo de vuelo" en Pedir Turno (default "Particular", puede cambiar a
+            "Instrucción"). Con 'instruccion' seleccionada, el turno sigue EXACTAMENTE las
+            mismas reglas que un alumno: estado 'pendiente' (no autoaprobado), anticipación
+            mínima 12hs (antes 1h fijo para piloto), filtro de slots por disponibilidad de
+            instructor (antes solo aplicaba en LV-OAD), badge/flag 'sinInstructor' si nadie
+            declaró ese horario, fila DISPONIB. y aviso proactivo pre-aprobación en el modal
+            (antes ambos hardcodeados a LV-OAD). El selector de rango exclusivo (reservar
+            varios slots seguidos) queda restringido a 'particular' — 'instruccion' es
+            siempre 1 slot, como un alumno.
+            Nuevo helper tipoVueloDe(r) centraliza la interpretación con compatibilidad
+            retroactiva para turnos viejos sin el campo (mismo criterio que ya usaban por
+            separado 'autoAprobPiloto' en Consultas v6.67 y claseVencido() v6.93 — ambos
+            migrados a este helper único, sin cambio de comportamiento para datos viejos).
+            okAnticipacion() pasa a depender de tipo_vuelo (vía selectedTipoVuelo) en vez de
+            solo el rol.
+-->
+
+<!--
+  ARCHIVO : turnos.html
   VERSION : 6.93
   FECHA   : 2026-07-17
   CAMBIOS : FIX reportado por Daniel sobre v6.92: los turnos de PILOTO en LV-ART/LV-MPH
@@ -1884,7 +1910,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.93</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.94</div>
   </div>
 
 </div>
@@ -2012,6 +2038,13 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         ✕ AERONAVE NO DISPONIBLE — La aeronave seleccionada no se encuentra disponible para reservas en este momento. Contactate con el instructor para más información.
       </div>
       <div id="avion-seleccionado-label" style="display:none;font-family:var(--font-mono);font-size:11px;color:var(--amber);letter-spacing:.1em;margin-bottom:.75rem"></div>
+      <div id="tipo-vuelo-wrap" style="display:none;margin-bottom:1rem">
+        <div class="section-title">▸ Tipo de vuelo</div>
+        <select id="tipo-vuelo-select" onchange="cambiarTipoVuelo(this.value)" style="width:100%;max-width:340px;padding:9px 12px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:var(--font-mono);font-size:13px">
+          <option value="particular">Particular — se aprueba automático</option>
+          <option value="instruccion">Instrucción — requiere aprobación del instructor</option>
+        </select>
+      </div>
       <div class="section-title">▸ Seleccioná un día</div>
       <div class="days-grid" id="days-grid"></div>
       <div id="slots-section" style="display:none">
@@ -3034,7 +3067,7 @@ const DEFAULT_CONFIG_AVION={
 // Estado global
 let configs={};       // configs['LV-OAD'] = {horariosDia, diasBloqueados}
 let session=null;
-let selectedDay=null, selectedSlot=null, selectedSlotFin=null, selectedAvion=null;
+let selectedDay=null, selectedSlot=null, selectedSlotFin=null, selectedAvion=null, selectedTipoVuelo=null;
 let unsubReservas=null;
 let activeDow=1;
 let activeConfigAvion='LV-OAD';  // avión activo en cfg horarios/días
@@ -3159,7 +3192,16 @@ function renderBannerVencimientoAlumno(alumno){
 function fmtLabel(d){const D=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];return D[d.getDay()]+'\n'+d.getDate()+'/'+(d.getMonth()+1);}
 function ok12h(ds,h){const[y,m,d]=ds.split('-').map(Number);const[hh,mm]=h.split(':').map(Number);return(new Date(y,m-1,d,hh,mm,0)-ahoraServidor())>=12*3600*1000;}
 function ok1h(ds,h){const[y,m,d]=ds.split('-').map(Number);const[hh,mm]=h.split(':').map(Number);return(new Date(y,m-1,d,hh,mm,0)-ahoraServidor())>=1*3600*1000;}
-function okAnticipacion(ds,h){return(session?.rol==='piloto')?ok1h(ds,h):ok12h(ds,h);}
+// v6.94: la anticipación mínima ya no depende solo del rol — un piloto pidiendo
+// 'instruccion' en cualquier avión necesita las mismas 12hs que un alumno (tiene que
+// haber margen real para que un instructor lo revise y confirme); un piloto en
+// 'particular' sigue con 1h, como siempre. selectedTipoVuelo es el estado global de la
+// pantalla "Pedir Turno" (seleccionarAvion / cambiarTipoVuelo).
+function requiereAnticipacionLarga(){
+  const rol=session?.rol||'alumno';
+  return rol!=='piloto'||selectedTipoVuelo==='instruccion';
+}
+function okAnticipacion(ds,h){return requiereAnticipacionLarga()?ok12h(ds,h):ok1h(ds,h);}
 function esAdminRO(){return session?.user==='administrador';}  // acceso completo pero solo lectura en horarios
 function esAdminROHorarios(){return session?.user==='administrador';}  // solo lectura en checkboxes de horarios (no en toggle avión)
 // Instructor "real": sesión de instructor que NO sea admin ni administrador. Solo estos pueden APROBAR turnos.
@@ -3436,7 +3478,7 @@ window.logout=function(){
   if(_unsubPendientes){_unsubPendientes();_unsubPendientes=null;}
   const banner=document.getElementById('banner-pendientes');if(banner)banner.style.display='none';
   const bturnos=document.getElementById('banner-turnos-pend');if(bturnos)bturnos.style.display='none';
-  session=null;selectedDay=null;selectedSlot=null;selectedAvion=null;selectedSlotFin=null;
+  session=null;selectedDay=null;selectedSlot=null;selectedAvion=null;selectedSlotFin=null;selectedTipoVuelo=null;
   try{sessionStorage.removeItem('lvoad-session');}catch(e){}
   // reset cachés de datos
   _reservasCache={};
@@ -3566,14 +3608,17 @@ function initAvionSelector(){
   const wrap=document.getElementById('avion-selector-wrap');
   const sel=document.getElementById('avion-selector');
   const avisoNoDisp=document.getElementById('avion-no-disponible');
+  const wrapTV=document.getElementById('tipo-vuelo-wrap');
 
   avisoNoDisp.style.display='none';
 
   if(aviones.length===1){
-    // alumno: solo LV-OAD
+    // alumno: solo LV-OAD, siempre tipo 'instruccion' (forzado, sin dropdown — v6.94)
     const activo=(configs['LV-OAD']?.activo)!==false;
     selectedAvion=activo?aviones[0].key:null;
+    selectedTipoVuelo=activo?'instruccion':null;
     wrap.style.display='none';
+    if(wrapTV) wrapTV.style.display='none';
     document.getElementById('avion-seleccionado-label').style.display='none';
     if(!activo){
       avisoNoDisp.style.display='block';
@@ -3585,6 +3630,8 @@ function initAvionSelector(){
   } else {
     // piloto: muestra botonera con todos, marcando inactivos
     selectedAvion=null;
+    selectedTipoVuelo=null;
+    if(wrapTV) wrapTV.style.display='none';
     wrap.style.display='block';
     sel.innerHTML=aviones.map(av=>{
       const activo=(configs[av.key]?.activo)!==false;
@@ -3597,12 +3644,26 @@ function initAvionSelector(){
   }
 }
 
+// v6.94: cambio de tipo de vuelo (dropdown, solo piloto + avión≠LV-OAD) — igual que un
+// cambio de avión, invalida el día/horario ya elegido porque cambia la anticipación
+// mínima y si se filtra o no por disponibilidad de instructor.
+window.cambiarTipoVuelo=function(v){
+  selectedTipoVuelo=v;
+  selectedDay=null;selectedSlot=null;selectedSlotFin=null;
+  document.getElementById('slots-section').style.display='none';
+  document.getElementById('slot-confirm').style.display='none';
+  document.getElementById('slot-fin-wrap').innerHTML='';
+  renderDaysGrid();
+};
+
 window.seleccionarAvion=function(key){
   const activo=(configs[key]?.activo)!==false;
   const avisoNoDisp=document.getElementById('avion-no-disponible');
+  const wrapTV=document.getElementById('tipo-vuelo-wrap');
+  const selTV=document.getElementById('tipo-vuelo-select');
 
   selectedAvion=activo?key:null;
-  selectedDay=null;selectedSlot=null;
+  selectedDay=null;selectedSlot=null;selectedSlotFin=null;
 
   // actualizar visual
   document.querySelectorAll('.avion-btn').forEach(b=>{
@@ -3612,6 +3673,8 @@ window.seleccionarAvion=function(key){
   if(!activo){
     avisoNoDisp.style.display='block';
     document.getElementById('avion-seleccionado-label').style.display='none';
+    if(wrapTV) wrapTV.style.display='none';
+    selectedTipoVuelo=null;
     document.getElementById('days-grid').innerHTML='';
     document.getElementById('slots-section').style.display='none';
     document.getElementById('slot-confirm').style.display='none';
@@ -3623,6 +3686,19 @@ window.seleccionarAvion=function(key){
   const lbl=document.getElementById('avion-seleccionado-label');
   lbl.textContent='▸ AVIÓN: '+key;
   lbl.style.display='block';
+
+  // v6.94: LV-OAD siempre 'instruccion' forzado (mismo criterio que ya regía antes de
+  // este cambio: LV-OAD requiere aprobación sin importar el rol). Cualquier otro avión:
+  // dropdown piloto-only, default 'particular' — Daniel: "por defecto particular".
+  if(key==='LV-OAD'){
+    selectedTipoVuelo='instruccion';
+    if(wrapTV) wrapTV.style.display='none';
+  } else {
+    selectedTipoVuelo='particular';
+    if(selTV) selTV.value='particular';
+    if(wrapTV) wrapTV.style.display='block';
+  }
+
   // ocultar slots/confirm y redibujar días
   document.getElementById('slots-section').style.display='none';
   document.getElementById('slot-confirm').style.display='none';
@@ -3846,22 +3922,28 @@ async function renderSlots(ds,data){
   const esOAD=(selectedAvion||'LV-OAD')==='LV-OAD';
   const rol=session?.rol||'alumno';
   const esPiloto=rol==='piloto';
-  // Disponibilidad de instructores (solo relevante en LV-OAD)
-  const slotsConInstructor=esOAD?await slotsConInstructorParaDia(ds):new Set();
+  // v6.94: antes esto era "solo relevante en LV-OAD" (esOAD). Ahora un piloto pidiendo
+  // 'instruccion' en CUALQUIER avión también necesita ver disponibilidad de instructor —
+  // requiereInstructor generaliza esa condición. LV-OAD sigue siendo siempre 'instruccion'
+  // (forzado en seleccionarAvion, sin dropdown).
+  const requiereInstructor=esOAD||(esPiloto&&selectedTipoVuelo==='instruccion');
+  const slotsConInstructor=requiereInstructor?await slotsConInstructorParaDia(ds):new Set();
   _slotsConInstructorDia=slotsConInstructor;
   _slotsConInstructorFecha=ds;
-  // PILOTO en LV-OAD: puede reservar aunque no haya instructor (solo verifica avión/slot).
-  // ALUMNO en LV-OAD: solo ve slots con instructor disponible (sin cambios).
-  const pilotoOADLibre=esOAD&&esPiloto;
-  const avail=horasParaDia(ds,selectedAvion).filter(h=>okAnticipacion(ds,h)&&(!esOAD||pilotoOADLibre||slotsConInstructor.has(h)));
+  // PILOTO en modo instrucción (LV-OAD, o cualquier avión con 'instruccion' elegida en el
+  // dropdown): puede reservar aunque no haya instructor con horario cargado ese día (queda
+  // pendiente / SIN INSTRUCTOR). ALUMNO en LV-OAD: solo ve slots con instructor disponible
+  // (sin cambios, nunca tiene este bypass).
+  const pilotoLibre=requiereInstructor&&esPiloto;
+  const avail=horasParaDia(ds,selectedAvion).filter(h=>okAnticipacion(ds,h)&&(!requiereInstructor||pilotoLibre||slotsConInstructor.has(h)));
   if(!avail.length){
-    const sinDisp=esOAD&&!pilotoOADLibre&&slotsConInstructor.size===0;
-    grid.innerHTML='<div class="empty">//'+(sinDisp?' SIN INSTRUCTOR DISPONIBLE PARA ESTE DÍA':' SIN DISPONIBILIDAD (se requiere '+(rol==='piloto'?'1 hora':'12 hs')+' de anticipación)')+'</div>';
+    const sinDisp=requiereInstructor&&!pilotoLibre&&slotsConInstructor.size===0;
+    grid.innerHTML='<div class="empty">//'+(sinDisp?' SIN INSTRUCTOR DISPONIBLE PARA ESTE DÍA':' SIN DISPONIBILIDAD (se requiere '+(requiereAnticipacionLarga()?'12 hs':'1 hora')+' de anticipación)')+'</div>';
     return;
   }
   grid.innerHTML=avail.map(h=>{
     const tk=taken.includes(h),sl=selectedSlot===h;
-    const sinInst=esOAD&&!slotsConInstructor.has(h);
+    const sinInst=requiereInstructor&&!slotsConInstructor.has(h);
     const cls='slot'+(tk?' taken':sl?' selected':'')+(sinInst&&!tk?' sin-instructor':'');
     const tip=(sinInst&&!tk)?' title="Sin instructor con horario cargado este día — podés reservar igual; quedará pendiente de aprobación"':'';
     return `<div class="${cls}" data-hora="${h}"${tip}>${h}</div>`;
@@ -3874,7 +3956,10 @@ function selectSlot(h){
   selectedSlotFin=null;
   get(ref(db,'reservas')).then(s=>renderSlots(selectedDay,s.val()));
   const rol=session?.rol||'alumno';
-  if(rol==='piloto' && (selectedAvion||'LV-OAD')!=='LV-OAD'){
+  // v6.94: el bloque exclusivo de varios slots (vuelo largo sin instructor) solo tiene
+  // sentido para 'particular' — un pedido de 'instruccion' sigue el flujo simple de 1
+  // slot + aprobación, igual que un alumno, sin importar el avión.
+  if(rol==='piloto' && (selectedAvion||'LV-OAD')!=='LV-OAD' && selectedTipoVuelo==='particular'){
     get(ref(db,'reservas')).then(snap=>{
       const taken=slotsTomados(selectedDay,selectedAvion,snap.val());
       const horas=horasParaDia(selectedDay,selectedAvion);
@@ -3899,7 +3984,10 @@ function selectSlot(h){
     document.getElementById('slot-fin-wrap').innerHTML='';
     document.getElementById('confirm-label').textContent=selectedAvion+' — '+selectedDay+' a las '+h+' hs';
     const esOAD=(selectedAvion||'LV-OAD')==='LV-OAD';
-    const sinInst=esOAD&&_slotsConInstructorFecha===selectedDay&&!_slotsConInstructorDia.has(h);
+    // v6.94: requiere instructor en LV-OAD (siempre) o en cualquier avión cuando el
+    // piloto eligió 'instruccion' — antes era esOAD a secas.
+    const requiereInstructor=esOAD||(rol==='piloto'&&selectedTipoVuelo==='instruccion');
+    const sinInst=requiereInstructor&&_slotsConInstructorFecha===selectedDay&&!_slotsConInstructorDia.has(h);
     document.getElementById('confirm-nota').textContent=sinInst
       ?'▸ No hay instructor con horario cargado este día. El turno se cargará igual y quedará pendiente de aprobación.'
       :'▸ Requerirá aprobación del instructor.';
@@ -3920,8 +4008,9 @@ window.actualizarLabelRango=function(){
     ?selectedAvion+' — '+selectedDay+' a las '+selectedSlot+' hs (1 slot)'
     :selectedAvion+' — '+selectedDay+' de '+selectedSlot+' a '+selectedSlotFin+' hs ('+count+' slots)';
   document.getElementById('confirm-label').textContent=label;
-  const esOADlbl=(selectedAvion||'LV-OAD')==='LV-OAD';
-  document.getElementById('confirm-nota').textContent=esOADlbl?'▸ Requerirá aprobación del instructor.':'▸ Se aprobará automáticamente al confirmar.';
+  // v6.94: este selector de rango solo se muestra en modo 'particular' (ver selectSlot),
+  // así que siempre se aprueba automático — se deja explícito igual, por claridad.
+  document.getElementById('confirm-nota').textContent=selectedTipoVuelo==='instruccion'?'▸ Requerirá aprobación del instructor.':'▸ Se aprobará automáticamente al confirmar.';
 };
 
 window.cancelarSeleccion=function(){
@@ -3935,7 +4024,7 @@ window.confirmarTurno=async function(){
   hideEl('turno-err');hideEl('turno-ok');
   if(!selectedAvion){showErr('turno-err','Seleccioná un avión.');return;}
   if(!selectedDay||!selectedSlot){showErr('turno-err','Seleccioná día y horario.');return;}
-  if(!okAnticipacion(selectedDay,selectedSlot)){showErr('turno-err','Se requiere al menos '+(session?.rol==='piloto'?'1 hora':'12 horas')+' de anticipación.');return;}
+  if(!okAnticipacion(selectedDay,selectedSlot)){showErr('turno-err','Se requiere al menos '+(requiereAnticipacionLarga()?'12 horas':'1 hora')+' de anticipación.');return;}
   const rol=session.rol||'alumno';
   const esPiloto=rol==='piloto';
   // v6.55: defensa en profundidad — el bloqueo principal ya se muestra al abrir la
@@ -3953,15 +4042,23 @@ window.confirmarTurno=async function(){
   }
   const obs=val('al-obs');
   const esOAD=(selectedAvion||'LV-OAD')==='LV-OAD';
-  const estado=(esPiloto&&!esOAD)?'aprobado':'pendiente';
-  // Marca turnos de piloto en LV-OAD cargados sin instructor con horario ese día.
-  // Recalcula fresco (el instructor pudo cargar disponibilidad entremedio).
+  // v6.94: tipo de vuelo explícito por reserva (particular/instruccion), en vez de
+  // inferirlo del avión. LV-OAD siempre 'instruccion' (forzado en seleccionarAvion, sin
+  // dropdown — requiere aprobación sin importar el rol, como siempre). Alumno solo puede
+  // LV-OAD, así que también da 'instruccion' siempre. Piloto en LV-ART/LV-MPH: lo que
+  // haya elegido en el dropdown (selectedTipoVuelo, default 'particular').
+  const tipoVuelo=esOAD?'instruccion':(esPiloto?(selectedTipoVuelo||'particular'):'instruccion');
+  const requiereInstructor=tipoVuelo==='instruccion';
+  const estado=requiereInstructor?'pendiente':'aprobado';
+  // Marca turnos sin instructor con horario cargado ese día — antes solo aplicaba a
+  // piloto+LV-OAD, ahora a cualquier piloto en modo instrucción (recalcula fresco: el
+  // instructor pudo cargar disponibilidad entremedio).
   let sinInstructor=false;
-  if(esPiloto&&esOAD){
+  if(esPiloto&&requiereInstructor){
     const slotsInst=await slotsConInstructorParaDia(selectedDay);
     sinInstructor=!slotsInst.has(selectedSlot);
   }
-  const esRango=esPiloto&&!esOAD&&selectedSlotFin&&selectedSlotFin!==selectedSlot;
+  const esRango=esPiloto&&!requiereInstructor&&selectedSlotFin&&selectedSlotFin!==selectedSlot;
   const nuevaKey=push(ref(db,'reservas')).key; // genera un ID único sin escribir (no hace round-trip al server)
   const nuevoTurno={
     nombre:session.nombre,
@@ -3970,6 +4067,7 @@ window.confirmarTurno=async function(){
     hora:selectedSlot,
     ...(esRango?{horaInicio:selectedSlot,horaFin:selectedSlotFin}:{}),
     avion:selectedAvion,
+    tipo_vuelo:tipoVuelo,
     obs,
     estado,
     rol:session.rol||'alumno',
@@ -4269,6 +4367,17 @@ window.setCalFiltroAvion=function(key){
 window.irAPendientes=function(){showInstTab('reservas');setCalVista('lista');const w=document.querySelector('.cal-wrap');if(w)w.scrollIntoView({behavior:'smooth',block:'start'});};
 
 // Sufijo del tooltip del calendario: quién aprobó o canceló el turno (si corresponde).
+// v6.94: helper centralizado para el "tipo de vuelo" de una reserva (particular /
+// instruccion). Turnos nuevos lo traen explícito (nuevoTurno.tipo_vuelo, seteado en
+// confirmarTurno). Para turnos VIEJOS que no tienen el campo, se infiere con el mismo
+// criterio que ya usaban por separado Consultas (autoAprobPiloto, v6.67) y claseVencido()
+// (v6.93): piloto en avión≠LV-OAD sin dato explícito = 'particular' (así se comportaba el
+// sistema antes de v6.94, autoaprobado sin excepción). Cualquier otro caso = 'instruccion'.
+function tipoVueloDe(r){
+  if(r.tipo_vuelo)return r.tipo_vuelo;
+  return(r.rol==='piloto'&&(r.avion||'LV-OAD')!=='LV-OAD')?'particular':'instruccion';
+}
+
 function tooltipAccion(r){
   if(r.cancelado_por) return ' — Canceló: '+r.cancelado_por;
   if(r.cancelado_rol==='alumno'&&r.nombre) return ' — Canceló: '+r.nombre;
@@ -4290,7 +4399,7 @@ function tooltipAccion(r){
 // vencioSinAprobar). En LV-OAD el piloto reserva igual que el alumno (sí requiere
 // instructor real) y ahí NO aplica la excepción.
 function claseVencido(r){
-  const autoAprobPiloto=r.rol==='piloto'&&(r.avion||'LV-OAD')!=='LV-OAD';
+  const autoAprobPiloto=tipoVueloDe(r)==='particular';
   const fueAprobado=!!(r.aprobado_por||r.instructor)||autoAprobPiloto;
   return fueAprobado
     ?{cls:'vencido',tip:autoAprobPiloto&&!(r.aprobado_por||r.instructor)?' — VENCIDO (voló, turno de piloto autoaprobado)':' — VENCIDO (voló, aprobado por '+(r.aprobado_por||r.instructor)+')'}
@@ -5010,11 +5119,13 @@ window.abrirModal=function(key){
     ?` <span class="badge" style="background:rgba(224,82,156,.14);color:var(--pink);border:1px solid rgba(224,82,156,.45)">sin instructor</span>`:'';
   document.getElementById('md-estado').innerHTML=`<span class="badge badge-${r.estado}">${r.estado}</span>`+_sinInstBadge;
   // Fila "DISPONIB." (v6.23): mismo dato que el ★ y el "Puede aprobar: X" del tooltip del
-  // calendario, pero visible también en mobile (donde no existe hover/title). Solo para
-  // pendientes de LV-OAD. Se carga async porque pide /disponibilidad/{fecha} aparte.
+  // calendario, pero visible también en mobile (donde no existe hover/title). v6.94: antes
+  // "solo para pendientes de LV-OAD"; ahora cualquier pendiente en modo 'instruccion' (un
+  // piloto pidiendo instrucción en LV-ART/MPH también necesita ver quién puede aprobarlo).
+  // Se carga async porque pide /disponibilidad/{fecha} aparte.
   const dispRow=document.getElementById('md-disp-row'), dispVal=document.getElementById('md-disp');
   dispRow.style.display='none';
-  if(r.estado==='pendiente'&&(r.avion||'LV-OAD')==='LV-OAD'){
+  if(r.estado==='pendiente'&&tipoVueloDe(r)==='instruccion'){
     (async()=>{
       let dispDia=null,instData=null;
       try{dispDia=await fbGet('disponibilidad/'+r.fecha);}catch(_){}
@@ -5107,12 +5218,15 @@ window.abrirModal=function(key){
       const ba=document.createElement('button');ba.className='primary';ba.textContent='APROBAR TURNO';
       ba.onclick=async()=>{if(!confirm('¿Aprobar el turno de '+r.nombre+'?'))return;await fbUpdate('reservas/'+key,{estado:'aprobado',instructor:session.nombre,aprobado_por:session.nombre});await registrarAuditoria('aprobacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(r.avion||'LV-OAD')+' — '+r.fecha+' '+r.hora+' hs — alumno: '+r.nombre);mailAprob(r);cerrarModal();};
       actions.appendChild(ba);
-      // Aviso proactivo (LV-OAD): muestra un cartel ámbar ANTES de aprobar SOLO si el
+      // Aviso proactivo: muestra un cartel ámbar ANTES de aprobar SOLO si el
       // instructor que aprueba NO tiene ese horario en su disponibilidad Y ADEMÁS otro
       // instructor (no de vacaciones) SÍ lo declaró — o sea, si efectivamente estaría
       // pisando un turno que otro tenía previsto cubrir. Si nadie más tiene ese horario
       // (p.ej. turno de piloto sin instructor), no se muestra nada. (v5.96)
-      if((r.avion||'LV-OAD')==='LV-OAD'&&session?.user){(async()=>{
+      // v6.94: antes solo LV-OAD; ahora cualquier avión cuando el turno es 'instruccion'
+      // (un piloto pidiendo instrucción en LV-ART/MPH pisa disponibilidad igual que uno de
+      // LV-OAD).
+      if(tipoVueloDe(r)==='instruccion'&&session?.user){(async()=>{
         let dispDia=null,instData=null;
         try{dispDia=await fbGet('disponibilidad/'+r.fecha);}catch(_){}
         try{instData=await fbGet('instructores');}catch(_){}
@@ -6564,7 +6678,7 @@ function calcAlumnoStats(lista){
     st.pedidos++;
     if(r.rol==='piloto') st.rol='piloto'; // si aparece como piloto en cualquier reserva, se muestra como piloto
     if(r.estado==='vencido'){
-      const autoAprobPiloto=r.rol==='piloto'&&(r.avion||'LV-OAD')!=='LV-OAD';
+      const autoAprobPiloto=tipoVueloDe(r)==='particular';
       if(r.aprobado_por||r.instructor||autoAprobPiloto) st.volo++; else st.vencioSinAprobar++;
     }else if(r.estado==='cancelado'){
       if(r.cancelado_rol==='instructor') st.canceloInstructor++; else st.canceloAlumno++;
