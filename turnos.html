@@ -1,5 +1,18 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.98
+  FECHA   : 2026-07-18
+  CAMBIOS : Pedido de Daniel: la ventana mínima para que un ALUMNO cancele su propio
+            turno (puedeAlumnoCancelar) sube de 2 hs a 12 hs de anticipación — mismo
+            valor que la anticipación mínima para pedir el turno. Piloto sigue sin
+            límite (puede cancelar en cualquier momento). Solo cambia el gating del
+            botón CANCELAR en la lista de "Mis Turnos"; cancelarTurnoAlumno() no
+            revalida el horario server-side (mismo patrón que el resto del archivo,
+            reglas de Firebase abiertas).
+-->
+
+<!--
+  ARCHIVO : turnos.html
   VERSION : 6.97
   FECHA   : 2026-07-17
   CAMBIOS : Reportado por Daniel: el dropdown de "Tipo de vuelo" (LV-ART/LV-MPH) arrancaba
@@ -1954,7 +1967,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.97</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.98</div>
   </div>
 
 </div>
@@ -3143,7 +3156,7 @@ function genPass(){const c='ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz234567
 // ── REGLAS DE RESERVA ─────────────────────────────────────────
 // ANTICIPACIÓN MÍNIMA : Alumnos = 12 hs | Pilotos = 1 hs
 // HORIZONTE MÁXIMO    : Alumnos = 7 días | Pilotos = 30 días
-// CANCELACIÓN ALUMNO  : hasta 2 hs antes | Piloto: sin límite
+// CANCELACIÓN ALUMNO  : hasta 12 hs antes (v6.98, antes 2 hs) | Piloto: sin límite
 // APROBACIÓN          : Alumnos = manual por instructor | Pilotos = automática
 // ──────────────────────────────────────────────────────────────
 function getDays(cantidad){
@@ -4240,11 +4253,11 @@ function renderMisTurnos(data){
 function puedeAlumnoCancelar(r){
   // pilotos siempre pueden cancelar
   if((r.rol||'alumno')==='piloto') return true;
-  // alumnos: no pueden cancelar si faltan menos de 2 horas
+  // alumnos: no pueden cancelar si faltan menos de 12 horas (v6.98)
   const[y,m,d]=r.fecha.split('-').map(Number);
   const[hh,mm]=(r.hora||'00:00').split(':').map(Number);
   const fechaTurno=new Date(y,m-1,d,hh,mm,0).getTime();
-  return (fechaTurno - (Date.now()+_serverOffsetMs)) >= 2*60*60*1000;
+  return (fechaTurno - (Date.now()+_serverOffsetMs)) >= 12*60*60*1000;
 }
 
 // FIX v5.97: el modal de motivo de cancelación estaba anidado dentro de
