@@ -1,5 +1,22 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.97
+  FECHA   : 2026-07-17
+  CAMBIOS : Reportado por Daniel: el dropdown de "Tipo de vuelo" (LV-ART/LV-MPH) arrancaba
+            con "Particular" precargado por ser la primera opción, y varios pilotos lo
+            dejaban así sin fijarse aunque el vuelo fuera en realidad de instrucción. Ahora:
+            1) el <select> arranca sin opción elegida (placeholder "Seleccioná..."
+            disabled); 2) renderDaysGrid() bloquea el calendario de días con el mensaje
+            "Elegí el tipo de vuelo arriba para ver los días disponibles" hasta que el
+            piloto elija explícitamente Particular o Instrucción — no hay forma de llegar
+            a un día/horario sin pasar por el dropdown; 3) confirmarTurno() revalida el
+            caso igual como defensa en profundidad (mismo patrón que ya usa para la
+            habilitación de alumno, v6.55) por si se llega a ese punto por otro camino.
+            LV-OAD no cambia: sigue forzado a 'instruccion' sin dropdown.
+-->
+
+<!--
+  ARCHIVO : turnos.html
   VERSION : 6.96
   FECHA   : 2026-07-17
   CAMBIOS : Reportado por Daniel: en el calendario de Reservas (instructor), un turno de
@@ -1937,7 +1954,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.96</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.97</div>
   </div>
 
 </div>
@@ -2068,6 +2085,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <div id="tipo-vuelo-wrap" style="display:none;margin-bottom:1rem">
         <div class="section-title">▸ Tipo de vuelo</div>
         <select id="tipo-vuelo-select" onchange="cambiarTipoVuelo(this.value)" style="width:100%;max-width:340px;padding:9px 12px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:var(--font-mono);font-size:13px">
+          <option value="" selected disabled>Seleccioná...</option>
           <option value="particular">Particular — se aprueba automático</option>
           <option value="instruccion">Instrucción — requiere aprobación del instructor</option>
         </select>
@@ -3675,7 +3693,7 @@ function initAvionSelector(){
 // cambio de avión, invalida el día/horario ya elegido porque cambia la anticipación
 // mínima y si se filtra o no por disponibilidad de instructor.
 window.cambiarTipoVuelo=function(v){
-  selectedTipoVuelo=v;
+  selectedTipoVuelo=v||null;
   selectedDay=null;selectedSlot=null;selectedSlotFin=null;
   document.getElementById('slots-section').style.display='none';
   document.getElementById('slot-confirm').style.display='none';
@@ -3714,15 +3732,18 @@ window.seleccionarAvion=function(key){
   lbl.textContent='▸ AVIÓN: '+key;
   lbl.style.display='block';
 
-  // v6.94: LV-OAD siempre 'instruccion' forzado (mismo criterio que ya regía antes de
-  // este cambio: LV-OAD requiere aprobación sin importar el rol). Cualquier otro avión:
-  // dropdown piloto-only, default 'particular' — Daniel: "por defecto particular".
+  // v6.97 (reportado por Daniel): el dropdown arrancaba con 'particular' precargado, y
+  // como es la primera opción de la lista, muchos pilotos lo dejaban así sin fijarse —
+  // aunque el vuelo fuera en realidad de instrucción. Ahora arranca vacío (sin opción
+  // seleccionada) y el calendario de días queda bloqueado hasta que elijan explícitamente
+  // — así se obliga a abrir el dropdown y decidir, no hay default que se cuele solo.
+  // LV-OAD sigue igual: 'instruccion' forzado, sin dropdown (no aplica este cambio).
   if(key==='LV-OAD'){
     selectedTipoVuelo='instruccion';
     if(wrapTV) wrapTV.style.display='none';
   } else {
-    selectedTipoVuelo='particular';
-    if(selTV) selTV.value='particular';
+    selectedTipoVuelo=null;
+    if(selTV) selTV.value='';
     if(wrapTV) wrapTV.style.display='block';
   }
 
@@ -3827,6 +3848,13 @@ async function renderDaysGrid(){
   if(!selectedAvion) return; // piloto debe elegir avión primero
   const grid=document.getElementById('days-grid');
   if(!grid)return;
+  // v6.97: en LV-ART/LV-MPH el piloto tiene que elegir tipo de vuelo antes de ver días —
+  // si no, se ve tentado a saltear el dropdown (queda igual bloqueado hasta que sí elija).
+  const rol=session?.rol||'alumno';
+  if(rol==='piloto'&&(selectedAvion||'LV-OAD')!=='LV-OAD'&&!selectedTipoVuelo){
+    grid.innerHTML='<div class="empty">// Elegí el tipo de vuelo arriba para ver los días disponibles</div>';
+    return;
+  }
   const days=getDays();
   const año=ahoraServidor().getFullYear();
   const feriados=await getFeriados(año);
@@ -4050,6 +4078,10 @@ window.cancelarSeleccion=function(){
 window.confirmarTurno=async function(){
   hideEl('turno-err');hideEl('turno-ok');
   if(!selectedAvion){showErr('turno-err','Seleccioná un avión.');return;}
+  // v6.97: defensa en profundidad — el calendario de días ya queda bloqueado hasta elegir
+  // tipo de vuelo (renderDaysGrid), pero se revalida acá por si se llega a este punto por
+  // otro camino.
+  if((session.rol||'alumno')==='piloto'&&selectedAvion!=='LV-OAD'&&!selectedTipoVuelo){showErr('turno-err','Elegí el tipo de vuelo (Particular o Instrucción).');return;}
   if(!selectedDay||!selectedSlot){showErr('turno-err','Seleccioná día y horario.');return;}
   if(!okAnticipacion(selectedDay,selectedSlot)){showErr('turno-err','Se requiere al menos '+(requiereAnticipacionLarga()?'12 horas':'1 hora')+' de anticipación.');return;}
   const rol=session.rol||'alumno';
