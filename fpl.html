@@ -2,6 +2,15 @@
 <!--
 ==================================================================================
   PLAN DE VUELO (FPL) — Prototipo standalone
+  v3.25 ·  Pedido de Daniel: el default del casillero 18 para las aeronaves del
+           club pasa de "OPR/AEROCLUB RIO GRANDE" a "OPR/AEROCLUB RIO GRANDE
+           PERF/A" (se agrega la indicación de categoría de performance A). Cambio
+           en los dos lugares donde se fija ese default: el valor inicial del
+           textarea #f18 en el HTML y la función limpiar() (botón de reset del
+           formulario). No afecta a aeronaves personales (flotaUser), que siguen
+           usando su propio info_18 cargado por el usuario en el editor — ni a
+           DOF/ ni ALTN/, que item18() sigue agregando aparte, en su posición
+           fija, sin importar el contenido de este texto manual.
   v3.24 ·  Reportado por Daniel con capturas (PC y celular): 1) fieldset "Aeronave ·
            plantilla" quedaba apretado — dropdown de elegir aeronave ilegible y
            botones Nueva/Editar/Borrar mal posicionados en pantallas angostas; se
@@ -536,7 +545,7 @@
   <header class="bar">
     <span class="dot"></span>
     <h1>Plan de Vuelo <small>/ FPL</small></h1>
-    <span class="ver">v3.24</span>
+    <span class="ver">v3.25</span>
     <a href="turnos.html" title="Volver al turnero (sin cerrar sesión)" style="font-family:var(--mono);font-size:12px;color:var(--cyan);text-decoration:none;border:1px solid var(--line-hot);border-radius:5px;padding:5px 11px;letter-spacing:1px;transition:.15s" onmouseover="this.style.background='var(--cyan)';this.style.color='#04141a'" onmouseout="this.style.background='transparent';this.style.color='var(--cyan)'">← TURNERO</a>
     <div class="clk">
       <div id="clkUTC">--:-- Z</div>
@@ -682,7 +691,7 @@
       <legend>Otra información · 18</legend>
       <div class="body">
         <div class="field"><label>Texto (DOF/ se agrega solo)</label>
-          <textarea id="f18" placeholder="RMK/ ...">OPR/AEROCLUB RIO GRANDE</textarea></div>
+          <textarea id="f18" placeholder="RMK/ ...">OPR/AEROCLUB RIO GRANDE PERF/A</textarea></div>
       </div>
     </fieldset>
 
@@ -1174,7 +1183,7 @@ function cargarEnForm(key,p){
 function limpiar(){
   editKey=null; $('fpl').reset();
   $('f9n').value='1'; $('f10a').value='S'; $('f10b').value='C';
-  $('f18').value='OPR/AEROCLUB RIO GRANDE'; $('f13a').value='SAWE';
+  $('f18').value='OPR/AEROCLUB RIO GRANDE PERF/A'; $('f13a').value='SAWE';
   $('f13fecha').value=hoyLocal();
   setChecks('r19','E'); setChecks('s19',''); setChecks('j19','');
   $('f19dn').value=''; $('f19dc').value=''; $('f19dcol').value=''; $('f19dcov').checked=false;
