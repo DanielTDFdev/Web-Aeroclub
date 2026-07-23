@@ -1,5 +1,21 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 6.99
+  FECHA   : 2026-07-23
+  CAMBIOS : Reportado por Daniel: turnos cargados con "+ CARGAR TURNO" (campo cargado_por,
+            v6.53) no consumen cupo semanal del alumno por diseño, pero no había forma de
+            verlo en la UI — ni en la grilla ni en el modal de detalle — lo que hacía parecer
+            un bug de conteo cuando en realidad el saldo de tooltipSaldo() era correcto.
+            Fix: (1) badge 📋 en el bloque del calendario (vistas LISTA y SEMANA) con tooltip
+            "Cargado por X — no consume cupo del alumno", agregado también al title completo
+            del bloque; (2) nueva fila "CARGADO POR" en el modal de detalle del turno
+            (#modal-turno), visible solo si r.cargado_por está seteado. No se tocó la lógica
+            de turnosRestantesSemana() ni de tooltipSaldo() — el criterio de v6.53 sigue
+            vigente, este cambio es puramente de visibilidad.
+-->
+
+<!--
+  ARCHIVO : turnos.html
   VERSION : 6.98
   FECHA   : 2026-07-18
   CAMBIOS : Pedido de Daniel: la ventana mínima para que un ALUMNO cancele su propio
@@ -1805,6 +1821,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
    instructor logueado. Se suma a cualquier color de estado/avión que ya tenga el bloque. */
 .cal-block.mi-disp{box-shadow:0 0 0 2px var(--green),0 0 7px rgba(57,211,83,.6);}
 .mi-disp-badge{color:var(--green);font-size:10px;margin-right:2px;vertical-align:middle;}
+.cargado-badge{color:var(--text3);font-size:10px;margin-right:2px;vertical-align:middle;}
 .cal-empty{font-family:var(--font-mono);font-size:12px;color:var(--text3);padding:.75rem 0;letter-spacing:.05em;}
 /* columnas informativas semana anterior / siguiente */
 .cal-table th.col-pasado{color:var(--text3);opacity:.5;font-style:italic;}
@@ -1967,7 +1984,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.98</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v6.99</div>
   </div>
 
 </div>
@@ -2303,6 +2320,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <div class="modal-row"><span class="modal-lbl">ESTADO</span><span class="modal-val" id="md-estado"></span></div>
       <div class="modal-row" id="md-disp-row" style="display:none"><span class="modal-lbl">DISPONIB.</span><span class="modal-val" id="md-disp" style="font-size:11px"></span></div>
       <div class="modal-row"><span class="modal-lbl">SOLICITADO</span><span class="modal-val" id="md-ts" style="color:var(--text3);font-size:11px"></span></div>
+      <div class="modal-row" id="md-cargado-row" style="display:none"><span class="modal-lbl">CARGADO POR</span><span class="modal-val" id="md-cargado" style="color:var(--text3);font-size:11px"></span></div>
       <div class="modal-row" id="md-ts-cancel-row" style="display:none"><span class="modal-lbl">CANCELADO</span><span class="modal-val" id="md-ts-cancel" style="color:var(--text3);font-size:11px"></span></div>
       <div class="modal-row" id="md-aprobo-row" style="display:none"><span class="modal-lbl">APROBÓ</span><span class="modal-val"><span id="md-aprobo"></span><span class="md-ico md-ico-ok">👍</span></span></div>
       <div class="modal-row" id="md-inst-row"><span class="modal-lbl" id="md-inst-lbl">INSTRUCTOR</span><span class="modal-val"><span id="md-inst"></span><span id="md-inst-ico" class="md-ico md-ico-cancel" style="display:none">👎</span></span></div>
@@ -4620,7 +4638,12 @@ async function renderTodasReservas(data){
         const tipDisp=coincideDisp?' — ✓ Coincide con tu disponibilidad':'';
         const tipQuien=r.estado==='pendiente'?tipQuienesPueden(dispCompleta,r.fecha,r.hora):'';
         const badge=coincideDisp?'<span class="mi-disp-badge" title="Coincide con tu disponibilidad">★</span>':'';
-        html+=`<div class="cal-block ${colorCls}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'}${tipSin}${tipDisp}${tipQuien}${tooltipAccion(r)}${tooltipSaldo(r,todas)}" style="${estiloExtra}">${badge}${avLabel}${rangoLabel}${nombre}</div>`;
+        // v6.99: turnos cargados con "+ CARGAR TURNO" (cargado_por) no consumen cupo del
+        // alumno (v6.53) — se marcan visualmente en la grilla para que quede claro por qué
+        // el saldo semanal no baja, y quién lo cargó.
+        const tipCargado=r.cargado_por?` — CARGADO POR ${r.cargado_por} (no consume cupo del alumno)`:'';
+        const cargadoBadge=r.cargado_por?`<span class="cargado-badge" title="Cargado por ${r.cargado_por} — no consume cupo del alumno">📋</span>`:'';
+        html+=`<div class="cal-block ${colorCls}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'}${tipSin}${tipDisp}${tipQuien}${tooltipAccion(r)}${tooltipSaldo(r,todas)}${tipCargado}" style="${estiloExtra}">${badge}${cargadoBadge}${avLabel}${rangoLabel}${nombre}</div>`;
       });
       html+='</td>';
     });
@@ -4746,8 +4769,11 @@ async function renderVistaSemana(){
         const tipDisp=coincideDisp?' — ✓ Coincide con tu disponibilidad':'';
         const tipQuien=r.estado==='pendiente'?tipQuienesPueden(dispCompleta,ds,r.hora):'';
         const badge=coincideDisp?'<span class="mi-disp-badge" title="Coincide con tu disponibilidad">★</span>':'';
-        html+=`<div class="cal-block ${colorCls}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'} — ${r.estado}${tipSin}${tipDisp}${tipQuien}${tooltipAccion(r)}${tooltipSaldo(r,todas)}" style="${estiloExtra}">
-          ${badge}<span style="font-size:9px;opacity:.8">${r.avion||'LV-OAD'}</span><br>${nombre}
+        // v6.99: ver nota en renderTodasReservas — mismo badge/tooltip para turnos con cargado_por.
+        const tipCargado=r.cargado_por?` — CARGADO POR ${r.cargado_por} (no consume cupo del alumno)`:'';
+        const cargadoBadge=r.cargado_por?`<span class="cargado-badge" title="Cargado por ${r.cargado_por} — no consume cupo del alumno">📋</span>`:'';
+        html+=`<div class="cal-block ${colorCls}" onclick="abrirModal('${r.key}')" title="${r.nombre} — ${r.avion||'LV-OAD'} — ${r.estado}${tipSin}${tipDisp}${tipQuien}${tooltipAccion(r)}${tooltipSaldo(r,todas)}${tipCargado}" style="${estiloExtra}">
+          ${badge}${cargadoBadge}<span style="font-size:9px;opacity:.8">${r.avion||'LV-OAD'}</span><br>${nombre}
         </div>`;
       });
       html+='</td>';
@@ -5237,6 +5263,17 @@ window.abrirModal=function(key){
     document.getElementById('md-ts').textContent=fmtTs;
   } else {
     document.getElementById('md-ts').textContent='—';
+  }
+  // Fila CARGADO POR (v6.99): turnos dados de alta con "+ CARGAR TURNO" (guardarTurnoManual)
+  // llevan cargado_por seteado y no consumen cupo semanal del alumno (v6.53). Se muestra
+  // acá para que quede visible quién lo cargó, ya que antes ese dato no aparecía en ningún
+  // lado de la UI y generaba confusión al ver el saldo de cuota sin explicación.
+  const cargadoRow=document.getElementById('md-cargado-row');
+  if(r.cargado_por){
+    document.getElementById('md-cargado').textContent=r.cargado_por+' — no consume cupo del alumno';
+    cargadoRow.style.display='flex';
+  } else {
+    cargadoRow.style.display='none';
   }
   // Fila CANCELADO (ts_cancelacion) — solo para turnos cancelados con ese campo (v6.36+)
   const tsCancelRow=document.getElementById('md-ts-cancel-row');
