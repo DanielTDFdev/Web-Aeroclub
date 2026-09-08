@@ -2,6 +2,9 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.64 · Pedido de Daniel: "el logo, minúsculo" — seguía chico a pesar de
+  v1.62/v1.63. Salto directo a 64px (antes 44px) en vez de otro +30%.
+
   v1.63 · Pedido de Daniel: 3 ajustes más. 1) Logo "seguía quedando chico" —
   otro +30% (34px→44px). 2) "by DAC 2026" pasa de estar a la derecha del
   header a ir debajo del logo (nuevo wrapper .hdr-brand, columna). 3) .nota
@@ -948,7 +951,7 @@
      apretado; el copyright se oculta en pantallas angostas (ver @media más
      abajo) porque ahí el header ya venía justo de espacio — se prioriza
      título/badge/nota/volver, que son funcionales. */
-  header .hdr-logo{width:44px;height:44px;object-fit:contain;flex-shrink:0}
+  header .hdr-logo{width:64px;height:64px;object-fit:contain;flex-shrink:0}
   header .hdr-brand{display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0}
   header .hdr-copy{font-family:var(--font-mono);font-size:10px;color:var(--text3);
     letter-spacing:.06em;white-space:nowrap}
@@ -1084,7 +1087,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.63</span>
+    <span class="badge" id="ver-badge">v1.64</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
