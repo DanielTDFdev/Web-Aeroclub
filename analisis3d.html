@@ -2,6 +2,11 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.63 · Pedido de Daniel: 3 ajustes más. 1) Logo "seguía quedando chico" —
+  otro +30% (34px→44px). 2) "by DAC 2026" pasa de estar a la derecha del
+  header a ir debajo del logo (nuevo wrapper .hdr-brand, columna). 3) .nota
+  (alumno + matrícula + horario) de gris (--text3) a blanco (--text).
+
   v1.62 · Pedido de Daniel: 3 ajustes visuales. 1) Texto de #info (HORA/ALT/
   GS/RUMBO/BANK/PITCH/VS) pasa de gris (--text2/--text3) a blanco (--text),
   no se leía sobre el fondo oscuro. 2) Logo del header 26px→34px (+30%).
@@ -943,12 +948,13 @@
      apretado; el copyright se oculta en pantallas angostas (ver @media más
      abajo) porque ahí el header ya venía justo de espacio — se prioriza
      título/badge/nota/volver, que son funcionales. */
-  header .hdr-logo{width:34px;height:34px;object-fit:contain;flex-shrink:0}
+  header .hdr-logo{width:44px;height:44px;object-fit:contain;flex-shrink:0}
+  header .hdr-brand{display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0}
   header .hdr-copy{font-family:var(--font-mono);font-size:10px;color:var(--text3);
     letter-spacing:.06em;white-space:nowrap}
   .badge{font-family:var(--font-mono);font-size:10px;color:var(--amber);border:1px solid var(--amber);
     border-radius:4px;padding:2px 7px;letter-spacing:.08em}
-  header .nota{font-family:var(--font-mono);font-size:13px;color:var(--text3);margin-left:auto}
+  header .nota{font-family:var(--font-mono);font-size:13px;color:var(--text);margin-left:auto}
   /* v2: cielo = degradado blanco->celeste en el propio contenedor; el canvas es
      transparente (alpha:true) así que este fondo se ve DETRÁS de la escena 3D en
      vez del negro sólido de antes. */
@@ -1073,11 +1079,13 @@
     <button id="btn-recargar-version" style="font-family:var(--font-mono);font-size:12px;font-weight:700;padding:6px 16px;background:#0a0a0a;color:var(--amber);border:1px solid #0a0a0a;border-radius:6px;cursor:pointer">ACTUALIZAR AHORA</button>
   </div>
   <header>
-    <img src="logo_aeroclub.png" alt="Aeroclub Río Grande" class="hdr-logo">
+    <div class="hdr-brand">
+      <img src="logo_aeroclub.png" alt="Aeroclub Río Grande" class="hdr-logo">
+      <span class="hdr-copy">© 2026 — by DAC</span>
+    </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.62</span>
+    <span class="badge" id="ver-badge">v1.63</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
-    <span class="hdr-copy">© 2026 — by DAC</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
   <div id="stage">
