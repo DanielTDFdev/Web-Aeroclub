@@ -2,6 +2,11 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.62 · Pedido de Daniel: 3 ajustes visuales. 1) Texto de #info (HORA/ALT/
+  GS/RUMBO/BANK/PITCH/VS) pasa de gris (--text2/--text3) a blanco (--text),
+  no se leía sobre el fondo oscuro. 2) Logo del header 26px→34px (+30%).
+  3) .nota (nombre alumno + matrícula + turno) 11px→13px (+20%).
+
   v1.61 · Pedido de Daniel: invertir el eje de panning (se sentía al revés).
   Un solo signo cambiado en panCamera() — factor pasa a negativo, invirtiendo
   dx y dy en conjunto, mismo criterio para ambos ejes.
@@ -938,12 +943,12 @@
      apretado; el copyright se oculta en pantallas angostas (ver @media más
      abajo) porque ahí el header ya venía justo de espacio — se prioriza
      título/badge/nota/volver, que son funcionales. */
-  header .hdr-logo{width:26px;height:26px;object-fit:contain;flex-shrink:0}
+  header .hdr-logo{width:34px;height:34px;object-fit:contain;flex-shrink:0}
   header .hdr-copy{font-family:var(--font-mono);font-size:10px;color:var(--text3);
     letter-spacing:.06em;white-space:nowrap}
   .badge{font-family:var(--font-mono);font-size:10px;color:var(--amber);border:1px solid var(--amber);
     border-radius:4px;padding:2px 7px;letter-spacing:.08em}
-  header .nota{font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-left:auto}
+  header .nota{font-family:var(--font-mono);font-size:13px;color:var(--text3);margin-left:auto}
   /* v2: cielo = degradado blanco->celeste en el propio contenedor; el canvas es
      transparente (alpha:true) así que este fondo se ve DETRÁS de la escena 3D en
      vez del negro sólido de antes. */
@@ -966,10 +971,10 @@
   .panel{position:absolute;z-index:10;background:rgba(15,20,32,.88);border:1px solid var(--border);
     border-radius:8px;padding:10px 12px;font-family:var(--font-mono);font-size:11px;color:var(--text2);
     backdrop-filter:blur(4px)}
-  #info{top:12px;left:12px;min-width:190px;max-width:230px;line-height:1.75}
+  #info{top:12px;left:12px;min-width:190px;max-width:230px;line-height:1.75;color:var(--text)}
   #info b{color:var(--text);font-size:15px}
   #info .row{display:flex;justify-content:space-between;gap:14px}
-  #info .lbl{color:var(--text3)}
+  #info .lbl{color:var(--text)}
   /* v1.39 — pedido de Daniel: en celular el panel de datos + los 6 toggles +
      la leyenda de color, todo apilado permanentemente arriba a la izquierda
      (v1.31), ocupaba media pantalla y se pisaba con el mapa/3D de abajo —
@@ -1070,7 +1075,7 @@
   <header>
     <img src="logo_aeroclub.png" alt="Aeroclub Río Grande" class="hdr-logo">
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.61</span>
+    <span class="badge" id="ver-badge">v1.62</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <span class="hdr-copy">© 2026 — by DAC</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
