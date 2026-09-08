@@ -2,6 +2,14 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.60 · Pedido de Daniel: panning de cámara. Clic derecho + arrastre en
+  desktop, 2 dedos + arrastre en touch (coexiste con el pinch-zoom ya
+  existente: la distancia entre dedos sigue siendo zoom, el punto medio es el
+  pan). Offset aditivo (panTarget) sobre el target de actualizarCamara, en los
+  ejes right/up derivados de camTheta/camPhi. Se resetea al togglear "Seguir
+  avión" para no quedar con la cámara desalineada del avión/centro al
+  cambiar de modo.
+
   v1.59 · Pedido de Daniel: flechas de sentido pasan a color verde (antes
   celeste 0xbfe3ff) — mismo mesh/opacidad, solo cambia el color base.
 
@@ -1058,7 +1066,7 @@
   <header>
     <img src="logo_aeroclub.png" alt="Aeroclub Río Grande" class="hdr-logo">
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.59</span>
+    <span class="badge" id="ver-badge">v1.60</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <span class="hdr-copy">© 2026 — by DAC</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
@@ -2681,7 +2689,23 @@ function aplicarRevelado(idxF){
 let camTheta = Math.PI*0.22, camPhi = Math.PI*0.40;
 let camRadioLibre = Math.max(extent*1.15, 400);
 let camRadioSeguir = Math.max(180, extent*0.03);
-let dragging=false, lastX=0, lastY=0;
+let dragging=false, panning=false, lastX=0, lastY=0;
+// v1.60 — Pedido de Daniel: panning. Offset ADITIVO sobre el target que ya
+// usa actualizarCamara (avión en modo seguir, centro en cámara libre) — no
+// reemplaza el target, se le suma. Se calcula en los ejes "right"/"up" de la
+// cámara actual (derivados a mano de camTheta/camPhi, sin depender de
+// camera.matrixWorld que recién se actualiza en el próximo render) para que
+// el paneo se sienta como "arrastrar el mundo", igual sea cual sea el ángulo.
+const panTarget = new THREE.Vector3(0,0,0);
+function panCamera(dxPix, dyPix, radio){
+  const rightX = Math.cos(camTheta), rightZ = -Math.sin(camTheta);
+  const upX = -Math.sin(camTheta)*Math.cos(camPhi), upY = Math.sin(camPhi), upZ = -Math.cos(camTheta)*Math.cos(camPhi);
+  const factor = radio*0.0015; // escala con el zoom, mismo criterio que aplicarZoom
+  const dx = -dxPix*factor, dy = dyPix*factor;
+  panTarget.x += rightX*dx + upX*dy;
+  panTarget.y += upY*dy;
+  panTarget.z += rightZ*dx + upZ*dy;
+}
 const canvas = renderer.domElement;
 const seguirChk = document.getElementById('seguir');
 // v1.36 — FIX: cambiar de modo (seguir avión ↔ cámara libre) no disparaba
@@ -2690,7 +2714,7 @@ const seguirChk = document.getElementById('seguir');
 // "Seguir avión" sin tocar el zoom después, se quedaba mostrando lo que
 // hubiera antes (mosaico de fondo o un parche de cámara libre desactualizado)
 // en vez de mostrar de una el parche que corresponde al nuevo modo.
-seguirChk.onchange = ()=>{ if(mapaSatChk.checked) actualizarMapaSatelital(); };
+seguirChk.onchange = ()=>{ panTarget.set(0,0,0); if(mapaSatChk.checked) actualizarMapaSatelital(); };
 
 let _debounceMapaSatTimer = null;
 function aplicarZoom(deltaY){
@@ -2717,21 +2741,31 @@ function aplicarZoom(deltaY){
 // se rota (arrastre); con 2, la distancia entre ambos maneja el zoom (pinch).
 const _punterosActivos = new Map(); // pointerId -> {x,y}
 let _pinchDistanciaPrevia = null;
+let _pinchMidpointPrevia = null; // v1.60: además de la distancia (zoom), el punto medio entre los 2 dedos maneja el pan
+
+// v1.60 — pan: clic derecho + arrastre en desktop (se banea el menú
+// contextual del navegador solo sobre el canvas), 2 dedos + arrastre en
+// touch (coexiste con el pinch: la DISTANCIA entre dedos sigue siendo zoom,
+// el PUNTO MEDIO entre ambos es el pan — gesto estándar de mapas/visores 3D).
+canvas.addEventListener('contextmenu', e=>e.preventDefault());
 
 canvas.addEventListener('pointerdown', e=>{
   canvas.setPointerCapture(e.pointerId);
   _punterosActivos.set(e.pointerId, {x:e.clientX, y:e.clientY});
   if(_punterosActivos.size===1){
-    dragging=true; lastX=e.clientX; lastY=e.clientY;
+    panning = e.button===2; // clic derecho = pan, resto = orbit (rotación)
+    dragging = !panning;
+    lastX=e.clientX; lastY=e.clientY;
   } else {
-    dragging=false; // 2° dedo apoyado: se corta el drag, pasa a modo pinch
+    dragging=false; panning=false; // 2° dedo apoyado: se corta el drag, pasa a modo pinch/pan
     _pinchDistanciaPrevia = null;
+    _pinchMidpointPrevia = null;
   }
 });
 function _soltarPuntero(e){
   _punterosActivos.delete(e.pointerId);
-  if(_punterosActivos.size<2) _pinchDistanciaPrevia = null;
-  if(_punterosActivos.size===0) dragging=false;
+  if(_punterosActivos.size<2){ _pinchDistanciaPrevia = null; _pinchMidpointPrevia = null; }
+  if(_punterosActivos.size===0){ dragging=false; panning=false; }
 }
 window.addEventListener('pointerup', _soltarPuntero);
 window.addEventListener('pointercancel', _soltarPuntero);
@@ -2743,15 +2777,27 @@ window.addEventListener('pointermove', e=>{
     const pts = Array.from(_punterosActivos.values());
     const dx=pts[0].x-pts[1].x, dy=pts[0].y-pts[1].y;
     const dist = Math.hypot(dx,dy);
+    const midX=(pts[0].x+pts[1].x)/2, midY=(pts[0].y+pts[1].y)/2;
+    const radio = seguirChk.checked ? camRadioSeguir : camRadioLibre;
     if(_pinchDistanciaPrevia!=null){
       // separar dedos (dist crece) = acercar cámara → mismo signo que
       // deltaY negativo en la rueda de mouse.
       aplicarZoom((_pinchDistanciaPrevia-dist)*2.2);
     }
+    if(_pinchMidpointPrevia!=null){
+      panCamera(midX-_pinchMidpointPrevia.x, midY-_pinchMidpointPrevia.y, radio);
+    }
     _pinchDistanciaPrevia = dist;
+    _pinchMidpointPrevia = {x:midX,y:midY};
     return;
   }
 
+  if(panning){
+    const dx=e.clientX-lastX, dy=e.clientY-lastY;
+    lastX=e.clientX; lastY=e.clientY;
+    panCamera(dx, dy, seguirChk.checked ? camRadioSeguir : camRadioLibre);
+    return;
+  }
   if(!dragging) return;
   const dx=e.clientX-lastX, dy=e.clientY-lastY;
   lastX=e.clientX; lastY=e.clientY;
@@ -2764,11 +2810,12 @@ canvas.addEventListener('wheel', e=>{
 }, {passive:false});
 
 function actualizarCamara(target, radio){
-  const x = target.x + radio*Math.sin(camPhi)*Math.sin(camTheta);
-  const y = target.y + radio*Math.cos(camPhi);
-  const z = target.z + radio*Math.sin(camPhi)*Math.cos(camTheta);
+  const tx = target.x+panTarget.x, ty = target.y+panTarget.y, tz = target.z+panTarget.z;
+  const x = tx + radio*Math.sin(camPhi)*Math.sin(camTheta);
+  const y = ty + radio*Math.cos(camPhi);
+  const z = tz + radio*Math.sin(camPhi)*Math.cos(camTheta);
   camera.position.set(x,y,z);
-  camera.lookAt(target);
+  camera.lookAt(tx,ty,tz);
 }
 
 // ============================================================================
