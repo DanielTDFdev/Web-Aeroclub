@@ -2,6 +2,10 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.61 · Pedido de Daniel: invertir el eje de panning (se sentía al revés).
+  Un solo signo cambiado en panCamera() — factor pasa a negativo, invirtiendo
+  dx y dy en conjunto, mismo criterio para ambos ejes.
+
   v1.60 · Pedido de Daniel: panning de cámara. Clic derecho + arrastre en
   desktop, 2 dedos + arrastre en touch (coexiste con el pinch-zoom ya
   existente: la distancia entre dedos sigue siendo zoom, el punto medio es el
@@ -1066,7 +1070,7 @@
   <header>
     <img src="logo_aeroclub.png" alt="Aeroclub Río Grande" class="hdr-logo">
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.60</span>
+    <span class="badge" id="ver-badge">v1.61</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <span class="hdr-copy">© 2026 — by DAC</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
@@ -2700,7 +2704,7 @@ const panTarget = new THREE.Vector3(0,0,0);
 function panCamera(dxPix, dyPix, radio){
   const rightX = Math.cos(camTheta), rightZ = -Math.sin(camTheta);
   const upX = -Math.sin(camTheta)*Math.cos(camPhi), upY = Math.sin(camPhi), upZ = -Math.cos(camTheta)*Math.cos(camPhi);
-  const factor = radio*0.0015; // escala con el zoom, mismo criterio que aplicarZoom
+  const factor = -radio*0.0015; // v1.61: signo invertido (pedido de Daniel) — escala con el zoom, mismo criterio que aplicarZoom
   const dx = -dxPix*factor, dy = dyPix*factor;
   panTarget.x += rightX*dx + upX*dy;
   panTarget.y += upY*dy;
