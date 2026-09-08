@@ -2,6 +2,9 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.59 · Pedido de Daniel: flechas de sentido pasan a color verde (antes
+  celeste 0xbfe3ff) — mismo mesh/opacidad, solo cambia el color base.
+
   v1.58 · Pedido de Daniel: las flechas de sentido (v1.57) dejan de recortarse
   por la ventana de sobrevida — quedan siempre, aunque la cortina se recorte
   por detrás del avión. Se siguen revelando progresivamente (aparecen a
@@ -1055,7 +1058,7 @@
   <header>
     <img src="logo_aeroclub.png" alt="Aeroclub Río Grande" class="hdr-logo">
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.58</span>
+    <span class="badge" id="ver-badge">v1.59</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <span class="hdr-copy">© 2026 — by DAC</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
@@ -2470,7 +2473,7 @@ function construirFlechas(){
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(posiciones,3));
   const mat = new THREE.MeshBasicMaterial({
-    color: 0xbfe3ff, transparent:true, opacity:0.32, // sutil, pedido explícito de Daniel
+    color: 0x4ade80, transparent:true, opacity:0.32, // v1.59: verde, pedido de Daniel (antes celeste)
     side: THREE.DoubleSide, depthTest:false // mismo criterio que la rosa: nunca tapada por z-fighting contra el suelo/mapa satelital
   });
   flechasGeo = geo;
