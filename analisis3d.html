@@ -2,6 +2,29 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.89 · Reportado por Daniel con captura de vuelo completo, cuarta vuelta
+  sobre lo mismo — y esta vez la causa era otra. El criterio de v1.88
+  (neto/total) estaba bien; el problema era el ALCANCE de la ventana. En su
+  vuelo había DOS maniobras distintas y consecutivas: unas eses reales sobre
+  una ruta y, después, un viraje circular sobre un punto. El agrupador las
+  metía en UNA sola serie: el conjunto cancelaba bien por las eses, pasaba
+  el filtro neto/total, y la etiqueta "ESES SOBRE CAMINO" se extendía
+  también sobre el bucle — que es justo donde estaba el avión en la captura.
+  Ningún umbral arregla eso, hace falta PRIORIDAD: un segmento que ya es una
+  maniobra completa por sí mismo (viraje de ≥300° a un mismo lado) no puede
+  ser además un eslabón de una serie de eses. Se resuelve en orden, marcando
+  segmentos consumidos: 1) ochos (par opuesto de vueltas completas que vuelve
+  al punto — condición fuerte, va primero para que sus lóbulos no se
+  consuman como virajes sueltos), 2) viraje sobre un punto, 3) eses solo con
+  los segmentos que quedaron libres.
+  Se elimina el filtro de supresión de v1.87 (quitar virajes contenidos en un
+  ocho): la prioridad por consumo impide que un mismo viraje genere dos
+  eventos, que era lo que ese filtro tapaba después.
+  Verificado con el caso exacto de la captura (eses + bucle consecutivos):
+  ahora salen en dos ventanas separadas, cada una con su etiqueta correcta.
+  Controles de regresión OK: eses solas, viraje sobre un punto solo, ochos y
+  espiral en descenso siguen detectándose bien, todos con ruido de rumbo.
+
   v1.88 · Reportado por Daniel con captura, tercera vuelta sobre lo mismo:
   seguía marcando "ESES SOBRE CAMINO" en un viraje continuo hacia un mismo
   lado. Los parches de v1.87 (continuidad temporal, mínimo de 3 virajes)
@@ -1534,7 +1557,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.88</span>
+    <span class="badge" id="ver-badge">v1.89</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -2224,83 +2247,104 @@ function detectarManiobras(track, viento){
     }
   }
 
-  // Alternancia: 2+ segmentos consecutivos de sentido opuesto, cada uno con
-  // giro suficiente. Ocho vs ese: si el avión vuelve cerca del punto de
-  // partida es un ocho sobre pilones; si se desplaza a lo largo de un eje son
-  // eses sobre camino. ⚠ Criterio geométrico, no infalible — validar con
-  // vuelos reales.
-  let k=0;
-  while(k<segs.length-1){
-    if(Math.abs(segs[k].giro)<VIRAJE_GIRO_MIN_DEG || !enAltura(segs[k].ini)){ k++; continue; }
-    let m=k;
-    // v1.87: además de alternar sentido y tener giro suficiente, el viraje
-    // siguiente tiene que EMPEZAR poco después de que termine el anterior —
-    // si hubo un tramo recto largo en medio no son la misma serie de eses.
-    while(m+1<segs.length && segs[m+1].signo===-segs[m].signo &&
-          Math.abs(segs[m+1].giro)>=VIRAJE_GIRO_MIN_DEG &&
-          track[segs[m+1].ini].t - track[segs[m].fin].t <= ESES_HUECO_MAX_S) m++;
-    const nVirajes = m-k+1;
-    // v1.88: criterio de fondo — giro NETO vs giro ABSOLUTO recorrido en toda
-    // la serie (ver ESES_NETO_SOBRE_TOTAL_MAX). Si casi todo el giro fue al
-    // mismo lado no es un patrón alternante, es un viraje continuo, y no
-    // importa en cuántos segmentos lo haya partido el ruido.
-    const a0=segs[k].ini, b0=segs[m].fin;
-    let netoSerie=0, absSerie=0;
-    for(let i=a0+1;i<=b0;i++){
-      const dd = difH(track[i-1].hdgDeg, track[i].hdgDeg);
-      netoSerie += dd; absSerie += Math.abs(dd);
+  // ==========================================================================
+  // v1.89 — PRIORIDAD ENTRE PATRONES (reportado por Daniel con captura de
+  // vuelo completo). El problema no era el criterio de v1.88 sino el ALCANCE
+  // de la ventana: en su vuelo había DOS maniobras distintas y consecutivas
+  // —unas eses reales sobre una ruta, y después un viraje circular sobre un
+  // punto— y el agrupador las metía en UNA sola serie. El conjunto cancelaba
+  // bien (por las eses), pasaba el filtro neto/total, y la etiqueta "ESES
+  // SOBRE CAMINO" se extendía también sobre el bucle, que es justo donde
+  // estaba el avión en la captura.
+  // Ningún umbral arregla eso: hace falta prioridad. Un segmento que YA es
+  // una maniobra completa por sí mismo (un viraje de ≥300° a un mismo lado)
+  // no puede ser además un eslabón de una serie de eses. Se resuelve en
+  // orden, marcando segmentos consumidos:
+  //   1) OCHOS   — par consecutivo opuesto, AMBOS ≥300°, vuelve al punto
+  //   2) VIRAJE SOBRE UN PUNTO — ≥300° a un lado, altitud constante
+  //   3) ESES    — series alternantes SOLO con segmentos no consumidos
+  // Así los ochos (dos vueltas completas) se siguen reconociendo, el bucle
+  // suelto queda como viraje sobre un punto, y la serie de eses se arma con
+  // los virajes que realmente son eses.
+  const consumido = new Array(segs.length).fill(false);
+  const esGrande = segs.map(s=>Math.abs(s.giro)>=VIRAJE_PUNTO_GIRO_MIN_DEG);
+  const giroSerie = (a,b)=>{
+    let neto=0, abs=0;
+    for(let i=a+1;i<=b;i++){ const d=difH(track[i-1].hdgDeg,track[i].hdgDeg); neto+=d; abs+=Math.abs(d); }
+    return {neto, abs};
+  };
+
+  // --- 1) OCHOS SOBRE PILONES: dos vueltas completas opuestas y encadenadas
+  //        que vuelven al punto de partida. Condición fuerte y específica, va
+  //        primero para que sus lóbulos no se consuman como virajes sueltos.
+  for(let k=0;k+1<segs.length;k++){
+    if(consumido[k]||consumido[k+1]) continue;
+    if(!esGrande[k]||!esGrande[k+1]) continue;
+    if(segs[k+1].signo!==-segs[k].signo) continue;
+    if(!enAltura(segs[k].ini)) continue;
+    if(track[segs[k+1].ini].t - track[segs[k].fin].t > ESES_HUECO_MAX_S) continue;
+    const a=segs[k].ini, b=segs[k+1].fin;
+    const desp = Math.hypot(track[b].x-track[a].x, track[b].z-track[a].z);
+    if(desp<=OCHO_RETORNO_MAX_M){
+      out.push({tipo:'OCHOS SOBRE PILONES', tIni:track[a].t, tFin:track[b].t,
+                detalle:`2 vueltas · desplaz. ${desp.toFixed(0)} m`});
+      consumido[k]=consumido[k+1]=true;
     }
-    const alternante = absSerie>1 && Math.abs(netoSerie)/absSerie <= ESES_NETO_SOBRE_TOTAL_MAX;
-    if(!alternante){ k=m+1; continue; }
-    const desp = Math.hypot(track[b0].x-track[a0].x, track[b0].z-track[a0].z);
-    const ratio = (Math.abs(netoSerie)/absSerie).toFixed(2);
-    if(nVirajes>=ESES_MIN_VIRAJES){
-      out.push({tipo: desp<=OCHO_RETORNO_MAX_M ? 'OCHOS SOBRE PILONES' : 'ESES SOBRE CAMINO',
-                tIni:track[a0].t, tFin:track[b0].t,
-                detalle:`${nVirajes} virajes · desplaz. ${desp.toFixed(0)} m · neto/total ${ratio}`});
-      k=m+1;
-    } else if(nVirajes===2){
-      // dos virajes opuestos encadenados: puede ser un ocho (vuelve al punto)
-      // pero NO alcanza para llamarlo serie de eses (ver ESES_MIN_VIRAJES)
-      if(desp<=OCHO_RETORNO_MAX_M){
-        out.push({tipo:'OCHOS SOBRE PILONES', tIni:track[a0].t, tFin:track[b0].t,
-                  detalle:`2 virajes · desplaz. ${desp.toFixed(0)} m · neto/total ${ratio}`});
-      }
-      k=m+1;
-    } else k++;
   }
 
-  // v1.87 — VIRAJE SOBRE UN PUNTO (definición de Daniel): giro persistente
-  // hacia un mismo lado manteniendo la altitud (±100ft). Se evalúa sobre los
-  // segmentos de viraje completos (no subdivididos por sentido vertical, que
-  // es lo que hace falta para espirales) porque acá lo definitorio es
-  // justamente que la altura NO cambia.
-  for(const sg of segs){
-    if(!enAltura(sg.ini) || sg.fin<=sg.ini) continue;
-    const giro = Math.abs(sg.giro);
-    if(giro < VIRAJE_PUNTO_GIRO_MIN_DEG) continue;
+  // --- 2) VIRAJE SOBRE UN PUNTO (definición de Daniel): giro persistente
+  //        hacia un mismo lado manteniendo la altitud (±100ft). Se evalúa
+  //        sobre el segmento completo, sin subdividir por sentido vertical,
+  //        porque acá lo definitorio es justamente que la altura NO cambia.
+  for(let k=0;k<segs.length;k++){
+    if(consumido[k]) continue;
+    const sg=segs[k];
+    if(!enAltura(sg.ini) || sg.fin<=sg.ini || !esGrande[k]) continue;
     let minA=Infinity, maxA=-Infinity;
     for(let i=sg.ini;i<=sg.fin;i++){ minA=Math.min(minA,altFt[i]); maxA=Math.max(maxA,altFt[i]); }
     if(maxA-minA > VIRAJE_PUNTO_DALT_MAX_FT*2) continue; // ±100ft = banda de 200ft
+    const giro=Math.abs(sg.giro);
     let arco=0;
     for(let i=sg.ini+1;i<=sg.fin;i++) arco += Math.hypot(track[i].x-track[i-1].x, track[i].z-track[i-1].z);
     const radio = arco/(giro*Math.PI/180);
     out.push({tipo:'VIRAJE SOBRE UN PUNTO', tIni:track[sg.ini].t, tFin:track[sg.fin].t,
               detalle:`${giro.toFixed(0)}° · alt ±${((maxA-minA)/2).toFixed(0)} ft · radio ${radio.toFixed(0)} m`});
+    consumido[k]=true;
+  }
+
+  // --- 3) ESES SOBRE CAMINO: series de virajes alternantes, solo con
+  //        segmentos que no fueron consumidos arriba. Además del mínimo de
+  //        virajes y la continuidad temporal, se exige el criterio de v1.88:
+  //        el giro NETO tiene que ser chico respecto del ABSOLUTO recorrido
+  //        (los virajes de unas eses se cancelan; un viraje continuo no).
+  let k=0;
+  while(k<segs.length-1){
+    if(consumido[k] || Math.abs(segs[k].giro)<VIRAJE_GIRO_MIN_DEG || !enAltura(segs[k].ini)){ k++; continue; }
+    let m=k;
+    while(m+1<segs.length && !consumido[m+1] &&
+          segs[m+1].signo===-segs[m].signo &&
+          Math.abs(segs[m+1].giro)>=VIRAJE_GIRO_MIN_DEG &&
+          track[segs[m+1].ini].t - track[segs[m].fin].t <= ESES_HUECO_MAX_S) m++;
+    const nVirajes = m-k+1;
+    if(nVirajes<ESES_MIN_VIRAJES){ k=m+1; continue; }
+    const a0=segs[k].ini, b0=segs[m].fin;
+    const g=giroSerie(a0,b0);
+    if(!(g.abs>1 && Math.abs(g.neto)/g.abs <= ESES_NETO_SOBRE_TOTAL_MAX)){ k=m+1; continue; }
+    const desp = Math.hypot(track[b0].x-track[a0].x, track[b0].z-track[a0].z);
+    const ratio = (Math.abs(g.neto)/g.abs).toFixed(2);
+    out.push({tipo: desp<=OCHO_RETORNO_MAX_M ? 'OCHOS SOBRE PILONES' : 'ESES SOBRE CAMINO',
+              tIni:track[a0].t, tFin:track[b0].t,
+              detalle:`${nVirajes} virajes · desplaz. ${desp.toFixed(0)} m · neto/total ${ratio}`});
+    for(let q=k;q<=m;q++) consumido[q]=true;
+    k=m+1;
   }
 
   out.sort((a,b)=>a.tIni-b.tIni);
-  // v1.87: un ocho está hecho de dos virajes de 360° a altitud constante, así
-  // que cada lóbulo también califica como "viraje sobre un punto" y se
-  // reportaba duplicado. Se suprimen los virajes sobre un punto contenidos
-  // dentro de un ocho o una serie de eses ya detectada — el patrón completo
-  // es la maniobra, no sus partes.
-  const patrones = out.filter(m=>m.tipo==='OCHOS SOBRE PILONES' || m.tipo==='ESES SOBRE CAMINO');
-  const filtrado = out.filter(m=>{
-    if(m.tipo!=='VIRAJE SOBRE UN PUNTO') return true;
-    return !patrones.some(p => m.tIni>=p.tIni-1 && m.tFin<=p.tFin+1);
-  });
-  return filtrado;
+  // v1.89: el filtro de supresión de v1.87 (quitar virajes sobre un punto
+  // contenidos en un ocho/eses) ya no hace falta — la prioridad por consumo
+  // de segmentos de arriba impide que un mismo viraje produzca dos eventos,
+  // que era exactamente lo que ese filtro venía a tapar después.
+  return out;
 }
 
 // v1.82 — VIENTO ESTIMADO desde la propia traza, sin dato externo. Con TAS
