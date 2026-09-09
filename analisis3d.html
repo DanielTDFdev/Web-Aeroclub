@@ -2,6 +2,13 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.70 · Pedido de Daniel: marcador de touchdown con rate of descent al
+  toque. Detección por máquina de estados sobre track[].y (10ft/3ft AGL,
+  histéresis para no disparar dos veces por ruido GPS) — captura TODOS los
+  toques, incluidos touch-and-go. Por cada uno: disco chato en el suelo
+  (verde/amarillo/rojo según dureza del VS) + cartelito HTML con el fpm,
+  mismo mecanismo de proyección que el cartelito del avión.
+
   v1.69 · Pedido de Daniel: se sacan los console.log de depuración del mosaico
   satelital ([mapaSat:MAPA] zoom/tiles, origen lat0/lng0, esquinas NO/SE) —
   eran de cuando se debuggeaba el offset/alineación del LOD (v1.32-v1.48),
@@ -1070,6 +1077,13 @@
     white-space:nowrap;pointer-events:none;z-index:5}
   #etiqueta-avion::after{content:'';position:absolute;left:50%;bottom:-5px;
     transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--cyan)}
+  /* v1.70: cartelito de touchdown — mismo mecanismo de proyección que
+     #etiqueta-avion, pero uno por cada toque detectado (estático, no sigue
+     al avión) y con el color de borde seteado inline según dureza. */
+  .etiqueta-td{position:absolute;transform:translate(-50%,-100%);
+    background:rgba(15,20,32,.85);border:1px solid var(--border);border-radius:6px;
+    padding:3px 9px;font-family:var(--font-mono);font-size:11px;color:var(--text);
+    white-space:nowrap;pointer-events:none;z-index:4}
   footer{flex-shrink:0;background:var(--bg3);border-top:1px solid var(--border);
     padding:10px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
     font-family:var(--font-mono);font-size:12px}
@@ -1129,7 +1143,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.69</span>
+    <span class="badge" id="ver-badge">v1.70</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -1165,6 +1179,7 @@
           <label class="toggle"><input type="checkbox" id="rosa" checked><span class="track"></span>Rosa de rumbos</label>
           <label class="toggle"><input type="checkbox" id="mapaSat" checked><span class="track"></span>Mapa satelital (suelo)</label>
           <label class="toggle"><input type="checkbox" id="flechas" checked><span class="track"></span>Flechas de sentido</label>
+          <label class="toggle"><input type="checkbox" id="touchdown" checked><span class="track"></span>Touchdowns</label>
         </div>
       </div>
     </div>
@@ -1590,6 +1605,28 @@ for(const p of track){
 }
 const centro = new THREE.Vector3((bb.minX+bb.maxX)/2, 0, (bb.minZ+bb.maxZ)/2);
 const extent = Math.max(bb.maxX-bb.minX, bb.maxZ-bb.minZ);
+
+// v1.70 — Pedido de Daniel: marcador de touchdown con rate of descent al
+// toque. Detección por máquina de estados sobre track[].y (ya AGL, relativo
+// al mínimo de ESTE vuelo — ver procesarPuntos): "en el aire" cuando supera
+// UMBRAL_AIRE, "en tierra" cuando baja de UMBRAL_TIERRA. Cada transición
+// aire→tierra es un touchdown — así detecta TODOS los toques (touch-and-go
+// incluidos), no solo el aterrizaje final. La franja entre ambos umbrales es
+// una zona muerta a propósito, para no disparar dos veces por ruido GPS
+// justo en el límite.
+const UMBRAL_AIRE_M = 10*0.3048, UMBRAL_TIERRA_M = 3*0.3048; // 10ft / 3ft AGL
+const touchdowns = [];
+{
+  let enAire = track[0].y > UMBRAL_AIRE_M;
+  for(let i=1;i<track.length;i++){
+    if(enAire && track[i].y <= UMBRAL_TIERRA_M){
+      touchdowns.push({x:track[i].x, z:track[i].z, t:track[i].t, vsFpm: track[i].vs*196.85});
+      enAire = false;
+    } else if(!enAire && track[i].y > UMBRAL_AIRE_M){
+      enAire = true;
+    }
+  }
+}
 
 // v1.33 — FIX reportado por Daniel: haciendo zoom out del todo, en algún
 // momento desaparecía TODA la escena. Causa: camera.far quedó fijo en 20000
@@ -2572,6 +2609,78 @@ function construirFlechas(){
   return mesh;
 }
 
+// v1.70 — marcador de touchdown: un disco chato en el suelo por cada toque
+// (color según dureza del aterrizaje) + su rate of descent como cartelito
+// HTML (mismo mecanismo que el cartelito del avión — ver loop()). El disco
+// es tamaño fijo en metros (no depende de extent ni del avión): representa
+// una zona de toque real, no una referencia que necesite verse a upo
+// distancia.
+const TD_RADIO_M = 5;
+function colorTouchdown(vsFpm){
+  const suave = Math.abs(vsFpm);
+  if(suave <= 200) return 0x4ade80; // verde — aterrizaje suave
+  if(suave <= 400) return 0xf5c542; // amarillo — normal
+  return 0xe0554a;                  // rojo — duro
+}
+function construirTouchdowns(){
+  const g = new THREE.Group();
+  const y = 0.10; // entre las flechas (0.08) y la rosa (0.12)
+  for(const td of touchdowns){
+    const color = colorTouchdown(td.vsFpm);
+    // Disco relleno (fan de triángulos) — mismo estilo "geometría a mano"
+    // que el resto de las referencias de suelo (flechas, rosa).
+    const SEG = 24;
+    const pos = new Float32Array(SEG*3*3);
+    for(let i=0;i<SEG;i++){
+      const a0=(i/SEG)*Math.PI*2, a1=((i+1)/SEG)*Math.PI*2;
+      pos.set([
+        td.x, y, td.z,
+        td.x+TD_RADIO_M*Math.sin(a0), y, td.z+TD_RADIO_M*Math.cos(a0),
+        td.x+TD_RADIO_M*Math.sin(a1), y, td.z+TD_RADIO_M*Math.cos(a1),
+      ], i*9);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+    const mat = new THREE.MeshBasicMaterial({color, transparent:true, opacity:0.45, side:THREE.DoubleSide, depthTest:false});
+    const disco = new THREE.Mesh(geo, mat);
+    disco.renderOrder = 2;
+    g.add(disco);
+    // Aro de borde, más opaco, para que se distinga del suelo satelital.
+    const puntosAro = [];
+    for(let i=0;i<=SEG;i++){ const a=(i/SEG)*Math.PI*2; puntosAro.push(new THREE.Vector3(td.x+TD_RADIO_M*Math.sin(a), y, td.z+TD_RADIO_M*Math.cos(a))); }
+    const aro = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(puntosAro), new THREE.LineBasicMaterial({color, transparent:true, opacity:0.85, depthTest:false}));
+    aro.renderOrder = 3;
+    g.add(aro);
+  }
+  return g;
+}
+let touchdownGroup = null;
+const touchdownChk = document.getElementById('touchdown');
+const _tdEtiquetas = []; // divs HTML, uno por touchdown — ver actualización en loop()
+function _crearEtiquetasTouchdown(){
+  for(const div of _tdEtiquetas) div.remove();
+  _tdEtiquetas.length = 0;
+  for(const td of touchdowns){
+    const div = document.createElement('div');
+    div.className = 'etiqueta-td';
+    const color = '#'+colorTouchdown(td.vsFpm).toString(16).padStart(6,'0');
+    div.style.borderColor = color;
+    div.textContent = `⬇ ${Math.round(td.vsFpm)} fpm`;
+    document.getElementById('stage').appendChild(div);
+    _tdEtiquetas.push(div);
+  }
+}
+touchdownChk.onchange = ()=>{
+  if(touchdownChk.checked){
+    if(!touchdownGroup){ touchdownGroup=construirTouchdowns(); scene.add(touchdownGroup); _crearEtiquetasTouchdown(); }
+    touchdownGroup.visible=true;
+  } else if(touchdownGroup){
+    touchdownGroup.visible=false;
+    for(const div of _tdEtiquetas) div.style.display='none';
+  }
+};
+if(touchdownChk.checked && touchdowns.length){ touchdownGroup=construirTouchdowns(); scene.add(touchdownGroup); _crearEtiquetasTouchdown(); } // arranca activado
+
 function construirCortina(){
   const N = track.length;
   const [min,max] = rangoColor();
@@ -3162,6 +3271,23 @@ function loop(now){
     etiqueta.style.left = ((1-(ndc.x*0.5+0.5))*stage.clientWidth) + 'px';
     etiqueta.style.top = ((-ndc.y*0.5+0.5)*stage.clientHeight) + 'px';
     etiqueta.textContent = Math.round((m.hdgDeg%360+360)%360)+'° · '+Math.round(m.y*3.28084)+' ft';
+  }
+
+  // v1.70: reposiciona cada cartelito de touchdown igual que el del avión —
+  // son puntos fijos en el mundo, así que solo cambia si se mueve la cámara.
+  if(touchdownChk.checked){
+    for(let i=0;i<touchdowns.length;i++){
+      const td = touchdowns[i], div = _tdEtiquetas[i];
+      if(!div) continue;
+      const ndcTd = new THREE.Vector3(td.x, 0.10, td.z).project(camera);
+      if(ndcTd.z > 1){
+        div.style.display = 'none';
+      } else {
+        div.style.display = 'block';
+        div.style.left = ((1-(ndcTd.x*0.5+0.5))*stage.clientWidth) + 'px';
+        div.style.top = ((-ndcTd.y*0.5+0.5)*stage.clientHeight) + 'px';
+      }
+    }
   }
 
   renderer.render(scene, camera);
