@@ -2,6 +2,14 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.69 · Pedido de Daniel: se sacan los console.log de depuración del mosaico
+  satelital ([mapaSat:MAPA] zoom/tiles, origen lat0/lng0, esquinas NO/SE) —
+  eran de cuando se debuggeaba el offset/alineación del LOD (v1.32-v1.48),
+  esos bugs ya están resueltos y quedaban spameando la consola en cada fetch.
+  Se dejan los console.warn/error que sí siguen usándose (tile caído, versión
+  nueva no detectada, GLB no cargó) — esos avisan de fallos reales, no son
+  logs de debug.
+
   v1.68 · Corrección de v1.67: el signo del offset lateral quedó invertido —
   Daniel lo pidió a la izquierda y salió a la derecha. Mismo vector, signo
   cambiado (+right en vez de -right).
@@ -1121,7 +1129,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.68</span>
+    <span class="badge" id="ver-badge">v1.69</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -1905,7 +1913,6 @@ async function _fetchMosaicoParaZoom(zoom, txMin, txMax, tyMin, tyMax, yPos, eti
     }
   }
   await Promise.all(promesas);
-  console.log(`[mapaSat:${etiqueta||'?'}] zoom=${zoom} tiles=${nx*ny} ok=${ok} fail=${fail}`);
   if(fail > ok){
     const avisoMapa = document.createElement('div');
     avisoMapa.className = 'panel';
@@ -1923,9 +1930,6 @@ async function _fetchMosaicoParaZoom(zoom, txMin, txMax, tyMin, tyMax, yPos, eti
   const xEste  = R*(se.lng-lng0)*Math.PI/180*Math.cos(lat0Rad);
   const zNorte = R*(no.lat-lat0)*Math.PI/180;
   const zSur   = R*(se.lat-lat0)*Math.PI/180;
-
-  console.log('[mapaSat] origen del vuelo (lat0,lng0):', lat0, lng0);
-  console.log('[mapaSat] esquina NO real:', no, '/ esquina SE real:', se);
 
   const tex = new THREE.CanvasTexture(canvas);
   // La malla rota -90° en X igual que el suelo/grilla/rosa: con flipY por
