@@ -2,6 +2,24 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.76 · Nuevos fixes reportados por Daniel con captura sobre v1.75 (fases
+  de circuito). 1) "Básica" seguía saliendo en pleno ascenso, aun con el
+  filtro de tendencia de VS de v1.75 — la causa real no era cinemática: el
+  crosswind (viraje de 90° recién despegado) y la básica tienen EL MISMO
+  rumbo, ningún umbral de VS los separa de forma confiable. Fix real: filtro
+  de SECUENCIA — una básica solo se conserva si la última ventana confirmada
+  antes de ella fue "inicial" (el crosswind post-despegue nunca pasó por
+  inicial todavía). 2) La nota de calidad daba verde a un punto a 797ft
+  (900±103) porque medía el desvío contra el ancho de la banda de detección
+  (±300ft, deliberadamente ancha para no perder puntos). Se separa: la banda
+  de detección no se toca, pero la nota de calidad ahora usa el estándar
+  real que dio Daniel (900±50ft, ALT_IDEAL_TOL_FT). 3) Básicas y finales que
+  nunca salían: en vez de adivinar un tercer umbral a partir de capturas, se
+  agrega un modo de diagnóstico (toggle "Diagnóstico de circuito") que
+  muestra en pantalla, en tiempo real, los números crudos del punto actual
+  (Δrumbo a cada candidato, offset al eje, altura, tendencia de VS) — así el
+  próximo ajuste sale de datos reales, no de screenshots.
+
   v1.75 · 3 fixes reportados por Daniel con captura sobre v1.74 (fases de
   circuito). 1) "Básica" salía en pleno ascenso al virar 90° recién
   despegado (eso es viento cruzado/crosswind, no básica) — ahora básica
@@ -1164,6 +1182,13 @@
   #etiqueta-fase.pulso{animation:pulsoFase .45s ease-out}
   @keyframes pulsoFase{0%{transform:translate(-50%,-100%) scale(1.7);opacity:0}
     100%{transform:translate(-50%,-100%) scale(1);opacity:1}}
+  /* v1.76: panel de diagnóstico de circuito — números crudos del punto más
+     cercano al instante actual, para ajustar umbrales con datos reales en
+     vez de capturas de pantalla. Oculto por default (toggle "circuito-debug"). */
+  #debug-fase{position:absolute;left:8px;bottom:8px;
+    background:rgba(10,14,22,.88);border:1px solid var(--border);border-radius:6px;
+    padding:7px 11px;font-family:var(--font-mono);font-size:10.5px;line-height:1.5;
+    color:var(--text2);white-space:pre;pointer-events:none;z-index:5;display:none}
   footer{flex-shrink:0;background:var(--bg3);border-top:1px solid var(--border);
     padding:10px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
     font-family:var(--font-mono);font-size:12px}
@@ -1223,7 +1248,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.75</span>
+    <span class="badge" id="ver-badge">v1.76</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -1240,6 +1265,7 @@
     <button id="btn-config" title="Ajustes de vista">⚙</button>
     <div id="etiqueta-avion">070° · 0 ft</div>
     <div id="etiqueta-fase"></div>
+    <div id="debug-fase"></div>
     <div id="config-backdrop"></div>
     <div id="panel-config">
       <div class="config-head">
@@ -1261,6 +1287,7 @@
           <label class="toggle"><input type="checkbox" id="mapaSat" checked><span class="track"></span>Mapa satelital (suelo)</label>
           <label class="toggle"><input type="checkbox" id="flechas" checked><span class="track"></span>Flechas de sentido</label>
           <label class="toggle"><input type="checkbox" id="circuito" checked><span class="track"></span>Fases de circuito</label>
+          <label class="toggle"><input type="checkbox" id="circuito-debug"><span class="track"></span>Diagnóstico de circuito</label>
         </div>
       </div>
     </div>
@@ -1605,6 +1632,13 @@ const TOL_RUMBO_FINAL = 30; // ± grados — más ancha que inicial por lo de ar
 const TOL_RUMBO_BASICA = 20; // ± grados
 const OFFSET_FINAL_MAX_M = 200; // final: a menos de esto del eje de pista
 const OFFSET_INICIAL_MIN_M = 150; // inicial: a más de esto del eje de pista
+// v1.76 — pedido de Daniel: la nota de calidad (verde/amarillo/rojo) medía el
+// desvío de altura contra el ANCHO DE LA BANDA de detección (±300ft), que es
+// deliberadamente ancha para no perder puntos válidos. Eso permitía que algo
+// a 100ft del ideal saliera "verde". El estándar real que dio Daniel es
+// 900±50ft — se usa ESE número solo para la nota de color, la banda de
+// detección (CIRC_ALT_MIN/MAX_FT) no se toca.
+const ALT_IDEAL_TOL_FT = 50; // ±ft — vara para la nota de calidad, no para detectar
 // v1.75 — pedido de Daniel con captura: "básica" salía en pleno ascenso justo
 // después de despegar, al virar 90° (viento cruzado/crosswind, que es OTRO
 // tramo, no básica). Antes solo se exigía VS puntual no-ascendente para
@@ -1617,6 +1651,17 @@ const VS_NO_ASCENDIENDO_MAX_MS = 0.3; // m/s — tendencia reciente, no punto su
 const VENTANA_TENDENCIA_S = 25; // ventana hacia atrás para la tendencia de VS
 const MIN_SOSTENIDO_S = 12; // mínimo sostenido para CONFIRMAR un tramo
 const FUSION_HUECO_S = 8; // huecos cortos dentro del mismo tramo se fusionan (ruido puntual)
+// v1.76 — pedido de Daniel con captura: seguía saliendo "básica" en pleno
+// ascenso, aun con el filtro de tendencia de VS de v1.75. Causa real: el
+// viraje de 90° recién despegado (crosswind) y la básica (antes de la
+// final) son EL MISMO rumbo geométrico — ningún umbral de VS/altura los va
+// a distinguir de forma confiable, porque a veces el ascenso se aplana un
+// momento justo en el viraje. La distinción real no es cinemática, es de
+// SECUENCIA: la básica de un circuito real siempre viene después de haber
+// volado la inicial (viento en cola) de esa misma vuelta; el crosswind
+// post-despegue nunca pasó por inicial todavía. Se filtra acá, después de
+// la histéresis: una ventana de básica solo se conserva si la última
+// ventana CONFIRMADA antes de ella (de cualquier tipo) fue "INICIAL".
 
 // v1.75 — pedido de Daniel: cartelito con semáforo verde/amarillo/rojo según
 // qué tan "de libro" fue la maniobra. Cada punto clasificado guarda cuánto se
@@ -1657,7 +1702,7 @@ function calcularFasesCircuito(track, lat0, lng0, R){
     if(distAero>CIRC_RADIO_M) return null;
     const altFt = p.y*3.28084;
     if(altFt<CIRC_ALT_MIN_FT || altFt>CIRC_ALT_MAX_FT) return null;
-    const devAlt = Math.abs(altFt-900)/300;
+    const devAlt = Math.abs(altFt-900)/ALT_IDEAL_TOL_FT; // v1.76: vara de calidad ±50ft, no la banda de detección
     const offset = Math.abs(dx*uz - dz*ux); // distancia perpendicular al eje de pista
     const dFinal = Math.min(difAng(p.hdgDeg,RWY_HDG[0]), difAng(p.hdgDeg,RWY_HDG[1]));
     const dInicial = Math.min(difAng(p.hdgDeg,(RWY_HDG[0]+180)%360), difAng(p.hdgDeg,(RWY_HDG[1]+180)%360));
@@ -1690,16 +1735,48 @@ function calcularFasesCircuito(track, lat0, lng0, R){
     if(dur>=MIN_SOSTENIDO_S) ventanas.push({fase, tIni:track[i].t, tFin:track[j-1].t, sumaDev, cont});
     i=j;
   }
+  // v1.76: filtro de secuencia — descarta básicas que no vinieron de una
+  // inicial ya confirmada (ver comentario junto a MIN_SOSTENIDO_S arriba)
+  const secuenciadas = [];
+  let ultimaFaseValida = null;
+  for(const v of ventanas){
+    if(v.fase==='BASICA' && ultimaFaseValida!=='INICIAL') continue;
+    secuenciadas.push(v);
+    ultimaFaseValida = v.fase;
+  }
+
   // fusiona ventanas de la misma fase separadas por un hueco corto
   const fusionadas = [];
-  for(const v of ventanas){
+  for(const v of secuenciadas){
     const prev = fusionadas[fusionadas.length-1];
     if(prev && prev.fase===v.fase && v.tIni-prev.tFin<FUSION_HUECO_S){
       prev.tFin = v.tFin; prev.sumaDev += v.sumaDev; prev.cont += v.cont;
     } else fusionadas.push({...v});
   }
   for(const v of fusionadas) v.calidad = calidadColor(v.sumaDev/v.cont);
-  return fusionadas;
+
+  // v1.76 — pedido de Daniel: en vez de seguir adivinando umbrales a partir
+  // de capturas, esto expone los números crudos del punto más cercano a un
+  // tiempo dado (diferencia de rumbo a cada candidato, offset al eje,
+  // altura, tendencia de VS) para el modo de diagnóstico en pantalla — ver
+  // toggle "circuito-debug" y su uso en loop().
+  function diagnosticoEnT(t){
+    let idx=0, mejor=Infinity;
+    for(let k=0;k<track.length;k++){ const d=Math.abs(track[k].t-t); if(d<mejor){ mejor=d; idx=k; } }
+    const p = track[idx];
+    const dx = p.x-xAero, dz = p.z-zAero;
+    const offset = Math.abs(dx*uz - dz*ux);
+    const altFt = p.y*3.28084;
+    const dFinal = Math.min(difAng(p.hdgDeg,RWY_HDG[0]), difAng(p.hdgDeg,RWY_HDG[1]));
+    const dInicial = Math.min(difAng(p.hdgDeg,(RWY_HDG[0]+180)%360), difAng(p.hdgDeg,(RWY_HDG[1]+180)%360));
+    const dBasica = Math.min(
+      difAng(p.hdgDeg,(RWY_HDG[0]+90)%360), difAng(p.hdgDeg,(RWY_HDG[0]+270)%360),
+      difAng(p.hdgDeg,(RWY_HDG[1]+90)%360), difAng(p.hdgDeg,(RWY_HDG[1]+270)%360)
+    );
+    return {dFinal, dInicial, dBasica, offset, altFt, vs:tendVS[idx]};
+  }
+
+  return {ventanas: fusionadas, diagnosticoEnT};
 }
 
 function iniciarVisor(track){
@@ -1711,7 +1788,7 @@ function iniciarVisor(track){
   const epocaInicioSeg = track.epocaInicioSeg; // pedido de Daniel: timestamp real (UTC) en el panel
 
   // v1.74: ventanas de fase de circuito confirmadas para este track (ver función arriba)
-  const fasesCircuito = calcularFasesCircuito(track, lat0, lng0, R);
+  const {ventanas: fasesCircuito, diagnosticoEnT} = calcularFasesCircuito(track, lat0, lng0, R);
   function faseEnT(t){
     for(const v of fasesCircuito){ if(t>=v.tIni && t<=v.tFin) return v; }
     return null;
@@ -2864,6 +2941,7 @@ const humoChk = document.getElementById('humo');
 const progresivoChk = document.getElementById('progresivo');
 const flechasChk = document.getElementById('flechas');
 const circuitoChk = document.getElementById('circuito'); // v1.74
+const circuitoDebugChk = document.getElementById('circuito-debug'); // v1.76
 cortinaChk.onchange = ()=>{
   if(cortinaChk.checked){
     if(!cortinaMesh){ cortinaMesh=construirCortina(); scene.add(cortinaMesh); }
@@ -3413,6 +3491,23 @@ function loop(now){
   } else {
     etiquetaFase.style.display = 'none';
     etiquetaFase.dataset.fase = '';
+  }
+
+  // v1.76: panel de diagnóstico — números crudos del punto más cercano a
+  // currentT, para ajustar umbrales con datos reales en vez de capturas.
+  const debugFase = document.getElementById('debug-fase');
+  if(circuitoDebugChk.checked){
+    const d = diagnosticoEnT(currentT);
+    debugFase.style.display = 'block';
+    debugFase.textContent =
+      `Δrumbo final ${d.dFinal.toFixed(0)}° (tol ${TOL_RUMBO_FINAL}°)\n`+
+      `Δrumbo básica ${d.dBasica.toFixed(0)}° (tol ${TOL_RUMBO_BASICA}°)\n`+
+      `Δrumbo inicial ${d.dInicial.toFixed(0)}° (tol ${TOL_RUMBO_INICIAL}°)\n`+
+      `offset eje ${d.offset.toFixed(0)}m (final≤${OFFSET_FINAL_MAX_M} / inicial≥${OFFSET_INICIAL_MIN_M})\n`+
+      `alt ${d.altFt.toFixed(0)}ft (Δ900 = ${(d.altFt-900).toFixed(0)}, banda ${CIRC_ALT_MIN_FT}-${CIRC_ALT_MAX_FT})\n`+
+      `VS tend.25s ${(d.vs*196.85).toFixed(0)}fpm (no-ascenso ≤${(VS_NO_ASCENDIENDO_MAX_MS*196.85).toFixed(0)})`;
+  } else {
+    debugFase.style.display = 'none';
   }
 
   renderer.render(scene, camera);
