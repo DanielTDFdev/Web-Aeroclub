@@ -2,6 +2,25 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.79 · Dato de Daniel: una básica estándar desciende a 450 fpm ±50. Se
+  incorpora a la NOTA de calidad de básica, que desde v1.78 se calificaba
+  solo por rumbo (la altura se había sacado por ser el tramo que pierde
+  altura por diseño). No se usa como filtro de detección a propósito: una
+  básica volada a 700 fpm sigue siendo una básica, y lo que se quiere es
+  marcarla en rojo, no dejar de detectarla. Usa p.vs (ya suavizado en
+  procesarPuntos) y no la tendencia de 25s, que arrastraría el tramo
+  anterior sobre una básica de ~15-20s.
+  Además, hallazgo del test al implementarlo: los estándares con tolerancia
+  que dio Daniel (900±50 ft, -450±50 fpm) se estaban tratando como "borde
+  del rojo" en vez de "rango aceptable" — a 500 fpm, el límite exacto que
+  Daniel considera estándar, el cartel salía ROJO. Se agrega
+  devConTolerancia(): 0 en todo el rango de tolerancia, y crece recién a
+  partir de ahí (dev=1, rojo, a dos tolerancias del ideal). Afecta también a
+  la altura de inicial, que tenía el mismo problema desde v1.76. Las
+  tolerancias de RUMBO no cambian: esas son de detección (definen qué cuenta
+  como el tramo), no estándares declarados. Verificado: básica a 400/450/500
+  fpm da verde, 525 amarillo, 560+ rojo.
+
   v1.78 · Auditoría (/revisar) del código de fases de circuito, sin pedido
   nuevo de Daniel. Hallazgos, por severidad:
   ALTO — BUG DE ORDEN: la fusión de huecos cortos corría DESPUÉS del filtro
@@ -1307,7 +1326,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.78</span>
+    <span class="badge" id="ver-badge">v1.79</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -1709,6 +1728,12 @@ const OFFSET_INICIAL_MIN_M = 150; // inicial: a más de esto del eje de pista
 // 900±50ft — se usa ESE número solo para la nota de color, la banda de
 // detección (CIRC_ALT_MIN/MAX_FT) no se toca.
 const ALT_IDEAL_TOL_FT = 50; // ±ft — vara para la nota de calidad, no para detectar
+// v1.79 — dato de Daniel: una básica estándar desciende a 450 fpm ±50. Se usa
+// SOLO para la nota de calidad de básica (que desde v1.78 se calificaba solo
+// por rumbo), NO como filtro de detección: una básica volada a 700 fpm sigue
+// siendo una básica, y justamente lo que se quiere es marcarla en rojo, no
+// dejar de detectarla.
+const BASICA_VS_IDEAL_FPM = -450, BASICA_VS_TOL_FPM = 50;
 // v1.75 — pedido de Daniel con captura: "básica" salía en pleno ascenso justo
 // después de despegar, al virar 90° (viento cruzado/crosswind, que es OTRO
 // tramo, no básica). Antes solo se exigía VS puntual no-ascendente para
@@ -1751,6 +1776,19 @@ function calidadColor(prom){
   if(prom<=0.4) return {bg:'#2ecc71', fg:'#062b12'}; // verde
   if(prom<=0.75) return {bg:'#ffb700', fg:'#1a1400'}; // amarillo
   return {bg:'#e74c3c', fg:'#2b0705'}; // rojo
+}
+
+// v1.79 — hallazgo del test: los estándares que dio Daniel (900±50 ft de
+// altura, -450±50 fpm de descenso en básica) venían con su tolerancia, y el
+// código los trataba como "borde del rojo" en vez de "rango aceptable": a
+// 500 fpm (el límite exacto que Daniel considera estándar) daba dev=1.0, o
+// sea ROJO. Esto normaliza correctamente: 0 en TODO el rango de tolerancia,
+// y de ahí en más crece — dev=1 (rojo) recién a dos tolerancias del ideal.
+// No aplica a las tolerancias de RUMBO, que son de detección (definen qué
+// cuenta como el tramo) y no un estándar declarado, así que ahí sigue
+// valiendo la normalización directa Δ/tol.
+function devConTolerancia(valor, ideal, tol){
+  return Math.max(0, (Math.abs(valor-ideal) - tol) / tol);
 }
 
 function calcularFasesCircuito(track, lat0, lng0, R){
@@ -1796,7 +1834,7 @@ function calcularFasesCircuito(track, lat0, lng0, R){
     }
     // INICIAL y BÁSICA: banda de altura de circuito (900±300)
     if(altFt<CIRC_ALT_MIN_FT || altFt>CIRC_ALT_MAX_FT) return null;
-    const devAlt = Math.abs(altFt-900)/ALT_IDEAL_TOL_FT; // v1.76: vara de calidad ±50ft, no la banda de detección
+    const devAlt = devConTolerancia(altFt, 900, ALT_IDEAL_TOL_FT); // v1.79: 0 en todo el rango 900±50, crece después
     // v1.77 — pedido de Daniel con captura: salía "inicial" con rumbo de
     // pista y en ascenso. A esta le faltaba el mismo filtro de tendencia de
     // VS que ya tenían final y básica — un giro ascendente que ya se alejó
@@ -1815,8 +1853,13 @@ function calcularFasesCircuito(track, lat0, lng0, R){
     // (verificado con circuito sintético correcto: daba rojo). Inicial sí
     // conserva devAlt — ese es el tramo que se vuela nivelado a la altura de
     // circuito, ahí la altura sí es un indicador legítimo de la maniobra.
+    // v1.79: lo que SÍ califica a una básica, además del rumbo, es la tasa
+    // de descenso — 450 fpm ±50 según Daniel. Se usa p.vs (ya suavizado en
+    // procesarPuntos) y no tendVS, que promedia 25s y arrastra el tramo
+    // anterior: la básica dura ~15-20s, esa ventana la desdibujaría.
     if(dBasica<=TOL_RUMBO_BASICA && tendVS[i]<=VS_NO_ASCENDIENDO_MAX_MS){
-      return {fase:'BASICA', dev:dBasica/TOL_RUMBO_BASICA};
+      const devVs = devConTolerancia(p.vs*196.85, BASICA_VS_IDEAL_FPM, BASICA_VS_TOL_FPM);
+      return {fase:'BASICA', dev:Math.max(dBasica/TOL_RUMBO_BASICA, devVs)};
     }
     return null;
   });
@@ -3663,6 +3706,7 @@ function loop(now){
       `offset eje ${d.offset.toFixed(0)}m (final≤${OFFSET_FINAL_MAX_M} / inicial≥${OFFSET_INICIAL_MIN_M})\n`+
       `alt ${d.altFt.toFixed(0)}ft (banda circ ${CIRC_ALT_MIN_FT}-${CIRC_ALT_MAX_FT} / final ${FINAL_ALT_MIN_FT}-${FINAL_ALT_MAX_FT})\n`+
       `VS tend.25s ${(d.vs*196.85).toFixed(0)}fpm (no-ascenso ≤${(VS_NO_ASCENDIENDO_MAX_MS*196.85).toFixed(0)})\n`+
+      `VS básica ideal ${BASICA_VS_IDEAL_FPM}±${BASICA_VS_TOL_FPM}fpm (solo nota, no filtro)\n`+
       `\n— CENSO DEL VUELO (puntos que pasan c/criterio) —\n`+
       `en radio ${censoCircuito.enRadio}/${censoCircuito.total}\n`+
       `FINAL alt ${censoCircuito.finalAlt} · rumbo ${censoCircuito.finalRumbo} · offset ${censoCircuito.finalOffset} · vs ${censoCircuito.finalVs} → TODOS ${censoCircuito.finalTodo}\n`+
