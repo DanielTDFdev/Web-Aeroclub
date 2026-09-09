@@ -2,6 +2,12 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.73 · Reversión pedida por Daniel: v1.70-v1.72 (marcador de touchdown /
+  toque-y-motor) seguía marcando toques en pleno vuelo aun con el piso
+  virtual. En vez de seguir iterando, se saca toda la feature — detección
+  (_detectarToques/_detectarAterrizajeFinal/piso virtual), marcadores 3D,
+  cartelitos HTML y el checkbox — y queda el visor como en v1.69.
+
   v1.72 · FIX reportado por Daniel con captura: apareció un "toque" marcado en
   pleno aire (683ft, VS≈0), en medio de una maniobra, sin haber aterrizado.
   Causa: TOQUE_ALTURA_MAX_FT se medía contra yMin — el mínimo puntual de todo
@@ -1101,13 +1107,6 @@
     white-space:nowrap;pointer-events:none;z-index:5}
   #etiqueta-avion::after{content:'';position:absolute;left:50%;bottom:-5px;
     transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--cyan)}
-  /* v1.70: cartelito de touchdown — mismo mecanismo de proyección que
-     #etiqueta-avion, pero uno por cada toque detectado (estático, no sigue
-     al avión) y con el color de borde seteado inline según dureza. */
-  .etiqueta-td{position:absolute;transform:translate(-50%,-100%);
-    background:rgba(15,20,32,.85);border:1px solid var(--border);border-radius:6px;
-    padding:3px 9px;font-family:var(--font-mono);font-size:11px;color:var(--text);
-    white-space:nowrap;pointer-events:none;z-index:4}
   footer{flex-shrink:0;background:var(--bg3);border-top:1px solid var(--border);
     padding:10px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
     font-family:var(--font-mono);font-size:12px}
@@ -1167,7 +1166,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.72</span>
+    <span class="badge" id="ver-badge">v1.73</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -1203,7 +1202,6 @@
           <label class="toggle"><input type="checkbox" id="rosa" checked><span class="track"></span>Rosa de rumbos</label>
           <label class="toggle"><input type="checkbox" id="mapaSat" checked><span class="track"></span>Mapa satelital (suelo)</label>
           <label class="toggle"><input type="checkbox" id="flechas" checked><span class="track"></span>Flechas de sentido</label>
-          <label class="toggle"><input type="checkbox" id="touchdown" checked><span class="track"></span>Touchdowns</label>
         </div>
       </div>
     </div>
@@ -1486,46 +1484,6 @@ function procesarPuntos(puntosCrudos){
   // resta la altitud MÍNIMA de este vuelo (no una elevación fija de aeródromo)
   // para que la traza arranque siempre pegada al "piso" del visor
   const yMin = Math.min(...track.map(p => p.y));
-
-  // v1.72 — Pedido de Daniel: apareció un "toque" marcado en pleno aire, en
-  // medio de una maniobra (espiral/simulacro), sin haber aterrizado. Causa:
-  // TOQUE_ALTURA_MAX_FT (en iniciarVisor) se mide contra yMin de acá arriba —
-  // el mínimo puntual de TODO el registro crudo. Si el archivo no arrancó con
-  // el avión realmente en tierra (o si el mínimo puntual quedó más alto que
-  // el piso real por cualquier motivo), yMin no representa tierra de verdad,
-  // y una maniobra que baja y sube 100ft+ cerca de ESE mínimo (aunque esté a
-  // cientos de pies del piso real) pasa el filtro de altura igual. Mismo
-  // problema, y misma solución, que _calcPisoVirtual ya resolvió en
-  // turnos.html: en vez de un solo punto, se promedia la altitud de los
-  // primeros PISO_VENTANA_MIN minutos (asumiendo que ahí el avión está
-  // parado/carreteando antes de despegar) — un promedio de varios minutos
-  // pesa mucho menos el ruido de un solo punto. Con los mismos guards que
-  // turnos.html: solo se usa si (1) la ventana es estable (poca variación —
-  // no está en medio de un ascenso) y (2) no queda muy por encima del mínimo
-  // puntual (si no, el archivo arrancó ya en vuelo y esos minutos no son
-  // tierra). Se guarda como OFFSET sobre yMin (no se toca yMin en sí, para no
-  // afectar el resto del render — cortina, colores, "ft" en el panel — que ya
-  // funciona bien tal cual está); lo usan solo _detectarToques y
-  // _detectarAterrizajeFinal en iniciarVisor.
-  const PISO_VENTANA_SEG = 5*60;
-  const PISO_VARIACION_MAX_FT = 150;
-  const PISO_DESVIO_MAX_FT = 200;
-  let pisoOffsetM = 0;
-  {
-    const ventana = track.filter(p => p.t <= PISO_VENTANA_SEG);
-    if(ventana.length >= 5){
-      const ys = ventana.map(p=>p.y);
-      const prom = ys.reduce((a,b)=>a+b,0)/ys.length;
-      const rangoFt = (Math.max(...ys)-Math.min(...ys))*3.28084;
-      const desvioFt = (prom-yMin)*3.28084;
-      if(rangoFt<=PISO_VARIACION_MAX_FT && desvioFt<=PISO_DESVIO_MAX_FT){
-        pisoOffsetM = prom - yMin;
-      } else {
-        console.warn('[análisis3d] piso virtual descartado (variación '+rangoFt.toFixed(0)+'ft, desvío '+desvioFt.toFixed(0)+'ft sobre el mínimo registrado) — probablemente el archivo arrancó con el avión ya en vuelo. Se usa el mínimo puntual como piso para detectar toques, como antes.');
-      }
-    }
-  }
-
   for(const p of track) p.y -= yMin;
 
   // Recorte pedido por Daniel: trazar solo desde que despega. Arranca en el
@@ -1562,7 +1520,6 @@ function procesarPuntos(puntosCrudos){
   // sumarse a este ancla para reconstruir la hora real de ESE instante.
   recortado.epocaInicioSeg = t0 + tBase;
   recortado.origenGeo = {lat0, lng0, R};
-  recortado.pisoOffsetM = pisoOffsetM; // v1.72 — ver comentario junto a PISO_VENTANA_SEG
   return recortado;
 }
 
@@ -1671,82 +1628,6 @@ for(const p of track){
 const centro = new THREE.Vector3((bb.minX+bb.maxX)/2, 0, (bb.minZ+bb.maxZ)/2);
 const extent = Math.max(bb.maxX-bb.minX, bb.maxZ-bb.minZ);
 
-// v1.71 — Pedido de Daniel: el umbral absoluto de v1.70 (10ft/3ft AGL) no
-// detectaba toques y motor. Causa raíz: vuelo.html muestrea GPS cada 10s
-// (GPS_MUESTREO_MS) — un touch-and-go real dura 2-5s de ruedas en el piso,
-// así que casi nunca hay una muestra exactamente en el punto más bajo; el
-// dato para tocar un umbral absoluto de AGL directamente no existe. turnos.html
-// ya resuelve este mismo problema en su "Análisis del vuelo" (mapa 2D) con un
-// algoritmo de PROMINENCIA en vez de un umbral absoluto: un toque es un
-// mínimo local de altitud con una SUBIDA de al menos TOQUE_PROMINENCIA_FT
-// antes y después dentro de una ventana — no importa qué tan bajo haya
-// llegado la muestra más baja, alcanza con que sea un valle real entre dos
-// subidas. Se porta esa misma lógica acá (mismos parámetros/nombres que
-// turnos.html, para no reinventar umbrales ya afinados por Daniel a mano con
-// vuelos reales). Además se porta _detectarAterrizajeFinal (sostenido >60s
-// cerca del piso + desplazamiento neto = rodaje) para distinguir el
-// aterrizaje final (que NUNCA sube después, por eso _detectarToques no lo
-// agarra a propósito) de un touch-and-go.
-const TOQUE_PROMINENCIA_FT = 100;
-const TOQUE_VENTANA_SEG = 4*60; // TOQUE_VENTANA_MIN de turnos.html, en segundos (acá track.t ya está en segundos)
-const TOQUE_ALTURA_MAX_FT = 300; // relativo al PISO (yMin + pisoOffsetM — ver v1.72), no al 0 crudo del track
-function _detectarToques(track, pisoOffsetM){
-  const candidatos=[];
-  for(let i=1;i<track.length-1;i++){
-    if(track[i].y>track[i-1].y || track[i].y>track[i+1].y) continue; // no-estricto: permite meseta (altímetro GPS repite valor cerca del piso)
-    if((track[i].y-pisoOffsetM)*3.28084 > TOQUE_ALTURA_MAX_FT) continue;
-    let antesOk=false;
-    for(let j=i-1;j>=0;j--){
-      if(track[i].t-track[j].t>TOQUE_VENTANA_SEG) break;
-      if((track[j].y-track[i].y)*3.28084>=TOQUE_PROMINENCIA_FT){ antesOk=true; break; }
-    }
-    if(!antesOk) continue;
-    let despuesOk=false;
-    for(let j=i+1;j<track.length;j++){
-      if(track[j].t-track[i].t>TOQUE_VENTANA_SEG) break;
-      if((track[j].y-track[i].y)*3.28084>=TOQUE_PROMINENCIA_FT){ despuesOk=true; break; }
-    }
-    if(despuesOk) candidatos.push(track[i]);
-  }
-  candidatos.sort((a,b)=>a.t-b.t);
-  const dedup=[];
-  for(const c of candidatos){
-    const ult=dedup[dedup.length-1];
-    if(ult && (c.t-ult.t)<120){ // 2 min — mismo dedup que turnos.html
-      if(c.y<ult.y) dedup[dedup.length-1]=c;
-      continue;
-    }
-    dedup.push(c);
-  }
-  return dedup;
-}
-const ATERRIZAJE_ALTURA_TOL_FT = 60;
-const ATERRIZAJE_DURACION_MIN_SEG = 60;
-const ATERRIZAJE_DESPLAZ_MIN_M = 50; // turnos.html usa km (lat/lng); acá track ya está en metros ENU, directo
-function _detectarAterrizajeFinal(track, pisoOffsetM){
-  const candidatos=[];
-  let i=0;
-  while(i<track.length){
-    if((track[i].y-pisoOffsetM)*3.28084 > ATERRIZAJE_ALTURA_TOL_FT){ i++; continue; }
-    let j=i;
-    while(j+1<track.length && (track[j+1].y-pisoOffsetM)*3.28084<=ATERRIZAJE_ALTURA_TOL_FT) j++;
-    const durSeg = track[j].t-track[i].t;
-    if(durSeg>=ATERRIZAJE_DURACION_MIN_SEG){
-      const dispM = Math.hypot(track[j].x-track[i].x, track[j].z-track[i].z);
-      if(dispM>=ATERRIZAJE_DESPLAZ_MIN_M) candidatos.push(track[i]); // el INICIO del tramo, no el final — mismo criterio que turnos.html
-    }
-    i=j+1;
-  }
-  if(!candidatos.length) return null;
-  candidatos.sort((a,b)=>a.t-b.t);
-  return candidatos[candidatos.length-1];
-}
-const touchdowns = _detectarToques(track, track.pisoOffsetM||0).map(p=>({x:p.x, z:p.z, t:p.t, vsFpm:p.vs*196.85, esFinal:false}));
-{
-  const finalPt = _detectarAterrizajeFinal(track, track.pisoOffsetM||0);
-  if(finalPt) touchdowns.push({x:finalPt.x, z:finalPt.z, t:finalPt.t, vsFpm:finalPt.vs*196.85, esFinal:true});
-}
-touchdowns.sort((a,b)=>a.t-b.t);
 
 // v1.33 — FIX reportado por Daniel: haciendo zoom out del todo, en algún
 // momento desaparecía TODA la escena. Causa: camera.far quedó fijo en 20000
@@ -2729,82 +2610,6 @@ function construirFlechas(){
   return mesh;
 }
 
-// v1.70 — marcador de touchdown: un disco chato en el suelo por cada toque
-// (color según dureza del aterrizaje) + su rate of descent como cartelito
-// HTML (mismo mecanismo que el cartelito del avión — ver loop()). El disco
-// es tamaño fijo en metros (no depende de extent ni del avión): representa
-// una zona de toque real, no una referencia que necesite verse a upo
-// distancia.
-// v1.71 — el aterrizaje final (td.esFinal) se dibuja más grande y con
-// cartelito propio ("ATERRIZAJE"), para distinguirlo de un touch-and-go —
-// mismo criterio visual que turnos.html (triángulo verde propio, distinto de
-// los círculos de toque).
-const TD_RADIO_M = 5;
-function colorTouchdown(vsFpm){
-  const suave = Math.abs(vsFpm);
-  if(suave <= 200) return 0x4ade80; // verde — aterrizaje suave
-  if(suave <= 400) return 0xf5c542; // amarillo — normal
-  return 0xe0554a;                  // rojo — duro
-}
-function construirTouchdowns(){
-  const g = new THREE.Group();
-  const y = 0.10; // entre las flechas (0.08) y la rosa (0.12)
-  for(const td of touchdowns){
-    const color = colorTouchdown(td.vsFpm);
-    const radio = TD_RADIO_M * (td.esFinal ? 1.4 : 1);
-    // Disco relleno (fan de triángulos) — mismo estilo "geometría a mano"
-    // que el resto de las referencias de suelo (flechas, rosa).
-    const SEG = 24;
-    const pos = new Float32Array(SEG*3*3);
-    for(let i=0;i<SEG;i++){
-      const a0=(i/SEG)*Math.PI*2, a1=((i+1)/SEG)*Math.PI*2;
-      pos.set([
-        td.x, y, td.z,
-        td.x+radio*Math.sin(a0), y, td.z+radio*Math.cos(a0),
-        td.x+radio*Math.sin(a1), y, td.z+radio*Math.cos(a1),
-      ], i*9);
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
-    const mat = new THREE.MeshBasicMaterial({color, transparent:true, opacity:0.45, side:THREE.DoubleSide, depthTest:false});
-    const disco = new THREE.Mesh(geo, mat);
-    disco.renderOrder = 2;
-    g.add(disco);
-    // Aro de borde, más opaco, para que se distinga del suelo satelital.
-    const puntosAro = [];
-    for(let i=0;i<=SEG;i++){ const a=(i/SEG)*Math.PI*2; puntosAro.push(new THREE.Vector3(td.x+radio*Math.sin(a), y, td.z+radio*Math.cos(a))); }
-    const aro = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(puntosAro), new THREE.LineBasicMaterial({color, transparent:true, opacity:0.85, depthTest:false}));
-    aro.renderOrder = 3;
-    g.add(aro);
-  }
-  return g;
-}
-let touchdownGroup = null;
-const touchdownChk = document.getElementById('touchdown');
-const _tdEtiquetas = []; // divs HTML, uno por touchdown — ver actualización en loop()
-function _crearEtiquetasTouchdown(){
-  for(const div of _tdEtiquetas) div.remove();
-  _tdEtiquetas.length = 0;
-  for(const td of touchdowns){
-    const div = document.createElement('div');
-    div.className = 'etiqueta-td';
-    const color = '#'+colorTouchdown(td.vsFpm).toString(16).padStart(6,'0');
-    div.style.borderColor = color;
-    div.textContent = td.esFinal ? `🛬 ATERRIZAJE · ${Math.round(td.vsFpm)} fpm` : `⬇ ${Math.round(td.vsFpm)} fpm`;
-    document.getElementById('stage').appendChild(div);
-    _tdEtiquetas.push(div);
-  }
-}
-touchdownChk.onchange = ()=>{
-  if(touchdownChk.checked){
-    if(!touchdownGroup){ touchdownGroup=construirTouchdowns(); scene.add(touchdownGroup); _crearEtiquetasTouchdown(); }
-    touchdownGroup.visible=true;
-  } else if(touchdownGroup){
-    touchdownGroup.visible=false;
-    for(const div of _tdEtiquetas) div.style.display='none';
-  }
-};
-if(touchdownChk.checked && touchdowns.length){ touchdownGroup=construirTouchdowns(); scene.add(touchdownGroup); _crearEtiquetasTouchdown(); } // arranca activado
 
 function construirCortina(){
   const N = track.length;
@@ -3396,23 +3201,6 @@ function loop(now){
     etiqueta.style.left = ((1-(ndc.x*0.5+0.5))*stage.clientWidth) + 'px';
     etiqueta.style.top = ((-ndc.y*0.5+0.5)*stage.clientHeight) + 'px';
     etiqueta.textContent = Math.round((m.hdgDeg%360+360)%360)+'° · '+Math.round(m.y*3.28084)+' ft';
-  }
-
-  // v1.70: reposiciona cada cartelito de touchdown igual que el del avión —
-  // son puntos fijos en el mundo, así que solo cambia si se mueve la cámara.
-  if(touchdownChk.checked){
-    for(let i=0;i<touchdowns.length;i++){
-      const td = touchdowns[i], div = _tdEtiquetas[i];
-      if(!div) continue;
-      const ndcTd = new THREE.Vector3(td.x, 0.10, td.z).project(camera);
-      if(ndcTd.z > 1){
-        div.style.display = 'none';
-      } else {
-        div.style.display = 'block';
-        div.style.left = ((1-(ndcTd.x*0.5+0.5))*stage.clientWidth) + 'px';
-        div.style.top = ((-ndcTd.y*0.5+0.5)*stage.clientHeight) + 'px';
-      }
-    }
   }
 
   renderer.render(scene, camera);
