@@ -2,6 +2,10 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.68 · Corrección de v1.67: el signo del offset lateral quedó invertido —
+  Daniel lo pidió a la izquierda y salió a la derecha. Mismo vector, signo
+  cambiado (+right en vez de -right).
+
   v1.67 · Pedido de Daniel sobre v1.66: "quedó gigantesca" + "no la quiero
   debajo del avión, a la izquierda". (1) El radio de la rosa dejó de basarse
   en `extent` (tamaño de TODO el vuelo — tenía sentido cuando era un marcador
@@ -1117,7 +1121,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.67</span>
+    <span class="badge" id="ver-badge">v1.68</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -3117,7 +3121,7 @@ function loop(now){
     const rightX = Math.cos(camTheta), rightZ = -Math.sin(camTheta);
     const offset = AVION_LARGO_MUNDO*3.2; // separación del avión, en la misma unidad que el tamaño de la rosa
     const baseX = siguiendo ? pos.x : centro.x, baseZ = siguiendo ? pos.z : centro.z;
-    rosaGroup.position.set(baseX - rightX*offset, 0, baseZ - rightZ*offset);
+    rosaGroup.position.set(baseX + rightX*offset, 0, baseZ + rightZ*offset);
   }
 
   // "Suelo infinito": el plano se recentra bajo la cámara en cada frame para
