@@ -2,6 +2,29 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.81 · 1 falla persistente + 1 pregunta de Daniel que cambia el diseño.
+  1) CARTELES QUE SEGUÍAN APAGÁNDOSE a mitad de la maniobra pese al relleno
+  de huecos de v1.80: ese relleno usaba un umbral fijo (8s) y no alcanza —
+  con viento fuerte el rumbo oscila y se va de tolerancia por tramos más
+  largos. Se pasa al patrón clásico de histéresis: umbral de ENTRADA
+  estricto (el que confirma la ventana) y de SALIDA laxo — confirmado el
+  tramo, se extiende hacia adelante y atrás mientras los puntos NO
+  clasifiquen como OTRA fase, así solo lo corta el comienzo real del tramo
+  siguiente y no el ruido. Acotado por EXT_MAX_S=45s para que un tramo no se
+  derrame sobre medio vuelo. Dos detalles resueltos en el camino: la fusión
+  de ventanas no actualizaba idxFin (quedaba desincronizado del tFin), y dos
+  ventanas vecinas reclamaban entero el mismo hueco al extenderse y quedaban
+  solapadas — ahora se lo reparten por la mitad.
+  2) COLOR EN VIVO (pregunta de Daniel: "si la maniobra empieza en rojo y
+  luego se corrige, ¿el cartel cambia de color?"). Hasta v1.80 NO: era el
+  promedio de toda la ventana, fijo, así que un tramo corregido se veía rojo
+  de punta a punta y no se podía ver EN QUÉ MOMENTO se salió del estándar —
+  justo el dato útil para instruir. Ahora cada ventana guarda su perfil de
+  desvío punto por punto y el color se evalúa sobre los últimos 12s
+  (VENTANA_COLOR_S): ventana móvil y no punto suelto, para que un bache de
+  GPS no lo haga parpadear, pero corta como para que una corrección real se
+  vea enseguida. El promedio global del tramo se conserva como resumen.
+
   v1.80 · 2 fallas reportadas por Daniel + estándar de final que faltaba.
   1) CARTEL QUE SE APAGA A MITAD DE LA MANIOBRA: un punto suelto que no
   clasificaba (ruido de rumbo, un bache de VS) partía la corrida en dos, y
@@ -1349,7 +1372,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.80</span>
+    <span class="badge" id="ver-badge">v1.81</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -1917,8 +1940,34 @@ function calcularFasesCircuito(track, lat0, lng0, R){
     while(j<crudo.length && crudo[j]!=null && crudo[j].fase===fase){ sumaDev+=crudo[j].dev; cont++; j++; }
     const dur = track[j-1].t - track[i].t;
     const minReq = fase==='BASICA' ? MIN_SOSTENIDO_BASICA_S : MIN_SOSTENIDO_S;
-    if(dur>=minReq) ventanas.push({fase, tIni:track[i].t, tFin:track[j-1].t, sumaDev, cont});
+    if(dur>=minReq) ventanas.push({fase, tIni:track[i].t, tFin:track[j-1].t, sumaDev, cont, idxIni:i, idxFin:j-1});
     i=j;
+  }
+
+  // v1.81 — reportado por Daniel: los carteles SEGUÍAN apagándose a mitad de
+  // la maniobra pese al relleno de huecos de v1.80. Ese relleno usaba un
+  // umbral fijo (FUSION_HUECO_S=8s) y no alcanza: con viento fuerte el rumbo
+  // oscila y se va de tolerancia por tramos más largos que eso. Se cambia al
+  // patrón clásico de histéresis: umbral de ENTRADA estricto (el que ya
+  // confirma la ventana) y umbral de SALIDA laxo — una vez confirmado el
+  // tramo, se extiende hacia adelante y hacia atrás mientras los puntos NO
+  // clasifiquen como OTRA fase. O sea que solo lo corta el comienzo real del
+  // tramo siguiente, no el ruido. EXT_MAX_S acota la extensión para que un
+  // tramo no se derrame sobre medio vuelo si el resto nunca clasifica.
+  const EXT_MAX_S = 45;
+  for(let v=0; v<ventanas.length; v++){
+    const cur = ventanas[v], ant = ventanas[v-1], sig = ventanas[v+1];
+    // Límites: no invadir la ventana vecina. Cuando dos ventanas comparten un
+    // hueco de puntos sin clasificar, se lo reparten por la mitad — si no,
+    // ambas lo reclamarían entero y quedarían solapadas (y faseEnT devolvería
+    // siempre la primera, marcando mal el tramo).
+    const limA = ant ? Math.ceil((ant.idxFin + cur.idxIni)/2) : 0;
+    const limB = sig ? Math.floor((cur.idxFin + sig.idxIni)/2) : crudo.length-1;
+    let a = cur.idxIni;
+    while(a>limA && crudo[a-1]==null && cur.tIni-track[a-1].t<=EXT_MAX_S) a--;
+    let b = cur.idxFin;
+    while(b<limB && crudo[b+1]==null && track[b+1].t-cur.tFin<=EXT_MAX_S) b++;
+    cur.idxIni=a; cur.idxFin=b; cur.tIni=track[a].t; cur.tFin=track[b].t;
   }
   // v1.78 — hallazgo de /revisar: BUG DE ORDEN. La fusión de huecos cortos
   // corría DESPUÉS del filtro de secuencia, y eso perdía tramos reales: una
@@ -1932,7 +1981,7 @@ function calcularFasesCircuito(track, lat0, lng0, R){
   for(const v of ventanas){
     const prev = fusionadas[fusionadas.length-1];
     if(prev && prev.fase===v.fase && v.tIni-prev.tFin<FUSION_HUECO_S){
-      prev.tFin = v.tFin; prev.sumaDev += v.sumaDev; prev.cont += v.cont;
+      prev.tFin = v.tFin; prev.sumaDev += v.sumaDev; prev.cont += v.cont; prev.idxFin = v.idxFin;
     } else fusionadas.push({...v});
   }
 
@@ -1945,7 +1994,22 @@ function calcularFasesCircuito(track, lat0, lng0, R){
     secuenciadas.push(v);
     ultimaFaseValida = v.fase;
   }
-  for(const v of secuenciadas) v.calidad = calidadColor(v.sumaDev/v.cont);
+  // v1.81 — pregunta de Daniel: "si la maniobra empieza en rojo y luego se
+  // corrige, ¿el cartel cambia de color?". Hasta v1.80 NO: el color se
+  // calculaba una sola vez como promedio de toda la ventana y quedaba fijo,
+  // así que un tramo corregido a mitad de camino se veía rojo de punta a
+  // punta y no se podía ver EN QUÉ MOMENTO se salió del estándar — que es
+  // justo el dato útil para instruir. Ahora cada ventana guarda su perfil de
+  // desvío punto por punto y el color se evalúa en vivo sobre los últimos
+  // VENTANA_COLOR_S segundos (ver colorEnT): si el alumno corrige, el cartel
+  // pasa de rojo a verde en el momento en que corrige.
+  for(const v of secuenciadas){
+    v.calidad = calidadColor(v.sumaDev/v.cont); // promedio global (fallback y resumen del tramo)
+    v.perfil = [];
+    for(let k=v.idxIni; k<=v.idxFin; k++){
+      if(crudo[k]!=null) v.perfil.push({t:track[k].t, dev:crudo[k].dev});
+    }
+  }
 
   // v1.76 — pedido de Daniel: en vez de seguir adivinando umbrales a partir
   // de capturas, esto expone los números crudos del punto más cercano a un
@@ -2036,6 +2100,21 @@ function iniciarVisor(track){
   function faseEnT(t){
     for(const v of fasesCircuito){ if(t>=v.tIni && t<=v.tFin) return v; }
     return null;
+  }
+  // v1.81: color en vivo — promedia el desvío de los últimos VENTANA_COLOR_S
+  // segundos dentro del tramo, en vez del promedio fijo de toda la ventana.
+  // Es una ventana móvil y no el punto suelto para que un bache de GPS no
+  // haga parpadear el color, pero corta como para que una corrección real se
+  // vea enseguida.
+  const VENTANA_COLOR_S = 12;
+  function colorEnT(v, t){
+    let suma=0, cont=0;
+    for(const p of v.perfil){ if(p.t<=t && t-p.t<=VENTANA_COLOR_S){ suma+=p.dev; cont++; } }
+    if(!cont){ // antes del primer punto clasificado del tramo (zona extendida)
+      for(const p of v.perfil){ if(p.t>t){ return calidadColor(p.dev); } }
+      return v.calidad;
+    }
+    return calidadColor(suma/cont);
   }
 
 // ============================================================================
@@ -3729,8 +3808,9 @@ function loop(now){
     etiquetaFase.style.display = 'block';
     etiquetaFase.style.left = etiqueta.style.left;
     etiquetaFase.style.top = ((-ndc.y*0.5+0.5)*stage.clientHeight - 28) + 'px';
-    etiquetaFase.style.background = ventanaFase.calidad.bg;
-    etiquetaFase.style.color = ventanaFase.calidad.fg;
+    const col = colorEnT(ventanaFase, currentT); // v1.81: color en vivo, ver colorEnT
+    etiquetaFase.style.background = col.bg;
+    etiquetaFase.style.color = col.fg;
     etiquetaFase.textContent = nombre;
   } else {
     etiquetaFase.style.display = 'none';
