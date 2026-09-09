@@ -2,6 +2,17 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.71 · Pedido de Daniel: el umbral absoluto de v1.70 no detectaba toques y
+  motor (GPS_MUESTREO_MS=10s en vuelo.html — un touch-and-go de 2-5s casi
+  nunca cae justo en una muestra, el dato para un umbral de AGL directamente
+  no existe). Se porta la lógica de _detectarToques/_detectarAterrizajeFinal
+  de turnos.html (ya probada en producción, mismos parámetros/nombres):
+  prominencia — mínimo local con subida de ≥100ft antes Y después dentro de
+  4 min — en vez de umbral absoluto. Se agrega también la detección de
+  aterrizaje final (sostenido >60s cerca del piso + desplazamiento neto =
+  rodaje), con marcador propio más grande ("ATERRIZAJE") distinto de los
+  touch-and-go.
+
   v1.70 · Pedido de Daniel: marcador de touchdown con rate of descent al
   toque. Detección por máquina de estados sobre track[].y (10ft/3ft AGL,
   histéresis para no disparar dos veces por ruido GPS) — captura TODOS los
@@ -1143,7 +1154,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.70</span>
+    <span class="badge" id="ver-badge">v1.71</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -1606,27 +1617,82 @@ for(const p of track){
 const centro = new THREE.Vector3((bb.minX+bb.maxX)/2, 0, (bb.minZ+bb.maxZ)/2);
 const extent = Math.max(bb.maxX-bb.minX, bb.maxZ-bb.minZ);
 
-// v1.70 — Pedido de Daniel: marcador de touchdown con rate of descent al
-// toque. Detección por máquina de estados sobre track[].y (ya AGL, relativo
-// al mínimo de ESTE vuelo — ver procesarPuntos): "en el aire" cuando supera
-// UMBRAL_AIRE, "en tierra" cuando baja de UMBRAL_TIERRA. Cada transición
-// aire→tierra es un touchdown — así detecta TODOS los toques (touch-and-go
-// incluidos), no solo el aterrizaje final. La franja entre ambos umbrales es
-// una zona muerta a propósito, para no disparar dos veces por ruido GPS
-// justo en el límite.
-const UMBRAL_AIRE_M = 10*0.3048, UMBRAL_TIERRA_M = 3*0.3048; // 10ft / 3ft AGL
-const touchdowns = [];
-{
-  let enAire = track[0].y > UMBRAL_AIRE_M;
-  for(let i=1;i<track.length;i++){
-    if(enAire && track[i].y <= UMBRAL_TIERRA_M){
-      touchdowns.push({x:track[i].x, z:track[i].z, t:track[i].t, vsFpm: track[i].vs*196.85});
-      enAire = false;
-    } else if(!enAire && track[i].y > UMBRAL_AIRE_M){
-      enAire = true;
+// v1.71 — Pedido de Daniel: el umbral absoluto de v1.70 (10ft/3ft AGL) no
+// detectaba toques y motor. Causa raíz: vuelo.html muestrea GPS cada 10s
+// (GPS_MUESTREO_MS) — un touch-and-go real dura 2-5s de ruedas en el piso,
+// así que casi nunca hay una muestra exactamente en el punto más bajo; el
+// dato para tocar un umbral absoluto de AGL directamente no existe. turnos.html
+// ya resuelve este mismo problema en su "Análisis del vuelo" (mapa 2D) con un
+// algoritmo de PROMINENCIA en vez de un umbral absoluto: un toque es un
+// mínimo local de altitud con una SUBIDA de al menos TOQUE_PROMINENCIA_FT
+// antes y después dentro de una ventana — no importa qué tan bajo haya
+// llegado la muestra más baja, alcanza con que sea un valle real entre dos
+// subidas. Se porta esa misma lógica acá (mismos parámetros/nombres que
+// turnos.html, para no reinventar umbrales ya afinados por Daniel a mano con
+// vuelos reales). Además se porta _detectarAterrizajeFinal (sostenido >60s
+// cerca del piso + desplazamiento neto = rodaje) para distinguir el
+// aterrizaje final (que NUNCA sube después, por eso _detectarToques no lo
+// agarra a propósito) de un touch-and-go.
+const TOQUE_PROMINENCIA_FT = 100;
+const TOQUE_VENTANA_SEG = 4*60; // TOQUE_VENTANA_MIN de turnos.html, en segundos (acá track.t ya está en segundos)
+const TOQUE_ALTURA_MAX_FT = 300; // relativo al piso — acá el piso es 0 porque track[].y ya viene relativo al mínimo del vuelo (ver yMin en procesarPuntos)
+function _detectarToques(track){
+  const candidatos=[];
+  for(let i=1;i<track.length-1;i++){
+    if(track[i].y>track[i-1].y || track[i].y>track[i+1].y) continue; // no-estricto: permite meseta (altímetro GPS repite valor cerca del piso)
+    if(track[i].y*3.28084 > TOQUE_ALTURA_MAX_FT) continue;
+    let antesOk=false;
+    for(let j=i-1;j>=0;j--){
+      if(track[i].t-track[j].t>TOQUE_VENTANA_SEG) break;
+      if((track[j].y-track[i].y)*3.28084>=TOQUE_PROMINENCIA_FT){ antesOk=true; break; }
     }
+    if(!antesOk) continue;
+    let despuesOk=false;
+    for(let j=i+1;j<track.length;j++){
+      if(track[j].t-track[i].t>TOQUE_VENTANA_SEG) break;
+      if((track[j].y-track[i].y)*3.28084>=TOQUE_PROMINENCIA_FT){ despuesOk=true; break; }
+    }
+    if(despuesOk) candidatos.push(track[i]);
   }
+  candidatos.sort((a,b)=>a.t-b.t);
+  const dedup=[];
+  for(const c of candidatos){
+    const ult=dedup[dedup.length-1];
+    if(ult && (c.t-ult.t)<120){ // 2 min — mismo dedup que turnos.html
+      if(c.y<ult.y) dedup[dedup.length-1]=c;
+      continue;
+    }
+    dedup.push(c);
+  }
+  return dedup;
 }
+const ATERRIZAJE_ALTURA_TOL_FT = 60;
+const ATERRIZAJE_DURACION_MIN_SEG = 60;
+const ATERRIZAJE_DESPLAZ_MIN_M = 50; // turnos.html usa km (lat/lng); acá track ya está en metros ENU, directo
+function _detectarAterrizajeFinal(track){
+  const candidatos=[];
+  let i=0;
+  while(i<track.length){
+    if(track[i].y*3.28084 > ATERRIZAJE_ALTURA_TOL_FT){ i++; continue; }
+    let j=i;
+    while(j+1<track.length && track[j+1].y*3.28084<=ATERRIZAJE_ALTURA_TOL_FT) j++;
+    const durSeg = track[j].t-track[i].t;
+    if(durSeg>=ATERRIZAJE_DURACION_MIN_SEG){
+      const dispM = Math.hypot(track[j].x-track[i].x, track[j].z-track[i].z);
+      if(dispM>=ATERRIZAJE_DESPLAZ_MIN_M) candidatos.push(track[i]); // el INICIO del tramo, no el final — mismo criterio que turnos.html
+    }
+    i=j+1;
+  }
+  if(!candidatos.length) return null;
+  candidatos.sort((a,b)=>a.t-b.t);
+  return candidatos[candidatos.length-1];
+}
+const touchdowns = _detectarToques(track).map(p=>({x:p.x, z:p.z, t:p.t, vsFpm:p.vs*196.85, esFinal:false}));
+{
+  const finalPt = _detectarAterrizajeFinal(track);
+  if(finalPt) touchdowns.push({x:finalPt.x, z:finalPt.z, t:finalPt.t, vsFpm:finalPt.vs*196.85, esFinal:true});
+}
+touchdowns.sort((a,b)=>a.t-b.t);
 
 // v1.33 — FIX reportado por Daniel: haciendo zoom out del todo, en algún
 // momento desaparecía TODA la escena. Causa: camera.far quedó fijo en 20000
@@ -2615,6 +2681,10 @@ function construirFlechas(){
 // es tamaño fijo en metros (no depende de extent ni del avión): representa
 // una zona de toque real, no una referencia que necesite verse a upo
 // distancia.
+// v1.71 — el aterrizaje final (td.esFinal) se dibuja más grande y con
+// cartelito propio ("ATERRIZAJE"), para distinguirlo de un touch-and-go —
+// mismo criterio visual que turnos.html (triángulo verde propio, distinto de
+// los círculos de toque).
 const TD_RADIO_M = 5;
 function colorTouchdown(vsFpm){
   const suave = Math.abs(vsFpm);
@@ -2627,6 +2697,7 @@ function construirTouchdowns(){
   const y = 0.10; // entre las flechas (0.08) y la rosa (0.12)
   for(const td of touchdowns){
     const color = colorTouchdown(td.vsFpm);
+    const radio = TD_RADIO_M * (td.esFinal ? 1.4 : 1);
     // Disco relleno (fan de triángulos) — mismo estilo "geometría a mano"
     // que el resto de las referencias de suelo (flechas, rosa).
     const SEG = 24;
@@ -2635,8 +2706,8 @@ function construirTouchdowns(){
       const a0=(i/SEG)*Math.PI*2, a1=((i+1)/SEG)*Math.PI*2;
       pos.set([
         td.x, y, td.z,
-        td.x+TD_RADIO_M*Math.sin(a0), y, td.z+TD_RADIO_M*Math.cos(a0),
-        td.x+TD_RADIO_M*Math.sin(a1), y, td.z+TD_RADIO_M*Math.cos(a1),
+        td.x+radio*Math.sin(a0), y, td.z+radio*Math.cos(a0),
+        td.x+radio*Math.sin(a1), y, td.z+radio*Math.cos(a1),
       ], i*9);
     }
     const geo = new THREE.BufferGeometry();
@@ -2647,7 +2718,7 @@ function construirTouchdowns(){
     g.add(disco);
     // Aro de borde, más opaco, para que se distinga del suelo satelital.
     const puntosAro = [];
-    for(let i=0;i<=SEG;i++){ const a=(i/SEG)*Math.PI*2; puntosAro.push(new THREE.Vector3(td.x+TD_RADIO_M*Math.sin(a), y, td.z+TD_RADIO_M*Math.cos(a))); }
+    for(let i=0;i<=SEG;i++){ const a=(i/SEG)*Math.PI*2; puntosAro.push(new THREE.Vector3(td.x+radio*Math.sin(a), y, td.z+radio*Math.cos(a))); }
     const aro = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(puntosAro), new THREE.LineBasicMaterial({color, transparent:true, opacity:0.85, depthTest:false}));
     aro.renderOrder = 3;
     g.add(aro);
@@ -2665,7 +2736,7 @@ function _crearEtiquetasTouchdown(){
     div.className = 'etiqueta-td';
     const color = '#'+colorTouchdown(td.vsFpm).toString(16).padStart(6,'0');
     div.style.borderColor = color;
-    div.textContent = `⬇ ${Math.round(td.vsFpm)} fpm`;
+    div.textContent = td.esFinal ? `🛬 ATERRIZAJE · ${Math.round(td.vsFpm)} fpm` : `⬇ ${Math.round(td.vsFpm)} fpm`;
     document.getElementById('stage').appendChild(div);
     _tdEtiquetas.push(div);
   }
