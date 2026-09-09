@@ -2,6 +2,27 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.90 · Reportado por Daniel con captura, quinta vuelta: seguía saliendo
+  "ESES SOBRE CAMINO" sobre lo que claramente es un viraje sobre un punto.
+  La prioridad de v1.89 tenía un AGUJERO: un viraje grande se consumía como
+  maniobra propia SOLO si mantenía la altura dentro de ±100ft. Un viraje de
+  300° que sube o baja más que eso no calificaba, quedaba libre, y se
+  enganchaba a una serie de eses de otra parte del vuelo — que es exactamente
+  el caso de la captura (el arco cambia de altura, se ve en el gradiente de
+  color del modo Altitud). El criterio correcto no depende de la altura: un
+  viraje de ≥300° hacia un mismo lado es SIEMPRE una maniobra propia y nunca
+  un eslabón de unas eses. Ahora se consume siempre, y el perfil vertical
+  solo decide CÓMO se llama (sobre un punto / espiral / en ascenso o
+  descenso), con un fallback por banda de altura para el viraje que no
+  destaca en ningún sub-tramo.
+  Orden final, marcando segmentos consumidos: 1) ochos, 2) todo viraje ≥300°
+  (consume siempre), 3) virajes verticales en segmentos de 120-300° (NO
+  consumen: un viraje de 180° en descenso puede ser el eslabón de unas eses),
+  4) eses solo con segmentos libres.
+  Verificado con el caso exacto (eses + viraje descendente de 330°): ahora
+  salen en dos ventanas separadas. Regresiones OK: eses solas, ochos, espiral
+  y viraje sobre un punto con altura constante siguen bien.
+
   v1.89 · Reportado por Daniel con captura de vuelo completo, cuarta vuelta
   sobre lo mismo — y esta vez la causa era otra. El criterio de v1.88
   (neto/total) estaba bien; el problema era el ALCANCE de la ventana. En su
@@ -1557,7 +1578,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.89</span>
+    <span class="badge" id="ver-badge">v1.90</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -2197,21 +2218,29 @@ function detectarManiobras(track, viento){
   }
   segs.push({ini, fin:signo!==0?ultGiro:n-1, giro:acum, signo});
 
-  // v1.86 — reportado por Daniel con captura: marcaba "ESPIRAL DESCENSO" en un
-  // tramo donde el avión CLARAMENTE subía. Causa: el cambio de altura se
-  // medía sobre el segmento de viraje ENTERO, así que en un viraje continuo
-  // largo (568° en su caso) que baja al principio y sube al final, el neto
-  // quedaba negativo y se etiquetaba todo el tramo como descenso, incluida la
-  // parte de ascenso. Ahora cada segmento de viraje se SUBDIVIDE por sentido
-  // vertical: se reporta un evento por cada sub-tramo con VS consistente, así
-  // el cartel siempre coincide con lo que el avión está haciendo en ese
-  // momento. Los tramos nivelados (|VS| < VS_SIGNO_MIN_FPM) no cortan la
-  // corrida: se absorben en el sub-tramo en curso para no fragmentar por
-  // ruido, solo un cambio de signo real la corta.
-  for(const sg of segs){
-    if(!enAltura(sg.ini)) continue;
-    if(sg.fin<=sg.ini) continue;
-    // subdividir por sentido vertical
+  // v1.90 — reportado por Daniel con captura (quinta vez sobre lo mismo).
+  // La prioridad de v1.89 tenía un agujero: un viraje grande se consumía como
+  // maniobra propia SOLO si mantenía la altura dentro de ±100ft. Un viraje de
+  // 300° que sube o baja más que eso no calificaba, quedaba libre, y se
+  // enganchaba a una serie de eses de otra parte del vuelo — que es
+  // exactamente lo de la captura (el arco cambia de altura, se ve en el
+  // gradiente de color). El criterio correcto no depende de la altura: un
+  // viraje de ≥300° hacia un mismo lado es SIEMPRE una maniobra propia, y
+  // nunca un eslabón de unas eses. Se consume siempre y la altura solo decide
+  // CÓMO se llama (sobre un punto / espiral / en ascenso o descenso).
+  //
+  // El orden completo, marcando segmentos consumidos:
+  //   1) OCHOS  — par consecutivo opuesto de vueltas completas que vuelve al punto
+  //   2) TODO VIRAJE GRANDE (≥300°) — se clasifica por perfil vertical y se consume
+  //   3) VIRAJES VERTICALES en segmentos chicos (120-300°) — no consumen, pueden ser eses
+  //   4) ESES   — series alternantes solo con segmentos libres
+  const consumido = new Array(segs.length).fill(false);
+  const esGrande = segs.map(s=>Math.abs(s.giro)>=VIRAJE_PUNTO_GIRO_MIN_DEG);
+  const difHl = difH;
+
+  // helper: subdivide un segmento por sentido vertical (v1.86 — un viraje que
+  // baja y después sube no puede llevar una sola etiqueta)
+  function subdividirVertical(sg){
     const sub = [];
     let a = sg.ini, sVert = 0;
     for(let i=sg.ini; i<=sg.fin; i++){
@@ -2221,62 +2250,24 @@ function detectarManiobras(track, viento){
       else if(s!==0 && sVert===0) sVert=s;
     }
     sub.push({a, b:sg.fin, s:sVert});
-
-    for(const st of sub){
-      if(st.b<=st.a || st.s===0) continue;
-      // giro y arco recorrido de ESTE sub-tramo
-      let giro=0, arco=0;
-      for(let i=st.a+1; i<=st.b; i++){
-        giro += difH(track[i-1].hdgDeg, track[i].hdgDeg);
-        arco += Math.hypot(track[i].x-track[i-1].x, track[i].z-track[i-1].z);
-      }
-      giro = Math.abs(giro);
-      const dAlt = (track[st.b].y-track[st.a].y)*3.28084;
-      const dur = track[st.b].t - track[st.a].t;
-      const desp = Math.hypot(track[st.b].x-track[st.a].x, track[st.b].z-track[st.a].z);
-      const radio = giro>1 ? arco/(giro*Math.PI/180) : Infinity;
-      const compacto = desp <= ESPIRAL_DESP_MAX_RADIOS*radio;
-      const sube = dAlt>0;
-      if(giro>=ESPIRAL_GIRO_MIN_DEG && Math.abs(dAlt)>=ESPIRAL_DALT_MIN_FT && dur>=15 && compacto){
-        out.push({tipo: sube?'ESPIRAL ASCENSO':'ESPIRAL DESCENSO', tIni:track[st.a].t, tFin:track[st.b].t,
-                  detalle:`${giro.toFixed(0)}° · ${sube?'+':''}${dAlt.toFixed(0)} ft · radio ${radio.toFixed(0)} m`});
-      } else if(giro>=VIRAJE_VERT_GIRO_MIN_DEG && Math.abs(dAlt)>=VIRAJE_VERT_DALT_MIN_FT && dur>=10){
-        out.push({tipo: sube?'VIRAJE EN ASCENSO':'VIRAJE EN DESCENSO', tIni:track[st.a].t, tFin:track[st.b].t,
-                  detalle:`${giro.toFixed(0)}° · ${sube?'+':''}${dAlt.toFixed(0)} ft · radio ${radio.toFixed(0)} m`});
-      }
+    return sub;
+  }
+  function metricas(a,b){
+    let giro=0, arco=0;
+    for(let i=a+1;i<=b;i++){
+      giro += difHl(track[i-1].hdgDeg, track[i].hdgDeg);
+      arco += Math.hypot(track[i].x-track[i-1].x, track[i].z-track[i-1].z);
     }
+    giro = Math.abs(giro);
+    const dAlt = (track[b].y-track[a].y)*3.28084;
+    const desp = Math.hypot(track[b].x-track[a].x, track[b].z-track[a].z);
+    const radio = giro>1 ? arco/(giro*Math.PI/180) : Infinity;
+    return {giro, dAlt, desp, radio, dur:track[b].t-track[a].t};
   }
 
-  // ==========================================================================
-  // v1.89 — PRIORIDAD ENTRE PATRONES (reportado por Daniel con captura de
-  // vuelo completo). El problema no era el criterio de v1.88 sino el ALCANCE
-  // de la ventana: en su vuelo había DOS maniobras distintas y consecutivas
-  // —unas eses reales sobre una ruta, y después un viraje circular sobre un
-  // punto— y el agrupador las metía en UNA sola serie. El conjunto cancelaba
-  // bien (por las eses), pasaba el filtro neto/total, y la etiqueta "ESES
-  // SOBRE CAMINO" se extendía también sobre el bucle, que es justo donde
-  // estaba el avión en la captura.
-  // Ningún umbral arregla eso: hace falta prioridad. Un segmento que YA es
-  // una maniobra completa por sí mismo (un viraje de ≥300° a un mismo lado)
-  // no puede ser además un eslabón de una serie de eses. Se resuelve en
-  // orden, marcando segmentos consumidos:
-  //   1) OCHOS   — par consecutivo opuesto, AMBOS ≥300°, vuelve al punto
-  //   2) VIRAJE SOBRE UN PUNTO — ≥300° a un lado, altitud constante
-  //   3) ESES    — series alternantes SOLO con segmentos no consumidos
-  // Así los ochos (dos vueltas completas) se siguen reconociendo, el bucle
-  // suelto queda como viraje sobre un punto, y la serie de eses se arma con
-  // los virajes que realmente son eses.
-  const consumido = new Array(segs.length).fill(false);
-  const esGrande = segs.map(s=>Math.abs(s.giro)>=VIRAJE_PUNTO_GIRO_MIN_DEG);
-  const giroSerie = (a,b)=>{
-    let neto=0, abs=0;
-    for(let i=a+1;i<=b;i++){ const d=difH(track[i-1].hdgDeg,track[i].hdgDeg); neto+=d; abs+=Math.abs(d); }
-    return {neto, abs};
-  };
-
   // --- 1) OCHOS SOBRE PILONES: dos vueltas completas opuestas y encadenadas
-  //        que vuelven al punto de partida. Condición fuerte y específica, va
-  //        primero para que sus lóbulos no se consuman como virajes sueltos.
+  //        que vuelven al punto de partida. Va primero para que sus lóbulos no
+  //        se consuman como virajes sueltos.
   for(let k=0;k+1<segs.length;k++){
     if(consumido[k]||consumido[k+1]) continue;
     if(!esGrande[k]||!esGrande[k+1]) continue;
@@ -2292,25 +2283,72 @@ function detectarManiobras(track, viento){
     }
   }
 
-  // --- 2) VIRAJE SOBRE UN PUNTO (definición de Daniel): giro persistente
-  //        hacia un mismo lado manteniendo la altitud (±100ft). Se evalúa
-  //        sobre el segmento completo, sin subdividir por sentido vertical,
-  //        porque acá lo definitorio es justamente que la altura NO cambia.
+  // --- 2) TODO VIRAJE GRANDE es una maniobra propia. Se consume SIEMPRE (ahí
+  //        estaba el agujero de v1.89) y el perfil vertical solo elige el
+  //        nombre.
   for(let k=0;k<segs.length;k++){
-    if(consumido[k]) continue;
+    if(consumido[k] || !esGrande[k]) continue;
     const sg=segs[k];
-    if(!enAltura(sg.ini) || sg.fin<=sg.ini || !esGrande[k]) continue;
-    let minA=Infinity, maxA=-Infinity;
-    for(let i=sg.ini;i<=sg.fin;i++){ minA=Math.min(minA,altFt[i]); maxA=Math.max(maxA,altFt[i]); }
-    if(maxA-minA > VIRAJE_PUNTO_DALT_MAX_FT*2) continue; // ±100ft = banda de 200ft
-    const giro=Math.abs(sg.giro);
-    let arco=0;
-    for(let i=sg.ini+1;i<=sg.fin;i++) arco += Math.hypot(track[i].x-track[i-1].x, track[i].z-track[i-1].z);
-    const radio = arco/(giro*Math.PI/180);
-    out.push({tipo:'VIRAJE SOBRE UN PUNTO', tIni:track[sg.ini].t, tFin:track[sg.fin].t,
-              detalle:`${giro.toFixed(0)}° · alt ±${((maxA-minA)/2).toFixed(0)} ft · radio ${radio.toFixed(0)} m`});
+    if(!enAltura(sg.ini) || sg.fin<=sg.ini) continue;
     consumido[k]=true;
+    let reporto=false;
+    for(const st of subdividirVertical(sg)){
+      if(st.b<=st.a || st.s===0) continue;
+      const m=metricas(st.a,st.b);
+      const sube=m.dAlt>0;
+      const compacto = m.desp <= ESPIRAL_DESP_MAX_RADIOS*m.radio;
+      if(m.giro>=ESPIRAL_GIRO_MIN_DEG && Math.abs(m.dAlt)>=ESPIRAL_DALT_MIN_FT && m.dur>=15 && compacto){
+        out.push({tipo: sube?'ESPIRAL ASCENSO':'ESPIRAL DESCENSO', tIni:track[st.a].t, tFin:track[st.b].t,
+                  detalle:`${m.giro.toFixed(0)}° · ${sube?'+':''}${m.dAlt.toFixed(0)} ft · radio ${m.radio.toFixed(0)} m`});
+        reporto=true;
+      } else if(m.giro>=VIRAJE_VERT_GIRO_MIN_DEG && Math.abs(m.dAlt)>=VIRAJE_VERT_DALT_MIN_FT && m.dur>=10){
+        out.push({tipo: sube?'VIRAJE EN ASCENSO':'VIRAJE EN DESCENSO', tIni:track[st.a].t, tFin:track[st.b].t,
+                  detalle:`${m.giro.toFixed(0)}° · ${sube?'+':''}${m.dAlt.toFixed(0)} ft · radio ${m.radio.toFixed(0)} m`});
+        reporto=true;
+      }
+    }
+    if(!reporto){
+      // ningún sub-tramo destacó: el viraje se etiqueta por su banda de altura
+      let minA=Infinity, maxA=-Infinity;
+      for(let i=sg.ini;i<=sg.fin;i++){ minA=Math.min(minA,altFt[i]); maxA=Math.max(maxA,altFt[i]); }
+      const m=metricas(sg.ini,sg.fin);
+      const banda=maxA-minA;
+      if(banda <= VIRAJE_PUNTO_DALT_MAX_FT*2){
+        out.push({tipo:'VIRAJE SOBRE UN PUNTO', tIni:track[sg.ini].t, tFin:track[sg.fin].t,
+                  detalle:`${m.giro.toFixed(0)}° · alt ±${(banda/2).toFixed(0)} ft · radio ${m.radio.toFixed(0)} m`});
+      } else {
+        const sube=m.dAlt>0;
+        out.push({tipo: sube?'VIRAJE EN ASCENSO':'VIRAJE EN DESCENSO', tIni:track[sg.ini].t, tFin:track[sg.fin].t,
+                  detalle:`${m.giro.toFixed(0)}° · ${sube?'+':''}${m.dAlt.toFixed(0)} ft · radio ${m.radio.toFixed(0)} m`});
+      }
+    }
   }
+
+  // --- 3) Virajes con cambio de altura en segmentos CHICOS (120-300°). No
+  //        consumen: un viraje de 180° en descenso puede ser el eslabón de
+  //        unas eses, y en ese caso las eses son la maniobra que corresponde.
+  for(let k=0;k<segs.length;k++){
+    if(consumido[k] || esGrande[k]) continue;
+    const sg=segs[k];
+    if(!enAltura(sg.ini) || sg.fin<=sg.ini) continue;
+    for(const st of subdividirVertical(sg)){
+      if(st.b<=st.a || st.s===0) continue;
+      const m=metricas(st.a,st.b);
+      const sube=m.dAlt>0;
+      if(m.giro>=VIRAJE_VERT_GIRO_MIN_DEG && Math.abs(m.dAlt)>=VIRAJE_VERT_DALT_MIN_FT && m.dur>=10){
+        out.push({tipo: sube?'VIRAJE EN ASCENSO':'VIRAJE EN DESCENSO', tIni:track[st.a].t, tFin:track[st.b].t,
+                  detalle:`${m.giro.toFixed(0)}° · ${sube?'+':''}${m.dAlt.toFixed(0)} ft · radio ${m.radio.toFixed(0)} m`});
+      }
+    }
+  }
+
+  // --- 4) ESES SOBRE CAMINO (ver v1.88/v1.89 en el changelog): series de
+  //        virajes alternantes armadas SOLO con segmentos libres.
+  const giroSerie = (a,b)=>{
+    let neto=0, abs=0;
+    for(let i=a+1;i<=b;i++){ const d=difH(track[i-1].hdgDeg,track[i].hdgDeg); neto+=d; abs+=Math.abs(d); }
+    return {neto, abs};
+  };
 
   // --- 3) ESES SOBRE CAMINO: series de virajes alternantes, solo con
   //        segmentos que no fueron consumidos arriba. Además del mínimo de
