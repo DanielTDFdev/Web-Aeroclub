@@ -2,6 +2,15 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.65 · FIX reportado por Daniel: rosa de rumbos "flotando en el aire" al
+  principio del vuelo. Causa: se dibuja en `centro`, el punto medio FIJO de
+  todo el recorrido — el despegue suele quedar lejos de ahí, y con
+  depthTest:false (necesario contra z-fighting, v1.17) se dibuja encima de
+  todo sin importar la distancia, incluso cuando debería quedar oculta por el
+  horizonte. Se autocorregía solo a mitad de vuelo, al acercarse al centro.
+  Fix: se oculta la rosa (no se dibuja) mientras el avión está lejos del
+  centro (radio*6), en vez de tocar depthTest y reabrir el z-fighting.
+
   v1.64 · Pedido de Daniel: "el logo, minúsculo" — seguía chico a pesar de
   v1.62/v1.63. Salto directo a 64px (antes 44px) en vez de otro +30%.
 
@@ -1087,7 +1096,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.64</span>
+    <span class="badge" id="ver-badge">v1.65</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -1653,6 +1662,7 @@ function _crearTexturaLetra(letra){
   ctx.fillText(letra, size/2, size/2+4);
   return new THREE.CanvasTexture(c);
 }
+let ROSA_RADIO = 0; // v1.65: expuesto para poder ocultar la rosa cuando el avión está lejos del centro (fijo) del vuelo — ver comentario en el loop principal
 function construirRosaRumbos(){
   const g = new THREE.Group();
   // v1.17 FIX: Daniel reportó que no se veía — con radio=extent*0.025 quedaba
@@ -1787,6 +1797,7 @@ function construirRosaRumbos(){
     sprite.position.set(centro.x+radio*1.30*Math.sin(a), y+tamLetra*0.3, centro.z+radio*1.30*Math.cos(a));
     g.add(sprite);
   }
+  ROSA_RADIO = radio;
   return g;
 }
 let rosaGroup = null;
@@ -3048,6 +3059,26 @@ function loop(now){
   const siguiendo = seguirChk.checked;
   actualizarCamara(siguiendo ? pos : centro, siguiendo ? camRadioSeguir : camRadioLibre);
   actualizarInfo(m);
+
+  // v1.65 — FIX reportado por Daniel: la rosa de rumbos se ve "flotando en el
+  // aire" al principio del vuelo. Causa real: `centro` es el punto medio fijo
+  // de TODO el recorrido (bb.min/max de todo el track), y ahí se dibuja la
+  // rosa — pero el despegue suele quedar lejos de ese punto medio (en un
+  // extremo del vuelo, no en el centro). Sus materiales usan depthTest:false
+  // (necesario para que no titile contra el suelo/grilla de cerca, ver v1.17),
+  // así que se dibuja SIEMPRE encima de todo sin importar la distancia real —
+  // incluso cuando debería quedar oculta por el horizonte del "suelo
+  // infinito". Por eso se ve flotando en el cielo al arrancar lejos del
+  // centro, y se autocorrige a mitad de vuelo cuando el avión se acerca a él.
+  // En vez de tocar depthTest (reintroduciría el z-fighting que v1.17 vino a
+  // resolver), directamente se oculta la rosa mientras el avión (en modo
+  // "seguir") está lejos del centro — deja de dibujarse el punto problemático
+  // en vez de dibujarlo mal. En cámara libre el target YA ES `centro`, así
+  // que ahí la distancia siempre es 0 y la rosa se ve bien siempre.
+  if(rosaGroup && ROSA_RADIO>0){
+    const distCentro = siguiendo ? Math.hypot(pos.x-centro.x, pos.z-centro.z) : 0;
+    rosaGroup.visible = rosaChk.checked && distCentro < ROSA_RADIO*6;
+  }
 
   // "Suelo infinito": el plano se recentra bajo la cámara en cada frame para
   // que el borde nunca quede a la vista. Con el degradado liso de antes eso
