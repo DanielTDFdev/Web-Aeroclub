@@ -2,6 +2,37 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.82 · Análisis adicionales pedidos por Daniel (1, 2 y 4 de la lista; el
+  punto 6, maniobras fuera del circuito, queda pendiente de definiciones).
+  1) SENDA DE APROXIMACIÓN: fila nueva en el panel de datos. Sale
+  prácticamente gratis porque `pitch` de procesarPuntos ya es atan(vs/gs),
+  o sea el ángulo real de la TRAYECTORIA sobre el suelo (no la actitud del
+  avión). Se compara contra 3° de descenso y se colorea con el mismo
+  semáforo, pero SOLO mientras el avión está en la final — fuera de la
+  final el número se muestra neutro, porque 3° no es un objetivo en el resto
+  del circuito. Complementa al rate de 450 fpm: el rate solo es correcto si
+  la velocidad también lo es, el ángulo captura ambas.
+  2) ESTABILIZACIÓN DE LA APROXIMACIÓN: por cada final se busca, recorriendo
+  desde el toque hacia atrás, el punto MÁS ALTO a partir del cual el resto
+  del tramo cumple rumbo/rate/alineación sin volver a salirse — o sea, si se
+  desestabiliza y se recupera, cuenta la recuperación (criterio operativo
+  real, no el primer instante que casualmente estuvo dentro). Se reporta la
+  altura de estabilización con veredicto OK/BAJA/TARDÍA. ⚠ Los umbrales
+  (300ft objetivo, 200ft mínimo, y las tolerancias de estabilización) son
+  PROPUESTA — Daniel tiene que confirmarlos o corregirlos, no son estándar
+  del Aeroclub.
+  4) VIENTO ESTIMADO desde la propia traza, sin dato externo: con TAS
+  aproximadamente constante, GS(θ) ≈ TAS + Wx·sin(θ) + Wz·cos(θ); con el
+  avión virando por todos los rumbos del circuito eso es un sistema
+  sobredeterminado de 3 incógnitas, resuelto por mínimos cuadrados
+  (eliminación gaussiana con pivoteo). Se reporta de dónde VIENE el viento
+  (convención meteorológica) e intensidad en kt, más la TAS media y la
+  dispersión del ajuste — esa dispersión es el dato honesto de cuánto
+  confiar, porque el método asume TAS constante y en un circuito la final es
+  más lenta que la inicial. Devuelve null si el vuelo no cubrió suficientes
+  rumbos (sistema mal condicionado) en vez de inventar un número.
+  Los tres se muestran en un panel de resumen nuevo debajo del de datos.
+
   v1.81 · 1 falla persistente + 1 pregunta de Daniel que cambia el diseño.
   1) CARTELES QUE SEGUÍAN APAGÁNDOSE a mitad de la maniobra pese al relleno
   de huecos de v1.80: ese relleno usaba un umbral fijo (8s) y no alcanza —
@@ -1250,6 +1281,13 @@
   #info b{color:var(--text);font-size:15px}
   #info .row{display:flex;justify-content:space-between;gap:14px}
   #info .lbl{color:var(--text)}
+  /* v1.82: resumen del vuelo (viento estimado + estabilización de cada
+     aproximación). Debajo del panel de datos en vivo, mismo estilo. */
+  #panel-vuelo{position:absolute;top:12px;left:12px;margin-top:0;z-index:10;
+    background:rgba(15,20,32,.88);border:1px solid var(--border);border-radius:8px;
+    padding:8px 12px;font-family:var(--font-mono);font-size:10.5px;color:var(--text2);
+    backdrop-filter:blur(4px);line-height:1.6;max-width:230px;white-space:pre-line;display:none}
+  #panel-vuelo .t{color:var(--cyan);letter-spacing:.05em}
   /* v1.39 — pedido de Daniel: en celular el panel de datos + los 6 toggles +
      la leyenda de color, todo apilado permanentemente arriba a la izquierda
      (v1.31), ocupaba media pantalla y se pisaba con el mapa/3D de abajo —
@@ -1372,7 +1410,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.81</span>
+    <span class="badge" id="ver-badge">v1.82</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -1385,7 +1423,9 @@
       <div class="row"><span class="lbl">BANK</span><span id="v-bank">—</span></div>
       <div class="row"><span class="lbl">PITCH</span><span id="v-pitch">—</span></div>
       <div class="row"><span class="lbl">VS</span><span id="v-vs">—</span></div>
+      <div class="row"><span class="lbl">SENDA</span><span id="v-senda">—</span></div>
     </div>
+    <div id="panel-vuelo"></div>
     <button id="btn-config" title="Ajustes de vista">⚙</button>
     <div id="etiqueta-avion">070° · 0 ft</div>
     <div id="etiqueta-fase"></div>
@@ -1793,6 +1833,25 @@ const ALT_IDEAL_TOL_FT = 50; // ±ft — vara para la nota de calidad, no para d
 // siendo una básica, y justamente lo que se quiere es marcarla en rojo, no
 // dejar de detectarla.
 const BASICA_VS_IDEAL_FPM = -450, BASICA_VS_TOL_FPM = 50;
+// ============================================================================
+// v1.82 — ANÁLISIS ADICIONALES pedidos por Daniel (senda, estabilización, viento)
+// ============================================================================
+// SENDA DE APROXIMACIÓN: el ángulo de trayectoria ya está calculado en
+// procesarPuntos como `pitch` = atan(vs/gs) — que NO es la actitud del avión
+// sino el ángulo real de la trayectoria sobre el suelo, que es justo lo que
+// hace falta acá. Estándar 3° de descenso. Es el complemento del rate de 450
+// fpm: el rate solo es correcto si la velocidad también lo es, y el ángulo
+// captura las dos cosas juntas.
+const SENDA_IDEAL_DEG = -3, SENDA_TOL_DEG = 0.5;
+// ESTABILIZACIÓN DE LA APROXIMACIÓN: altura a la que la final quedó
+// estabilizada (rumbo, rate y alineación dentro de tolerancia, y ya sin
+// salirse hasta el final del tramo). ⚠ Estos números son PROPUESTA, no
+// estándar del Aeroclub — Daniel tiene que confirmarlos o corregirlos.
+const ESTAB_ALT_OBJETIVO_FT = 300; // estabilizada en o antes de esta altura = OK
+const ESTAB_ALT_MINIMA_FT = 200;   // por debajo de esto = aproximación no estabilizada
+const ESTAB_TOL_RUMBO_DEG = 10;    // más estricto que el de detección (30°)
+const ESTAB_TOL_VS_FPM = 150;      // más laxo que el estándar de calidad (±50)
+const ESTAB_TOL_OFFSET_M = 100;    // más estricto que el de detección (200m)
 // v1.75 — pedido de Daniel con captura: "básica" salía en pleno ascenso justo
 // después de despegar, al virar 90° (viento cruzado/crosswind, que es OTRO
 // tramo, no básica). Antes solo se exigía VS puntual no-ascendente para
@@ -1848,6 +1907,79 @@ function calidadColor(prom){
 // valiendo la normalización directa Δ/tol.
 function devConTolerancia(valor, ideal, tol){
   return Math.max(0, (Math.abs(valor-ideal) - tol) / tol);
+}
+
+// v1.82 — VIENTO ESTIMADO desde la propia traza, sin dato externo. Con TAS
+// aproximadamente constante, la ground speed en cada instante es
+// GS(θ) ≈ TAS + Wx·sin(θ) + Wz·cos(θ), donde θ es el rumbo y (Wx,Wz) la
+// componente de viento en el marco ENU. Con el avión virando por todos los
+// rumbos de un circuito, eso es un sistema sobredeterminado de 3 incógnitas
+// que se resuelve por mínimos cuadrados. Devuelve de dónde VIENE el viento
+// (convención meteorológica) y su intensidad en kt.
+// Limitación honesta: asume TAS constante en la muestra usada. En un vuelo
+// donde la velocidad varía mucho (circuito completo con final lenta) el
+// resultado es una estimación, no una medición — por eso se reporta también
+// la dispersión, para saber cuánto confiar.
+function estimarViento(track){
+  const pts = track.filter(p => p.gs > 15); // descarta rodaje/detenido (>~30kt)
+  if(pts.length < 30) return null;
+  // sistema normal 3x3 para [TAS, Wx, Wz]
+  let S=[[0,0,0],[0,0,0],[0,0,0]], b=[0,0,0];
+  for(const p of pts){
+    const r = p.hdgDeg*Math.PI/180;
+    const f = [1, Math.sin(r), Math.cos(r)];
+    for(let a=0;a<3;a++){ for(let c=0;c<3;c++) S[a][c]+=f[a]*f[c]; b[a]+=f[a]*p.gs; }
+  }
+  // eliminación gaussiana con pivoteo parcial
+  const M = S.map((row,idx)=>[...row, b[idx]]);
+  for(let col=0; col<3; col++){
+    let piv=col; for(let r2=col+1;r2<3;r2++) if(Math.abs(M[r2][col])>Math.abs(M[piv][col])) piv=r2;
+    if(Math.abs(M[piv][col])<1e-9) return null; // mal condicionado: el vuelo no cubrió suficientes rumbos
+    [M[col],M[piv]]=[M[piv],M[col]];
+    for(let r2=0;r2<3;r2++){
+      if(r2===col) continue;
+      const f=M[r2][col]/M[col][col];
+      for(let c2=col;c2<4;c2++) M[r2][c2]-=f*M[col][c2];
+    }
+  }
+  const tas=M[0][3]/M[0][0], Wx=M[1][3]/M[1][1], Wz=M[2][3]/M[2][2];
+  const vel = Math.sqrt(Wx*Wx+Wz*Wz);
+  if(!isFinite(vel) || vel>50) return null; // >100kt: ajuste sin sentido, no lo reportamos
+  // (Wx,Wz) es la componente que SUMA a la GS, o sea hacia dónde SOPLA.
+  // El viento se reporta de dónde VIENE: +180°.
+  let de = Math.atan2(Wx,Wz)*180/Math.PI + 180;
+  de = (de%360+360)%360;
+  // dispersión del ajuste, para saber cuánto confiar
+  let err=0;
+  for(const p of pts){
+    const r=p.hdgDeg*Math.PI/180;
+    err += Math.pow(p.gs - (tas + Wx*Math.sin(r) + Wz*Math.cos(r)), 2);
+  }
+  return {deDeg:Math.round(de), kt:vel*1.94384, tasKt:tas*1.94384,
+          rmsKt:Math.sqrt(err/pts.length)*1.94384, n:pts.length};
+}
+
+// v1.82 — ESTABILIZACIÓN DE LA APROXIMACIÓN. Recorre la final desde el final
+// hacia atrás y busca el punto MÁS ALTO a partir del cual todo el resto del
+// tramo cumple los criterios sin volver a salirse. Esa es la altura de
+// estabilización: si la aproximación se desestabiliza y se recupera, cuenta
+// la recuperación (que es el criterio operativo real, no el primer instante
+// en que casualmente estuvo dentro).
+function analizarEstabilizacion(track, v, xAero, zAero, ux, uz, difAng){
+  let mejorIdx = null;
+  for(let k=v.idxFin; k>=v.idxIni; k--){
+    const p = track[k];
+    const dx=p.x-xAero, dz=p.z-zAero;
+    const offset = Math.abs(dx*uz - dz*ux);
+    const dRumbo = Math.min(difAng(p.hdgDeg,RWY_HDG[0]), difAng(p.hdgDeg,RWY_HDG[1]));
+    const vsFpm = p.vs*196.85;
+    const ok = dRumbo<=ESTAB_TOL_RUMBO_DEG && offset<=ESTAB_TOL_OFFSET_M &&
+               Math.abs(vsFpm-FINAL_VS_IDEAL_FPM)<=ESTAB_TOL_VS_FPM;
+    if(!ok) break;      // se salió: lo anterior a esto no cuenta
+    mejorIdx = k;
+  }
+  if(mejorIdx===null) return {estabilizada:false, altFt:null};
+  return {estabilizada:true, altFt: track[mejorIdx].y*3.28084, t: track[mejorIdx].t};
 }
 
 function calcularFasesCircuito(track, lat0, lng0, R){
@@ -2009,6 +2141,8 @@ function calcularFasesCircuito(track, lat0, lng0, R){
     for(let k=v.idxIni; k<=v.idxFin; k++){
       if(crudo[k]!=null) v.perfil.push({t:track[k].t, dev:crudo[k].dev});
     }
+    // v1.82: estabilización, solo tiene sentido en la final
+    if(v.fase==='FINAL') v.estab = analizarEstabilizacion(track, v, xAero, zAero, ux, uz, difAng);
   }
 
   // v1.76 — pedido de Daniel: en vez de seguir adivinando umbrales a partir
@@ -2097,6 +2231,37 @@ function iniciarVisor(track){
 
   // v1.74: ventanas de fase de circuito confirmadas para este track (ver función arriba)
   const {ventanas: fasesCircuito, diagnosticoEnT, censo: censoCircuito} = calcularFasesCircuito(track, lat0, lng0, R);
+  // v1.82: ventanas de fase + análisis adicionales (viento, estabilización)
+  const vientoEstimado = estimarViento(track);
+  (function pintarResumenVuelo(){
+    const el = document.getElementById('panel-vuelo');
+    if(!el) return;
+    const partes = [];
+    if(vientoEstimado){
+      partes.push(`VIENTO EST. ${String(vientoEstimado.deDeg).padStart(3,'0')}° / ${vientoEstimado.kt.toFixed(0)} kt`);
+      partes.push(`  TAS media ${vientoEstimado.tasKt.toFixed(0)} kt · ajuste ±${vientoEstimado.rmsKt.toFixed(1)} kt`);
+    } else {
+      partes.push('VIENTO EST. — (el vuelo no cubrió suficientes rumbos)');
+    }
+    const finales = fasesCircuito.filter(v=>v.fase==='FINAL' && v.estab);
+    if(finales.length){
+      partes.push('');
+      finales.forEach((v,idx)=>{
+        const e = v.estab;
+        if(!e.estabilizada){ partes.push(`APROX ${idx+1}: NO ESTABILIZADA`); return; }
+        const alt = Math.round(e.altFt);
+        const veredicto = alt>=ESTAB_ALT_OBJETIVO_FT ? 'OK'
+                        : alt>=ESTAB_ALT_MINIMA_FT ? 'BAJA' : 'TARDÍA';
+        partes.push(`APROX ${idx+1}: estabilizada a ${alt} ft — ${veredicto}`);
+      });
+    }
+    el.textContent = partes.join('\n');
+    el.style.display = 'block';
+    // se ubica debajo del panel de datos en vivo, que tiene alto variable
+    const info = document.getElementById('info');
+    if(info) el.style.top = (info.offsetTop + info.offsetHeight + 8) + 'px';
+  })();
+
   function faseEnT(t){
     for(const v of fasesCircuito){ if(t>=v.tIni && t<=v.tFin) return v; }
     return null;
@@ -3613,6 +3778,20 @@ function actualizarInfo(m){
   document.getElementById('v-bank').textContent = Math.round(m.bank*180/Math.PI)+'°';
   document.getElementById('v-pitch').textContent = Math.round(m.pitch*180/Math.PI)+'°';
   document.getElementById('v-vs').textContent = Math.round(m.vs*196.85)+' fpm';
+  // v1.82: senda de aproximación — m.pitch ES el ángulo de trayectoria
+  // (atan(vs/gs) en procesarPuntos), no la actitud del avión. Se colorea
+  // contra el estándar de 3° SOLO cuando el avión está en la final; fuera de
+  // la final el número se muestra igual pero neutro, porque 3° no es un
+  // objetivo en el resto del circuito.
+  const sendaDeg = m.pitch*180/Math.PI;
+  const elSenda = document.getElementById('v-senda');
+  elSenda.textContent = sendaDeg.toFixed(1)+'°';
+  const vFase = faseEnT(currentT);
+  if(vFase && vFase.fase==='FINAL'){
+    elSenda.style.color = calidadColor(devConTolerancia(sendaDeg, SENDA_IDEAL_DEG, SENDA_TOL_DEG)).bg;
+  } else {
+    elSenda.style.color = '';
+  }
 }
 
 // ============================================================================
