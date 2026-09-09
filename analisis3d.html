@@ -2,6 +2,16 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.85 · Pedido de Daniel: la ventana de eventos pasa a ser plegable y
+  arranca MINIMIZADA — en un vuelo largo la lista ocupaba media pantalla
+  (ver captura de Daniel: ~20 eventos). Header clickeable con el total de
+  eventos, para saber de un vistazo si vale la pena abrirlo, y cuerpo con
+  scroll propio (max-height 52vh) para que tampoco crezca sin límite cuando
+  se abre. El panel se reubica al plegar/desplegar.
+  Nota: la captura que motivó esto corría v1.83 — los ~18 "VUELO LENTO (mín
+  70-79 kt)" son del umbral viejo de 80kt; con el de v1.84 (≤50) desaparecen
+  solos. La TAS media de ese vuelo era 79kt, así que casi todo calificaba.
+
   v1.84 · Daniel corrige los umbrales de velocidad: vuelo lento pasa a ≤50kt
   (era 80) y pérdida a ≤30kt (era 50). Se corrige también el comparador, que
   era estricto (<) cuando Daniel especificó "o menos" — ahora ≤, y el rango
@@ -1315,12 +1325,22 @@
   #info .row{display:flex;justify-content:space-between;gap:14px}
   #info .lbl{color:var(--text)}
   /* v1.82: resumen del vuelo (viento estimado + estabilización de cada
-     aproximación). Debajo del panel de datos en vivo, mismo estilo. */
-  #panel-vuelo{position:absolute;top:12px;left:12px;margin-top:0;z-index:10;
+     aproximación). Debajo del panel de datos en vivo, mismo estilo.
+     v1.85: plegable — arranca minimizado (pedido de Daniel: la lista de
+     eventos de un vuelo largo tapaba media pantalla) y con scroll propio
+     cuando se abre, para que no crezca sin límite. */
+  #panel-vuelo{position:absolute;top:12px;left:12px;z-index:10;
     background:rgba(15,20,32,.88);border:1px solid var(--border);border-radius:8px;
-    padding:8px 12px;font-family:var(--font-mono);font-size:10.5px;color:var(--text2);
-    backdrop-filter:blur(4px);line-height:1.6;max-width:230px;white-space:pre-line;display:none}
-  #panel-vuelo .t{color:var(--cyan);letter-spacing:.05em}
+    font-family:var(--font-mono);font-size:10.5px;color:var(--text2);
+    backdrop-filter:blur(4px);line-height:1.6;max-width:230px;display:none}
+  #panel-vuelo .pv-head{display:flex;align-items:center;gap:8px;cursor:pointer;
+    padding:7px 10px;color:var(--cyan);letter-spacing:.05em;user-select:none;white-space:nowrap}
+  #panel-vuelo .pv-head:hover{color:#fff}
+  #panel-vuelo .pv-caret{margin-left:auto;transition:transform .15s;font-size:9px}
+  #panel-vuelo.abierto .pv-caret{transform:rotate(90deg)}
+  #panel-vuelo .pv-body{display:none;padding:0 10px 9px;white-space:pre-line;
+    max-height:52vh;overflow-y:auto;border-top:1px solid var(--border);margin-top:2px;padding-top:7px}
+  #panel-vuelo.abierto .pv-body{display:block}
   /* v1.39 — pedido de Daniel: en celular el panel de datos + los 6 toggles +
      la leyenda de color, todo apilado permanentemente arriba a la izquierda
      (v1.31), ocupaba media pantalla y se pisaba con el mapa/3D de abajo —
@@ -1443,7 +1463,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.84</span>
+    <span class="badge" id="ver-badge">v1.85</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -2441,11 +2461,30 @@ function iniciarVisor(track){
       partes.push('');
       partes.push('MANIOBRAS por velocidad: sin viento estimado');
     }
-    el.textContent = partes.join('\n');
+    // v1.85: panel plegable — header fijo + cuerpo colapsable. Arranca
+    // MINIMIZADO por pedido de Daniel: en un vuelo largo la lista de eventos
+    // ocupaba media pantalla. El header resume cuántos eventos hay para que
+    // se vea de un vistazo si vale la pena abrirlo.
+    const nEventos = maniobras.length + fasesCircuito.filter(v=>v.fase==='FINAL' && v.estab).length;
+    el.innerHTML = '';
+    const head = document.createElement('div');
+    head.className = 'pv-head';
+    head.innerHTML = `<span>ANÁLISIS DEL VUELO${nEventos?' · '+nEventos:''}</span><span class="pv-caret">▶</span>`;
+    const body = document.createElement('div');
+    body.className = 'pv-body';
+    body.textContent = partes.join('\n');
+    el.appendChild(head); el.appendChild(body);
+    head.addEventListener('click', ()=>{
+      el.classList.toggle('abierto');
+      reubicar();
+    });
     el.style.display = 'block';
     // se ubica debajo del panel de datos en vivo, que tiene alto variable
-    const info = document.getElementById('info');
-    if(info) el.style.top = (info.offsetTop + info.offsetHeight + 8) + 'px';
+    function reubicar(){
+      const info = document.getElementById('info');
+      if(info) el.style.top = (info.offsetTop + info.offsetHeight + 8) + 'px';
+    }
+    reubicar();
   })();
 
   function faseEnT(t){
