@@ -2,6 +2,29 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.88 · Reportado por Daniel con captura, tercera vuelta sobre lo mismo:
+  seguía marcando "ESES SOBRE CAMINO" en un viraje continuo hacia un mismo
+  lado. Los parches de v1.87 (continuidad temporal, mínimo de 3 virajes)
+  atacaban síntomas — el criterio de fondo faltaba, y el ruido de rumbo del
+  GPS los sorteaba fragmentando el viraje en segmentos alternantes.
+  CRITERIO DE FONDO: en unas eses reales los virajes SE CANCELAN — 180° a un
+  lado y 180° al otro dejan un giro NETO cercano a cero mientras el giro
+  ABSOLUTO recorrido es grande. En un viraje sobre un punto (o una espiral)
+  todo el giro va al mismo lado: neto ≈ absoluto. El cociente
+  |neto|/absoluto separa las dos familias sin depender de en cuántos
+  segmentos haya partido el ruido, que es exactamente lo que rompía los
+  parches anteriores. Techo en 0.5; un patrón alternante legítimo da ~0.00 y
+  un viraje continuo ~1.0.
+  Verificado con ruido de rumbo inyectado (±6°/punto, que es lo que hacía
+  fallar a v1.87): el viraje continuo ahora sale "VIRAJE SOBRE UN PUNTO", y
+  las eses y ochos reales siguen detectándose con y sin ruido.
+  El cociente se muestra en el detalle del cartel para poder auditarlo.
+  Limitación conocida: con ruido de rumbo muy alto (±12°/punto) el viraje
+  continuo no se fragmenta en un segmento que llegue a los 300° y no se
+  reporta nada. A ese nivel de ruido el rumbo ya no es utilizable; si
+  aparece en vuelos reales habría que detectar el viraje por ventana
+  deslizante de giro neto en vez de por segmentos.
+
   v1.87 · Reportado por Daniel: confundía un viraje sobre un punto con eses
   sobre camino. CAUSA: el agrupador de eses solo exigía que los virajes
   ALTERNARAN de sentido, sin mirar si eran consecutivos en el tiempo —
@@ -1511,7 +1534,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.87</span>
+    <span class="badge" id="ver-badge">v1.88</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -2000,6 +2023,18 @@ const OCHO_RETORNO_MAX_M = 400;       // desplazamiento neto por debajo de esto 
 // EVIDENTE de eses", así que dos virajes no alcanzan: se exigen 3.
 const ESES_HUECO_MAX_S = 20;          // pausa máxima entre virajes para que sigan siendo la misma serie
 const ESES_MIN_VIRAJES = 3;           // "patrón evidente": menos de 3 no es una serie de eses
+// v1.88 — reportado por Daniel con captura (otra vez): seguía marcando "eses
+// sobre camino" en un viraje continuo hacia un mismo lado. Los parches de
+// v1.87 (continuidad temporal, mínimo de 3 virajes) atacaban síntomas; el
+// criterio de fondo faltaba. En unas eses reales los virajes SE CANCELAN:
+// 180° a un lado y 180° al otro dejan un giro NETO cercano a cero mientras el
+// giro ABSOLUTO recorrido es grande. En un viraje sobre un punto (o una
+// espiral) todo el giro va al mismo lado, así que neto ≈ absoluto. Ese
+// cociente separa las dos familias sin depender de cuántos segmentos genere
+// el ruido de rumbo del GPS, que es lo que venía rompiendo los parches
+// anteriores. Un patrón alternante legítimo queda muy por debajo de este
+// techo; un viraje continuo da ~1.0 y nunca clasifica como eses.
+const ESES_NETO_SOBRE_TOTAL_MAX = 0.5;
 // VIRAJE SOBRE UN PUNTO (definición de Daniel): cambio persistente de rumbo
 // hacia un mismo lado con altitud constante ±100ft. Se distingue de espiral
 // (que exige ≥200ft de cambio de altura) y de viraje en ascenso/descenso
@@ -2205,21 +2240,31 @@ function detectarManiobras(track, viento){
           Math.abs(segs[m+1].giro)>=VIRAJE_GIRO_MIN_DEG &&
           track[segs[m+1].ini].t - track[segs[m].fin].t <= ESES_HUECO_MAX_S) m++;
     const nVirajes = m-k+1;
+    // v1.88: criterio de fondo — giro NETO vs giro ABSOLUTO recorrido en toda
+    // la serie (ver ESES_NETO_SOBRE_TOTAL_MAX). Si casi todo el giro fue al
+    // mismo lado no es un patrón alternante, es un viraje continuo, y no
+    // importa en cuántos segmentos lo haya partido el ruido.
+    const a0=segs[k].ini, b0=segs[m].fin;
+    let netoSerie=0, absSerie=0;
+    for(let i=a0+1;i<=b0;i++){
+      const dd = difH(track[i-1].hdgDeg, track[i].hdgDeg);
+      netoSerie += dd; absSerie += Math.abs(dd);
+    }
+    const alternante = absSerie>1 && Math.abs(netoSerie)/absSerie <= ESES_NETO_SOBRE_TOTAL_MAX;
+    if(!alternante){ k=m+1; continue; }
+    const desp = Math.hypot(track[b0].x-track[a0].x, track[b0].z-track[a0].z);
+    const ratio = (Math.abs(netoSerie)/absSerie).toFixed(2);
     if(nVirajes>=ESES_MIN_VIRAJES){
-      const a=segs[k].ini, b=segs[m].fin;
-      const desp = Math.hypot(track[b].x-track[a].x, track[b].z-track[a].z);
       out.push({tipo: desp<=OCHO_RETORNO_MAX_M ? 'OCHOS SOBRE PILONES' : 'ESES SOBRE CAMINO',
-                tIni:track[a].t, tFin:track[b].t,
-                detalle:`${nVirajes} virajes · desplaz. ${desp.toFixed(0)} m`});
+                tIni:track[a0].t, tFin:track[b0].t,
+                detalle:`${nVirajes} virajes · desplaz. ${desp.toFixed(0)} m · neto/total ${ratio}`});
       k=m+1;
     } else if(nVirajes===2){
       // dos virajes opuestos encadenados: puede ser un ocho (vuelve al punto)
       // pero NO alcanza para llamarlo serie de eses (ver ESES_MIN_VIRAJES)
-      const a=segs[k].ini, b=segs[m].fin;
-      const desp = Math.hypot(track[b].x-track[a].x, track[b].z-track[a].z);
       if(desp<=OCHO_RETORNO_MAX_M){
-        out.push({tipo:'OCHOS SOBRE PILONES', tIni:track[a].t, tFin:track[b].t,
-                  detalle:`2 virajes · desplaz. ${desp.toFixed(0)} m`});
+        out.push({tipo:'OCHOS SOBRE PILONES', tIni:track[a0].t, tFin:track[b0].t,
+                  detalle:`2 virajes · desplaz. ${desp.toFixed(0)} m · neto/total ${ratio}`});
       }
       k=m+1;
     } else k++;
