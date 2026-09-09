@@ -2,6 +2,34 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.83 · Maniobras fuera del circuito (punto 6), con las definiciones que
+  dio Daniel: ochos sobre pilones, eses sobre camino, virajes escarpados
+  (>30° de bank sostenido), espirales en ascenso/descenso, vuelo lento
+  (<80kt) y pérdidas (<50kt), las dos últimas "en altitud de vuelo".
+  ⚠ VELOCIDAD: Daniel las definió en kt de vuelo, pero el GPS solo da GROUND
+  SPEED. Con el viento de Río Grande (30kt no es raro) volar a 85kt con
+  viento en contra da 55kt de GS y se marcaría "pérdida" en vuelo normal.
+  Se usa el viento estimado de v1.82 para restar el vector viento y obtener
+  TAS (≈IAS con error de pocos por ciento a estas alturas). Si no hay
+  estimación de viento confiable, las maniobras por velocidad NO se reportan
+  — mejor no marcar nada que marcar una pérdida falsa.
+  ⚠ OCHOS vs ESES: comparten firma (virajes alternados opuestos). Se separan
+  por desplazamiento neto — los ochos vuelven cerca del punto de partida, las
+  eses avanzan a lo largo de un eje. Criterio geométrico razonable pero no
+  infalible, a validar con vuelos reales.
+  ⚠ SIN SEMÁFORO: Daniel dio criterios para RECONOCER cada maniobra, no
+  tolerancias de ejecución, así que calificarlas sería inventar un estándar.
+  El cartel va en violeta neutro, distinto del semáforo de las fases.
+  BUG hallado en el test propio: la segmentación de virajes arrancaba el
+  segmento en el corte anterior aunque el avión viniera RECTO, así que el
+  tramo recto previo quedaba dentro del viraje e inflaba el desplazamiento
+  neto — un ocho sintético con 93m reales de desplazamiento daba 833m y se
+  clasificaba "eses" en vez de "ochos". El segmento ahora empieza donde
+  empieza el giro y termina en el último punto con giro.
+  El cartel 3D es el mismo de las fases (no se puede estar en circuito y
+  haciendo ochos a la vez, no compiten); las maniobras además se listan con
+  su minuto en el panel de resumen. Toggle propio "Maniobras".
+
   v1.82 · Análisis adicionales pedidos por Daniel (1, 2 y 4 de la lista; el
   punto 6, maniobras fuera del circuito, queda pendiente de definiciones).
   1) SENDA DE APROXIMACIÓN: fila nueva en el panel de datos. Sale
@@ -1410,7 +1438,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.82</span>
+    <span class="badge" id="ver-badge">v1.83</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -1451,6 +1479,7 @@
           <label class="toggle"><input type="checkbox" id="mapaSat" checked><span class="track"></span>Mapa satelital (suelo)</label>
           <label class="toggle"><input type="checkbox" id="flechas" checked><span class="track"></span>Flechas de sentido</label>
           <label class="toggle"><input type="checkbox" id="circuito" checked><span class="track"></span>Fases de circuito</label>
+          <label class="toggle"><input type="checkbox" id="maniobras" checked><span class="track"></span>Maniobras</label>
           <label class="toggle"><input type="checkbox" id="circuito-debug"><span class="track"></span>Diagnóstico de circuito</label>
         </div>
       </div>
@@ -1852,6 +1881,29 @@ const ESTAB_ALT_MINIMA_FT = 200;   // por debajo de esto = aproximación no esta
 const ESTAB_TOL_RUMBO_DEG = 10;    // más estricto que el de detección (30°)
 const ESTAB_TOL_VS_FPM = 150;      // más laxo que el estándar de calidad (±50)
 const ESTAB_TOL_OFFSET_M = 100;    // más estricto que el de detección (200m)
+
+// ============================================================================
+// v1.83 — MANIOBRAS FUERA DEL CIRCUITO (definiciones dadas por Daniel)
+// ============================================================================
+// ⚠ VELOCIDAD: Daniel definió vuelo lento (<80kt) y pérdida (<50kt) en kt de
+// vuelo, pero el GPS solo entrega GROUND SPEED. Con el viento de Río Grande
+// (30kt no es raro) la GS y la velocidad real difieren muchísimo: volando a
+// 85kt con viento en contra la GS puede ser 55kt, y se marcaría "pérdida"
+// estando en vuelo normal. Por eso acá NO se usa gs directo: se resta el
+// vector de viento estimado (ver estimarViento, v1.82) para obtener TAS.
+// A las alturas de este tipo de vuelo TAS≈IAS con error de pocos por ciento.
+// Si no hay estimación de viento confiable, las maniobras por velocidad NO
+// se reportan — es preferible no marcar nada que marcar una pérdida falsa.
+const MANIOBRA_ALT_MIN_FT = 500;      // "en altitud de vuelo": descarta despegue/aterrizaje/circuito bajo
+const VUELO_LENTO_KT = 80;            // definido por Daniel
+const PERDIDA_KT = 50;                // definido por Daniel
+const BANK_ESCARPADO_DEG = 30;        // definido por Daniel: >30° sostenido
+const MIN_LENTO_S = 10, MIN_PERDIDA_S = 4, MIN_ESCARPADO_S = 8;
+const VIRAJE_GIRO_MIN_DEG = 150;      // giro acumulado que cuenta como "un viraje" de una ese/ocho
+const ESPIRAL_GIRO_MIN_DEG = 330;     // ~una vuelta completa en el mismo sentido
+const ESPIRAL_DALT_MIN_FT = 200;      // cambio de altura que distingue espiral de viraje sostenido llano
+const OCHO_RETORNO_MAX_M = 400;       // desplazamiento neto por debajo de esto = vuelve al punto (ocho);
+                                      // por encima = avanza a lo largo de un eje (eses sobre camino)
 // v1.75 — pedido de Daniel con captura: "básica" salía en pleno ascenso justo
 // después de despegar, al virar 90° (viento cruzado/crosswind, que es OTRO
 // tramo, no básica). Antes solo se exigía VS puntual no-ascendente para
@@ -1907,6 +1959,118 @@ function calidadColor(prom){
 // valiendo la normalización directa Δ/tol.
 function devConTolerancia(valor, ideal, tol){
   return Math.max(0, (Math.abs(valor-ideal) - tol) / tol);
+}
+
+// v1.83 — DETECTOR DE MANIOBRAS. Devuelve ventanas {tipo,tIni,tFin,detalle}.
+// No lleva semáforo de calidad: Daniel dio los criterios para RECONOCER cada
+// maniobra, no tolerancias de ejecución, así que calificarlas sería inventar
+// un estándar. Se muestran en color neutro a propósito.
+function detectarManiobras(track, viento){
+  const out = [];
+  const n = track.length;
+  // TAS por punto = |vector de velocidad respecto al suelo − vector viento|.
+  // Sin viento estimado confiable no se calcula: ver comentario de arriba.
+  let tasKt = null;
+  if(viento){
+    const hacia = (viento.deDeg+180)*Math.PI/180;
+    const w = viento.kt/1.94384;
+    const Wx = w*Math.sin(hacia), Wz = w*Math.cos(hacia);
+    tasKt = track.map(p=>{
+      const r = p.hdgDeg*Math.PI/180;
+      const vx = p.gs*Math.sin(r) - Wx, vz = p.gs*Math.cos(r) - Wz;
+      return Math.sqrt(vx*vx+vz*vz)*1.94384;
+    });
+  }
+  const altFt = track.map(p=>p.y*3.28084);
+  const enAltura = i => altFt[i] >= MANIOBRA_ALT_MIN_FT;
+
+  // helper: agrupa corridas de puntos que cumplen `test`, con duración mínima
+  function corridas(test, minS, tipo, detalle){
+    let i=0;
+    while(i<n){
+      if(!test(i)){ i++; continue; }
+      let j=i; while(j<n && test(j)) j++;
+      if(track[j-1].t - track[i].t >= minS){
+        out.push({tipo, tIni:track[i].t, tFin:track[j-1].t,
+                  detalle: detalle? detalle(i,j-1) : ''});
+      }
+      i=j;
+    }
+  }
+
+  if(tasKt){
+    corridas(i=>enAltura(i) && tasKt[i]<PERDIDA_KT, MIN_PERDIDA_S, 'PÉRDIDA',
+      (a,b)=>{ let m=Infinity; for(let k=a;k<=b;k++) m=Math.min(m,tasKt[k]); return `mín ${m.toFixed(0)} kt`; });
+    corridas(i=>enAltura(i) && tasKt[i]<VUELO_LENTO_KT && tasKt[i]>=PERDIDA_KT, MIN_LENTO_S, 'VUELO LENTO',
+      (a,b)=>{ let m=Infinity; for(let k=a;k<=b;k++) m=Math.min(m,tasKt[k]); return `mín ${m.toFixed(0)} kt`; });
+  }
+
+  const bankDeg = track.map(p=>p.bank*180/Math.PI);
+  corridas(i=>enAltura(i) && Math.abs(bankDeg[i])>BANK_ESCARPADO_DEG, MIN_ESCARPADO_S, 'VIRAJE ESCARPADO',
+    (a,b)=>{ let m=0; for(let k=a;k<=b;k++) m=Math.max(m,Math.abs(bankDeg[k])); return `máx ${m.toFixed(0)}° bank`; });
+
+  // --- Virajes acumulados: segmentos de giro continuo en un mismo sentido ---
+  // Se integra el cambio de rumbo; un cambio de signo sostenido cierra el
+  // segmento. Sobre esos segmentos se reconocen espirales (≥1 vuelta con
+  // cambio de altura) y las alternancias (ochos / eses).
+  const difH = (a,b)=>{ let d=b-a; while(d>180)d-=360; while(d<-180)d+=360; return d; };
+  const segs = [];
+  let ini=0, acum=0, signo=0, ultGiro=0;
+  for(let i=1;i<n;i++){
+    const d = difH(track[i-1].hdgDeg, track[i].hdgDeg);
+    const s = d>0.5?1 : d<-0.5?-1 : 0;
+    if(s!==0 && signo!==0 && s!==signo){
+      segs.push({ini, fin:ultGiro, giro:acum, signo});
+      ini=i-1; acum=0; signo=s; ultGiro=i;
+    } else if(s!==0 && signo===0){
+      // v1.83 FIX (hallado en test): el segmento arrancaba en el último corte
+      // aunque el avión viniera volando RECTO — el tramo recto previo quedaba
+      // dentro del viraje e inflaba el desplazamiento neto. Con un ocho
+      // sintético de 93m reales de desplazamiento, el cálculo daba 833m y por
+      // eso lo clasificaba "eses sobre camino" en vez de "ochos". El segmento
+      // ahora empieza donde EMPIEZA el giro, y termina en el último punto con
+      // giro (ultGiro), no arrastrando el tramo recto de salida.
+      signo=s; ini=i-1; acum=0; ultGiro=i;
+    }
+    if(s!==0) ultGiro=i;
+    acum += d;
+  }
+  segs.push({ini, fin:signo!==0?ultGiro:n-1, giro:acum, signo});
+
+  for(const sg of segs){
+    if(!enAltura(sg.ini)) continue;
+    const giro = Math.abs(sg.giro);
+    const dAlt = altFt[sg.fin]-altFt[sg.ini];
+    const dur = track[sg.fin].t - track[sg.ini].t;
+    if(giro>=ESPIRAL_GIRO_MIN_DEG && Math.abs(dAlt)>=ESPIRAL_DALT_MIN_FT && dur>=15){
+      out.push({tipo: dAlt>0?'ESPIRAL ASCENSO':'ESPIRAL DESCENSO', tIni:track[sg.ini].t, tFin:track[sg.fin].t,
+                detalle:`${giro.toFixed(0)}° · ${dAlt>0?'+':''}${dAlt.toFixed(0)} ft`});
+    }
+  }
+
+  // Alternancia: 2+ segmentos consecutivos de sentido opuesto, cada uno con
+  // giro suficiente. Ocho vs ese: si el avión vuelve cerca del punto de
+  // partida es un ocho sobre pilones; si se desplaza a lo largo de un eje son
+  // eses sobre camino. ⚠ Criterio geométrico, no infalible — validar con
+  // vuelos reales.
+  let k=0;
+  while(k<segs.length-1){
+    if(Math.abs(segs[k].giro)<VIRAJE_GIRO_MIN_DEG || !enAltura(segs[k].ini)){ k++; continue; }
+    let m=k;
+    while(m+1<segs.length && segs[m+1].signo===-segs[m].signo &&
+          Math.abs(segs[m+1].giro)>=VIRAJE_GIRO_MIN_DEG) m++;
+    if(m>k){
+      const a=segs[k].ini, b=segs[m].fin;
+      const desp = Math.hypot(track[b].x-track[a].x, track[b].z-track[a].z);
+      out.push({tipo: desp<=OCHO_RETORNO_MAX_M ? 'OCHOS SOBRE PILONES' : 'ESES SOBRE CAMINO',
+                tIni:track[a].t, tFin:track[b].t,
+                detalle:`${m-k+1} virajes · desplaz. ${desp.toFixed(0)} m`});
+      k=m+1;
+    } else k++;
+  }
+
+  out.sort((a,b)=>a.tIni-b.tIni);
+  return out;
 }
 
 // v1.82 — VIENTO ESTIMADO desde la propia traza, sin dato externo. Con TAS
@@ -2233,6 +2397,11 @@ function iniciarVisor(track){
   const {ventanas: fasesCircuito, diagnosticoEnT, censo: censoCircuito} = calcularFasesCircuito(track, lat0, lng0, R);
   // v1.82: ventanas de fase + análisis adicionales (viento, estabilización)
   const vientoEstimado = estimarViento(track);
+  const maniobras = detectarManiobras(track, vientoEstimado); // v1.83
+  function maniobraEnT(t){
+    for(const m of maniobras){ if(t>=m.tIni && t<=m.tFin) return m; }
+    return null;
+  }
   (function pintarResumenVuelo(){
     const el = document.getElementById('panel-vuelo');
     if(!el) return;
@@ -2254,6 +2423,18 @@ function iniciarVisor(track){
                         : alt>=ESTAB_ALT_MINIMA_FT ? 'BAJA' : 'TARDÍA';
         partes.push(`APROX ${idx+1}: estabilizada a ${alt} ft — ${veredicto}`);
       });
+    }
+    if(maniobras.length){
+      partes.push('');
+      partes.push('MANIOBRAS');
+      const mm = new Date(0);
+      maniobras.forEach(m=>{
+        const min = Math.floor(m.tIni/60), seg = Math.round(m.tIni%60);
+        partes.push(`  ${String(min).padStart(2,'0')}:${String(seg).padStart(2,'0')} ${m.tipo}${m.detalle?' ('+m.detalle+')':''}`);
+      });
+    } else if(!vientoEstimado){
+      partes.push('');
+      partes.push('MANIOBRAS por velocidad: sin viento estimado');
     }
     el.textContent = partes.join('\n');
     el.style.display = 'block';
@@ -3429,6 +3610,7 @@ const humoChk = document.getElementById('humo');
 const progresivoChk = document.getElementById('progresivo');
 const flechasChk = document.getElementById('flechas');
 const circuitoChk = document.getElementById('circuito'); // v1.74
+const maniobrasChk = document.getElementById('maniobras'); // v1.83
 const circuitoDebugChk = document.getElementById('circuito-debug'); // v1.76
 cortinaChk.onchange = ()=>{
   if(cortinaChk.checked){
@@ -3976,20 +4158,35 @@ function loop(now){
   // entrada, aunque el usuario esté arrastrando el slider en vez de reproduciendo.
   const etiquetaFase = document.getElementById('etiqueta-fase');
   const ventanaFase = circuitoChk.checked ? faseEnT(currentT) : null;
-  if(ventanaFase && ndc.z<=1){
-    const nombre = ventanaFase.fase==='INICIAL' ? 'INICIAL' : ventanaFase.fase==='BASICA' ? 'BÁSICA' : 'FINAL';
-    if(etiquetaFase.dataset.fase !== ventanaFase.fase+ventanaFase.tIni){
+  // v1.83: si no hay fase de circuito activa, el mismo cartel muestra la
+  // maniobra en curso (no se puede estar en circuito y haciendo ochos a la
+  // vez, así que no compiten). Color NEUTRO a propósito: Daniel dio criterios
+  // para reconocer cada maniobra, no tolerancias de ejecución, así que
+  // pintarlas con el semáforo sugeriría una calificación que no tenemos.
+  const maniobraAct = (!ventanaFase && maniobrasChk.checked) ? maniobraEnT(currentT) : null;
+  if((ventanaFase || maniobraAct) && ndc.z<=1){
+    const esFase = !!ventanaFase;
+    const nombre = esFase
+      ? (ventanaFase.fase==='INICIAL' ? 'INICIAL' : ventanaFase.fase==='BASICA' ? 'BÁSICA' : 'FINAL')
+      : maniobraAct.tipo;
+    const clave = esFase ? ventanaFase.fase+ventanaFase.tIni : maniobraAct.tipo+maniobraAct.tIni;
+    if(etiquetaFase.dataset.fase !== clave){
       etiquetaFase.classList.remove('pulso');
       void etiquetaFase.offsetWidth; // fuerza reflow para poder re-disparar la animación
       etiquetaFase.classList.add('pulso');
-      etiquetaFase.dataset.fase = ventanaFase.fase+ventanaFase.tIni;
+      etiquetaFase.dataset.fase = clave;
     }
     etiquetaFase.style.display = 'block';
     etiquetaFase.style.left = etiqueta.style.left;
     etiquetaFase.style.top = ((-ndc.y*0.5+0.5)*stage.clientHeight - 28) + 'px';
-    const col = colorEnT(ventanaFase, currentT); // v1.81: color en vivo, ver colorEnT
-    etiquetaFase.style.background = col.bg;
-    etiquetaFase.style.color = col.fg;
+    if(esFase){
+      const col = colorEnT(ventanaFase, currentT); // v1.81: color en vivo, ver colorEnT
+      etiquetaFase.style.background = col.bg;
+      etiquetaFase.style.color = col.fg;
+    } else {
+      etiquetaFase.style.background = '#7c5cff'; // violeta neutro: identifica, no califica
+      etiquetaFase.style.color = '#f2eeff';
+    }
     etiquetaFase.textContent = nombre;
   } else {
     etiquetaFase.style.display = 'none';
