@@ -2,6 +2,19 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.72 · FIX reportado por Daniel con captura: apareció un "toque" marcado en
+  pleno aire (683ft, VS≈0), en medio de una maniobra, sin haber aterrizado.
+  Causa: TOQUE_ALTURA_MAX_FT se medía contra yMin — el mínimo puntual de todo
+  el registro crudo — que no necesariamente es tierra real (si el archivo no
+  arrancó con el avión parado/carreteando, o si esa maniobra fue la más baja
+  registrada). Se porta también _calcPisoVirtual de turnos.html: promedio de
+  altitud de los primeros 5 min (asumiendo ahí el avión está en tierra), con
+  los mismos guards (variación y desvío máximos) que turnos.html ya tiene
+  probados. Se guarda como offset sobre yMin — no se toca yMin en sí ni el
+  resto del render (cortina, colores, "ft" del panel), solo lo usan
+  _detectarToques/_detectarAterrizajeFinal para saber qué tan cerca de tierra
+  está cada candidato.
+
   v1.71 · Pedido de Daniel: el umbral absoluto de v1.70 no detectaba toques y
   motor (GPS_MUESTREO_MS=10s en vuelo.html — un touch-and-go de 2-5s casi
   nunca cae justo en una muestra, el dato para un umbral de AGL directamente
@@ -1154,7 +1167,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.71</span>
+    <span class="badge" id="ver-badge">v1.72</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -1473,6 +1486,46 @@ function procesarPuntos(puntosCrudos){
   // resta la altitud MÍNIMA de este vuelo (no una elevación fija de aeródromo)
   // para que la traza arranque siempre pegada al "piso" del visor
   const yMin = Math.min(...track.map(p => p.y));
+
+  // v1.72 — Pedido de Daniel: apareció un "toque" marcado en pleno aire, en
+  // medio de una maniobra (espiral/simulacro), sin haber aterrizado. Causa:
+  // TOQUE_ALTURA_MAX_FT (en iniciarVisor) se mide contra yMin de acá arriba —
+  // el mínimo puntual de TODO el registro crudo. Si el archivo no arrancó con
+  // el avión realmente en tierra (o si el mínimo puntual quedó más alto que
+  // el piso real por cualquier motivo), yMin no representa tierra de verdad,
+  // y una maniobra que baja y sube 100ft+ cerca de ESE mínimo (aunque esté a
+  // cientos de pies del piso real) pasa el filtro de altura igual. Mismo
+  // problema, y misma solución, que _calcPisoVirtual ya resolvió en
+  // turnos.html: en vez de un solo punto, se promedia la altitud de los
+  // primeros PISO_VENTANA_MIN minutos (asumiendo que ahí el avión está
+  // parado/carreteando antes de despegar) — un promedio de varios minutos
+  // pesa mucho menos el ruido de un solo punto. Con los mismos guards que
+  // turnos.html: solo se usa si (1) la ventana es estable (poca variación —
+  // no está en medio de un ascenso) y (2) no queda muy por encima del mínimo
+  // puntual (si no, el archivo arrancó ya en vuelo y esos minutos no son
+  // tierra). Se guarda como OFFSET sobre yMin (no se toca yMin en sí, para no
+  // afectar el resto del render — cortina, colores, "ft" en el panel — que ya
+  // funciona bien tal cual está); lo usan solo _detectarToques y
+  // _detectarAterrizajeFinal en iniciarVisor.
+  const PISO_VENTANA_SEG = 5*60;
+  const PISO_VARIACION_MAX_FT = 150;
+  const PISO_DESVIO_MAX_FT = 200;
+  let pisoOffsetM = 0;
+  {
+    const ventana = track.filter(p => p.t <= PISO_VENTANA_SEG);
+    if(ventana.length >= 5){
+      const ys = ventana.map(p=>p.y);
+      const prom = ys.reduce((a,b)=>a+b,0)/ys.length;
+      const rangoFt = (Math.max(...ys)-Math.min(...ys))*3.28084;
+      const desvioFt = (prom-yMin)*3.28084;
+      if(rangoFt<=PISO_VARIACION_MAX_FT && desvioFt<=PISO_DESVIO_MAX_FT){
+        pisoOffsetM = prom - yMin;
+      } else {
+        console.warn('[análisis3d] piso virtual descartado (variación '+rangoFt.toFixed(0)+'ft, desvío '+desvioFt.toFixed(0)+'ft sobre el mínimo registrado) — probablemente el archivo arrancó con el avión ya en vuelo. Se usa el mínimo puntual como piso para detectar toques, como antes.');
+      }
+    }
+  }
+
   for(const p of track) p.y -= yMin;
 
   // Recorte pedido por Daniel: trazar solo desde que despega. Arranca en el
@@ -1509,6 +1562,7 @@ function procesarPuntos(puntosCrudos){
   // sumarse a este ancla para reconstruir la hora real de ESE instante.
   recortado.epocaInicioSeg = t0 + tBase;
   recortado.origenGeo = {lat0, lng0, R};
+  recortado.pisoOffsetM = pisoOffsetM; // v1.72 — ver comentario junto a PISO_VENTANA_SEG
   return recortado;
 }
 
@@ -1635,12 +1689,12 @@ const extent = Math.max(bb.maxX-bb.minX, bb.maxZ-bb.minZ);
 // agarra a propósito) de un touch-and-go.
 const TOQUE_PROMINENCIA_FT = 100;
 const TOQUE_VENTANA_SEG = 4*60; // TOQUE_VENTANA_MIN de turnos.html, en segundos (acá track.t ya está en segundos)
-const TOQUE_ALTURA_MAX_FT = 300; // relativo al piso — acá el piso es 0 porque track[].y ya viene relativo al mínimo del vuelo (ver yMin en procesarPuntos)
-function _detectarToques(track){
+const TOQUE_ALTURA_MAX_FT = 300; // relativo al PISO (yMin + pisoOffsetM — ver v1.72), no al 0 crudo del track
+function _detectarToques(track, pisoOffsetM){
   const candidatos=[];
   for(let i=1;i<track.length-1;i++){
     if(track[i].y>track[i-1].y || track[i].y>track[i+1].y) continue; // no-estricto: permite meseta (altímetro GPS repite valor cerca del piso)
-    if(track[i].y*3.28084 > TOQUE_ALTURA_MAX_FT) continue;
+    if((track[i].y-pisoOffsetM)*3.28084 > TOQUE_ALTURA_MAX_FT) continue;
     let antesOk=false;
     for(let j=i-1;j>=0;j--){
       if(track[i].t-track[j].t>TOQUE_VENTANA_SEG) break;
@@ -1669,13 +1723,13 @@ function _detectarToques(track){
 const ATERRIZAJE_ALTURA_TOL_FT = 60;
 const ATERRIZAJE_DURACION_MIN_SEG = 60;
 const ATERRIZAJE_DESPLAZ_MIN_M = 50; // turnos.html usa km (lat/lng); acá track ya está en metros ENU, directo
-function _detectarAterrizajeFinal(track){
+function _detectarAterrizajeFinal(track, pisoOffsetM){
   const candidatos=[];
   let i=0;
   while(i<track.length){
-    if(track[i].y*3.28084 > ATERRIZAJE_ALTURA_TOL_FT){ i++; continue; }
+    if((track[i].y-pisoOffsetM)*3.28084 > ATERRIZAJE_ALTURA_TOL_FT){ i++; continue; }
     let j=i;
-    while(j+1<track.length && track[j+1].y*3.28084<=ATERRIZAJE_ALTURA_TOL_FT) j++;
+    while(j+1<track.length && (track[j+1].y-pisoOffsetM)*3.28084<=ATERRIZAJE_ALTURA_TOL_FT) j++;
     const durSeg = track[j].t-track[i].t;
     if(durSeg>=ATERRIZAJE_DURACION_MIN_SEG){
       const dispM = Math.hypot(track[j].x-track[i].x, track[j].z-track[i].z);
@@ -1687,9 +1741,9 @@ function _detectarAterrizajeFinal(track){
   candidatos.sort((a,b)=>a.t-b.t);
   return candidatos[candidatos.length-1];
 }
-const touchdowns = _detectarToques(track).map(p=>({x:p.x, z:p.z, t:p.t, vsFpm:p.vs*196.85, esFinal:false}));
+const touchdowns = _detectarToques(track, track.pisoOffsetM||0).map(p=>({x:p.x, z:p.z, t:p.t, vsFpm:p.vs*196.85, esFinal:false}));
 {
-  const finalPt = _detectarAterrizajeFinal(track);
+  const finalPt = _detectarAterrizajeFinal(track, track.pisoOffsetM||0);
   if(finalPt) touchdowns.push({x:finalPt.x, z:finalPt.z, t:finalPt.t, vsFpm:finalPt.vs*196.85, esFinal:true});
 }
 touchdowns.sort((a,b)=>a.t-b.t);
