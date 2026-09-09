@@ -2,6 +2,30 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.86 · Reportado por Daniel con captura + pedido nuevo.
+  1) BUG: marcaba "ESPIRAL DESCENSO" en un tramo donde el avión CLARAMENTE
+  subía. El cambio de altura se medía sobre el segmento de viraje ENTERO, así
+  que en un viraje continuo largo (568° en su caso) que baja al principio y
+  sube al final, el neto quedaba negativo y se etiquetaba todo el tramo como
+  descenso, incluida la parte de ascenso. Ahora cada segmento de viraje se
+  SUBDIVIDE por sentido vertical y se reporta un evento por sub-tramo con VS
+  consistente, así el cartel siempre coincide con lo que el avión hace en ese
+  instante. Los tramos nivelados (|VS|<100fpm) no cortan la corrida — se
+  absorben para no fragmentar por ruido, solo un cambio de signo real corta.
+  Verificado con el caso exacto: un viraje que baja 810ft y luego sube 600ft
+  ahora da dos eventos separados, cada uno con su sentido correcto.
+  2) ESPIRAL vs VIRAJE EN ASCENSO/DESCENSO (pedido de Daniel: "una espiral
+  tiene un radio más apretado, no tiene gran desplazamiento horizontal").
+  En vez de fijar un radio en metros —que dependería del avión y del viento—
+  se compara el desplazamiento neto del tramo con el RADIO del propio
+  viraje, que sale de la geometría: radio = arco/giro. Una espiral cerrada
+  vuelve casi al mismo punto (desplazamiento ≈0 aunque recorra 2πr); un
+  viraje amplio que deriva se aleja varios radios. Criterio adimensional,
+  se adapta solo a cualquier velocidad y ritmo de viraje. Espiral exige
+  además ≥330° (al menos una vuelta); un viraje con cambio de altura pero
+  sin vuelta completa o con deriva grande cae en VIRAJE EN ASCENSO/DESCENSO.
+  El detalle del cartel ahora incluye el radio, para poder juzgarlo a ojo.
+
   v1.85 · Pedido de Daniel: la ventana de eventos pasa a ser plegable y
   arranca MINIMIZADA — en un vuelo largo la lista ocupaba media pantalla
   (ver captura de Daniel: ~20 eventos). Header clickeable con el total de
@@ -1463,7 +1487,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.85</span>
+    <span class="badge" id="ver-badge">v1.86</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -1927,6 +1951,19 @@ const MIN_LENTO_S = 10, MIN_PERDIDA_S = 4, MIN_ESCARPADO_S = 8;
 const VIRAJE_GIRO_MIN_DEG = 150;      // giro acumulado que cuenta como "un viraje" de una ese/ocho
 const ESPIRAL_GIRO_MIN_DEG = 330;     // ~una vuelta completa en el mismo sentido
 const ESPIRAL_DALT_MIN_FT = 200;      // cambio de altura que distingue espiral de viraje sostenido llano
+// v1.86 — pedido de Daniel: distinguir ESPIRAL de un simple VIRAJE EN
+// ASCENSO/DESCENSO. Su criterio: "una espiral tiene un radio más apretado, no
+// tiene gran desplazamiento horizontal". En vez de fijar un radio en metros
+// (que dependería del avión y del viento), se compara el desplazamiento neto
+// del tramo con el RADIO del propio viraje, que sale de la geometría:
+// radio = arco recorrido / giro en radianes. Una espiral cerrada vuelve casi
+// al mismo punto (desplazamiento ≈ 0 aunque recorra 2πr), mientras un viraje
+// amplio que deriva se aleja varios radios. Criterio adimensional, se adapta
+// solo a cualquier velocidad y ritmo de viraje.
+const ESPIRAL_DESP_MAX_RADIOS = 1.5;
+const VIRAJE_VERT_GIRO_MIN_DEG = 120; // giro mínimo para reportar "viraje en ascenso/descenso"
+const VIRAJE_VERT_DALT_MIN_FT = 150;  // cambio de altura mínimo, para no marcar cualquier viraje
+const VS_SIGNO_MIN_FPM = 100;         // |VS| por debajo de esto se considera nivelado (no define sentido)
 const OCHO_RETORNO_MAX_M = 400;       // desplazamiento neto por debajo de esto = vuelve al punto (ocho);
                                       // por encima = avanza a lo largo de un eje (eses sobre camino)
 // v1.75 — pedido de Daniel con captura: "básica" salía en pleno ascenso justo
@@ -2062,14 +2099,53 @@ function detectarManiobras(track, viento){
   }
   segs.push({ini, fin:signo!==0?ultGiro:n-1, giro:acum, signo});
 
+  // v1.86 — reportado por Daniel con captura: marcaba "ESPIRAL DESCENSO" en un
+  // tramo donde el avión CLARAMENTE subía. Causa: el cambio de altura se
+  // medía sobre el segmento de viraje ENTERO, así que en un viraje continuo
+  // largo (568° en su caso) que baja al principio y sube al final, el neto
+  // quedaba negativo y se etiquetaba todo el tramo como descenso, incluida la
+  // parte de ascenso. Ahora cada segmento de viraje se SUBDIVIDE por sentido
+  // vertical: se reporta un evento por cada sub-tramo con VS consistente, así
+  // el cartel siempre coincide con lo que el avión está haciendo en ese
+  // momento. Los tramos nivelados (|VS| < VS_SIGNO_MIN_FPM) no cortan la
+  // corrida: se absorben en el sub-tramo en curso para no fragmentar por
+  // ruido, solo un cambio de signo real la corta.
   for(const sg of segs){
     if(!enAltura(sg.ini)) continue;
-    const giro = Math.abs(sg.giro);
-    const dAlt = altFt[sg.fin]-altFt[sg.ini];
-    const dur = track[sg.fin].t - track[sg.ini].t;
-    if(giro>=ESPIRAL_GIRO_MIN_DEG && Math.abs(dAlt)>=ESPIRAL_DALT_MIN_FT && dur>=15){
-      out.push({tipo: dAlt>0?'ESPIRAL ASCENSO':'ESPIRAL DESCENSO', tIni:track[sg.ini].t, tFin:track[sg.fin].t,
-                detalle:`${giro.toFixed(0)}° · ${dAlt>0?'+':''}${dAlt.toFixed(0)} ft`});
+    if(sg.fin<=sg.ini) continue;
+    // subdividir por sentido vertical
+    const sub = [];
+    let a = sg.ini, sVert = 0;
+    for(let i=sg.ini; i<=sg.fin; i++){
+      const fpm = track[i].vs*196.85;
+      const s = fpm>VS_SIGNO_MIN_FPM ? 1 : fpm<-VS_SIGNO_MIN_FPM ? -1 : 0;
+      if(s!==0 && sVert!==0 && s!==sVert){ sub.push({a, b:i-1, s:sVert}); a=i-1; sVert=s; }
+      else if(s!==0 && sVert===0) sVert=s;
+    }
+    sub.push({a, b:sg.fin, s:sVert});
+
+    for(const st of sub){
+      if(st.b<=st.a || st.s===0) continue;
+      // giro y arco recorrido de ESTE sub-tramo
+      let giro=0, arco=0;
+      for(let i=st.a+1; i<=st.b; i++){
+        giro += difH(track[i-1].hdgDeg, track[i].hdgDeg);
+        arco += Math.hypot(track[i].x-track[i-1].x, track[i].z-track[i-1].z);
+      }
+      giro = Math.abs(giro);
+      const dAlt = (track[st.b].y-track[st.a].y)*3.28084;
+      const dur = track[st.b].t - track[st.a].t;
+      const desp = Math.hypot(track[st.b].x-track[st.a].x, track[st.b].z-track[st.a].z);
+      const radio = giro>1 ? arco/(giro*Math.PI/180) : Infinity;
+      const compacto = desp <= ESPIRAL_DESP_MAX_RADIOS*radio;
+      const sube = dAlt>0;
+      if(giro>=ESPIRAL_GIRO_MIN_DEG && Math.abs(dAlt)>=ESPIRAL_DALT_MIN_FT && dur>=15 && compacto){
+        out.push({tipo: sube?'ESPIRAL ASCENSO':'ESPIRAL DESCENSO', tIni:track[st.a].t, tFin:track[st.b].t,
+                  detalle:`${giro.toFixed(0)}° · ${sube?'+':''}${dAlt.toFixed(0)} ft · radio ${radio.toFixed(0)} m`});
+      } else if(giro>=VIRAJE_VERT_GIRO_MIN_DEG && Math.abs(dAlt)>=VIRAJE_VERT_DALT_MIN_FT && dur>=10){
+        out.push({tipo: sube?'VIRAJE EN ASCENSO':'VIRAJE EN DESCENSO', tIni:track[st.a].t, tFin:track[st.b].t,
+                  detalle:`${giro.toFixed(0)}° · ${sube?'+':''}${dAlt.toFixed(0)} ft · radio ${radio.toFixed(0)} m`});
+      }
     }
   }
 
