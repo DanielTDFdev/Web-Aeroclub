@@ -2,6 +2,11 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.84 · Daniel corrige los umbrales de velocidad: vuelo lento pasa a ≤50kt
+  (era 80) y pérdida a ≤30kt (era 50). Se corrige también el comparador, que
+  era estricto (<) cuando Daniel especificó "o menos" — ahora ≤, y el rango
+  de vuelo lento queda 30<v≤50 para que no se solape con pérdida.
+
   v1.83 · Maniobras fuera del circuito (punto 6), con las definiciones que
   dio Daniel: ochos sobre pilones, eses sobre camino, virajes escarpados
   (>30° de bank sostenido), espirales en ascenso/descenso, vuelo lento
@@ -1438,7 +1443,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.83</span>
+    <span class="badge" id="ver-badge">v1.84</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -1895,8 +1900,8 @@ const ESTAB_TOL_OFFSET_M = 100;    // más estricto que el de detección (200m)
 // Si no hay estimación de viento confiable, las maniobras por velocidad NO
 // se reportan — es preferible no marcar nada que marcar una pérdida falsa.
 const MANIOBRA_ALT_MIN_FT = 500;      // "en altitud de vuelo": descarta despegue/aterrizaje/circuito bajo
-const VUELO_LENTO_KT = 80;            // definido por Daniel
-const PERDIDA_KT = 50;                // definido por Daniel
+const VUELO_LENTO_KT = 50;            // definido por Daniel (v1.84: era 80)
+const PERDIDA_KT = 30;                // definido por Daniel (v1.84: era 50)
 const BANK_ESCARPADO_DEG = 30;        // definido por Daniel: >30° sostenido
 const MIN_LENTO_S = 10, MIN_PERDIDA_S = 4, MIN_ESCARPADO_S = 8;
 const VIRAJE_GIRO_MIN_DEG = 150;      // giro acumulado que cuenta como "un viraje" de una ese/ocho
@@ -1999,9 +2004,9 @@ function detectarManiobras(track, viento){
   }
 
   if(tasKt){
-    corridas(i=>enAltura(i) && tasKt[i]<PERDIDA_KT, MIN_PERDIDA_S, 'PÉRDIDA',
+    corridas(i=>enAltura(i) && tasKt[i]<=PERDIDA_KT, MIN_PERDIDA_S, 'PÉRDIDA',
       (a,b)=>{ let m=Infinity; for(let k=a;k<=b;k++) m=Math.min(m,tasKt[k]); return `mín ${m.toFixed(0)} kt`; });
-    corridas(i=>enAltura(i) && tasKt[i]<VUELO_LENTO_KT && tasKt[i]>=PERDIDA_KT, MIN_LENTO_S, 'VUELO LENTO',
+    corridas(i=>enAltura(i) && tasKt[i]<=VUELO_LENTO_KT && tasKt[i]>PERDIDA_KT, MIN_LENTO_S, 'VUELO LENTO',
       (a,b)=>{ let m=Infinity; for(let k=a;k<=b;k++) m=Math.min(m,tasKt[k]); return `mín ${m.toFixed(0)} kt`; });
   }
 
