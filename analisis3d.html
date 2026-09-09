@@ -2,6 +2,25 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.75 · 3 fixes reportados por Daniel con captura sobre v1.74 (fases de
+  circuito). 1) "Básica" salía en pleno ascenso al virar 90° recién
+  despegado (eso es viento cruzado/crosswind, no básica) — ahora básica
+  también exige VS no ascendente, igual que final, y en vez de mirar el VS
+  de UN punto se mira el PROMEDIO de los últimos 25s (VENTANA_TENDENCIA_S),
+  para cubrir también "viene de un ascenso y lo interrumpe" (un bache plano
+  de un instante ya no alcanza para pasar el filtro). 2) Nunca salía
+  "FINAL": SAWE es un aeródromo de viento fuerte y en corrección de deriva
+  el rumbo GPS (track sobre el suelo) se aparta del rumbo nominal de pista
+  aun volando bien — 20° de tolerancia se quedaba corto para final. Se
+  separó la tolerancia de inicial (quedó en 20°) de la de final (ahora 30°,
+  antes compartían una sola constante) para poder ensancharla sin tocar
+  básica ni inicial. 3) Semáforo verde/amarillo/rojo pedido por Daniel:
+  cada punto clasificado guarda cuánto se alejó de lo ideal (rumbo/altura/
+  offset, normalizado 0-1 contra su propia tolerancia), el promedio de la
+  ventana confirmada decide el color (calidadColor()) — promedio y no peor
+  punto, para que un bache de GPS aislado no tiña rojo un tramo bien
+  volado. Colores fijos por ahora (no configurables).
+
   v1.74 · Pedido de Daniel: detección y marcado de tramos del circuito de
   tránsito (inicial/básica/final), con cartelito que aparece cuando el avión
   ENTRA a cada tramo (no un panel fijo). Solo SAWE por ahora, pista 08/26
@@ -1204,7 +1223,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.74</span>
+    <span class="badge" id="ver-badge">v1.75</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -1574,13 +1593,43 @@ const SAWE_LAT = -53.77784, SAWE_LNG = -67.753083; // referencia de plataforma S
 const RWY_HDG = [85, 265]; // pista 08/26 SAWE, confirmado por Daniel
 const CIRC_ALT_MIN_FT = 600, CIRC_ALT_MAX_FT = 1200; // 900ft AGL ±300 (confirmado por Daniel)
 const CIRC_RADIO_M = 3000; // distancia máx. a la plataforma para considerar "en circuito"
-const TOL_RUMBO_INICIAL_FINAL = 20; // ± grados, para inicial y final
+// v1.75 — pedido de Daniel con captura: nunca salía "FINAL". SAWE es un
+// aeródromo de viento fuerte (METARs habituales de 20-30kt+, a veces
+// racheado); en corrección de deriva el RUMBO real (track sobre el suelo,
+// que es lo único que da el GPS — no el rumbo de la nariz) se aparta bastante
+// del rumbo nominal de pista aun volando la maniobra bien. 20° de tolerancia
+// se quedaba corto. Se separa la tolerancia de inicial/final (antes
+// compartían una sola constante) para poder ensancharla sin tocar básica.
+const TOL_RUMBO_INICIAL = 20; // ± grados
+const TOL_RUMBO_FINAL = 30; // ± grados — más ancha que inicial por lo de arriba
 const TOL_RUMBO_BASICA = 20; // ± grados
 const OFFSET_FINAL_MAX_M = 200; // final: a menos de esto del eje de pista
 const OFFSET_INICIAL_MIN_M = 150; // inicial: a más de esto del eje de pista
-const VS_FINAL_MAX_MS = 0.3; // final exige no estar ascendiendo (m/s) — distingue de la trepada tras el despegue
+// v1.75 — pedido de Daniel con captura: "básica" salía en pleno ascenso justo
+// después de despegar, al virar 90° (viento cruzado/crosswind, que es OTRO
+// tramo, no básica). Antes solo se exigía VS puntual no-ascendente para
+// "final"; ahora también para "básica", y además no se mira el VS de un solo
+// punto (un bache lo cruza igual) sino el PROMEDIO de los últimos
+// VENTANA_TENDENCIA_S segundos — así "viene de un ascenso y lo interrumpe"
+// (el otro caso que reportó Daniel) tampoco pasa: la tendencia reciente sigue
+// dando positiva aunque el punto puntual ya esté plano.
+const VS_NO_ASCENDIENDO_MAX_MS = 0.3; // m/s — tendencia reciente, no punto suelto
+const VENTANA_TENDENCIA_S = 25; // ventana hacia atrás para la tendencia de VS
 const MIN_SOSTENIDO_S = 12; // mínimo sostenido para CONFIRMAR un tramo
 const FUSION_HUECO_S = 8; // huecos cortos dentro del mismo tramo se fusionan (ruido puntual)
+
+// v1.75 — pedido de Daniel: cartelito con semáforo verde/amarillo/rojo según
+// qué tan "de libro" fue la maniobra. Cada punto clasificado guarda cuánto se
+// alejó de lo ideal (0=perfecto, 1=al borde de la tolerancia) en rumbo,
+// altura, y offset de eje (offset solo aplica a final). El promedio de esos
+// desvíos en toda la ventana confirmada decide el color — no el peor punto
+// individual, para que un bache de GPS aislado no tiña rojo un tramo bien
+// volado.
+function calidadColor(prom){
+  if(prom<=0.4) return {bg:'#2ecc71', fg:'#062b12'}; // verde
+  if(prom<=0.75) return {bg:'#ffb700', fg:'#1a1400'}; // amarillo
+  return {bg:'#e74c3c', fg:'#2b0705'}; // rojo
+}
 
 function calcularFasesCircuito(track, lat0, lng0, R){
   const lat0Rad = lat0*Math.PI/180;
@@ -1591,12 +1640,24 @@ function calcularFasesCircuito(track, lat0, lng0, R){
   const ux = Math.sin(rwyRad), uz = Math.cos(rwyRad);
   const difAng = (a,b)=>{ let d=Math.abs(a-b)%360; if(d>180) d=360-d; return d; };
 
-  const crudo = track.map(p=>{
+  // tendencia de VS: promedio móvil de los últimos VENTANA_TENDENCIA_S
+  // segundos (ventana deslizante de dos punteros, track viene ordenado por t)
+  const tendVS = new Array(track.length);
+  { let j=0, suma=0;
+    for(let i=0;i<track.length;i++){
+      suma += track[i].vs;
+      while(track[i].t - track[j].t > VENTANA_TENDENCIA_S){ suma -= track[j].vs; j++; }
+      tendVS[i] = suma/(i-j+1);
+    }
+  }
+
+  const crudo = track.map((p,i)=>{
     const dx = p.x-xAero, dz = p.z-zAero;
     const distAero = Math.sqrt(dx*dx+dz*dz);
     if(distAero>CIRC_RADIO_M) return null;
     const altFt = p.y*3.28084;
     if(altFt<CIRC_ALT_MIN_FT || altFt>CIRC_ALT_MAX_FT) return null;
+    const devAlt = Math.abs(altFt-900)/300;
     const offset = Math.abs(dx*uz - dz*ux); // distancia perpendicular al eje de pista
     const dFinal = Math.min(difAng(p.hdgDeg,RWY_HDG[0]), difAng(p.hdgDeg,RWY_HDG[1]));
     const dInicial = Math.min(difAng(p.hdgDeg,(RWY_HDG[0]+180)%360), difAng(p.hdgDeg,(RWY_HDG[1]+180)%360));
@@ -1604,9 +1665,15 @@ function calcularFasesCircuito(track, lat0, lng0, R){
       difAng(p.hdgDeg,(RWY_HDG[0]+90)%360), difAng(p.hdgDeg,(RWY_HDG[0]+270)%360),
       difAng(p.hdgDeg,(RWY_HDG[1]+90)%360), difAng(p.hdgDeg,(RWY_HDG[1]+270)%360)
     );
-    if(dFinal<=TOL_RUMBO_INICIAL_FINAL && offset<=OFFSET_FINAL_MAX_M && p.vs<=VS_FINAL_MAX_MS) return 'FINAL';
-    if(dInicial<=TOL_RUMBO_INICIAL_FINAL && offset>=OFFSET_INICIAL_MIN_M) return 'INICIAL';
-    if(dBasica<=TOL_RUMBO_BASICA) return 'BASICA';
+    if(dFinal<=TOL_RUMBO_FINAL && offset<=OFFSET_FINAL_MAX_M && tendVS[i]<=VS_NO_ASCENDIENDO_MAX_MS){
+      return {fase:'FINAL', dev:Math.max(dFinal/TOL_RUMBO_FINAL, devAlt, offset/OFFSET_FINAL_MAX_M)};
+    }
+    if(dInicial<=TOL_RUMBO_INICIAL && offset>=OFFSET_INICIAL_MIN_M){
+      return {fase:'INICIAL', dev:Math.max(dInicial/TOL_RUMBO_INICIAL, devAlt)};
+    }
+    if(dBasica<=TOL_RUMBO_BASICA && tendVS[i]<=VS_NO_ASCENDIENDO_MAX_MS){
+      return {fase:'BASICA', dev:Math.max(dBasica/TOL_RUMBO_BASICA, devAlt)};
+    }
     return null;
   });
 
@@ -1616,20 +1683,22 @@ function calcularFasesCircuito(track, lat0, lng0, R){
   let i=0;
   while(i<crudo.length){
     if(crudo[i]==null){ i++; continue; }
-    const fase = crudo[i];
-    let j=i;
-    while(j<crudo.length && crudo[j]===fase) j++;
+    const fase = crudo[i].fase;
+    let j=i, sumaDev=0, cont=0;
+    while(j<crudo.length && crudo[j]!=null && crudo[j].fase===fase){ sumaDev+=crudo[j].dev; cont++; j++; }
     const dur = track[j-1].t - track[i].t;
-    if(dur>=MIN_SOSTENIDO_S) ventanas.push({fase, tIni:track[i].t, tFin:track[j-1].t});
+    if(dur>=MIN_SOSTENIDO_S) ventanas.push({fase, tIni:track[i].t, tFin:track[j-1].t, sumaDev, cont});
     i=j;
   }
   // fusiona ventanas de la misma fase separadas por un hueco corto
   const fusionadas = [];
   for(const v of ventanas){
     const prev = fusionadas[fusionadas.length-1];
-    if(prev && prev.fase===v.fase && v.tIni-prev.tFin<FUSION_HUECO_S) prev.tFin = v.tFin;
-    else fusionadas.push({fase:v.fase, tIni:v.tIni, tFin:v.tFin});
+    if(prev && prev.fase===v.fase && v.tIni-prev.tFin<FUSION_HUECO_S){
+      prev.tFin = v.tFin; prev.sumaDev += v.sumaDev; prev.cont += v.cont;
+    } else fusionadas.push({...v});
   }
+  for(const v of fusionadas) v.calidad = calidadColor(v.sumaDev/v.cont);
   return fusionadas;
 }
 
@@ -1644,7 +1713,7 @@ function iniciarVisor(track){
   // v1.74: ventanas de fase de circuito confirmadas para este track (ver función arriba)
   const fasesCircuito = calcularFasesCircuito(track, lat0, lng0, R);
   function faseEnT(t){
-    for(const v of fasesCircuito){ if(t>=v.tIni && t<=v.tFin) return v.fase; }
+    for(const v of fasesCircuito){ if(t>=v.tIni && t<=v.tFin) return v; }
     return null;
   }
 
@@ -3326,18 +3395,20 @@ function loop(now){
   // de fase reinicia la animación de "pulso" para marcar el momento de
   // entrada, aunque el usuario esté arrastrando el slider en vez de reproduciendo.
   const etiquetaFase = document.getElementById('etiqueta-fase');
-  const faseActual = circuitoChk.checked ? faseEnT(currentT) : null;
-  if(faseActual && ndc.z<=1){
-    const nombre = faseActual==='INICIAL' ? 'INICIAL' : faseActual==='BASICA' ? 'BÁSICA' : 'FINAL';
-    if(etiquetaFase.dataset.fase !== faseActual){
+  const ventanaFase = circuitoChk.checked ? faseEnT(currentT) : null;
+  if(ventanaFase && ndc.z<=1){
+    const nombre = ventanaFase.fase==='INICIAL' ? 'INICIAL' : ventanaFase.fase==='BASICA' ? 'BÁSICA' : 'FINAL';
+    if(etiquetaFase.dataset.fase !== ventanaFase.fase+ventanaFase.tIni){
       etiquetaFase.classList.remove('pulso');
       void etiquetaFase.offsetWidth; // fuerza reflow para poder re-disparar la animación
       etiquetaFase.classList.add('pulso');
-      etiquetaFase.dataset.fase = faseActual;
+      etiquetaFase.dataset.fase = ventanaFase.fase+ventanaFase.tIni;
     }
     etiquetaFase.style.display = 'block';
     etiquetaFase.style.left = etiqueta.style.left;
     etiquetaFase.style.top = ((-ndc.y*0.5+0.5)*stage.clientHeight - 28) + 'px';
+    etiquetaFase.style.background = ventanaFase.calidad.bg;
+    etiquetaFase.style.color = ventanaFase.calidad.fg;
     etiquetaFase.textContent = nombre;
   } else {
     etiquetaFase.style.display = 'none';
