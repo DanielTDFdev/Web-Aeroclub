@@ -2,6 +2,65 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.78 · Auditoría (/revisar) del código de fases de circuito, sin pedido
+  nuevo de Daniel. Hallazgos, por severidad:
+  ALTO — BUG DE ORDEN: la fusión de huecos cortos corría DESPUÉS del filtro
+  de secuencia, y eso perdía tramos reales. Una básica volada como viraje
+  continuo se fragmenta en 2-3 ventanas separadas por huecos de ruido; el
+  filtro de secuencia aceptaba la primera (venía de inicial) y descartaba
+  las siguientes (para ellas la ventana previa ya era "BASICA", no
+  "INICIAL"), y recién después se intentaba fusionar — pero ya no quedaba
+  nada. Invertido el orden: primero fusión, después secuencia. Esto puede
+  explicar por sí solo parte de las básicas faltantes que reportó Daniel.
+  MEDIO — DIAGNÓSTICO INSUFICIENTE: el panel de v1.76 solo mostraba el punto
+  actual, lo que obliga a cazar el instante exacto con el slider para
+  entender por qué un tramo no se marca. Se agrega un CENSO del vuelo
+  completo: cuántos puntos pasan cada criterio POR SEPARADO (altura, rumbo,
+  offset, VS) y cuántos los pasan todos, más la lista de ventanas
+  detectadas. Con eso el criterio culpable de un tramo ausente se ve de una
+  sin adivinar el momento. Se calcula una sola vez, no por frame.
+  BAJO — RENDIMIENTO: diagnosticoEnT() hacía un barrido LINEAL sobre todo el
+  track en CADA FRAME (60fps) mientras el toggle estaba activo. El track ya
+  viene ordenado por t, así que pasa a búsqueda binaria.
+  ALTO — CALIDAD DE BÁSICA SIEMPRE ROJA (hallazgo del test funcional, no de
+  la lectura del código): la nota de básica ponderaba el desvío de altura
+  contra 900±50ft, pero la básica es justamente el tramo donde se PIERDE
+  altura antes de la final — el mismo error conceptual ya corregido en final
+  en v1.77. Verificado con un circuito sintético BIEN volado: daba rojo.
+  Básica pasa a calificarse solo por rumbo. Inicial conserva la ponderación
+  de altura, que ahí sí corresponde (es el tramo nivelado a altura de
+  circuito).
+  VALIDACIÓN: se probó calcularFasesCircuito() aislada en Node contra dos
+  tracks sintéticos — un circuito bien volado (da INICIAL+BÁSICA+FINAL, las
+  tres verdes) y un despegue con viraje de crosswind ascendente (no marca
+  nada, como corresponde).
+  VERIFICADO Y DESCARTADO: sospeché que el punto de referencia de SAWE
+  (plataforma, no eje de pista) desplazaba el offset y bloqueaba "final".
+  Se midió contra la otra referencia pública disponible: difieren 243m,
+  pero solo 6m en la componente PERPENDICULAR al eje, que es la única que
+  afecta al offset. Hipótesis descartada, no se tocó nada por eso.
+
+  v1.77 · 4 síntomas reportados por Daniel con captura sobre v1.76, los
+  primeros 3 resultaron ser UN SOLO bug. 1) Salía "inicial" con rumbo de
+  pista y en ascenso: a inicial le faltaba el filtro de tendencia de VS que
+  ya tenían final y básica desde v1.75/76 — un giro ascendente que ya se
+  alejó del eje pasaba igual. 2) Seguían saliendo básicas en ascenso pese al
+  filtro de secuencia de v1.76: esa inicial FALSA del punto 1 habilitaba el
+  gate de secuencia (que solo mira que la ventana anterior HAYA SIDO
+  "inicial", no que fuera real) — arreglado el bug de origen, se arregla
+  esto también. 3) No detectaba básicas reales: la banda de altura de
+  circuito (600-1200ft) y sobre todo el mínimo sostenido de 12s le pegaban
+  fuerte a un circuito volado como viraje continuo (típico con viento
+  fuerte) — el rumbo pasa por la ventana perpendicular de básica un momento,
+  girando, sin sostenerse "parado" ahí. Mínimo sostenido bajado a 6s SOLO
+  para básica. 4) Nunca salía "final": la banda de altura de circuito
+  (600-1200ft) se aplicaba también a final, pero final por definición
+  DESCIENDE hasta la pista — en un patrón cerrado el alineamiento con el eje
+  se completa fácilmente por debajo de 600ft. Final pasa a tener su propia
+  banda (50-1200ft, con piso bajo para no confundirlo con carreteo). Nota de
+  calidad de final ajustada: ya no pondera altura (no tiene "altura ideal",
+  desciende por diseño), solo rumbo y offset del eje.
+
   v1.76 · Nuevos fixes reportados por Daniel con captura sobre v1.75 (fases
   de circuito). 1) "Básica" seguía saliendo en pleno ascenso, aun con el
   filtro de tendencia de VS de v1.75 — la causa real no era cinemática: el
@@ -1248,7 +1307,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.76</span>
+    <span class="badge" id="ver-badge">v1.78</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -1618,7 +1677,18 @@ function procesarPuntos(puntosCrudos){
 // segundos seguidos (MIN_SOSTENIDO_S) — nada dispara por un punto aislado.
 const SAWE_LAT = -53.77784, SAWE_LNG = -67.753083; // referencia de plataforma SAWE
 const RWY_HDG = [85, 265]; // pista 08/26 SAWE, confirmado por Daniel
-const CIRC_ALT_MIN_FT = 600, CIRC_ALT_MAX_FT = 1200; // 900ft AGL ±300 (confirmado por Daniel)
+const CIRC_ALT_MIN_FT = 600, CIRC_ALT_MAX_FT = 1200; // 900ft AGL ±300 — banda de altura de CIRCUITO (inicial/básica)
+// v1.77 — pedido de Daniel con captura: "final" seguía sin salir nunca.
+// Causa real: la banda de altura de circuito (600-1200ft) se aplicaba
+// también a final, pero final por definición es el tramo que DESCIENDE
+// hasta la pista — exigirle estar siempre arriba de 600ft lo bloqueaba en
+// cualquier circuito donde el alineamiento con el eje se complete más bajo
+// (muy común en un patrón cerrado/circuito bajo con viento). Final ahora
+// tiene su propia banda, mucho más permisiva hacia abajo: desde casi el
+// piso (50ft, para no confundir con el carreteo en pista antes de despegar
+// o después de aterrizar, que tiene rumbo/offset parecidos pero GS bajo y
+// altura ~0) hasta 1200ft.
+const FINAL_ALT_MIN_FT = 50, FINAL_ALT_MAX_FT = 1200;
 const CIRC_RADIO_M = 3000; // distancia máx. a la plataforma para considerar "en circuito"
 // v1.75 — pedido de Daniel con captura: nunca salía "FINAL". SAWE es un
 // aeródromo de viento fuerte (METARs habituales de 20-30kt+, a veces
@@ -1649,7 +1719,14 @@ const ALT_IDEAL_TOL_FT = 50; // ±ft — vara para la nota de calidad, no para d
 // dando positiva aunque el punto puntual ya esté plano.
 const VS_NO_ASCENDIENDO_MAX_MS = 0.3; // m/s — tendencia reciente, no punto suelto
 const VENTANA_TENDENCIA_S = 25; // ventana hacia atrás para la tendencia de VS
-const MIN_SOSTENIDO_S = 12; // mínimo sostenido para CONFIRMAR un tramo
+const MIN_SOSTENIDO_S = 12; // mínimo sostenido para CONFIRMAR inicial/final
+// v1.77 — pedido de Daniel con captura: seguía marcando básicas reales en
+// giro sostenido nunca llegaba a los 12s (circuito volado como viraje
+// continuo, típico con viento fuerte — el rumbo pasa por la ventana
+// perpendicular de básica un momento, girando, no se sostiene "parado" ahí
+// como sí puede sostenerse una inicial o una final en tramo recto). Mínimo
+// más corto solo para básica.
+const MIN_SOSTENIDO_BASICA_S = 6;
 const FUSION_HUECO_S = 8; // huecos cortos dentro del mismo tramo se fusionan (ruido puntual)
 // v1.76 — pedido de Daniel con captura: seguía saliendo "básica" en pleno
 // ascenso, aun con el filtro de tendencia de VS de v1.75. Causa real: el
@@ -1701,8 +1778,6 @@ function calcularFasesCircuito(track, lat0, lng0, R){
     const distAero = Math.sqrt(dx*dx+dz*dz);
     if(distAero>CIRC_RADIO_M) return null;
     const altFt = p.y*3.28084;
-    if(altFt<CIRC_ALT_MIN_FT || altFt>CIRC_ALT_MAX_FT) return null;
-    const devAlt = Math.abs(altFt-900)/ALT_IDEAL_TOL_FT; // v1.76: vara de calidad ±50ft, no la banda de detección
     const offset = Math.abs(dx*uz - dz*ux); // distancia perpendicular al eje de pista
     const dFinal = Math.min(difAng(p.hdgDeg,RWY_HDG[0]), difAng(p.hdgDeg,RWY_HDG[1]));
     const dInicial = Math.min(difAng(p.hdgDeg,(RWY_HDG[0]+180)%360), difAng(p.hdgDeg,(RWY_HDG[1]+180)%360));
@@ -1710,20 +1785,44 @@ function calcularFasesCircuito(track, lat0, lng0, R){
       difAng(p.hdgDeg,(RWY_HDG[0]+90)%360), difAng(p.hdgDeg,(RWY_HDG[0]+270)%360),
       difAng(p.hdgDeg,(RWY_HDG[1]+90)%360), difAng(p.hdgDeg,(RWY_HDG[1]+270)%360)
     );
-    if(dFinal<=TOL_RUMBO_FINAL && offset<=OFFSET_FINAL_MAX_M && tendVS[i]<=VS_NO_ASCENDIENDO_MAX_MS){
-      return {fase:'FINAL', dev:Math.max(dFinal/TOL_RUMBO_FINAL, devAlt, offset/OFFSET_FINAL_MAX_M)};
+    // FINAL: banda de altura propia (ver FINAL_ALT_MIN/MAX_FT arriba). No se
+    // incluye devAlt en su nota de calidad — a diferencia de inicial/básica,
+    // que se esperan a una altura pareja (900ft), final recorre por diseño
+    // un rango amplio de altura mientras desciende, así que "lejos de 900"
+    // no es una desviación de la maniobra.
+    if(altFt>=FINAL_ALT_MIN_FT && altFt<=FINAL_ALT_MAX_FT &&
+       dFinal<=TOL_RUMBO_FINAL && offset<=OFFSET_FINAL_MAX_M && tendVS[i]<=VS_NO_ASCENDIENDO_MAX_MS){
+      return {fase:'FINAL', dev:Math.max(dFinal/TOL_RUMBO_FINAL, offset/OFFSET_FINAL_MAX_M)};
     }
-    if(dInicial<=TOL_RUMBO_INICIAL && offset>=OFFSET_INICIAL_MIN_M){
+    // INICIAL y BÁSICA: banda de altura de circuito (900±300)
+    if(altFt<CIRC_ALT_MIN_FT || altFt>CIRC_ALT_MAX_FT) return null;
+    const devAlt = Math.abs(altFt-900)/ALT_IDEAL_TOL_FT; // v1.76: vara de calidad ±50ft, no la banda de detección
+    // v1.77 — pedido de Daniel con captura: salía "inicial" con rumbo de
+    // pista y en ascenso. A esta le faltaba el mismo filtro de tendencia de
+    // VS que ya tenían final y básica — un giro ascendente que ya se alejó
+    // ≥150m del eje (offset) pasaba igual, sin importar que siguiera
+    // subiendo. Esto además destapaba el filtro de secuencia de básica (ver
+    // más abajo): una inicial FALSA confirmada por este bug habilitaba
+    // básicas falsas después, porque el gate de secuencia solo mira que la
+    // ventana anterior HAYA SIDO "inicial", no que esa inicial fuera real.
+    if(dInicial<=TOL_RUMBO_INICIAL && offset>=OFFSET_INICIAL_MIN_M && tendVS[i]<=VS_NO_ASCENDIENDO_MAX_MS){
       return {fase:'INICIAL', dev:Math.max(dInicial/TOL_RUMBO_INICIAL, devAlt)};
     }
+    // v1.78 (hallazgo del test de /revisar): básica NO pondera altura contra
+    // 900ft. Es el mismo error conceptual que ya se corrigió en final: la
+    // básica es el tramo donde se PIERDE altura antes de la final, así que
+    // exigirle 900±50 la pintaba roja aun en un circuito bien volado
+    // (verificado con circuito sintético correcto: daba rojo). Inicial sí
+    // conserva devAlt — ese es el tramo que se vuela nivelado a la altura de
+    // circuito, ahí la altura sí es un indicador legítimo de la maniobra.
     if(dBasica<=TOL_RUMBO_BASICA && tendVS[i]<=VS_NO_ASCENDIENDO_MAX_MS){
-      return {fase:'BASICA', dev:Math.max(dBasica/TOL_RUMBO_BASICA, devAlt)};
+      return {fase:'BASICA', dev:dBasica/TOL_RUMBO_BASICA};
     }
     return null;
   });
 
   // histéresis: agrupa corridas consecutivas iguales, descarta las que no
-  // llegan al mínimo sostenido
+  // llegan al mínimo sostenido (distinto para básica — ver MIN_SOSTENIDO_BASICA_S)
   const ventanas = [];
   let i=0;
   while(i<crudo.length){
@@ -1732,37 +1831,51 @@ function calcularFasesCircuito(track, lat0, lng0, R){
     let j=i, sumaDev=0, cont=0;
     while(j<crudo.length && crudo[j]!=null && crudo[j].fase===fase){ sumaDev+=crudo[j].dev; cont++; j++; }
     const dur = track[j-1].t - track[i].t;
-    if(dur>=MIN_SOSTENIDO_S) ventanas.push({fase, tIni:track[i].t, tFin:track[j-1].t, sumaDev, cont});
+    const minReq = fase==='BASICA' ? MIN_SOSTENIDO_BASICA_S : MIN_SOSTENIDO_S;
+    if(dur>=minReq) ventanas.push({fase, tIni:track[i].t, tFin:track[j-1].t, sumaDev, cont});
     i=j;
   }
-  // v1.76: filtro de secuencia — descarta básicas que no vinieron de una
-  // inicial ya confirmada (ver comentario junto a MIN_SOSTENIDO_S arriba)
-  const secuenciadas = [];
-  let ultimaFaseValida = null;
-  for(const v of ventanas){
-    if(v.fase==='BASICA' && ultimaFaseValida!=='INICIAL') continue;
-    secuenciadas.push(v);
-    ultimaFaseValida = v.fase;
-  }
-
-  // fusiona ventanas de la misma fase separadas por un hueco corto
+  // v1.78 — hallazgo de /revisar: BUG DE ORDEN. La fusión de huecos cortos
+  // corría DESPUÉS del filtro de secuencia, y eso perdía tramos reales: una
+  // básica volada como viraje continuo se fragmenta en 2-3 ventanas separadas
+  // por huecos de ruido; el filtro de secuencia aceptaba la primera (venía de
+  // inicial) y descartaba las siguientes (ahora la ventana previa era
+  // "BASICA", no "INICIAL"), y recién después se intentaba fusionar — pero ya
+  // no quedaba nada que fusionar. Invertido: primero se fusionan los
+  // fragmentos, después se aplica la secuencia sobre ventanas ya completas.
   const fusionadas = [];
-  for(const v of secuenciadas){
+  for(const v of ventanas){
     const prev = fusionadas[fusionadas.length-1];
     if(prev && prev.fase===v.fase && v.tIni-prev.tFin<FUSION_HUECO_S){
       prev.tFin = v.tFin; prev.sumaDev += v.sumaDev; prev.cont += v.cont;
     } else fusionadas.push({...v});
   }
-  for(const v of fusionadas) v.calidad = calidadColor(v.sumaDev/v.cont);
+
+  // v1.76: filtro de secuencia — descarta básicas que no vinieron de una
+  // inicial ya confirmada (ver comentario junto a MIN_SOSTENIDO_S arriba)
+  const secuenciadas = [];
+  let ultimaFaseValida = null;
+  for(const v of fusionadas){
+    if(v.fase==='BASICA' && ultimaFaseValida!=='INICIAL') continue;
+    secuenciadas.push(v);
+    ultimaFaseValida = v.fase;
+  }
+  for(const v of secuenciadas) v.calidad = calidadColor(v.sumaDev/v.cont);
 
   // v1.76 — pedido de Daniel: en vez de seguir adivinando umbrales a partir
   // de capturas, esto expone los números crudos del punto más cercano a un
   // tiempo dado (diferencia de rumbo a cada candidato, offset al eje,
   // altura, tendencia de VS) para el modo de diagnóstico en pantalla — ver
   // toggle "circuito-debug" y su uso en loop().
+  // v1.78: búsqueda BINARIA en vez de lineal — esto corre en cada frame del
+  // render (60fps) mientras el toggle está activo, y con un track de miles
+  // de puntos un barrido lineal por frame es trabajo desperdiciado. El track
+  // ya viene ordenado por t, así que la binaria es directa.
   function diagnosticoEnT(t){
-    let idx=0, mejor=Infinity;
-    for(let k=0;k<track.length;k++){ const d=Math.abs(track[k].t-t); if(d<mejor){ mejor=d; idx=k; } }
+    let lo=0, hi=track.length-1;
+    while(lo<hi){ const mid=(lo+hi)>>1; if(track[mid].t<t) lo=mid+1; else hi=mid; }
+    let idx=lo;
+    if(idx>0 && Math.abs(track[idx-1].t-t)<Math.abs(track[idx].t-t)) idx--;
     const p = track[idx];
     const dx = p.x-xAero, dz = p.z-zAero;
     const offset = Math.abs(dx*uz - dz*ux);
@@ -1776,7 +1889,51 @@ function calcularFasesCircuito(track, lat0, lng0, R){
     return {dFinal, dInicial, dBasica, offset, altFt, vs:tendVS[idx]};
   }
 
-  return {ventanas: fusionadas, diagnosticoEnT};
+  // v1.78 — hallazgo de /revisar: el diagnóstico punto-a-punto obliga a
+  // Daniel a cazar el instante exacto con el slider para entender por qué un
+  // tramo no se marca. Este censo recorre TODO el vuelo una sola vez y
+  // cuenta, criterio por criterio, cuántos puntos pasan cada uno por
+  // separado — así el criterio culpable de un tramo que no aparece salta a
+  // la vista sin tener que adivinar el momento. Se calcula una sola vez, no
+  // por frame.
+  const censo = (()=>{
+    const c = {enRadio:0, finalAlt:0, finalRumbo:0, finalOffset:0, finalVs:0, finalTodo:0,
+               circAlt:0, iniRumbo:0, iniOffset:0, iniVs:0, iniTodo:0,
+               basRumbo:0, basVs:0, basTodo:0, total:track.length};
+    track.forEach((p,i)=>{
+      const dx = p.x-xAero, dz = p.z-zAero;
+      if(Math.sqrt(dx*dx+dz*dz)>CIRC_RADIO_M) return;
+      c.enRadio++;
+      const altFt = p.y*3.28084;
+      const offset = Math.abs(dx*uz - dz*ux);
+      const noAsc = tendVS[i]<=VS_NO_ASCENDIENDO_MAX_MS;
+      const dFinal = Math.min(difAng(p.hdgDeg,RWY_HDG[0]), difAng(p.hdgDeg,RWY_HDG[1]));
+      const dInicial = Math.min(difAng(p.hdgDeg,(RWY_HDG[0]+180)%360), difAng(p.hdgDeg,(RWY_HDG[1]+180)%360));
+      const dBasica = Math.min(
+        difAng(p.hdgDeg,(RWY_HDG[0]+90)%360), difAng(p.hdgDeg,(RWY_HDG[0]+270)%360),
+        difAng(p.hdgDeg,(RWY_HDG[1]+90)%360), difAng(p.hdgDeg,(RWY_HDG[1]+270)%360)
+      );
+      const fAlt = altFt>=FINAL_ALT_MIN_FT && altFt<=FINAL_ALT_MAX_FT;
+      if(fAlt) c.finalAlt++;
+      if(dFinal<=TOL_RUMBO_FINAL) c.finalRumbo++;
+      if(offset<=OFFSET_FINAL_MAX_M) c.finalOffset++;
+      if(noAsc) c.finalVs++;
+      if(fAlt && dFinal<=TOL_RUMBO_FINAL && offset<=OFFSET_FINAL_MAX_M && noAsc) c.finalTodo++;
+      const cAlt = altFt>=CIRC_ALT_MIN_FT && altFt<=CIRC_ALT_MAX_FT;
+      if(cAlt) c.circAlt++;
+      if(dInicial<=TOL_RUMBO_INICIAL) c.iniRumbo++;
+      if(offset>=OFFSET_INICIAL_MIN_M) c.iniOffset++;
+      if(noAsc) c.iniVs++;
+      if(cAlt && dInicial<=TOL_RUMBO_INICIAL && offset>=OFFSET_INICIAL_MIN_M && noAsc) c.iniTodo++;
+      if(dBasica<=TOL_RUMBO_BASICA) c.basRumbo++;
+      if(noAsc) c.basVs++;
+      if(cAlt && dBasica<=TOL_RUMBO_BASICA && noAsc) c.basTodo++;
+    });
+    c.ventanas = secuenciadas.map(v=>`${v.fase} ${v.tIni.toFixed(0)}-${v.tFin.toFixed(0)}s`).join(', ') || '(ninguna)';
+    return c;
+  })();
+
+  return {ventanas: secuenciadas, diagnosticoEnT, censo};
 }
 
 function iniciarVisor(track){
@@ -1788,7 +1945,7 @@ function iniciarVisor(track){
   const epocaInicioSeg = track.epocaInicioSeg; // pedido de Daniel: timestamp real (UTC) en el panel
 
   // v1.74: ventanas de fase de circuito confirmadas para este track (ver función arriba)
-  const {ventanas: fasesCircuito, diagnosticoEnT} = calcularFasesCircuito(track, lat0, lng0, R);
+  const {ventanas: fasesCircuito, diagnosticoEnT, censo: censoCircuito} = calcularFasesCircuito(track, lat0, lng0, R);
   function faseEnT(t){
     for(const v of fasesCircuito){ if(t>=v.tIni && t<=v.tFin) return v; }
     return null;
@@ -3504,8 +3661,14 @@ function loop(now){
       `Δrumbo básica ${d.dBasica.toFixed(0)}° (tol ${TOL_RUMBO_BASICA}°)\n`+
       `Δrumbo inicial ${d.dInicial.toFixed(0)}° (tol ${TOL_RUMBO_INICIAL}°)\n`+
       `offset eje ${d.offset.toFixed(0)}m (final≤${OFFSET_FINAL_MAX_M} / inicial≥${OFFSET_INICIAL_MIN_M})\n`+
-      `alt ${d.altFt.toFixed(0)}ft (Δ900 = ${(d.altFt-900).toFixed(0)}, banda ${CIRC_ALT_MIN_FT}-${CIRC_ALT_MAX_FT})\n`+
-      `VS tend.25s ${(d.vs*196.85).toFixed(0)}fpm (no-ascenso ≤${(VS_NO_ASCENDIENDO_MAX_MS*196.85).toFixed(0)})`;
+      `alt ${d.altFt.toFixed(0)}ft (banda circ ${CIRC_ALT_MIN_FT}-${CIRC_ALT_MAX_FT} / final ${FINAL_ALT_MIN_FT}-${FINAL_ALT_MAX_FT})\n`+
+      `VS tend.25s ${(d.vs*196.85).toFixed(0)}fpm (no-ascenso ≤${(VS_NO_ASCENDIENDO_MAX_MS*196.85).toFixed(0)})\n`+
+      `\n— CENSO DEL VUELO (puntos que pasan c/criterio) —\n`+
+      `en radio ${censoCircuito.enRadio}/${censoCircuito.total}\n`+
+      `FINAL alt ${censoCircuito.finalAlt} · rumbo ${censoCircuito.finalRumbo} · offset ${censoCircuito.finalOffset} · vs ${censoCircuito.finalVs} → TODOS ${censoCircuito.finalTodo}\n`+
+      `INIC. alt ${censoCircuito.circAlt} · rumbo ${censoCircuito.iniRumbo} · offset ${censoCircuito.iniOffset} · vs ${censoCircuito.iniVs} → TODOS ${censoCircuito.iniTodo}\n`+
+      `BÁS.  alt ${censoCircuito.circAlt} · rumbo ${censoCircuito.basRumbo} · vs ${censoCircuito.basVs} → TODOS ${censoCircuito.basTodo}\n`+
+      `ventanas: ${censoCircuito.ventanas}`;
   } else {
     debugFase.style.display = 'none';
   }
