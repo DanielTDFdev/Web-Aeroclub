@@ -2,6 +2,17 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.67 · Pedido de Daniel sobre v1.66: "quedó gigantesca" + "no la quiero
+  debajo del avión, a la izquierda". (1) El radio de la rosa dejó de basarse
+  en `extent` (tamaño de TODO el vuelo — tenía sentido cuando era un marcador
+  fijo, pero da cientos de metros de punta a punta en vuelos largos) y pasa a
+  basarse en AVION_LARGO_MUNDO (el largo real del modelo 3D, misma unidad que
+  ya usa el humo) — queda proporcional al avión, no al vuelo completo. Se
+  reconstruye una vez más cuando carga el GLB real (antes de eso usa el
+  fallback de AVION_LARGO_MUNDO). (2) Offset lateral con el vector "right" de
+  cámara (mismo usado en panCamera): -right = izquierda de pantalla,
+  cualquiera sea el ángulo de cámara en ese momento.
+
   v1.66 · FIX reportado por Daniel sobre v1.65: el umbral por distancia dejó
   de dibujar la rosa TODO el tiempo en vuelos locales/compactos (spins,
   patrones), donde la distancia avión↔centro normal ya superaba un umbral
@@ -1106,7 +1117,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.66</span>
+    <span class="badge" id="ver-badge">v1.67</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -1686,9 +1697,19 @@ function construirRosaRumbos(){
   // todas de `radio`); ROSA_ALPHA multiplica CADA opacity ya existente más
   // abajo (puntas, contornos, aro, letras) — no se tocan los colores/bisel,
   // solo cuánto se nota el conjunto.
-  const ROSA_ESCALA = 0.6;
+  // v1.67 — pedido de Daniel: "quedó gigantesca". Desde v1.66 el radio seguía
+  // calculado en base a `extent` (el tamaño de TODO el vuelo), que tenía
+  // sentido cuando la rosa era un único marcador fijo en el medio del
+  // recorrido — pero ahora que sigue de cerca al avión, ese mismo radio (que
+  // en un vuelo de varios km da cientos de metros de punta a punta) se ve
+  // gigantesco al lado del avión. Se cambia la unidad de referencia a
+  // AVION_LARGO_MUNDO (el largo real del modelo 3D, ya escalado para verse
+  // bien a la distancia de cámara de "seguir avión" — misma unidad que ya usa
+  // el humo), así el tamaño de la rosa queda proporcional al avión que tiene
+  // al lado, sin importar cuán largo sea el vuelo completo.
+  const ROSA_ESCALA = 1.3;
   const ROSA_ALPHA  = 0.55;
-  const radio = Math.max(60, extent*0.12) * ROSA_ESCALA;
+  const radio = AVION_LARGO_MUNDO * ROSA_ESCALA;
   const y = 0.12; // apenas por encima de la grilla (0.05)
 
   // v1.47 — pedido de Daniel: rosa tipo "estrella de 8 puntas" con efecto 3D,
@@ -1819,7 +1840,9 @@ rosaChk.onchange = ()=>{
     rosaGroup.visible=false;
   }
 };
-if(rosaChk.checked){ rosaGroup=construirRosaRumbos(); scene.add(rosaGroup); } // arranca activada
+// v1.67: la construcción inicial se movió más abajo en el archivo (después de
+// AVION_LARGO_MUNDO, del que ahora depende el tamaño de la rosa — ver
+// comentario junto a AVION_LARGO_MUNDO).
 
 // --- Mapa satelital como suelo (opcional, pedido de Daniel: "probemos") ---
 // Reusa el mismo proveedor de tiles que ya usan turnos.html/vuelo.html para
@@ -2246,6 +2269,7 @@ const HUMO_VIDA_MAX = 20;     // tope de SEGURIDAD en segundos — solo actúa s
   // límite. En vuelo normal, el que corta cada puff es HUMO_LARGO_OBJETIVO.
 let AVION_LARGO_MUNDO = MODELO_ESCALA*4; // fallback hasta que cargue el GLB
   // real (se recalcula abajo con el bounding box del modelo)
+if(rosaChk.checked){ rosaGroup=construirRosaRumbos(); scene.add(rosaGroup); } // arranca activada — v1.67: se construye recién acá porque el radio ahora depende de AVION_LARGO_MUNDO
 const HUMO_LARGO_OBJETIVO_MULT = 3; // pedido de Daniel: la estela debe medir,
   // en distancia real recorrida por el avión, 3 "largos de avión" — no un
   // tiempo fijo (antes HUMO_VIDA=7s, sin relación con el tamaño real ni la
@@ -2311,6 +2335,16 @@ new THREE.GLTFLoader().load('aeroplane.glb', (gltf)=>{
   // se usa como unidad de medida para el largo de la estela de humo.
   AVION_LARGO_MUNDO = caja.getSize(new THREE.Vector3()).z * MODELO_ESCALA;
   HUMO_LARGO_OBJETIVO = AVION_LARGO_MUNDO * HUMO_LARGO_OBJETIVO_MULT;
+  // v1.67: la rosa se construyó con el AVION_LARGO_MUNDO de fallback (antes de
+  // que cargue este GLB) — se reconstruye ahora con el valor real para que el
+  // tamaño quede exacto, mismo patrón que reconstruirTubo() al cambiar de
+  // modoColor.
+  if(rosaGroup){
+    scene.remove(rosaGroup);
+    rosaGroup = construirRosaRumbos();
+    rosaGroup.visible = rosaChk.checked;
+    scene.add(rosaGroup);
+  }
 
   modelo.rotation.y = MODELO_ROTACION_Y_EXTRA*Math.PI/180;
   modelo.scale.setScalar(MODELO_ESCALA);
@@ -3069,18 +3103,22 @@ function loop(now){
   actualizarCamara(siguiendo ? pos : centro, siguiendo ? camRadioSeguir : camRadioLibre);
   actualizarInfo(m);
 
-  // v1.66 — FIX reportado por Daniel sobre v1.65 (el umbral por distancia
-  // terminó ocultando la rosa TODO el tiempo en vuelos locales/compactos,
-  // donde la distancia avión↔centro normal ya supera un umbral calibrado
-  // contra el radio visual de la rosa, que no tiene relación real con la
-  // escala geográfica del vuelo). Se descarta el umbral: en vez de ocultar la
-  // rosa cuando está lejos de `centro`, directamente el grupo entero se
-  // REPOSICIONA cada frame para quedar siempre donde está el avión (modo
-  // "seguir") o donde mira la cámara libre (`centro`, el target de siempre en
-  // ese modo) — la rosa fue reconstruida en v1.66 con vértices relativos al
-  // grupo (antes absolutos sobre `centro`), así que alcanza con mover
-  // rosaGroup.position en vez de reconstruir geometría.
-  if(rosaGroup) rosaGroup.position.set(siguiendo ? pos.x : centro.x, 0, siguiendo ? pos.z : centro.z);
+  // v1.66 — la rosa fue reconstruida con vértices relativos al grupo (antes
+  // absolutos sobre `centro`), y el grupo se reposiciona cada frame para
+  // quedar siempre donde está el avión (modo "seguir") o donde mira la
+  // cámara libre (`centro`, el target de siempre en ese modo) — así nunca
+  // queda lejos.
+  // v1.67 — pedido de Daniel: "no quiero que quede debajo del avión, a la
+  // izquierda". Se le suma un offset lateral usando el mismo vector "right"
+  // de cámara que ya usa panCamera (rightX/rightZ, derivados de camTheta) —
+  // yendo en -right queda a la izquierda de la pantalla sea cual sea el
+  // ángulo de cámara en ese momento, no solo un costado fijo del avión.
+  if(rosaGroup){
+    const rightX = Math.cos(camTheta), rightZ = -Math.sin(camTheta);
+    const offset = AVION_LARGO_MUNDO*3.2; // separación del avión, en la misma unidad que el tamaño de la rosa
+    const baseX = siguiendo ? pos.x : centro.x, baseZ = siguiendo ? pos.z : centro.z;
+    rosaGroup.position.set(baseX - rightX*offset, 0, baseZ - rightZ*offset);
+  }
 
   // "Suelo infinito": el plano se recentra bajo la cámara en cada frame para
   // que el borde nunca quede a la vista. Con el degradado liso de antes eso
