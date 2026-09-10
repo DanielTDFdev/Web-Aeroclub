@@ -1,5 +1,14 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 8.67
+  CAMBIOS : Dos pedidos de Daniel con captura sobre EMERGENCIA SIMULADA
+            (mismo bug reportado en analisis3d.html v2.02/vuelo.html
+            v5.87/vuelo-piloto.html v4.66). (1) La franja roja podía
+            extenderse en pleno ASCENSO — fix: t1 ya no es el final de la
+            racha, sino el punto de altitud MÍNIMA real del tramo. (2)
+            umbral de distancia 2NM→1NM (nueva UNA_NM_KM, reemplaza
+            DOS_NM_KM).
+
   VERSION : 8.66
   CAMBIOS : Pedido de Daniel: el "Análisis del vuelo" (perfil de altitud)
             ahora también detecta EMERGENCIA SIMULADA (descenso consistente
@@ -4347,7 +4356,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.66</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.67</div>
   </div>
 
 </div>
@@ -13103,14 +13112,19 @@ const MANIOBRA_ALTURA_MIN_FT = 150; // por debajo de esto sobre el punto más ba
 // ventana de EMERGENCIA_VENTANA_MIN minutos (tolera el ruido/variación
 // normal de un planeo real, a diferencia de un umbral de VS sostenido sin
 // interrupción — probado primero en analisis3d.html v2.00 y descartado por
-// no detectar nada real), a más de 2 NM TANTO del punto de despegue COMO del
-// de aterrizaje final de este vuelo (primer/último punto con lat/lng válidos
-// de los segmentos 'real'). No usa altMinTraza/piso virtual — la prominencia
+// no detectar nada real). No usa altMinTraza/piso virtual — la prominencia
 // es relativa, no depende de la altura absoluta AGL.
+// v8.67 FIX (mismo bug reportado por Daniel con captura en analisis3d.html
+// v2.02/vuelo.html v5.87/vuelo-piloto.html v4.66: la franja podía extenderse
+// en pleno ASCENSO). t1 ya no es el final de la racha (que la ventana de
+// 5min podía extender más allá del descenso real si aparecía OTRO descenso
+// más adelante), sino el punto de altitud MÍNIMA real del tramo.
+// v8.67: umbral de distancia 2NM→1NM (nueva UNA_NM_KM, reemplaza DOS_NM_KM),
+// TANTO del punto de despegue COMO del de aterrizaje final de este vuelo.
 const EMERGENCIA_PROMINENCIA_FT = 300;
 const EMERGENCIA_VENTANA_MIN = 5;
 const EMERGENCIA_MIN_S = 25;
-const DOS_NM_KM = 2*1.852; // 3.704 km
+const UNA_NM_KM = 1.852; // 1 NM
 function _detectarEmergenciasSimuladas(segmentos){
   const reales = segmentos.filter(s=>s.tipo==='real');
   if(!reales.length) return [];
@@ -13127,8 +13141,8 @@ function _detectarEmergenciasSimuladas(segmentos){
       const a0=alts[Math.max(0,i-1)], a2=alts[Math.min(alts.length-1,i+1)];
       return (a0+a+a2)/3;
     });
-    const lejosDelCampo = i => _haversineKm(pts[i].lat,pts[i].lng,primerPto.lat,primerPto.lng) > DOS_NM_KM
-                              && _haversineKm(pts[i].lat,pts[i].lng,ultimoPto.lat,ultimoPto.lng) > DOS_NM_KM;
+    const lejosDelCampo = i => _haversineKm(pts[i].lat,pts[i].lng,primerPto.lat,primerPto.lng) > UNA_NM_KM
+                              && _haversineKm(pts[i].lat,pts[i].lng,ultimoPto.lat,ultimoPto.lng) > UNA_NM_KM;
     const hayDescensoProminente = i => {
       for(let j=i+1;j<pts.length;j++){
         const dtMin = (new Date(pts[j].ts)-new Date(pts[i].ts))/60000;
@@ -13141,15 +13155,17 @@ function _detectarEmergenciasSimuladas(segmentos){
     while(i<pts.length){
       if(!(lejosDelCampo(i) && hayDescensoProminente(i))){ i++; continue; }
       let j=i; while(j<pts.length && lejosDelCampo(j) && hayDescensoProminente(j)) j++;
-      const dtS = (new Date(pts[j-1].ts)-new Date(pts[i].ts))/1000;
+      let idxMin=i, m=suaves[i];
+      for(let k=i;k<j;k++){ if(suaves[k]<m){ m=suaves[k]; idxMin=k; } }
+      const dtS = (new Date(pts[idxMin].ts)-new Date(pts[i].ts))/1000;
       if(dtS>=EMERGENCIA_MIN_S){
-        let m=Infinity; for(let k=i;k<j;k++) m=Math.min(m,suaves[k]);
-        eventos.push({t0:pts[i].ts, t1:pts[j-1].ts, detalle:`pérdida ${((suaves[i]-m)*3.28084).toFixed(0)} ft`});
+        eventos.push({t0:pts[i].ts, t1:pts[idxMin].ts, detalle:`pérdida ${((suaves[i]-m)*3.28084).toFixed(0)} ft`});
       }
       i=j;
     }
   }
   return eventos;
+
 }
 // v8.55 — altMinTraza acá también puede ser el PISO VIRTUAL (_calcPisoVirtual), no cambia la lógica de esta función.
 function _clasificarTramosVuelo(segmentos, altMinTraza){
