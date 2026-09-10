@@ -2,6 +2,46 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.05 · Daniel mandó la especificación completa y exacta de EMERGENCIA
+  SIMULADA para comparar contra lo implementado — rediseño total según esos
+  números concretos, reemplaza el enfoque de prominencia de v2.01-v2.03:
+    - lugar: >1NM de despegue Y aterrizaje final (interpreto "y/o" como AND,
+      igual que v2.02 — avisar si el criterio real era OR).
+    - inicio: descenso SOSTENIDO desde >500ft, VS≤-350fpm, por más de 25s.
+    - debe llegar a ≤100ft AGL en algún punto (si no, no cuenta).
+    - fin: cuando arranca un ascenso SOSTENIDO de ≥100fpm.
+    - entre inicio y fin no debe aparecer ningún otro cartel de maniobra —
+      nuevo filtro de prioridad al final de detectarManiobras() que descarta
+      cualquier otra maniobra superpuesta con una ventana de EMERGENCIA.
+  AGL se aproxima con track[i].y (ya relativo al mínimo DE ESTE VUELO, ver
+  procesarPuntos) — no hay elevación de terreno real en la traza. La
+  duración "sostenida" del ascenso final (Daniel no dio un número) queda en
+  EMERGENCIA_ASCENSO_SOSTENIDO_S=10, interpretación propia a confirmar.
+  Vuelve a un umbral de VS directo (como el descartado v2.00) pero con -350
+  en vez de -500fpm — si las interrupciones reales de VS lo rompen otra vez,
+  la prominencia de v2.01-v2.03 queda probada como alternativa.
+
+  v2.03 · Pedido de Daniel con captura: después del fix v2.02 (recorte al
+  mínimo), el cartel se apagaba justo en el piso del planeo y el tiempo hasta
+  que el alumno estabilizaba la recuperación quedaba "huérfano" — a veces lo
+  tomaba VIRAJE EN DESCENSO (si viraba mientras recuperaba) y después, sin
+  ninguna maniobra activa, no mostraba nada. Criterio de Daniel: el cartel
+  de EMERGENCIA tiene que seguir activo desde el inicio hasta que arranca un
+  ASCENSO SOSTENIDO — recién ahí termina la maniobra de verdad, no en el
+  instante exacto del piso. Nueva haySubidaProminente()/constantes
+  EMERGENCIA_ASCENSO_PROMINENCIA_FT=100 / EMERGENCIA_ASCENSO_VENTANA_S=15
+  (≥400fpm de tendencia sostenida, no un bache o nivelada momentánea).
+  Validando esto con un sintético encontré un bug adicional (no reportado
+  por Daniel, lo agarré antes de entregar): el "mínimo real" de v2.02 se
+  calculaba solo dentro de la ventana usada para DETECTAR el descenso (que
+  se corta antes de llegar al piso — cerca del fondo ya no queda margen para
+  otros 300ft de caída dentro de los 5min, así que ese test se apaga ANTES
+  del punto más bajo real), subestimando tanto el punto de corte como la
+  "pérdida" reportada. Se simplificó todo el bloque: ahora se extiende UNA
+  sola vez desde tIni mientras no se confirme el ascenso sostenido — eso ya
+  cubre descenso completo + recuperación por sí solo, y el mínimo/pérdida se
+  calculan sobre ese rango ya correcto.
+
   v2.02 · Dos pedidos de Daniel con captura sobre EMERGENCIA SIMULADA. (1) El
   cartel salía en pleno ASCENSO (VS+574fpm en la captura) — la ventana de
   prominencia hacia adelante (5min) podía seguir dando "true" en un punto ya
@@ -1779,7 +1819,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.02</span>
+    <span class="badge" id="ver-badge">v2.05</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -2336,47 +2376,43 @@ const VUELO_LENTO_KT = 50;            // definido por Daniel (v1.84: era 80)
 const PERDIDA_KT = 30;                // definido por Daniel (v1.84: era 50)
 const BANK_ESCARPADO_DEG = 30;        // definido por Daniel: >30° sostenido
 const MIN_LENTO_S = 10, MIN_PERDIDA_S = 4, MIN_ESCARPADO_S = 8;
-// v2.00 — EMERGENCIA SIMULADA (pedido de Daniel): descenso consistente con
-// motor al ralentí (toque de motor simulando falla), volado lejos del campo
-// — no un descenso de básica/final normal.
-// v2.01 FIX (Daniel: "no los está detectando"): v2.00 exigía VS≤-500fpm en
-// TODOS los puntos durante ≥25s SEGUIDOS. En un planeo real el VS no es
-// constante — el alumno corrige cabeceo, ajusta rumbo hacia el campo
-// elegido, hay baches de GPS — así que cualquier interrupción cortaba la
-// racha y el detector nunca llegaba a los 25s. Se reemplaza el umbral
-// sostenido por el mismo enfoque de PROMINENCIA que ya usan vuelo.html/
-// turnos.html para toques y despegues (_detectarToques) y aterrizaje final
-// (_detectarAterrizajeFinal): en vez de exigir que CADA punto cumpla un
-// umbral instantáneo, se mide la pérdida NETA de altura dentro de una
-// ventana de tiempo — tolera el ruido/variación del medio igual que un toque
-// no exige bajar monótono hasta el piso.
-// v2.02 FIX (Daniel con captura: el cartel salía en pleno ASCENSO, VS+574
-// fpm). Causa: la ventana de prominencia hacia adelante (5min) es generosa a
-// propósito, y en un vuelo con más de un descenso pronunciado cerca en el
-// tiempo (otra emergencia, u otro bache real), un punto YA en ascenso podía
-// seguir dando test=true si más adelante, dentro de esos 5min, aparecía OTRO
-// punto 300ft más bajo — el corte de racha de corridas() no discriminaba eso,
-// se quedaba con TODO el tramo hasta que el test daba false, ascenso incluido.
-// Fix: en vez de usar el tFin donde corta la racha, se recorta SIEMPRE al
-// punto de altitud MÍNIMA dentro del tramo — ahí termina el descenso real; lo
-// que venga después (aunque el test siga dando true) ya es recuperación y
-// nunca se marca. Tolera igual una corrección breve dentro del propio planeo
-// (un bache que sube un toque a mitad de descenso no lo corta, porque el
-// mínimo real sigue estando más adelante).
-// EMERGENCIA_PROMINENCIA_FT=300: pérdida neta mínima — bastante más que los
-// 100ft de un toque, porque esto es una maniobra deliberada y sostenida, no
-// un rebote de rueda. EMERGENCIA_VENTANA_MIN=5: ventana más generosa que los
-// 4min de un toque, porque un planeo real hasta la recuperación puede llevar
-// varios minutos.
-// v2.02: umbral de distancia bajado de 2NM a 1NM (pedido de Daniel), TANTO
-// del punto de despegue COMO del de aterrizaje final de esta traza
-// (track[0]/track[n-1] tras el recorte de procesarPuntos) — descarta
-// cualquier descenso cerca del campo (básica/final reales). Si el criterio
-// real de Daniel era "lejos de CUALQUIERA de los dos" (más permisivo),
-// avisar para cambiar el AND por OR.
-const EMERGENCIA_PROMINENCIA_FT = 300;
-const EMERGENCIA_VENTANA_MIN = 5;
-const EMERGENCIA_MIN_S = 25; // duración mínima de la racha ya filtrada por prominencia (no de VS instantáneo)
+// v2.05 — EMERGENCIA SIMULADA, REDISEÑADA según especificación exacta de
+// Daniel (reemplaza el enfoque de prominencia de v2.01-v2.03, que aproximaba
+// sin números concretos). Parámetros dados por Daniel:
+//   lugar: > 1 NM del despegue inicial Y del aterrizaje final (interpreto
+//     "y/o" como AND — lejos de AMBOS — igual que v2.02; avisar si el
+//     criterio real era OR, lejos de CUALQUIERA de los dos, más permisivo).
+//   inicio: descenso SOSTENIDO desde una altitud >500ft (AGL — ver nota más
+//     abajo sobre la aproximación) durante más de 25s, con VS ≤ -350fpm.
+//   fin ("finaliza la emergencia"): cuando llega al nivel mínimo (siempre
+//     fuera de la 1NM) Y arranca un ascenso SOSTENIDO de ≥100fpm.
+//   además: el descenso tiene que llegar a 100ft AGL o menos en algún punto
+//     — si no baja de eso, no cuenta como emergencia real (sería un mero
+//     ajuste de altitud en crucero).
+//   entre inicio y fin no debe aparecer ningún otro cartel de maniobra.
+// AGL: no hay elevación de terreno real en esta traza — track[i].y ya está
+// restado contra el mínimo DE ESTE VUELO (ver procesarPuntos), que es la
+// mejor aproximación disponible sin datos de terreno. Para una zona de
+// entrenamiento relativamente chata cerca de SAWE es razonable, pero no es
+// AGL exacto si el terreno tiene relieve significativo.
+// "Sostenido" en el ascenso final: Daniel no dio una duración explícita para
+// confirmarlo (sí para el descenso: >25s) — se usa
+// EMERGENCIA_ASCENSO_SOSTENIDO_S=10 como criterio propio, mismo orden de
+// magnitud que otras confirmaciones "sostenidas" del archivo (MIN_SOSTENIDO_
+// BASICA_S=6, MIN_ESCARPADO_S=8). Avisar si hace falta ajustar.
+// v2.00-v2.03 usaban PROMINENCIA (pérdida neta de altura en una ventana) en
+// vez de un umbral de VS directo, porque el primer intento con umbral
+// (-500fpm sostenido sin interrupción) no detectaba nada real. Con el
+// número más generoso que da Daniel ahora (-350fpm) se vuelve a intentar el
+// umbral directo, tal como lo pidió — si sigue sin detectar por
+// interrupciones reales de VS, la prominencia queda como alternativa
+// probada.
+const EMERGENCIA_ALT_INICIO_MIN_FT = 500;
+const EMERGENCIA_ALT_FIN_MAX_FT = 100;
+const EMERGENCIA_VS_FPM = -350;
+const EMERGENCIA_MIN_S = 25;
+const EMERGENCIA_ASCENSO_FPM = 100;
+const EMERGENCIA_ASCENSO_SOSTENIDO_S = 10; // no especificado por Daniel — interpretación propia, avisar si hace falta ajustar
 const UNA_NM_M = 1852; // 1 NM
 const VIRAJE_GIRO_MIN_DEG = 150;      // giro acumulado que cuenta como "un viraje" de una ese/ocho
 const ESPIRAL_GIRO_MIN_DEG = 330;     // ~una vuelta completa en el mismo sentido
@@ -2530,40 +2566,53 @@ function detectarManiobras(track, viento){
   corridas(i=>enAltura(i) && Math.abs(bankDeg[i])>BANK_ESCARPADO_DEG, MIN_ESCARPADO_S, 'VIRAJE ESCARPADO',
     (a,b)=>{ let m=0; for(let k=a;k<=b;k++) m=Math.max(m,Math.abs(bankDeg[k])); return `máx ${m.toFixed(0)}° bank`; });
 
-  // v2.01/v2.02 — EMERGENCIA SIMULADA por prominencia (ver razonamiento junto
-  // a las constantes arriba). Distancia horizontal (plano x/z, ENU) contra el
-  // punto de despegue (track[0]) y el de aterrizaje final (track[n-1]) de
-  // esta traza; "candidato de descenso" = existe, dentro de la ventana, un
-  // punto más adelante con al menos EMERGENCIA_PROMINENCIA_FT menos altura.
-  // v2.02: NO se usa corridas() acá — necesita el post-procesado de recortar
-  // tFin al punto de altitud mínima real (ver comentario arriba), que
-  // corridas() no soporta.
+  // v2.05 — EMERGENCIA SIMULADA, según especificación exacta de Daniel (ver
+  // razonamiento completo junto a las constantes arriba). Umbral de VS
+  // directo en vez de prominencia — vuelve al enfoque de v2.00 pero con un
+  // número más generoso (-350fpm en vez de -500fpm) y altitud de inicio/fin
+  // explícitas.
+  const vsFpmArr = track.map(p=>p.vs*196.85);
   const distDespegueM = i => Math.hypot(track[i].x-track[0].x, track[i].z-track[0].z);
   const distAterrizajeM = i => Math.hypot(track[i].x-track[n-1].x, track[i].z-track[n-1].z);
   const lejosDelCampo = i => distDespegueM(i)>UNA_NM_M && distAterrizajeM(i)>UNA_NM_M;
-  const hayDescensoProminente = i => {
-    for(let j=i+1; j<n; j++){
-      const dtMin = (track[j].t-track[i].t)/60;
-      if(dtMin > EMERGENCIA_VENTANA_MIN) break;
-      if(altFt[i]-altFt[j] >= EMERGENCIA_PROMINENCIA_FT) return true;
+  // ¿hay un ascenso SOSTENIDO (≥100fpm, ver constantes) confirmado a partir
+  // de k, durante al menos EMERGENCIA_ASCENSO_SOSTENIDO_S seguidos?
+  const haySubidaSostenida = k => {
+    let m = k;
+    while(m < n && vsFpmArr[m] >= EMERGENCIA_ASCENSO_FPM){
+      if(track[m].t - track[k].t >= EMERGENCIA_ASCENSO_SOSTENIDO_S) return true;
+      m++;
     }
     return false;
   };
   {
     let i=0;
     while(i<n){
-      if(!(lejosDelCampo(i) && hayDescensoProminente(i))){ i++; continue; }
-      let j=i; while(j<n && lejosDelCampo(j) && hayDescensoProminente(j)) j++;
-      // recorte al punto de altitud MÍNIMA dentro de [i,j) — ahí termina el
-      // descenso real; nunca se marca más allá aunque el test siguiera dando
-      // true (otro descenso más adelante dentro de la ventana de 5min).
-      let idxMin = i, altMin = altFt[i];
-      for(let k=i; k<j; k++){ if(altFt[k] < altMin){ altMin = altFt[k]; idxMin = k; } }
-      if(track[idxMin].t - track[i].t >= EMERGENCIA_MIN_S){
-        out.push({tipo:'EMERGENCIA SIMULADA', tIni:track[i].t, tFin:track[idxMin].t,
-                  detalle:`pérdida ${(altFt[i]-altMin).toFixed(0)} ft`});
+      // inicio: lejos del campo, VS≤-350fpm, y ESTE punto (arranque de la
+      // racha) por encima de 500ft.
+      if(!(lejosDelCampo(i) && vsFpmArr[i]<=EMERGENCIA_VS_FPM && altFt[i]>EMERGENCIA_ALT_INICIO_MIN_FT)){ i++; continue; }
+      // racha de descenso sostenido (sin interrupción — mismo patrón que el
+      // resto de las maniobras por umbral instantáneo de este archivo).
+      let j=i;
+      while(j<n && lejosDelCampo(j) && vsFpmArr[j]<=EMERGENCIA_VS_FPM) j++;
+      if(track[j-1].t - track[i].t <= EMERGENCIA_MIN_S){ i=j; continue; } // no llega a los >25s pedidos
+      // desde el final de la racha, extender mientras NO haya ascenso
+      // sostenido confirmado — cubre la recuperación hasta que el ascenso
+      // real arranca (ahí sí termina la maniobra).
+      let idxFin = j-1;
+      for(let k=j-1; k<n; k++){
+        if(haySubidaSostenida(k)) break;
+        idxFin = k;
       }
-      i=j;
+      // exige haber llegado a ≤100ft AGL en algún punto del tramo completo
+      // — si no, es un mero ajuste de altitud en crucero, no una emergencia.
+      let altMin = Infinity;
+      for(let k=i; k<=idxFin; k++) altMin = Math.min(altMin, altFt[k]);
+      if(altMin <= EMERGENCIA_ALT_FIN_MAX_FT){
+        out.push({tipo:'EMERGENCIA SIMULADA', tIni:track[i].t, tFin:track[idxFin].t,
+                  detalle:`mín ${altMin.toFixed(0)}ft AGL`});
+      }
+      i = idxFin+1;
     }
   }
 
@@ -2755,6 +2804,21 @@ function detectarManiobras(track, viento){
   }
 
   out.sort((a,b)=>a.tIni-b.tIni);
+  // v2.05 — pedido de Daniel: "entre el inicio y el fin de la emergencia no
+  // deben aparecer otros carteles". PÉRDIDA/VUELO LENTO/VIRAJE ESCARPADO se
+  // agregan a `out` ANTES que EMERGENCIA SIMULADA (más arriba en esta
+  // función) — maniobraEnT() devuelve la PRIMERA coincidencia por orden de
+  // push, así que si alguna de esas se superpone en el tiempo con una
+  // emergencia, esa hubiera ganado. Se filtra acá: cualquier maniobra que no
+  // sea EMERGENCIA SIMULADA y se superponga con una ventana de EMERGENCIA
+  // SIMULADA se descarta.
+  const ventanasEmergencia = out.filter(m=>m.tipo==='EMERGENCIA SIMULADA');
+  if(ventanasEmergencia.length){
+    const filtrado = out.filter(m => m.tipo==='EMERGENCIA SIMULADA' ||
+      !ventanasEmergencia.some(e => m.tIni<=e.tFin && m.tFin>=e.tIni));
+    out.length = 0;
+    out.push(...filtrado);
+  }
   // v1.89: el filtro de supresión de v1.87 (quitar virajes sobre un punto
   // contenidos en un ocho/eses) ya no hace falta — la prioridad por consumo
   // de segmentos de arriba impide que un mismo viraje produzca dos eventos,
