@@ -2,6 +2,23 @@
 <!--
 ==================================================================================
   VUELO PILOTO — Registro de vuelo para pilotos · Aeroclub Río Grande
+  v4.68 · 2026-09-10
+  Pedido de Daniel: replicar acá la especificación exacta de EMERGENCIA
+  SIMULADA validada con un vuelo real (analisis3d.html v2.06/vuelo.html
+  v5.89). Reemplaza el enfoque de prominencia de v4.65-v4.67 por umbral
+  directo de VS (-350fpm) medido sobre una TENDENCIA (ventana centrada de
+  12s), desde >500ft AGL hasta ≤200ft AGL, por más de 25s, hasta que
+  arranca un ascenso sostenido de ≥100fpm. Recibe altMinTraza (para AGL).
+
+  v4.67 · 2026-09-10
+  Pedido de Daniel con captura (mismo criterio en analisis3d.html
+  v2.03/vuelo.html v5.88): la franja de EMERGENCIA SIMULADA se apagaba justo
+  en el mínimo (fix v4.66) y el tiempo hasta que el alumno estabilizaba la
+  recuperación quedaba sin marcar. Ahora se extiende desde t0 mientras NO se
+  confirme un ascenso SOSTENIDO (≥100ft en ≤15s). De paso corrige un bug: el
+  mínimo de v4.66 se calculaba solo dentro de la ventana usada para DETECTAR
+  el descenso, que se apaga antes de llegar al piso real.
+
   v4.66 · 2026-09-10
   Dos pedidos de Daniel con captura sobre EMERGENCIA SIMULADA (mismo bug
   reportado en analisis3d.html v2.02/vuelo.html v5.87). (1) La franja roja
@@ -1761,7 +1778,7 @@ const LS_PENDIENTES = 'acrg-piloto-v1-pendientes'; // cola de vuelos guardados l
 // avión "sin arrancar todavía" que sobrevivía indefinidamente en localStorage.
 const RESTAURAR_AVION_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '4.66';
+const APP_VERSION = '4.68';
 document.querySelectorAll('.ver').forEach(el=>el.textContent='v'+APP_VERSION);
 
 // ── Traza GPS (opcional) ─────────────────────────────────
@@ -4348,22 +4365,30 @@ const MANIOBRA_PERCENTIL = 0.10;
 const MANIOBRA_DIST_MIN_KM = 0.03;
 const MANIOBRA_STEP = 3;
 const MANIOBRA_ALTURA_MIN_FT = 150;
-// v4.65 — EMERGENCIA SIMULADA (pedido de Daniel): mismo criterio de
-// PROMINENCIA que analisis3d.html v2.01 y vuelo.html v5.86 — pérdida neta de
-// altura ≥ EMERGENCIA_PROMINENCIA_FT dentro de una ventana de
-// EMERGENCIA_VENTANA_MIN minutos (tolera el ruido/variación normal de un
-// planeo real).
-// v4.66 FIX (mismo bug reportado por Daniel con captura en analisis3d.html
-// v2.02/vuelo.html v5.87: la franja podía extenderse en pleno ASCENSO). t1
-// ya no es el final de la racha (que la ventana de 5min podía extender más
-// allá del descenso real si aparecía OTRO descenso más adelante), sino el
-// punto de altitud MÍNIMA real del tramo — ahí termina el descenso.
-// v4.66: umbral de distancia 2NM→1NM (nueva UNA_NM_KM, reemplaza DOS_NM_KM).
-const EMERGENCIA_PROMINENCIA_FT = 300;
-const EMERGENCIA_VENTANA_MIN = 5;
+// v4.68 — EMERGENCIA SIMULADA, REDISEÑADA según especificación exacta de
+// Daniel, validada con un vuelo real y replicada tal cual de vuelo.html
+// v5.89/analisis3d.html v2.06 (ver esos archivos para el diagnóstico
+// completo con datos reales). Reemplaza el enfoque de prominencia de
+// v4.65-v4.67.
+//   lugar: >1NM del despegue inicial Y del aterrizaje final.
+//   inicio: descenso SOSTENIDO desde >500ft AGL, con TENDENCIA de VS
+//     (ventana centrada de 12s, no el punto instantáneo) ≤-350fpm, por
+//     más de 25s.
+//   debe llegar a ≤200ft AGL en algún punto del tramo.
+//   fin: cuando arranca un ascenso SOSTENIDO de ≥100fpm, sostenido ≥10s
+//     (no especificado por Daniel — interpretación propia).
+// TENDENCIA en vez de umbral instantáneo: Daniel probó con un vuelo real
+// y el umbral -350fpm instantáneo no detectó nada — la tendencia tolera
+// el ruido/corrección real que cortaba la racha antes de los 25s.
+const EMERGENCIA_ALT_INICIO_MIN_FT = 500;
+const EMERGENCIA_ALT_FIN_MAX_FT = 200;
+const EMERGENCIA_VS_FPM = -350;
 const EMERGENCIA_MIN_S = 25;
+const EMERGENCIA_ASCENSO_FPM = 100;
+const EMERGENCIA_ASCENSO_SOSTENIDO_S = 10;
+const EMERGENCIA_TENDENCIA_S = 12;
 const UNA_NM_KM = 1.852; // 1 NM
-function _detectarEmergenciasSimuladas(segmentos){
+function _detectarEmergenciasSimuladas(segmentos, altMinTraza){
   const reales = segmentos.filter(s=>s.tipo==='real');
   if(!reales.length) return [];
   const primerPto = reales[0].pts.find(p=>p.alt!=null && p.lat!=null);
@@ -4373,33 +4398,47 @@ function _detectarEmergenciasSimuladas(segmentos){
   const eventos = [];
   for(const seg of reales){
     const pts = seg.pts.filter(p=>p.alt!=null && p.lat!=null);
-    if(pts.length<5) continue;
-    const alts = pts.map(p=>p.alt);
-    const suaves = alts.map((a,i)=>{
-      const a0=alts[Math.max(0,i-1)], a2=alts[Math.min(alts.length-1,i+1)];
-      return (a0+a+a2)/3;
-    });
+    const n = pts.length;
+    if(n<5) continue;
+    const tArr = pts.map(p=>new Date(p.ts).getTime()/1000);
+    const altFt = pts.map(p=> altMinTraza!=null ? (p.alt-altMinTraza)*3.28084 : p.alt*3.28084);
     const lejosDelCampo = i => _haversineKm(pts[i].lat,pts[i].lng,primerPto.lat,primerPto.lng) > UNA_NM_KM
                               && _haversineKm(pts[i].lat,pts[i].lng,ultimoPto.lat,ultimoPto.lng) > UNA_NM_KM;
-    const hayDescensoProminente = i => {
-      for(let j=i+1;j<pts.length;j++){
-        const dtMin = (new Date(pts[j].ts)-new Date(pts[i].ts))/60000;
-        if(dtMin>EMERGENCIA_VENTANA_MIN) break;
-        if((suaves[i]-suaves[j])*3.28084 >= EMERGENCIA_PROMINENCIA_FT) return true;
+    const vsTendFpm = new Array(n);
+    { let j=0, k=0;
+      for(let i=0;i<n;i++){
+        while(j<i && tArr[i]-tArr[j] > EMERGENCIA_TENDENCIA_S/2) j++;
+        if(k<i) k=i;
+        while(k<n-1 && tArr[k+1]-tArr[i] <= EMERGENCIA_TENDENCIA_S/2) k++;
+        const dt = tArr[k]-tArr[j];
+        vsTendFpm[i] = dt>0 ? (altFt[k]-altFt[j])/dt*60 : 0;
+      }
+    }
+    const haySubidaSostenida = k0 => {
+      let m=k0;
+      while(m<n && vsTendFpm[m]>=EMERGENCIA_ASCENSO_FPM){
+        if(tArr[m]-tArr[k0]>=EMERGENCIA_ASCENSO_SOSTENIDO_S) return true;
+        m++;
       }
       return false;
     };
     let i=0;
-    while(i<pts.length){
-      if(!(lejosDelCampo(i) && hayDescensoProminente(i))){ i++; continue; }
-      let j=i; while(j<pts.length && lejosDelCampo(j) && hayDescensoProminente(j)) j++;
-      let idxMin=i, m=suaves[i];
-      for(let k=i;k<j;k++){ if(suaves[k]<m){ m=suaves[k]; idxMin=k; } }
-      const dtS = (new Date(pts[idxMin].ts)-new Date(pts[i].ts))/1000;
-      if(dtS>=EMERGENCIA_MIN_S){
-        eventos.push({t0:pts[i].ts, t1:pts[idxMin].ts, detalle:`pérdida ${((suaves[i]-m)*3.28084).toFixed(0)} ft`});
+    while(i<n){
+      if(!(lejosDelCampo(i) && vsTendFpm[i]<=EMERGENCIA_VS_FPM && altFt[i]>EMERGENCIA_ALT_INICIO_MIN_FT)){ i++; continue; }
+      let j=i;
+      while(j<n && lejosDelCampo(j) && vsTendFpm[j]<=EMERGENCIA_VS_FPM) j++;
+      if(tArr[j-1]-tArr[i]<=EMERGENCIA_MIN_S){ i=j; continue; }
+      let idxFin=j-1;
+      for(let k=j-1;k<n;k++){
+        if(haySubidaSostenida(k)) break;
+        idxFin=k;
       }
-      i=j;
+      let altMin=Infinity;
+      for(let k=i;k<=idxFin;k++) altMin=Math.min(altMin, altFt[k]);
+      if(altMin<=EMERGENCIA_ALT_FIN_MAX_FT){
+        eventos.push({t0:pts[i].ts, t1:pts[idxFin].ts, detalle:`mín ${altMin.toFixed(0)}ft AGL`});
+      }
+      i=idxFin+1;
     }
   }
   return eventos;
@@ -4527,7 +4566,7 @@ window.abrirAnalisisVuelo = function(){
   const bandas = _clasificarTramosVuelo(segmentos, altMinTraza);
   const toques = _detectarToques(segmentos, altMinTraza);
   const aterrizaje = _detectarAterrizajeFinal(segmentos, altMinTraza);
-  const emergencias = _detectarEmergenciasSimuladas(segmentos);
+  const emergencias = _detectarEmergenciasSimuladas(segmentos, altMinTraza);
   const fmtT = iso => { const d=new Date(iso); return String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0'); };
   $('analisis-toques-resumen').textContent = toques.length
     ? `${toques.length} toque${toques.length!==1?'s':''} y despegue${toques.length!==1?'s':''} detectado${toques.length!==1?'s':''} — ${toques.map(t=>fmtT(t.ts)).join(', ')}`
