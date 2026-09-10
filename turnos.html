@@ -1,5 +1,14 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 8.65
+  CAMBIOS : Pedido de Daniel con captura: en el modal LOG DEL ALUMNO, el
+            textarea de observación del instructor (#mla-texto) quedaba muy
+            bajo (rows=3) y con texto medianamente largo forzaba scroll
+            interno, incómodo para leer aunque tuviera barrita. rows 3→7,
+            sin tocar nada más del modal (el historial de abajo ya no tiene
+            scroll propio en la vista de candado, solo esta caja editable
+            lo tenía).
+
   VERSION : 8.64
   CAMBIOS : FIX al fix v8.63 (mismo caso ya corregido en vuelo.html v5.81):
             el filtro por instructor propio quedó en el lugar equivocado —
@@ -4323,7 +4332,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.64</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.65</div>
   </div>
 
 </div>
@@ -4760,7 +4769,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
           <div class="section-title">🔒 OBSERVACIÓN PARA INSTRUCTORES — vuelo <span id="mla-ref-vuelo" style="color:var(--amber)"></span></div>
           <div id="mla-obspriv-lock" style="display:none;font-family:var(--font-mono);font-size:12px;color:var(--text2);line-height:1.7;padding:.6rem .75rem;background:var(--bg3);border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:var(--radius)"></div>
           <div id="mla-obspriv-form">
-            <textarea id="mla-texto" rows="3" placeholder="Progreso, novedades, warnings…" style="width:100%;box-sizing:border-box;font-family:var(--font-mono);font-size:12px;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);padding:8px;resize:vertical"></textarea>
+            <textarea id="mla-texto" rows="7" placeholder="Progreso, novedades, warnings…" style="width:100%;box-sizing:border-box;font-family:var(--font-mono);font-size:12px;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);padding:8px;resize:vertical"></textarea>
             <div class="row" style="margin-top:.5rem">
               <div class="field" style="margin:0;min-width:140px">
                 <label style="font-size:10px">Tiempo real de vuelo (hs)</label>
