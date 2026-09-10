@@ -2,6 +2,19 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.00 · Pedido de Daniel: nueva maniobra EMERGENCIA SIMULADA — descenso
+  consistente con motor al ralentí (VS ≤ -500 fpm sostenido ≥25s) volado a
+  más de 2 NM TANTO del punto de despegue COMO del punto de aterrizaje final
+  de la traza (track[0]/track[n-1] tras el recorte de procesarPuntos). Exigir
+  lejos de ambos puntos, no de cualquiera de los dos, descarta del todo
+  cualquier descenso cerca del campo (básica/final reales); si el criterio
+  real era "lejos de CUALQUIERA" (más permisivo), avisar para cambiar el AND
+  por OR. Se detecta con el mismo helper `corridas()` que el resto de las
+  maniobras (mismo array de salida, mismo formato {tipo,tIni,tFin,detalle}).
+  A diferencia del resto (violeta neutro, "identifica, no califica" — ver
+  v1.83), esta se pinta en ROJO en el cartelito flotante del visor 3D, pedido
+  explícito de Daniel: es señal de alerta, no solo identificación.
+
   v1.99 · FIX al fix v1.98: Daniel probó y el límite de tasa vertical
   (entonces simétrico, 15 m/s ambos sentidos) todavía dejaba picos de subida
   de ~1878 fpm durante el "catch-up" del artefacto — mucho más de lo que
@@ -1741,7 +1754,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.99</span>
+    <span class="badge" id="ver-badge">v2.00</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -2298,6 +2311,28 @@ const VUELO_LENTO_KT = 50;            // definido por Daniel (v1.84: era 80)
 const PERDIDA_KT = 30;                // definido por Daniel (v1.84: era 50)
 const BANK_ESCARPADO_DEG = 30;        // definido por Daniel: >30° sostenido
 const MIN_LENTO_S = 10, MIN_PERDIDA_S = 4, MIN_ESCARPADO_S = 8;
+// v2.00 — EMERGENCIA SIMULADA (pedido de Daniel): descenso consistente con
+// motor al ralentí (toque de motor simulando falla), volado lejos del campo
+// — no un descenso de básica/final normal. Dos condiciones:
+// 1) VS sostenida por debajo de EMERGENCIA_VS_MAX_FPM. -500 fpm porque ya es
+//    el mismo valor que el club usa como descenso "de libro" en básica/final
+//    (ver FINAL_VS_IDEAL_FPM más abajo) — un planeo a motor reducido cae en
+//    ese orden o más pronunciado, no es un simple ajuste de crucero.
+// 2) A más de 2 NM (3704 m) TANTO del punto de despegue COMO del punto de
+//    aterrizaje final de ESTE vuelo (track[0]/track[n-1] después del recorte
+//    de procesarPuntos — son el despegue y el aterrizaje real de esta
+//    traza). Exigir lejos de AMBOS, no de cualquiera de los dos, es a
+//    propósito: descartar del todo cualquier descenso que ocurra cerca del
+//    campo (básica/final reales, o un patrón que pase cerca del punto de
+//    despegue en un circuito), y quedarse solo con planeos hechos en zona de
+//    entrenamiento. Si el criterio real de Daniel era "lejos de CUALQUIERA
+//    de los dos" (más permisivo), avisar para cambiar el AND por OR.
+// EMERGENCIA_MIN_S=25: a diferencia de pérdida/vuelo lento (eventos breves),
+// una emergencia simulada real se sostiene bastante — no debería dispararse
+// por un bache momentáneo de sink en crucero.
+const EMERGENCIA_VS_MAX_FPM = -500;
+const EMERGENCIA_MIN_S = 25;
+const DOS_NM_M = 2*1852; // 3704 m
 const VIRAJE_GIRO_MIN_DEG = 150;      // giro acumulado que cuenta como "un viraje" de una ese/ocho
 const ESPIRAL_GIRO_MIN_DEG = 330;     // ~una vuelta completa en el mismo sentido
 const ESPIRAL_DALT_MIN_FT = 200;      // cambio de altura que distingue espiral de viraje sostenido llano
@@ -2449,6 +2484,16 @@ function detectarManiobras(track, viento){
   const bankDeg = track.map(p=>p.bank*180/Math.PI);
   corridas(i=>enAltura(i) && Math.abs(bankDeg[i])>BANK_ESCARPADO_DEG, MIN_ESCARPADO_S, 'VIRAJE ESCARPADO',
     (a,b)=>{ let m=0; for(let k=a;k<=b;k++) m=Math.max(m,Math.abs(bankDeg[k])); return `máx ${m.toFixed(0)}° bank`; });
+
+  // v2.00 — EMERGENCIA SIMULADA. Ver razonamiento junto a las constantes
+  // arriba. Distancia horizontal (plano x/z, ENU) contra el punto de
+  // despegue (track[0]) y el de aterrizaje final (track[n-1]) de esta traza.
+  const vsFpmArr = track.map(p=>p.vs*196.85);
+  const distDespegueM = i => Math.hypot(track[i].x-track[0].x, track[i].z-track[0].z);
+  const distAterrizajeM = i => Math.hypot(track[i].x-track[n-1].x, track[i].z-track[n-1].z);
+  corridas(i => vsFpmArr[i]<=EMERGENCIA_VS_MAX_FPM && distDespegueM(i)>DOS_NM_M && distAterrizajeM(i)>DOS_NM_M,
+    EMERGENCIA_MIN_S, 'EMERGENCIA SIMULADA',
+    (a,b)=>{ let m=0; for(let k=a;k<=b;k++) m=Math.min(m,vsFpmArr[k]); return `VS mín ${m.toFixed(0)} fpm`; });
 
   // --- Virajes acumulados: segmentos de giro continuo en un mismo sentido ---
   // Se integra el cambio de rumbo; un cambio de signo sostenido cierra el
@@ -4938,8 +4983,16 @@ function loop(now){
       etiquetaFase.style.background = col.bg;
       etiquetaFase.style.color = col.fg;
     } else {
-      etiquetaFase.style.background = '#7c5cff'; // violeta neutro: identifica, no califica
-      etiquetaFase.style.color = '#f2eeff';
+      // v2.00: EMERGENCIA SIMULADA se pinta en rojo — a diferencia del resto
+      // de las maniobras (violeta neutro, "identifica, no califica"), esta sí
+      // es una señal de alerta que Daniel quiere que resalte de un vistazo.
+      if(maniobraAct.tipo === 'EMERGENCIA SIMULADA'){
+        etiquetaFase.style.background = '#e74c3c';
+        etiquetaFase.style.color = '#2b0705';
+      } else {
+        etiquetaFase.style.background = '#7c5cff'; // violeta neutro: identifica, no califica
+        etiquetaFase.style.color = '#f2eeff';
+      }
     }
     etiquetaFase.textContent = nombre;
   } else {
