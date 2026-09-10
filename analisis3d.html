@@ -2,6 +2,28 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.98 · Pedido de Daniel: reportó un "climb inicial de 2278 fpm" imposible
+  para LV-OAD en un vuelo real (Fernando Rodríguez, 10/09). Con el dump del
+  track confirmé la causa: un salto de altitud GPS de un solo punto (28m→244m
+  en 2.0s, ~21.200 fpm equivalentes — imposible para cualquiera de los 3
+  aviones) que además NO vuelve a bajar, sigue de largo subiendo normal
+  (254,263,272m...). El despicado por mediana (v1.17) no lo agarra porque
+  solo vota en contra de picos que SUBEN Y VUELVEN — ordenada la ventana, 244
+  queda justo en el medio, no es outlier para ese criterio aunque sea
+  físicamente imposible. El promedio móvil de después esparce ese escalón
+  sobre ~7 muestras y ahí sale el VS inflado que vio Daniel en el panel.
+  Fix: nuevo limitarTasaVertical() (slew-rate limiter) ANTES de la mediana.
+  Ningún punto puede cambiar más de TASA_VS_MAX_PLAUSIBLE_MS=15 m/s (~2953
+  fpm, muy por encima de lo que da cualquiera de los 3 aviones del club en
+  cualquier maniobra real, muy por debajo del salto detectado) respecto del
+  punto ya aceptado — el resto de la diferencia se absorbe en las muestras
+  siguientes en vez de saltar de golpe. Corre en las dos direcciones
+  (adelante/atrás) y promedia, para no cargarle todo el retraso de la
+  transición a un solo lado. Verificado reproduciendo el pipeline completo en
+  Python sobre el track real: el pico de VS baja de ~2400 fpm (con el bug) a
+  un máximo de ~1870 fpm en todo el vuelo, sin escalones imposibles en
+  ningún punto de la traza.
+
   v1.97 · Pedido de Daniel: el patch satelital se sentía "como que está
   fallando" — se ocultaba y se volvía a pedir muy seguido al avanzar el
   avión, dando sensación de tiles que se borran y recargan. Evalué dos
@@ -1706,7 +1728,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.97</span>
+    <span class="badge" id="ver-badge">v1.98</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -1940,6 +1962,48 @@ function procesarPuntos(puntosCrudos){
   }
   const base2 = filtrados;
 
+  // v1.98 — LIMITADOR DE TASA VERTICAL (pedido de Daniel): la mediana de
+  // arriba vota en contra de picos que SUBEN y VUELVEN a bajar — pero un caso
+  // real (LV-OAD, vuelo Fernando Rodríguez 10/09) mostró que un salto de GPS
+  // también puede quedarse arriba y seguir de largo (28m→244m en 2s, y de ahí
+  // sigue subiendo normal: 254,263,272...). La mediana NO lo detecta porque,
+  // ordenada la ventana, 244 termina siendo justo el valor del medio — no es
+  // un outlier para el criterio de orden, aunque sea físicamente imposible.
+  // Fix: un limitador de tasa (slew-rate), clásico para este tipo de artefacto.
+  // Ningún punto puede cambiar más de TASA_VS_MAX_PLAUSIBLE_MS por segundo
+  // respecto del punto ya aceptado; si el dato crudo pide más, se lo recorta a
+  // ese máximo y el resto de la diferencia se termina de absorber en las
+  // muestras siguientes (en vez de saltar de golpe). Se corre en las DOS
+  // direcciones (adelante y atrás) y se promedia — así el "recorte" no le
+  // carga todo el retraso a un solo lado de la transición (si solo fuera hacia
+  // adelante, la subida real quedaría corrida unos segundos tarde).
+  // TASA_VS_MAX_PLAUSIBLE_MS=15 (≈2953 fpm) está MUY por encima de lo que
+  // puede dar cualquiera de los 3 aviones del club en cualquier maniobra de
+  // instrucción (LV-OAD/LV-ART trepan ~700fpm libro, LV-MPH ~1000fpm; incluso
+  // una pérdida o espiral pronunciada no acerca esto) pero muy por debajo del
+  // salto real detectado (~108 m/s, ~21.200 fpm) — separa bien un artefacto
+  // de GPS de cualquier maniobra real de instrucción.
+  const TASA_VS_MAX_PLAUSIBLE_MS = 15;
+  function limitarTasaVertical(arr, tArr, tasaMaxMS){
+    const n = arr.length;
+    const fwd = new Array(n); fwd[0] = arr[0];
+    for(let i=1; i<n; i++){
+      const dt = tArr[i]-tArr[i-1], maxDelta = dt>0 ? tasaMaxMS*dt : Infinity;
+      const delta = arr[i]-fwd[i-1];
+      fwd[i] = delta>maxDelta ? fwd[i-1]+maxDelta : delta<-maxDelta ? fwd[i-1]-maxDelta : arr[i];
+    }
+    const bwd = new Array(n); bwd[n-1] = arr[n-1];
+    for(let i=n-2; i>=0; i--){
+      const dt = tArr[i+1]-tArr[i], maxDelta = dt>0 ? tasaMaxMS*dt : Infinity;
+      const delta = arr[i]-bwd[i+1];
+      bwd[i] = delta>maxDelta ? bwd[i+1]+maxDelta : delta<-maxDelta ? bwd[i+1]-maxDelta : arr[i];
+    }
+    const out = new Array(n);
+    for(let i=0; i<n; i++) out[i] = (fwd[i]+bwd[i])/2;
+    return out;
+  }
+  const altitudLimitada = limitarTasaVertical(base2.map(p=>p.y), base2.map(p=>p.t), TASA_VS_MAX_PLAUSIBLE_MS);
+
   // Despicado de altitud (pedido de Daniel): un salto de GPS de 1-2 lecturas
   // (ruido típico en altitud, más que en posición horizontal) se veía como un
   // quiebre feo en el tubo. En vez de fijar un límite arbitrario de "tasa
@@ -1966,7 +2030,10 @@ function procesarPuntos(puntosCrudos){
   // contra de clusters de varios puntos corridos, después con la ventana
   // angosta original (radio=2) para terminar de limpiar bordes que la
   // primera pasada haya dejado escalonados.
-  const altitudDespicada = medianaEnVentana(medianaEnVentana(base2.map(p=>p.y), 4), 2);
+  // v1.98: ahora corre sobre altitudLimitada (ya sin el escalón imposible),
+  // no sobre base2.map(p=>p.y) directo — sigue siendo útil para el ruido
+  // normal de GPS que SÍ vuelve a su nivel (lo que este filtro no cubre).
+  const altitudDespicada = medianaEnVentana(medianaEnVentana(altitudLimitada, 4), 2);
 
   // Segundo paso de suavizado (pedido de Daniel): la mediana solo saca picos
   // aislados de a uno, pero no "empareja" el resto — el ruido normal del GPS
