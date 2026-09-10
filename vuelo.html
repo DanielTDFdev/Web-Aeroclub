@@ -2,6 +2,25 @@
 <!--
 ==================================================================================
   VUELO — App de registro de vuelo · Aeroclub Río Grande
+  v5.85 · 2026-09-10
+  Pedido de Daniel: nuevo botón "👤 Otro vuelo" en la pantalla de vuelo (debajo
+  de "← Cambiar turno"). Caso real: el alumno del turno más cercano no se
+  presentó, el horario queda libre y el instructor quiere iniciar el vuelo
+  con otro alumno que no tiene reserva ese día. Antes esto no era posible
+  si YA había turnos reales aprobados para hoy: la sección "Iniciar turno
+  sin reserva previa" (nt-buscar/nt-avion) se ocultaba a propósito en la
+  vista forzada de cargarTabVuelo() ("no tiene sentido ofrecer un turno
+  nuevo si ya hay uno esperando" — diseño de v4.1). Ese supuesto no
+  contemplaba el caso de alumno ausente. Cambios:
+  - cargarTabVuelo(): en la rama forzada (Cambiar turno/Otro vuelo/Ver
+    vencidos/empate de horario), v-nuevo-wrap ahora siempre queda visible
+    en vez de ocultarse cuando hay turnos vigentes.
+  - Nuevo botón btn-otro-alumno: mismo reset de estado que btn-cambiar-turno,
+    pero además hace scroll y foco directo a nt-buscar tras cargar la lista,
+    para no obligar al instructor a buscar manualmente la sección.
+  - Reutiliza 100% el flujo existente de turno in situ (crearTurnoInSitu,
+    chequeo de duplicado _turnoDuplicadoHoy) — sin lógica nueva de backend.
+
   v5.84 · 2026-09-07
   Pedido de Daniel: en "Reporte de horas de vuelo", la columna Tiempo (y el
   total) siempre muestran 1 decimal (1 -> "1.0", 0.5 -> "0.5"). Contraparte
@@ -1912,6 +1931,7 @@ select.sin-elegir{border-color:var(--amber);box-shadow:0 0 0 2px rgba(240,165,0,
       </div>
 
 
+      <button class="btn btn-ghost" id="btn-otro-alumno" style="margin-top:4px">👤 Otro vuelo</button>
       <button class="btn btn-ghost" id="btn-cambiar-turno" style="margin-top:4px">← Cambiar turno</button>
     </div>
 
@@ -2059,7 +2079,7 @@ const LS_PENDIENTES = 'acrg-vuelo-v2-pendientes'; // cola de vuelos guardados lo
 // límite de tiempo.
 const RESTAURAR_TURNO_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '5.84'; // ⚠ actualizar acá Y en el comentario header de arriba en cada bump
+const APP_VERSION = '5.85'; // ⚠ actualizar acá Y en el comentario header de arriba en cada bump
 
 // ── Traza GPS (opcional, la activa el instructor por vuelo) ────────────
 const LS_GPS_PUNTOS = 'acrg-vuelo-v2-gps-puntos'; // puntos del vuelo en curso (resiliencia ante recarga)
@@ -2363,11 +2383,16 @@ async function cargarTabVuelo(forzar=false){
       // Caso normal: un único turno es el más cercano a la hora actual — entrada directa
       mostrarPantallaVuelo(vigentes[0]);
     } else {
-      // Forzado ("Cambiar turno"/"Ver vencidos") o empate exacto de horario (anómalo) — mostrar
-      // para elegir. Hay turnos reales: tienen prioridad, se oculta la opción de iniciar in situ
-      // (no tiene sentido ofrecer crear un turno nuevo cuando ya hay uno real esperando).
+      // Forzado ("Cambiar turno"/"Otro vuelo"/"Ver vencidos") o empate exacto de horario
+      // (anómalo) — mostrar para elegir. v5.85: antes acá se ocultaba v-nuevo-wrap
+      // cuando había turnos reales ("no tiene sentido ofrecer un turno nuevo si ya
+      // hay uno esperando"), pero eso bloqueaba justo el caso real de Daniel: el
+      // alumno del turno no se presentó, y el instructor quiere iniciar el vuelo
+      // con otro alumno sin reserva — no puede si ese otro alumno no tiene turno
+      // propio. Ahora la búsqueda queda siempre disponible en la vista forzada.
       $('btn-ver-vencidos').style.display='none';
-      $('v-nuevo-wrap').style.display='none';
+      $('v-nuevo-wrap').style.display='block';
+      pintarEstadoNtAvion();
       // v5.26: nombre sin escapar interpolado en innerHTML — XSS almacenado,
       // mismo origen de datos que el ya arreglado en btnTraza/btnExportGPS
       // (v5.23). No detectado antes porque acá no pasaba por un atributo
@@ -2624,6 +2649,18 @@ async function crearTurnoInSitu(persona){
 
 $('btn-ver-vencidos').addEventListener('click',()=>cargarTabVuelo(true));
 $('btn-cambiar-turno').addEventListener('click',()=>{ detenerTrackGPS();gpsPoints=[];gpsGaps=[];localStorage.removeItem(LS_GPS_PUNTOS);localStorage.removeItem(LS_GPS_HUECOS);turnoActual=null;tsInicio=null;tsFin=null;metarInicio=null;metarFin=null;metarInicioListo=false;metarFinListo=false;guardadoExitoso=false;localStorage.removeItem(LS);cargarTabVuelo(true); });
+// v5.85: "Otro vuelo" — mismo reset que "Cambiar turno", pero en vez de dejar
+// al instructor en la lista, va directo a la búsqueda de alumno (nt-buscar) y
+// hace foco ahí. Cubre el caso "el alumno del turno no vino, quiero arrancar
+// con otro que no tiene reserva".
+$('btn-otro-alumno').addEventListener('click',async()=>{
+  detenerTrackGPS();gpsPoints=[];gpsGaps=[];localStorage.removeItem(LS_GPS_PUNTOS);localStorage.removeItem(LS_GPS_HUECOS);
+  turnoActual=null;tsInicio=null;tsFin=null;metarInicio=null;metarFin=null;metarInicioListo=false;metarFinListo=false;guardadoExitoso=false;
+  localStorage.removeItem(LS);
+  await cargarTabVuelo(true);
+  $('v-nuevo-wrap').scrollIntoView({behavior:'smooth',block:'start'});
+  $('nt-buscar').focus();
+});
 $('btn-nuevo-vuelo').addEventListener('click',resetVuelo);
 $('btn-otro-vuelo').addEventListener('click',()=>{ resetVuelo();cargarTabVuelo(); });
 
