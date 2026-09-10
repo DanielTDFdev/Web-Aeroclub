@@ -2,6 +2,19 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.99 · FIX al fix v1.98: Daniel probó y el límite de tasa vertical
+  (entonces simétrico, 15 m/s ambos sentidos) todavía dejaba picos de subida
+  de ~1878 fpm durante el "catch-up" del artefacto — mucho más de lo que
+  cualquiera de los 3 aviones puede trepar (LV-MPH ~1000 fpm libro es el
+  techo de la flota). El límite pasa a ser ASIMÉTRICO: TASA_SUBIDA_MAX_MS=6
+  (~1181 fpm, generoso sobre el libro pero firme) y TASA_BAJADA_MAX_MS=15
+  (~2953 fpm, sin tocar), porque bajando sí hay maniobras reales de
+  instrucción (pérdidas, espirales pronunciadas) que superan 1500-2000 fpm y
+  un límite estricto ahí recortaría maniobras genuinas, no solo artefactos.
+  Verificado en Python sobre el mismo track real: pico de subida en todo el
+  vuelo 1878→~942 fpm, pico de bajada ~1230 fpm — ambos dentro de lo
+  plausible para la flota, sin tocar ninguna maniobra real conocida.
+
   v1.98 · Pedido de Daniel: reportó un "climb inicial de 2278 fpm" imposible
   para LV-OAD en un vuelo real (Fernando Rodríguez, 10/09). Con el dump del
   track confirmé la causa: un salto de altitud GPS de un solo punto (28m→244m
@@ -1728,7 +1741,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.98</span>
+    <span class="badge" id="ver-badge">v1.99</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -1970,39 +1983,55 @@ function procesarPuntos(puntosCrudos){
   // ordenada la ventana, 244 termina siendo justo el valor del medio — no es
   // un outlier para el criterio de orden, aunque sea físicamente imposible.
   // Fix: un limitador de tasa (slew-rate), clásico para este tipo de artefacto.
-  // Ningún punto puede cambiar más de TASA_VS_MAX_PLAUSIBLE_MS por segundo
-  // respecto del punto ya aceptado; si el dato crudo pide más, se lo recorta a
-  // ese máximo y el resto de la diferencia se termina de absorber en las
-  // muestras siguientes (en vez de saltar de golpe). Se corre en las DOS
-  // direcciones (adelante y atrás) y se promedia — así el "recorte" no le
-  // carga todo el retraso a un solo lado de la transición (si solo fuera hacia
-  // adelante, la subida real quedaría corrida unos segundos tarde).
-  // TASA_VS_MAX_PLAUSIBLE_MS=15 (≈2953 fpm) está MUY por encima de lo que
-  // puede dar cualquiera de los 3 aviones del club en cualquier maniobra de
-  // instrucción (LV-OAD/LV-ART trepan ~700fpm libro, LV-MPH ~1000fpm; incluso
-  // una pérdida o espiral pronunciada no acerca esto) pero muy por debajo del
-  // salto real detectado (~108 m/s, ~21.200 fpm) — separa bien un artefacto
-  // de GPS de cualquier maniobra real de instrucción.
-  const TASA_VS_MAX_PLAUSIBLE_MS = 15;
-  function limitarTasaVertical(arr, tArr, tasaMaxMS){
+  // Ningún punto puede cambiar más de lo que permite la tasa máxima respecto
+  // del punto ya aceptado; si el dato crudo pide más, se lo recorta a ese
+  // máximo y el resto de la diferencia se absorbe en las muestras siguientes
+  // (en vez de saltar de golpe). Corre en las DOS direcciones (adelante y
+  // atrás) y promedia — así el recorte no le carga todo el retraso de la
+  // transición a un solo lado.
+  // v1.99 FIX (mismo pedido, Daniel probó y aún veía picos de subida de
+  // ~1878 fpm): el límite simétrico de v1.98 (15 m/s ambos sentidos) dejaba
+  // que el "catch-up" del artefacto trepara casi a tasa máxima durante varias
+  // muestras seguidas, y 15 m/s (~2953 fpm) es MUCHO más de lo que cualquiera
+  // de los 3 aviones puede subir — ninguno pasa de ~1000 fpm libro (LV-MPH),
+  // ni en ráfaga. Bajando es distinto: pérdidas, recuperaciones y espirales
+  // pronunciadas son maniobras reales de instrucción y sí pueden superar
+  // 1500-2000 fpm de tasa de descenso — un límite estricto ahí recortaría
+  // maniobras genuinas, no solo artefactos. Por eso el límite ahora es
+  // ASIMÉTRICO: mucho más estricto para subir que para bajar.
+  // TASA_SUBIDA_MAX_MS=6 (~1181 fpm) generoso sobre el libro de LV-MPH (~1000
+  // fpm) pero firme contra el artefacto. TASA_BAJADA_MAX_MS=15 (~2953 fpm) se
+  // mantiene amplio para no tocar maniobras de descenso pronunciado reales.
+  // Verificado en Python sobre el track real: el pico de subida en todo el
+  // vuelo baja de ~1878 fpm a ~942 fpm; el de bajada queda en ~1230 fpm — sin
+  // recortar ninguna maniobra real conocida de la flota.
+  const TASA_SUBIDA_MAX_MS = 6;
+  const TASA_BAJADA_MAX_MS = 15;
+  function limitarTasaVertical(arr, tArr, tasaSubidaMS, tasaBajadaMS){
     const n = arr.length;
     const fwd = new Array(n); fwd[0] = arr[0];
     for(let i=1; i<n; i++){
-      const dt = tArr[i]-tArr[i-1], maxDelta = dt>0 ? tasaMaxMS*dt : Infinity;
+      const dt = tArr[i]-tArr[i-1];
+      const maxSubida = dt>0 ? tasaSubidaMS*dt : Infinity;
+      const maxBajada = dt>0 ? tasaBajadaMS*dt : Infinity;
       const delta = arr[i]-fwd[i-1];
-      fwd[i] = delta>maxDelta ? fwd[i-1]+maxDelta : delta<-maxDelta ? fwd[i-1]-maxDelta : arr[i];
+      fwd[i] = delta>maxSubida ? fwd[i-1]+maxSubida : delta<-maxBajada ? fwd[i-1]-maxBajada : arr[i];
     }
     const bwd = new Array(n); bwd[n-1] = arr[n-1];
     for(let i=n-2; i>=0; i--){
-      const dt = tArr[i+1]-tArr[i], maxDelta = dt>0 ? tasaMaxMS*dt : Infinity;
+      // yendo hacia atrás, "subir" respecto del punto siguiente (arr[i]>bwd[i+1])
+      // equivale a haber BAJADO yendo hacia adelante — los límites se invierten.
+      const dt = tArr[i+1]-tArr[i];
+      const maxSubida = dt>0 ? tasaBajadaMS*dt : Infinity;
+      const maxBajada = dt>0 ? tasaSubidaMS*dt : Infinity;
       const delta = arr[i]-bwd[i+1];
-      bwd[i] = delta>maxDelta ? bwd[i+1]+maxDelta : delta<-maxDelta ? bwd[i+1]-maxDelta : arr[i];
+      bwd[i] = delta>maxSubida ? bwd[i+1]+maxSubida : delta<-maxBajada ? bwd[i+1]-maxBajada : arr[i];
     }
     const out = new Array(n);
     for(let i=0; i<n; i++) out[i] = (fwd[i]+bwd[i])/2;
     return out;
   }
-  const altitudLimitada = limitarTasaVertical(base2.map(p=>p.y), base2.map(p=>p.t), TASA_VS_MAX_PLAUSIBLE_MS);
+  const altitudLimitada = limitarTasaVertical(base2.map(p=>p.y), base2.map(p=>p.t), TASA_SUBIDA_MAX_MS, TASA_BAJADA_MAX_MS);
 
   // Despicado de altitud (pedido de Daniel): un salto de GPS de 1-2 lecturas
   // (ruido típico en altitud, más que en posición horizontal) se veía como un
