@@ -2,6 +2,18 @@
 <!--
 ==================================================================================
   VUELO PILOTO — Registro de vuelo para pilotos · Aeroclub Río Grande
+  v4.65 · 2026-09-10
+  Pedido de Daniel: el "Análisis del vuelo" (perfil de altitud) ahora también
+  detecta EMERGENCIA SIMULADA (descenso consistente con motor al ralentí,
+  lejos del campo) y la marca con una franja ROJA en el gráfico — misma
+  lógica de PROMINENCIA que analisis3d.html v2.01 y vuelo.html v5.86 (pérdida
+  neta de altura ≥300ft dentro de una ventana de 5min, más de 2NM tanto del
+  punto de despegue como del de aterrizaje final de este vuelo). Nueva
+  _detectarEmergenciasSimuladas(), nuevo parámetro `emergencias` en
+  _renderChartAltitud(), nuevo resumen de texto y línea de leyenda. Réplica
+  exacta de vuelo.html v5.86 (tres implementaciones independientes, sin
+  módulo compartido — falta turnos.html).
+
   v4.64 · 2026-09-07
   Pedido de Daniel: en "Reporte de horas de vuelo", la columna Tiempo (y el
   total) siempre muestran 1 decimal (1 -> "1.0", 0.5 -> "0.5"). Mismo fix
@@ -1742,7 +1754,7 @@ const LS_PENDIENTES = 'acrg-piloto-v1-pendientes'; // cola de vuelos guardados l
 // avión "sin arrancar todavía" que sobrevivía indefinidamente en localStorage.
 const RESTAURAR_AVION_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '4.64';
+const APP_VERSION = '4.65';
 document.querySelectorAll('.ver').forEach(el=>el.textContent='v'+APP_VERSION);
 
 // ── Traza GPS (opcional) ─────────────────────────────────
@@ -4329,6 +4341,56 @@ const MANIOBRA_PERCENTIL = 0.10;
 const MANIOBRA_DIST_MIN_KM = 0.03;
 const MANIOBRA_STEP = 3;
 const MANIOBRA_ALTURA_MIN_FT = 150;
+// v4.65 — EMERGENCIA SIMULADA (pedido de Daniel): mismo criterio de
+// PROMINENCIA que analisis3d.html v2.01 y vuelo.html v5.86 — pérdida neta de
+// altura ≥ EMERGENCIA_PROMINENCIA_FT dentro de una ventana de
+// EMERGENCIA_VENTANA_MIN minutos (tolera el ruido/variación normal de un
+// planeo real), a más de 2 NM TANTO del punto de despegue COMO del de
+// aterrizaje final de este vuelo.
+const EMERGENCIA_PROMINENCIA_FT = 300;
+const EMERGENCIA_VENTANA_MIN = 5;
+const EMERGENCIA_MIN_S = 25;
+const DOS_NM_KM = 2*1.852; // 3.704 km
+function _detectarEmergenciasSimuladas(segmentos){
+  const reales = segmentos.filter(s=>s.tipo==='real');
+  if(!reales.length) return [];
+  const primerPto = reales[0].pts.find(p=>p.alt!=null && p.lat!=null);
+  const ultimoSeg = reales[reales.length-1];
+  const ultimoPto = [...ultimoSeg.pts].reverse().find(p=>p.alt!=null && p.lat!=null);
+  if(!primerPto || !ultimoPto) return [];
+  const eventos = [];
+  for(const seg of reales){
+    const pts = seg.pts.filter(p=>p.alt!=null && p.lat!=null);
+    if(pts.length<5) continue;
+    const alts = pts.map(p=>p.alt);
+    const suaves = alts.map((a,i)=>{
+      const a0=alts[Math.max(0,i-1)], a2=alts[Math.min(alts.length-1,i+1)];
+      return (a0+a+a2)/3;
+    });
+    const lejosDelCampo = i => _haversineKm(pts[i].lat,pts[i].lng,primerPto.lat,primerPto.lng) > DOS_NM_KM
+                              && _haversineKm(pts[i].lat,pts[i].lng,ultimoPto.lat,ultimoPto.lng) > DOS_NM_KM;
+    const hayDescensoProminente = i => {
+      for(let j=i+1;j<pts.length;j++){
+        const dtMin = (new Date(pts[j].ts)-new Date(pts[i].ts))/60000;
+        if(dtMin>EMERGENCIA_VENTANA_MIN) break;
+        if((suaves[i]-suaves[j])*3.28084 >= EMERGENCIA_PROMINENCIA_FT) return true;
+      }
+      return false;
+    };
+    let i=0;
+    while(i<pts.length){
+      if(!(lejosDelCampo(i) && hayDescensoProminente(i))){ i++; continue; }
+      let j=i; while(j<pts.length && lejosDelCampo(j) && hayDescensoProminente(j)) j++;
+      const dtS = (new Date(pts[j-1].ts)-new Date(pts[i].ts))/1000;
+      if(dtS>=EMERGENCIA_MIN_S){
+        let m=Infinity; for(let k=i;k<j;k++) m=Math.min(m,suaves[k]);
+        eventos.push({t0:pts[i].ts, t1:pts[j-1].ts, detalle:`pérdida ${((suaves[i]-m)*3.28084).toFixed(0)} ft`});
+      }
+      i=j;
+    }
+  }
+  return eventos;
+}
 function _clasificarTramosVuelo(segmentos, altMinTraza){
   const porTramo = [];
   const todosLosGiros = [];
@@ -4378,7 +4440,7 @@ function _clasificarTramosVuelo(segmentos, altMinTraza){
   return bandas;
 }
 
-function _renderChartAltitud(puntos, altMinTraza, altMaxTraza, bandas, toques, aterrizaje){
+function _renderChartAltitud(puntos, altMinTraza, altMaxTraza, bandas, toques, aterrizaje, emergencias){
   const W=680, H=220, PAD_L=42, PAD_R=10, PAD_T=10, PAD_B=30;
   const validPts = puntos.filter(p=>p.alt!=null);
   if(validPts.length<2) return '<div style="font-family:var(--mono);font-size:12px;color:var(--gray)">// Sin datos de altitud suficientes para graficar.</div>';
@@ -4405,6 +4467,12 @@ function _renderChartAltitud(puntos, altMinTraza, altMaxTraza, bandas, toques, a
     if(b.tipo!=='maniobra') continue;
     const x1=xOf(b.t0), x2=xOf(b.t1);
     svg += `<rect x="${x1.toFixed(1)}" y="${PAD_T}" width="${Math.max(1,x2-x1).toFixed(1)}" height="${ejeYBase-PAD_T}" fill="rgba(240,165,0,.32)"/>`;
+  }
+  // v4.65 — EMERGENCIA SIMULADA: franja ROJA, dibujada DESPUÉS (encima) de
+  // las ámbar de maniobra genérica.
+  for(const e of (emergencias||[])){
+    const x1=xOf(e.t0), x2=xOf(e.t1);
+    svg += `<rect x="${x1.toFixed(1)}" y="${PAD_T}" width="${Math.max(1,x2-x1).toFixed(1)}" height="${ejeYBase-PAD_T}" fill="rgba(231,76,60,.38)"/>`;
   }
   const pathD = validPts.map((p,i)=>`${i===0?'M':'L'} ${xOf(p.ts).toFixed(1)} ${yOf(p.alt).toFixed(1)}`).join(' ');
   svg += `<path d="${pathD}" fill="none" stroke="#00c8d4" stroke-width="1.6"/>`;
@@ -4446,6 +4514,7 @@ window.abrirAnalisisVuelo = function(){
   const bandas = _clasificarTramosVuelo(segmentos, altMinTraza);
   const toques = _detectarToques(segmentos, altMinTraza);
   const aterrizaje = _detectarAterrizajeFinal(segmentos, altMinTraza);
+  const emergencias = _detectarEmergenciasSimuladas(segmentos);
   const fmtT = iso => { const d=new Date(iso); return String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0'); };
   $('analisis-toques-resumen').textContent = toques.length
     ? `${toques.length} toque${toques.length!==1?'s':''} y despegue${toques.length!==1?'s':''} detectado${toques.length!==1?'s':''} — ${toques.map(t=>fmtT(t.ts)).join(', ')}`
@@ -4455,6 +4524,12 @@ window.abrirAnalisisVuelo = function(){
     $('analisis-aterrizaje-resumen').style.display = 'block';
   } else {
     $('analisis-aterrizaje-resumen').style.display = 'none';
+  }
+  if(emergencias.length){
+    $('analisis-emergencia-resumen').textContent = `🔴 ${emergencias.length} emergencia${emergencias.length!==1?'s':''} simulada${emergencias.length!==1?'s':''} detectada${emergencias.length!==1?'s':''} — ${emergencias.map(e=>fmtT(e.t0)+' ('+e.detalle+')').join(', ')}`;
+    $('analisis-emergencia-resumen').style.display = 'block';
+  } else {
+    $('analisis-emergencia-resumen').style.display = 'none';
   }
   const escMetar = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   if(metarInicio || metarFin){
@@ -4466,7 +4541,7 @@ window.abrirAnalisisVuelo = function(){
   } else {
     $('analisis-metar').style.display = 'none';
   }
-  $('analisis-chart-wrap').innerHTML = _renderChartAltitud(puntos, altMinTraza, altMaxTraza, bandas, toques, aterrizaje);
+  $('analisis-chart-wrap').innerHTML = _renderChartAltitud(puntos, altMinTraza, altMaxTraza, bandas, toques, aterrizaje, emergencias);
   $('modal-analisis-vuelo').classList.add('open');
 };
 window.cerrarAnalisisVuelo = function(){
@@ -4583,11 +4658,14 @@ if('serviceWorker' in navigator){
   <div style="flex:1;overflow-y:auto;padding:16px">
     <div id="analisis-toques-resumen" style="font-family:var(--mono);font-size:13px;color:var(--white);margin-bottom:10px"></div>
     <div id="analisis-aterrizaje-resumen" style="display:none;font-family:var(--mono);font-size:13px;color:var(--white);margin-bottom:10px"></div>
+    <div id="analisis-emergencia-resumen" style="display:none;font-family:var(--mono);font-size:13px;color:#ff6b5b;font-weight:600;margin-bottom:10px"></div>
     <div id="analisis-metar" style="display:none;font-family:var(--mono);font-size:12px;color:var(--gray);background:rgba(0,200,212,.06);border:1px solid rgba(0,200,212,.2);border-radius:8px;padding:8px 12px;margin-bottom:10px;line-height:1.6"></div>
     <div id="analisis-chart-wrap"></div>
     <div style="margin-top:12px;font-family:var(--mono);font-size:10px;color:var(--gray);line-height:1.9">
       <span style="display:inline-block;width:11px;height:11px;background:rgba(240,165,0,.32);border:1px solid rgba(240,165,0,.5);border-radius:2px;vertical-align:-1px;margin-right:4px"></span>
       franja = tramo con maniobra (viraje sostenido) · resto del gráfico = crucero.<br>
+      <span style="display:inline-block;width:11px;height:11px;background:rgba(231,76,60,.38);border:1px solid rgba(231,76,60,.6);border-radius:2px;vertical-align:-1px;margin-right:4px"></span>
+      franja roja = emergencia simulada detectada (descenso ≥300ft en ≤5min, lejos del campo — aproximado).<br>
       <span style="display:inline-block;width:11px;height:11px;background:#f0a500;border:1px solid rgba(0,0,0,.55);border-radius:50%;vertical-align:-1px;margin-right:4px"></span>
       punto = toque y despegue detectado (aproximado — puede haber falsos positivos si el GPS es impreciso cerca de la pista).<br>
       <span style="display:inline-block;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:9px solid #39d353;vertical-align:-2px;margin-right:4px"></span>
