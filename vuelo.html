@@ -2,6 +2,13 @@
 <!--
 ==================================================================================
   VUELO — App de registro de vuelo · Aeroclub Río Grande
+  v5.91 · 2026-09-10
+  Pedido de Daniel: TOQUE_ALTURA_MAX_FT (techo de altura para considerar un
+  punto candidato a "toque y despegue" — detección de toques motor) bajado
+  de 300ft a 40ft sobre el punto más bajo del vuelo. Esta constante también
+  la usa _detectarAterrizajeFinal en este archivo, así que el aterrizaje
+  final también queda más estricto (antes 300ft, ahora 40ft).
+
   v5.90 · 2026-09-10
   Pedido de Daniel: umbral de piso de EMERGENCIA SIMULADA (ver v5.89) subido
   de 200ft a 400ft AGL, para detectar mejor.
@@ -2127,7 +2134,7 @@ const LS_PENDIENTES = 'acrg-vuelo-v2-pendientes'; // cola de vuelos guardados lo
 // límite de tiempo.
 const RESTAURAR_TURNO_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '5.90'; // ⚠ actualizar acá Y en el comentario header de arriba en cada bump
+const APP_VERSION = '5.91'; // ⚠ actualizar acá Y en el comentario header de arriba en cada bump
 
 // ── Traza GPS (opcional, la activa el instructor por vuelo) ────────────
 const LS_GPS_PUNTOS = 'acrg-vuelo-v2-gps-puntos'; // puntos del vuelo en curso (resiliencia ante recarga)
@@ -4330,7 +4337,7 @@ let _mapaVueloKeyActual = null; // pedido de Daniel: mismo patrón que turnos.ht
 
 const TOQUE_PROMINENCIA_FT = 100;
 const TOQUE_VENTANA_MIN = 4;
-const TOQUE_ALTURA_MAX_FT = 300;
+const TOQUE_ALTURA_MAX_FT = 40; // pedido de Daniel: bajado de 300 a 40ft — ojo, tambien la usa _detectarAterrizajeFinal en este archivo
 function _detectarToques(segmentos, altMinTraza){
   const candidatos=[];
   for(const seg of segmentos){

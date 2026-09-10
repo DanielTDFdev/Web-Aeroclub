@@ -1,5 +1,13 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 8.71
+  CAMBIOS : Pedido de Daniel: TOQUE_ALTURA_MAX_FT (techo de altura para
+            considerar un punto candidato a "toque y despegue" — detección
+            de toques motor) bajado de 300ft a 40ft sobre el punto más bajo
+            del vuelo. En este archivo _detectarAterrizajeFinal usa su
+            propia constante (ATERRIZAJE_ALTURA_TOL_FT), así que este
+            cambio afecta SOLO a _detectarToques.
+
   VERSION : 8.70
   CAMBIOS : Pedido de Daniel: umbral de piso de EMERGENCIA SIMULADA (ver
             v8.69) subido de 200ft a 400ft AGL, para detectar mejor.
@@ -4383,7 +4391,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.70</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.71</div>
   </div>
 
 </div>
@@ -13022,7 +13030,7 @@ function _calcPisoVirtual(segmentos, altMinTraza){
 // función en sí no cambió, solo qué "piso" le llega desde el llamador.
 const TOQUE_PROMINENCIA_FT = 100;
 const TOQUE_VENTANA_MIN = 4;
-const TOQUE_ALTURA_MAX_FT = 300;
+const TOQUE_ALTURA_MAX_FT = 40; // pedido de Daniel: bajado de 300 a 40ft
 function _detectarToques(segmentos, altMinTraza){
   const candidatos=[];
   for(const seg of segmentos){
