@@ -2,6 +2,22 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.96 · Pedido de Daniel: cuando la estimación de viento por GPS
+  (estimarViento) no se puede resolver — circuito con muy poca variedad de
+  rumbos, <30 puntos a velocidad, o sistema mal condicionado — usar el METAR
+  de arranque del vuelo como FALLBACK en vez de quedarse sin nada. Nueva
+  vientoAlturaDesdeMetar(): rota la dirección del METAR de superficie +30°
+  (aproximación empírica de capa límite para el hemisferio sur, ya
+  documentada en el comentario de v1.92) y multiplica la intensidad ×1.5
+  (orden de magnitud típico a la altura del circuito). Es una aproximación
+  gruesa, NO una medición — se marca `aproximado:true`, el panel la etiqueta
+  explícitamente como "proyectado desde METAR" y con un aviso, sin TAS medio
+  ni el contraste GPS-vs-METAR de v1.92 (no tiene sentido comparar el METAR
+  contra sí mismo). Solo se usa si estimarViento() devuelve null; la
+  estimación GPS sigue siendo siempre la preferida cuando está disponible.
+  Con METAR calmo (00000KT) o variable (VRB), sin dirección que rotar, se
+  sigue sin poder estimar — mismo comportamiento que antes.
+
   v1.95 · Reportado por Daniel: "dejó de detectar final" — pero esta vez con
   el censo de diagnóstico en mano, no una captura suelta. Primero descarté
   regresión: re-testeé calcularFasesCircuito() aislada y sigue detectando
@@ -1674,7 +1690,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.95</span>
+    <span class="badge" id="ver-badge">v1.96</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -2558,6 +2574,30 @@ function compararViento(est, met){
   return {dDir, dKt, coherente: dirOk && velOk};
 }
 
+// v1.96 — VIENTO EN ALTURA PROYECTADO DESDE EL METAR. Pedido de Daniel:
+// cuando estimarViento() (GPS) no puede resolverse (circuito insuficiente,
+// <30 puntos a velocidad, o sistema mal condicionado por poca variedad de
+// rumbos), en vez de quedarse sin nada usar el METAR de superficie como
+// FALLBACK, proyectado a la altura del circuito con una corrección empírica
+// de capa límite: rota la dirección (SAWE, hemisferio sur: típicamente
+// 20-40° hacia la derecha con la altura — se usa el punto medio, 30°) y
+// aumenta la intensidad (factor 1.5, orden de magnitud típico a 2000-3000ft
+// sobre terreno con fricción superficial — NO es una medición, es una regla
+// de aproximación general de meteorología aeronáutica).
+// ⚠ Muy inferior en confianza a la estimación GPS: se marca `aproximado:true`
+// y SOLO se usa si estimarViento() devolvió null. Nunca reemplaza a la GPS
+// cuando esta está disponible. Sin dirección (METAR calmo o VRB) no hay nada
+// que rotar — se devuelve null y las maniobras por velocidad siguen sin
+// reportarse, igual que antes de este cambio.
+const VIENTO_ALT_ROTACION_DEG = 30;
+const VIENTO_ALT_FACTOR_VEL = 1.5;
+function vientoAlturaDesdeMetar(metar){
+  const met = vientoDeMetar(metar);
+  if(!met || met.variable || met.deDeg==null || met.kt===0) return null;
+  const deDeg = (met.deDeg + VIENTO_ALT_ROTACION_DEG + 360) % 360;
+  return {deDeg, kt: met.kt*VIENTO_ALT_FACTOR_VEL, tasKt:null, rmsKt:null, n:0, aproximado:true};
+}
+
 // v1.82 — VIENTO ESTIMADO desde la propia traza, sin dato externo. Con TAS
 // aproximadamente constante, la ground speed en cada instante es
 // GS(θ) ≈ TAS + Wx·sin(θ) + Wz·cos(θ), donde θ es el rumbo y (Wx,Wz) la
@@ -2881,7 +2921,11 @@ function iniciarVisor(track){
   // v1.74: ventanas de fase de circuito confirmadas para este track (ver función arriba)
   const {ventanas: fasesCircuito, diagnosticoEnT, censo: censoCircuito} = calcularFasesCircuito(track, lat0, lng0, R);
   // v1.82: ventanas de fase + análisis adicionales (viento, estabilización)
-  const vientoEstimado = estimarViento(track);
+  let vientoEstimado = estimarViento(track);
+  // v1.96: sin estimación GPS, caer al proyectado desde el METAR (ver función
+  // arriba) — así las maniobras por velocidad se pueden seguir reportando,
+  // con la salvedad explícita de que es una aproximación.
+  if(!vientoEstimado) vientoEstimado = vientoAlturaDesdeMetar(track.metarInicio);
   const maniobras = detectarManiobras(track, vientoEstimado); // v1.83
   function maniobraEnT(t){
     for(const m of maniobras){ if(t>=m.tIni && t<=m.tFin) return m; }
@@ -2895,7 +2939,13 @@ function iniciarVisor(track){
     const el = document.getElementById('panel-vuelo');
     if(!el) return;
     const partes = [];
-    if(vientoEstimado){
+    if(vientoEstimado && vientoEstimado.aproximado){
+      // v1.96: fallback — no hubo estimación GPS, esto es el METAR proyectado
+      // a altura. Ningún TAS medido ni contraste (sería comparar el METAR
+      // contra sí mismo), solo el aviso de que es una aproximación gruesa.
+      partes.push(`VIENTO EST. ${String(vientoEstimado.deDeg).padStart(3,'0')}° / ${vientoEstimado.kt.toFixed(0)} kt (aprox., proyectado desde METAR)`);
+      partes.push('  ⚠ el vuelo no cubrió suficientes rumbos para estimar por GPS — este valor sale de rotar y escalar el METAR de superficie, no es una medición');
+    } else if(vientoEstimado){
       partes.push(`VIENTO EST. ${String(vientoEstimado.deDeg).padStart(3,'0')}° / ${vientoEstimado.kt.toFixed(0)} kt`);
       partes.push(`  TAS media ${vientoEstimado.tasKt.toFixed(0)} kt · ajuste ±${vientoEstimado.rmsKt.toFixed(1)} kt`);
       // v1.91: mínimos de GS y TAS del vuelo, lado a lado. Sirve para
@@ -2927,7 +2977,7 @@ function iniciarVisor(track){
         partes.push('METAR inicio: sin grupo de viento legible');
       }
     } else {
-      partes.push('VIENTO EST. — (el vuelo no cubrió suficientes rumbos)');
+      partes.push('VIENTO EST. — (el vuelo no cubrió suficientes rumbos, y sin METAR de arranque para aproximar)');
     }
     const finales = fasesCircuito.filter(v=>v.fase==='FINAL' && v.estab);
     if(finales.length){
