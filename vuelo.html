@@ -2,6 +2,10 @@
 <!--
 ==================================================================================
   VUELO — App de registro de vuelo · Aeroclub Río Grande
+  v5.90 · 2026-09-10
+  Pedido de Daniel: umbral de piso de EMERGENCIA SIMULADA (ver v5.89) subido
+  de 200ft a 400ft AGL, para detectar mejor.
+
   v5.89 · 2026-09-10
   Pedido de Daniel: replicar acá la especificación exacta de EMERGENCIA
   SIMULADA validada con un vuelo real en analisis3d.html v2.06 (ver ese
@@ -2123,7 +2127,7 @@ const LS_PENDIENTES = 'acrg-vuelo-v2-pendientes'; // cola de vuelos guardados lo
 // límite de tiempo.
 const RESTAURAR_TURNO_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '5.89'; // ⚠ actualizar acá Y en el comentario header de arriba en cada bump
+const APP_VERSION = '5.90'; // ⚠ actualizar acá Y en el comentario header de arriba en cada bump
 
 // ── Traza GPS (opcional, la activa el instructor por vuelo) ────────────
 const LS_GPS_PUNTOS = 'acrg-vuelo-v2-gps-puntos'; // puntos del vuelo en curso (resiliencia ante recarga)
@@ -4441,7 +4445,7 @@ const MANIOBRA_ALTURA_MIN_FT = 150;
 // directo como pidió Daniel. Umbral de piso subido de 100ft a 200ft AGL
 // (la emergencia real llegó a 115ft, 15ft por encima del entonces-100ft).
 const EMERGENCIA_ALT_INICIO_MIN_FT = 500;
-const EMERGENCIA_ALT_FIN_MAX_FT = 200;
+const EMERGENCIA_ALT_FIN_MAX_FT = 400; // v5.90 — pedido de Daniel: subido de 200 a 400ft para detectar mejor
 const EMERGENCIA_VS_FPM = -350;
 const EMERGENCIA_MIN_S = 25;
 const EMERGENCIA_ASCENSO_FPM = 100;

@@ -2,6 +2,9 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.07 · Pedido de Daniel: umbral de piso de EMERGENCIA SIMULADA (ver v2.06)
+  subido de 200ft a 400ft AGL, para detectar mejor.
+
   v2.06 · FIX a v2.05: Daniel probó con un vuelo real (Franco Rodrigo
   Carrizo, 10/09) y no detectó nada. Diagnóstico con el track real: la
   emergencia bajó de 1263ft a 210ft raw (115ft AGL) en 255s — de los 99
@@ -1830,7 +1833,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.06</span>
+    <span class="badge" id="ver-badge">v2.07</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -2426,7 +2429,7 @@ const MIN_LENTO_S = 10, MIN_PERDIDA_S = 4, MIN_ESCARPADO_S = 8;
 // magnitud que otras confirmaciones "sostenidas" del archivo (MIN_SOSTENIDO_
 // BASICA_S=6, MIN_ESCARPADO_S=8). Avisar si hace falta ajustar.
 const EMERGENCIA_ALT_INICIO_MIN_FT = 500;
-const EMERGENCIA_ALT_FIN_MAX_FT = 200;
+const EMERGENCIA_ALT_FIN_MAX_FT = 400; // v2.07 — pedido de Daniel: subido de 200 a 400ft para detectar mejor
 const EMERGENCIA_VS_FPM = -350;
 const EMERGENCIA_MIN_S = 25;
 const EMERGENCIA_ASCENSO_FPM = 100;

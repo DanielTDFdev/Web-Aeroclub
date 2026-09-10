@@ -1,5 +1,9 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 8.70
+  CAMBIOS : Pedido de Daniel: umbral de piso de EMERGENCIA SIMULADA (ver
+            v8.69) subido de 200ft a 400ft AGL, para detectar mejor.
+
   VERSION : 8.69
   CAMBIOS : Pedido de Daniel: replicar acá la especificación exacta de
             EMERGENCIA SIMULADA validada con un vuelo real (vuelo.html
@@ -4379,7 +4383,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.69</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.70</div>
   </div>
 
 </div>
@@ -13149,7 +13153,7 @@ const MANIOBRA_ALTURA_MIN_FT = 150; // por debajo de esto sobre el punto más ba
 // directo como pidió Daniel. AGL se aproxima con `piso`
 // (_calcPisoVirtual/altMinTraza, mismo criterio que toques/aterrizaje).
 const EMERGENCIA_ALT_INICIO_MIN_FT = 500;
-const EMERGENCIA_ALT_FIN_MAX_FT = 200;
+const EMERGENCIA_ALT_FIN_MAX_FT = 400; // v8.70 — pedido de Daniel: subido de 200 a 400ft para detectar mejor
 const EMERGENCIA_VS_FPM = -350;
 const EMERGENCIA_MIN_S = 25;
 const EMERGENCIA_ASCENSO_FPM = 100;
