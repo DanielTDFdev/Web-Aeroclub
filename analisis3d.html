@@ -2,6 +2,22 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.97 · Pedido de Daniel: el patch satelital se sentía "como que está
+  fallando" — se ocultaba y se volvía a pedir muy seguido al avanzar el
+  avión, dando sensación de tiles que se borran y recargan. Evalué dos
+  soluciones más agresivas (mostrar todos los meshes cacheados a la vez;
+  reemplazar por grilla de tiles individuales persistentes) y las descarté:
+  la primera reintroducía el z-fighting que se eliminó estructuralmente en
+  v1.43 (mallas superpuestas a distinto zoom compitiendo por profundidad), la
+  segunda es una reescritura completa de la descarga de tiles sin necesidad
+  real todavía. Fix elegido, más simple: agrandar el área que cubre CADA
+  patch (TILES_PRESUPUESTO 64->144, mismo zoom nativo 17, sin perder
+  resolución) y subir el umbral de recentrado en _chequearMapaSeguimiento
+  (radio*0.35 -> radio*0.6). Resultado: muchos menos recentrados por vuelo,
+  sigue habiendo UN solo mesh visible a la vez (nada de arquitectura nueva,
+  cero riesgo de z-fighting). No elimina el recentrado en vuelos muy largos
+  (cross-country de varias decenas de km), solo lo espacia bastante más.
+
   v1.96 · Pedido de Daniel: cuando la estimación de viento por GPS
   (estimarViento) no se puede resolver — circuito con muy poca variedad de
   rumbos, <30 puntos a velocidad, o sistema mal condicionado — usar el METAR
@@ -1690,7 +1706,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.96</span>
+    <span class="badge" id="ver-badge">v1.97</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -3573,8 +3589,12 @@ async function _fetchMosaicoParaZoom(zoom, txMin, txMax, tyMin, tyMax, yPos, eti
 //     (RADIO_PARCHE_MAX, _radioParcheDeseado, ZOOM_PARCHE, _metrosPorTile,
 //     TILES_LADO_PARCHE_MAX y las dos ramas por modo de cámara).
 // ============================================================================
-const TILES_PRESUPUESTO = 64;  // 8x8 nominal; el redondeo a tile entero puede
-  // llevarlo a ~90 en el peor caso. Es el techo de imágenes por mosaico.
+const TILES_PRESUPUESTO = 144;  // 12x12 nominal (antes 64/8x8); el redondeo
+  // a tile entero puede llevarlo a ~170 en el peor caso. Subido en v1.97 —
+  // pedido de Daniel: no quiere que el patch se sienta como que "se borra y
+  // se redibuja" al avanzar. Mismo zoom nativo (17), más área cubierta por
+  // patch = recentrados menos frecuentes. No elimina el recentrado en
+  // vuelos largos, solo lo hace mucho menos seguido.
 const Y_MAPA = -0.15;          // altura del plano del mapa (la de siempre)
 const _mapaCache = new Map();  // clave = rango de tiles -> Promise<THREE.Mesh>
 let mapaSatMeshActivo = null;  // el único mosaico visible en este momento
@@ -3659,7 +3679,9 @@ function _chequearMapaSeguimiento(ahoraMs, m){
   _ultimoChequeoMapa = ahoraMs;
   if(!_mapaVistaActual) return;
   const dx = m.x - _mapaVistaActual.x, dz = m.z - _mapaVistaActual.z;
-  if(Math.hypot(dx,dz) > _mapaVistaActual.radio*0.35) actualizarMapaSatelital();
+  // v1.97: 0.35 -> 0.6 (patch más grande de TILES_PRESUPUESTO, se deja
+  // alejar proporcionalmente más antes de recentrar).
+  if(Math.hypot(dx,dz) > _mapaVistaActual.radio*0.6) actualizarMapaSatelital();
 }
 
 const mapaSatChk = document.getElementById('mapaSat');
