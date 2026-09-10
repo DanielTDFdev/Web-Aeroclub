@@ -2,6 +2,25 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.95 · Reportado por Daniel: "dejó de detectar final" — pero esta vez con
+  el censo de diagnóstico en mano, no una captura suelta. Primero descarté
+  regresión: re-testeé calcularFasesCircuito() aislada y sigue detectando
+  bien en sintético, nada de v1.93/v1.94 tocó esta lógica. El censo mostró la
+  causa real: de 247 puntos en radio, 231 pasaban altura y 180 pasaban
+  rumbo, pero solo 86 pasaban offset — la intersección de los cuatro
+  criterios caía a 11 puntos en TODO el vuelo. Con el viento de SAWE, el
+  avión rara vez queda a menos de 200m del eje salvo muy tarde en la
+  aproximación, y para entonces no quedan 12s seguidos de alineación — de
+  ahí el patrón INICIAL→BÁSICA→INICIAL→BÁSICA sin ninguna final confirmada
+  entre medio en todo el vuelo.
+  Dos ajustes, ambos justificados por estos números reales: OFFSET_FINAL_MAX_M
+  200→350m, y mínimo sostenido de final separado del de inicial (12s→8s,
+  MIN_SOSTENIDO_FINAL_S), mismo criterio que ya se le aplicó a básica en
+  v1.80 por la misma razón de fondo.
+  Verificado con un caso sintético que reproduce el patrón del censo (offset
+  que recién cierra a ~280m, solo 10s de ventana efectiva): con los umbrales
+  viejos no confirmaba nada, con los nuevos aparece la final.
+
   v1.94 · Pedido de Daniel: el panel de datos también se pliega — en celular
   tapaba casi toda la pantalla. Mismo patrón que el panel de análisis de
   v1.85: cabecera siempre visible y cuerpo colapsable. Arranca PLEGADO en
@@ -1655,7 +1674,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.94</span>
+    <span class="badge" id="ver-badge">v1.95</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -2084,7 +2103,22 @@ const CIRC_RADIO_M = 3000; // distancia máx. a la plataforma para considerar "e
 const TOL_RUMBO_INICIAL = 20; // ± grados
 const TOL_RUMBO_FINAL = 30; // ± grados — más ancha que inicial por lo de arriba
 const TOL_RUMBO_BASICA = 20; // ± grados
-const OFFSET_FINAL_MAX_M = 200; // final: a menos de esto del eje de pista
+// v1.95 — reportado por Daniel con el censo de diagnóstico (no una captura
+// suelta esta vez, datos reales del vuelo): "dejó de detectar final". Nada
+// en v1.93/v1.94 tocó esta lógica — lo confirmé re-testeando
+// calcularFasesCircuito() aislada, sigue detectando bien en sintético. El
+// censo mostró la causa real: de 247 puntos en radio, 231 pasan altura y 180
+// pasan rumbo, pero solo 86 pasan offset — y la intersección de los cuatro
+// criterios cae a 11 puntos en TODO el vuelo. Con el viento de SAWE, el
+// avión rara vez queda a menos de 200m del eje salvo muy tarde en la
+// aproximación, y para entonces ya no quedan 12s seguidos de alineación
+// (de ahí el patrón INICIAL→BÁSICA→INICIAL→BÁSICA sin ninguna final
+// confirmada entre medio — la alineación llega tarde y dura poco).
+// Dos ajustes, ambos solo para FINAL, justificados por estos números reales
+// y no por otra suposición: offset más permisivo, y mínimo sostenido más
+// corto (mismo criterio que ya se aplicó a básica en v1.80 por la misma
+// razón — un tramo real puede ser más breve que 12s en este campo).
+const OFFSET_FINAL_MAX_M = 350; // era 200 — el censo mostró que ahí estaba el cuello de botella
 const OFFSET_INICIAL_MIN_M = 150; // inicial: a más de esto del eje de pista
 // v1.76 — pedido de Daniel: la nota de calidad (verde/amarillo/rojo) medía el
 // desvío de altura contra el ANCHO DE LA BANDA de detección (±300ft), que es
@@ -2192,7 +2226,8 @@ const VIRAJE_PUNTO_DALT_MAX_FT = 100;
 // dando positiva aunque el punto puntual ya esté plano.
 const VS_NO_ASCENDIENDO_MAX_MS = 0.3; // m/s — tendencia reciente, no punto suelto
 const VENTANA_TENDENCIA_S = 25; // ventana hacia atrás para la tendencia de VS
-const MIN_SOSTENIDO_S = 12; // mínimo sostenido para CONFIRMAR inicial/final
+const MIN_SOSTENIDO_S = 12; // mínimo sostenido para CONFIRMAR inicial
+const MIN_SOSTENIDO_FINAL_S = 8; // v1.95: final puede ser más breve que 12s en un campo con viento fuerte (misma razón que MIN_SOSTENIDO_BASICA_S)
 // v1.77 — pedido de Daniel con captura: seguía marcando básicas reales en
 // giro sostenido nunca llegaba a los 12s (circuito volado como viraje
 // continuo, típico con viento fuerte — el rumbo pasa por la ventana
@@ -2685,7 +2720,7 @@ function calcularFasesCircuito(track, lat0, lng0, R){
     let j=i, sumaDev=0, cont=0;
     while(j<crudo.length && crudo[j]!=null && crudo[j].fase===fase){ sumaDev+=crudo[j].dev; cont++; j++; }
     const dur = track[j-1].t - track[i].t;
-    const minReq = fase==='BASICA' ? MIN_SOSTENIDO_BASICA_S : MIN_SOSTENIDO_S;
+    const minReq = fase==='BASICA' ? MIN_SOSTENIDO_BASICA_S : fase==='FINAL' ? MIN_SOSTENIDO_FINAL_S : MIN_SOSTENIDO_S;
     if(dur>=minReq) ventanas.push({fase, tIni:track[i].t, tFin:track[j-1].t, sumaDev, cont, idxIni:i, idxFin:j-1});
     i=j;
   }
