@@ -2,6 +2,55 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v1.93 · Dos pedidos de Daniel sobre la interfaz. 1) Las horas de las
+  maniobras en el cuadro de análisis pasan de mm:ss relativo al inicio del
+  vuelo a HORA UTC REAL (hh:mm:ssZ) — así se pueden cruzar con el resto de
+  los registros de la app, que ya trabajan todos en UTC. Se reconstruye con
+  epocaInicioSeg + tIni, el mismo ancla que ya usaba el panel de datos.
+  2) La hora del instante actual sale del cuadro de información y se muda al
+  lado de la barra de progreso, que es donde se la busca mientras se
+  reproduce el vuelo. El panel de datos queda solo con los parámetros de
+  vuelo (ALT/GS/TAS/RUMBO/BANK/PITCH/VS/SENDA).
+  De paso se saca una variable muerta (const mm = new Date(0)) que había
+  quedado del formateo anterior.
+
+  v1.92 · Pedido de Daniel: contrastar el viento estimado por GPS contra el
+  METAR real, que es la referencia más segura. vuelo.html/vuelo-piloto.html
+  ya lo guardan al arrancar el vuelo, pero en /reservas/{key}.metar_inicio,
+  NO en /vuelo_tracks — así que se aprovecha el fetch a /reservas que ya
+  existía como respaldo del nombre y ahora se hace siempre.
+  Parser del grupo de viento del METAR (dddffKT / dddffGggKT, más VRB,
+  00000KT calmo, y unidades MPS/KMH). Verificado con METARs reales de SAWE
+  incluyendo ráfaga, variable, calmo, viento de 3 dígitos y METAR sin grupo
+  de viento.
+  ⚠ El METAR es viento de SUPERFICIE y el vuelo transcurre a 2000-3000ft,
+  donde es más fuerte y viene rotado. Por eso NO reemplaza a la estimación
+  por GPS para calcular TAS: se usa como ANCLA DE VALIDACIÓN. El panel de
+  resumen muestra ambos y un veredicto — "estimación coherente" con los
+  deltas, o "difiere del METAR — dudar del TAS", que es la señal de que los
+  eventos de vuelo lento y pérdida de ese vuelo no son confiables. Márgenes
+  anchos a propósito (50° de dirección, 60% de velocidad o 12kt): no se
+  espera que coincidan, solo que no se contradigan.
+  Contexto: esto salió de que en la captura de Daniel el ajuste de la
+  estimación GPS daba ±8.5kt, muy por encima del ±0.4 a ±2.3 de las pruebas
+  sintéticas — probablemente porque el método asume TAS constante y un vuelo
+  real mezcla circuito, crucero y maniobras a distintas velocidades.
+
+  v1.91 · Reportado por Daniel: "tuve momentos de 48kts y no lo detectó como
+  vuelo lento". Los 48kt eran del panel de datos, que mostraba GROUND SPEED,
+  mientras que la detección de vuelo lento/pérdida usa TAS (GS menos el
+  vector viento) desde v1.83 — justamente para no marcar pérdidas falsas con
+  viento en contra. Con el viento de su vuelo (235°/24kt), 48kt de GS son
+  entre 24 y 72kt de TAS según el rumbo: contra el viento 72kt (vuelo
+  normal), a favor 24kt (pérdida). O sea que la detección estaba bien, pero
+  el defecto era de INTERFAZ: el panel mostraba un número y el detector usaba
+  otro, invisible, sin forma de entender la diferencia.
+  Se agrega fila TAS al panel de datos, al lado de GS, coloreada según los
+  umbrales de Daniel (ámbar ≤50kt = vuelo lento, rojo ≤30kt = pérdida), y en
+  el panel de resumen los mínimos de GS y TAS del vuelo lado a lado. Así se
+  ve en el acto por qué un momento se marca o no.
+  No se cambió ningún umbral de detección: el criterio sigue siendo TAS.
+
   v1.90 · Reportado por Daniel con captura, quinta vuelta: seguía saliendo
   "ESES SOBRE CAMINO" sobre lo que claramente es un viraje sobre un punto.
   La prioridad de v1.89 tenía un AGUJERO: un viraje grande se consumía como
@@ -1526,6 +1575,8 @@
     border-radius:6px;padding:7px 12px;cursor:pointer;font-family:inherit;font-size:12px}
   footer button:hover{border-color:var(--cyan);color:var(--cyan)}
   #play{width:40px;text-align:center}
+  /* v1.93: hora del instante actual, al lado de la barra de progreso */
+  #v-hora{color:var(--cyan);white-space:nowrap;min-width:76px;text-align:right}
   #slider{flex:1;min-width:120px;accent-color:var(--cyan)}
   footer label{display:flex;align-items:center;gap:5px;color:var(--text2);white-space:nowrap}
   /* v1.51: barra de estela — siempre visible, arriba del footer, mismo estilo
@@ -1578,15 +1629,15 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v1.90</span>
+    <span class="badge" id="ver-badge">v1.93</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
   <div id="stage">
     <div class="panel" id="info">
-      <div class="row"><span class="lbl">HORA</span><span id="v-hora">—</span></div>
       <div class="row"><span class="lbl">ALT</span><b id="v-alt">—</b></div>
       <div class="row"><span class="lbl">GS</span><span id="v-gs">—</span></div>
+      <div class="row"><span class="lbl">TAS</span><span id="v-tas">—</span></div>
       <div class="row"><span class="lbl">RUMBO</span><span id="v-hdg">—</span></div>
       <div class="row"><span class="lbl">BANK</span><span id="v-bank">—</span></div>
       <div class="row"><span class="lbl">PITCH</span><span id="v-pitch">—</span></div>
@@ -1638,6 +1689,9 @@
   <footer>
     <button id="play" title="Reproducir / pausar">▶</button>
     <input type="range" id="slider" min="0" max="1000" value="0">
+    <!-- v1.93 (pedido de Daniel): la hora del instante actual se muda acá,
+         pegada a la barra de progreso, y sale del panel de datos. -->
+    <span id="v-hora">—</span>
     <label>Velocidad
       <select id="velSel">
         <option value="0.5">0.5×</option>
@@ -1686,23 +1740,30 @@ if(!trackKey){
         return;
       }
       const track = procesarPuntos(data.puntos);
+      // v1.92 — pedido de Daniel: contrastar el viento estimado por GPS contra
+      // el METAR real. vuelo.html/vuelo-piloto.html ya lo guardan al arrancar
+      // el vuelo, pero en /reservas/{key}.metar_inicio, NO en /vuelo_tracks.
+      // Se trae siempre (antes la reserva solo se pedía como respaldo del
+      // nombre) y se le pasa al visor.
+      let reservaDatos = null;
+      try{
+        const rr = await fetch(`${DB_URL}/reservas/${trackKey}.json`);
+        if(rr.ok) reservaDatos = await rr.json();
+      }catch(e){ /* sin METAR: el visor cae al viento estimado por GPS solo */ }
+      track.metarInicio = reservaDatos && reservaDatos.metar_inicio ? reservaDatos.metar_inicio : null;
       if(elNota){
         // v1.1 FIX (reportado por Daniel): vuelo_tracks/{key}.autor es el
         // INSTRUCTOR que cargó el vuelo, no el alumno/piloto — ese nombre vive
         // en /reservas/{key}, no acá. turnos.html ya lo pasa por query string
         // (?titulo=&sub=, tomado directo del modal del mapa); si la página se
-        // abre sin esos parámetros (ej. link directo con solo ?key=), se
-        // busca la reserva como respaldo en vez de mostrar el autor incorrecto.
+        // abre sin esos parámetros (ej. link directo con solo ?key=), se usa
+        // la reserva que ya trajimos arriba en vez del autor incorrecto.
         const titulo = urlParams.get('titulo'), sub = urlParams.get('sub');
         if(titulo){
           elNota.textContent = [titulo, sub].filter(Boolean).join(' · ');
         } else {
           let nombreRespaldo = '';
-          try{
-            const r = await fetch(`${DB_URL}/reservas/${trackKey}.json`);
-            const reserva = r.ok ? await r.json() : null;
-            if(reserva) nombreRespaldo = [reserva.nombre, reserva.avion].filter(Boolean).join(' — ');
-          }catch(e){ /* sin respaldo posible, seguimos igual */ }
+          if(reservaDatos) nombreRespaldo = [reservaDatos.nombre, reservaDatos.avion].filter(Boolean).join(' — ');
           const fecha = data.ts_guardado ? new Date(data.ts_guardado).toLocaleDateString('es-AR') : '';
           elNota.textContent = [nombreRespaldo, fecha].filter(Boolean).join(' · ') || 'Traza GPS';
         }
@@ -2385,6 +2446,47 @@ function detectarManiobras(track, viento){
   return out;
 }
 
+// v1.92 — VIENTO DEL METAR. vuelo.html/vuelo-piloto.html guardan el METAR
+// crudo del arranque del vuelo en /reservas/{key}.metar_inicio. Se parsea el
+// grupo de viento, que en un METAR tiene la forma dddffKT o dddffGggKT
+// (dirección en grados verdaderos, velocidad, opcionalmente ráfaga), más los
+// casos especiales VRB (variable) y 00000KT (calmo). Se aceptan también las
+// unidades MPS y KMH, que aparecen en METARs de otros países.
+// ⚠ El METAR es viento de SUPERFICIE y el vuelo transcurre a 2000-3000ft,
+// donde el viento es más fuerte y está rotado (típicamente 20-40° a la
+// derecha en el hemisferio sur). Por eso NO reemplaza a la estimación por
+// GPS para calcular TAS: se usa como ANCLA DE VALIDACIÓN — si la estimación
+// GPS y el METAR concuerdan razonablemente, la estimación es creíble; si
+// difieren mucho, conviene desconfiar de los eventos de vuelo lento/pérdida,
+// que dependen del TAS derivado.
+function vientoDeMetar(metar){
+  if(!metar || typeof metar !== 'string') return null;
+  const m = metar.match(/\b(\d{3}|VRB)(\d{2,3})(?:G(\d{2,3}))?(KT|MPS|KMH)\b/);
+  if(!m) return null;
+  const factor = m[4]==='KT' ? 1 : m[4]==='MPS' ? 1.94384 : 0.539957;
+  const kt = parseInt(m[2],10)*factor;
+  const rafagaKt = m[3] ? parseInt(m[3],10)*factor : null;
+  if(m[1]==='VRB') return {variable:true, deDeg:null, kt, rafagaKt};
+  return {variable:false, deDeg:parseInt(m[1],10), kt, rafagaKt};
+}
+
+// Compara la estimación por GPS contra el METAR y devuelve un veredicto.
+// Los márgenes son anchos a propósito: no se espera que coincidan (superficie
+// vs. altura de vuelo), solo que no se contradigan.
+function compararViento(est, met){
+  if(!est || !met) return null;
+  const dKt = Math.abs(est.kt - met.kt);
+  let dDir = null;
+  if(!met.variable && met.deDeg!=null){
+    dDir = Math.abs(est.deDeg - met.deDeg)%360;
+    if(dDir>180) dDir = 360-dDir;
+  }
+  // el viento en altura suele venir rotado y algo más fuerte que en superficie
+  const dirOk = dDir===null || dDir<=50;
+  const velOk = dKt <= Math.max(12, met.kt*0.6);
+  return {dDir, dKt, coherente: dirOk && velOk};
+}
+
 // v1.82 — VIENTO ESTIMADO desde la propia traza, sin dato externo. Con TAS
 // aproximadamente constante, la ground speed en cada instante es
 // GS(θ) ≈ TAS + Wx·sin(θ) + Wz·cos(θ), donde θ es el rumbo y (Wx,Wz) la
@@ -2721,6 +2823,34 @@ function iniciarVisor(track){
     if(vientoEstimado){
       partes.push(`VIENTO EST. ${String(vientoEstimado.deDeg).padStart(3,'0')}° / ${vientoEstimado.kt.toFixed(0)} kt`);
       partes.push(`  TAS media ${vientoEstimado.tasKt.toFixed(0)} kt · ajuste ±${vientoEstimado.rmsKt.toFixed(1)} kt`);
+      // v1.91: mínimos de GS y TAS del vuelo, lado a lado. Sirve para
+      // entender por qué un momento lento no se marcó: la detección usa TAS,
+      // no la GS que se ve en el panel de datos.
+      let minGs=Infinity, minTas=Infinity;
+      const hacia=(vientoEstimado.deDeg+180)*Math.PI/180, w=vientoEstimado.kt/1.94384;
+      for(const p of track){
+        if(p.y*3.28084 < MANIOBRA_ALT_MIN_FT) continue;
+        minGs = Math.min(minGs, p.gs*1.94384);
+        const r=p.hdgDeg*Math.PI/180;
+        const vx=p.gs*Math.sin(r)-w*Math.sin(hacia), vz=p.gs*Math.cos(r)-w*Math.cos(hacia);
+        minTas = Math.min(minTas, Math.sqrt(vx*vx+vz*vz)*1.94384);
+      }
+      if(isFinite(minTas)) partes.push(`  mín en vuelo: GS ${minGs.toFixed(0)} kt · TAS ${minTas.toFixed(0)} kt`);
+      // v1.92: contraste contra el METAR de inicio del vuelo
+      const vMet = vientoDeMetar(track.metarInicio);
+      if(vMet){
+        const dir = vMet.variable ? 'VRB' : String(vMet.deDeg).padStart(3,'0')+'°';
+        partes.push(`METAR inicio ${dir} / ${vMet.kt.toFixed(0)} kt${vMet.rafagaKt?' G'+vMet.rafagaKt.toFixed(0):''} (superficie)`);
+        const cmp = compararViento(vientoEstimado, vMet);
+        if(cmp){
+          const det = [cmp.dDir!=null?`Δdir ${cmp.dDir.toFixed(0)}°`:null, `Δvel ${cmp.dKt.toFixed(0)} kt`].filter(Boolean).join(' · ');
+          partes.push(cmp.coherente
+            ? `  ✓ estimación coherente (${det})`
+            : `  ⚠ difiere del METAR (${det}) — dudar del TAS`);
+        }
+      } else if(track.metarInicio){
+        partes.push('METAR inicio: sin grupo de viento legible');
+      }
     } else {
       partes.push('VIENTO EST. — (el vuelo no cubrió suficientes rumbos)');
     }
@@ -2739,10 +2869,15 @@ function iniciarVisor(track){
     if(maniobras.length){
       partes.push('');
       partes.push('MANIOBRAS');
-      const mm = new Date(0);
       maniobras.forEach(m=>{
-        const min = Math.floor(m.tIni/60), seg = Math.round(m.tIni%60);
-        partes.push(`  ${String(min).padStart(2,'0')}:${String(seg).padStart(2,'0')} ${m.tipo}${m.detalle?' ('+m.detalle+')':''}`);
+        // v1.93 (pedido de Daniel): hora UTC real en vez de mm:ss relativo al
+        // inicio del vuelo — así se puede cruzar con el resto de los registros
+        // de la app, que ya trabajan todos en UTC.
+        const f = new Date((epocaInicioSeg + m.tIni)*1000);
+        const hh = String(f.getUTCHours()).padStart(2,'0');
+        const mi = String(f.getUTCMinutes()).padStart(2,'0');
+        const ss = String(f.getUTCSeconds()).padStart(2,'0');
+        partes.push(`  ${hh}:${mi}:${ss}Z ${m.tipo}${m.detalle?' ('+m.detalle+')':''}`);
       });
     } else if(!vientoEstimado){
       partes.push('');
@@ -4287,6 +4422,28 @@ function actualizarInfo(m){
   document.getElementById('v-hora').textContent = `${hh}:${mm}:${ss}Z`;
   document.getElementById('v-alt').textContent = Math.round(m.y*3.28084)+' ft';
   document.getElementById('v-gs').textContent = Math.round(m.gs*1.94384)+' kt';
+  // v1.91 — reportado por Daniel: "tuve momentos de 48kts y no lo detectó
+  // como vuelo lento". Los 48kt eran del panel, que mostraba GROUND SPEED,
+  // mientras que la detección de vuelo lento/pérdida usa TAS (GS menos el
+  // vector viento) justamente para no marcar pérdidas falsas con viento en
+  // contra — ver v1.83. El defecto real era de interfaz: el panel mostraba un
+  // número y el detector usaba otro, invisible. Ahora se muestran los dos, y
+  // el TAS se colorea cuando cae en los rangos que Daniel definió, así se ve
+  // en el acto por qué un momento se marca o no.
+  const elTas = document.getElementById('v-tas');
+  if(vientoEstimado){
+    const hacia = (vientoEstimado.deDeg+180)*Math.PI/180;
+    const w = vientoEstimado.kt/1.94384;
+    const r = m.hdgDeg*Math.PI/180;
+    const vx = m.gs*Math.sin(r) - w*Math.sin(hacia), vz = m.gs*Math.cos(r) - w*Math.cos(hacia);
+    const tasKt = Math.sqrt(vx*vx+vz*vz)*1.94384;
+    elTas.textContent = Math.round(tasKt)+' kt';
+    elTas.style.color = tasKt<=PERDIDA_KT ? '#e74c3c'
+                      : tasKt<=VUELO_LENTO_KT ? '#ffb700' : '';
+  } else {
+    elTas.textContent = '— (sin viento est.)';
+    elTas.style.color = '';
+  }
   document.getElementById('v-hdg').textContent = Math.round((m.hdgDeg%360+360)%360)+'°';
   document.getElementById('v-bank').textContent = Math.round(m.bank*180/Math.PI)+'°';
   document.getElementById('v-pitch').textContent = Math.round(m.pitch*180/Math.PI)+'°';
