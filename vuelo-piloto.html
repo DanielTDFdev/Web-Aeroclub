@@ -2,6 +2,23 @@
 <!--
 ==================================================================================
   VUELO PILOTO — Registro de vuelo para pilotos · Aeroclub Río Grande
+  v4.74 · 2026-09-11
+  Pedido de Daniel: el modo (piloto vs alumno) deja de depender SOLO de
+  session.rol (fijo, del perfil de la persona) — un piloto (rol==='piloto')
+  con un turno de INSTRUCCIÓN propio hoy (aprobado, con instructor) ahora
+  opera con las reglas de alumno para ESE vuelo: le aparece el turno, NO
+  autoreporta tiempo/aterrizajes (eso lo carga el instructor desde
+  vuelo.html), y manda la duración del instructor (ya resuelto en v4.72).
+  Sin turno de instrucción hoy (o sin ningún turno), sigue con las reglas
+  normales de piloto — nada cambia para ese caso. Nueva
+  buscarTurnoInstruccionHoyPiloto() (filtro estricto: tipo_vuelo==
+  'instruccion' Y estado==='aprobado', a diferencia de buscarTurnoHoyAlumno()
+  que es más laxa a propósito para el alumno real). Nueva variable de
+  módulo modoAlumnoEfectivo, decidida una vez en _abrirAppInner() antes de
+  actualizarModoVuelo() — session.rol en sí no se toca en ningún lado,
+  solo se agrega esta capa encima para decidir qué bloque de la pestaña
+  Vuelo se muestra y qué confirma el logout.
+
   v4.73 · 2026-09-11
   Pedido de Daniel: tracking GPS en paralelo (modo alumno). Se saca el
   candado de exclusión mutua (gps_tracker_activo, v3.0/v4.63) que hacía
@@ -1794,6 +1811,15 @@ function conTimeout(promesa,ms=10000){
 
 // ── Estado ────────────────────────────────────────────────
 let session = null;
+// v4.74: pedido de Daniel — el modo (piloto vs alumno) deja de depender
+// SOLO de session.rol (el rol fijo de la persona) y pasa a depender del
+// TURNO del día: un piloto (rol==='piloto') con un turno de instrucción
+// propio hoy (aprobado, con instructor) opera con reglas de alumno para
+// ese vuelo — no autoreporta, aparece su turno, manda la duración del
+// instructor. Sin turno de instrucción hoy, sigue con reglas de piloto
+// normales. Se decide una vez en _abrirAppInner() y lo usan
+// actualizarModoVuelo() y el logout — session.rol en sí no se toca.
+let modoAlumnoEfectivo = false;
 let tsInicio = null;
 let tsFin = null;
 let metarInicio = null; // METAR crudo al momento del START (v4.37), null si falló/no disponible
@@ -1811,7 +1837,7 @@ const LS_PENDIENTES = 'acrg-piloto-v1-pendientes'; // cola de vuelos guardados l
 // avión "sin arrancar todavía" que sobrevivía indefinidamente en localStorage.
 const RESTAURAR_AVION_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '4.73';
+const APP_VERSION = '4.74';
 document.querySelectorAll('.ver').forEach(el=>el.textContent='v'+APP_VERSION);
 
 // ── Traza GPS (opcional) ─────────────────────────────────
@@ -2090,13 +2116,27 @@ async function _abrirAppInner(){
   $('screen-login').classList.remove('active');
   $('sh-nombre').textContent=session.nombre.split(' ')[0];
   $('sh-fecha').textContent=fmtFecha(hoy());
-  actualizarModoVuelo(); // v4.25: ícono + qué bloque de la pestaña Vuelo se muestra, según rol
   // v4.25: Libro/Reporte son compartidos entre piloto y alumno (mismo criterio de
   // consulta, por email, sin importar rol — ver cargarLibro()) — este init corre
-  // para los dos, antes de separar por rol más abajo.
+  // para los dos, antes de separar por modo más abajo.
   $('libro-fecha').value=hoy();
   { const [y,m]=hoy().split('-').map(Number); _libroCalYear=y; _libroCalMes=m-1; _libroCalSel=hoy(); }
-  if(session.rol==='alumno'){
+
+  // v4.74: se decide el modo ANTES de actualizarModoVuelo() — ya no es solo
+  // session.rol==='alumno'. Un piloto con un turno de instrucción propio
+  // hoy (aprobado, con instructor) pasa a modo alumno para ESE vuelo (no
+  // autoreporta, aparece su turno, manda la duración del instructor — ver
+  // buscarTurnoInstruccionHoyPiloto()). Si ya hay un vuelo en curso
+  // restaurado (recarga a mitad de vuelo), no se re-chequea nada — el modo
+  // ya quedó fijado al arrancar.
+  modoAlumnoEfectivo = session.rol==='alumno';
+  if(!modoAlumnoEfectivo && !tsInicio && !shaTrackeando){
+    const turnoInstr = await buscarTurnoInstruccionHoyPiloto();
+    if(turnoInstr){ modoAlumnoEfectivo=true; shaTurno=turnoInstr; }
+  }
+  actualizarModoVuelo(); // v4.25: ícono + qué bloque de la pestaña Vuelo se muestra, según el modo
+
+  if(modoAlumnoEfectivo){
     $('app-shell').classList.add('active');
     await abrirAppAlumno();
     return;
@@ -2594,7 +2634,7 @@ let shaTsInicio=null;
 // tocan acá: son compartidos tal cual, su criterio de consulta ya es por
 // email sin importar rol.
 function actualizarModoVuelo(){
-  const esAlumno=session.rol==='alumno';
+  const esAlumno=modoAlumnoEfectivo;
   $('top-user-icon').src='repo_fotos/'+(esAlumno?'alumno_icon.png':'piloto_icon.png');
   $('vuelo-modo-piloto').style.display=esAlumno?'none':'';
   $('vuelo-modo-alumno').style.display=esAlumno?'':'none';
@@ -2606,7 +2646,10 @@ async function abrirAppAlumno(){
   $('sha-sin-turno').style.display='none';
   $('sha-estado').style.display='none';
 
-  shaTurno=await buscarTurnoHoyAlumno();
+  // v4.74: si ya vino resuelto desde _abrirAppInner() (caso piloto con
+  // turno de instrucción hoy), no lo pisamos con la búsqueda genérica de
+  // alumno real.
+  if(!shaTurno) shaTurno=await buscarTurnoHoyAlumno();
   if(!shaTurno){
     $('sha-sin-turno').style.display='block';
     $('sha-btn-iniciar').style.display='none';
@@ -2621,6 +2664,29 @@ async function abrirAppAlumno(){
   actualizarEstadoAlumno();
 }
 
+// v4.74: pedido de Daniel — un piloto (rol==='piloto') con un turno de
+// INSTRUCCIÓN propio hoy (aprobado, con instructor) pasa a las reglas de
+// alumno para ESE vuelo. A diferencia de buscarTurnoHoyAlumno() (usada
+// para el rol==='alumno' real, que matchea cualquier turno no cancelado),
+// acá el filtro es más estricto a propósito: tipo_vuelo==='instruccion' Y
+// estado==='aprobado' — no queremos que un turno particular propio, o uno
+// todavía pendiente de aprobación, dispare el modo alumno por error.
+async function buscarTurnoInstruccionHoyPiloto(){
+  try{
+    const snap=await conTimeout(get(ref(db,'reservas')));
+    const data=snap.val()||{};
+    const f=hoy();
+    const candidatos=Object.entries(data)
+      .map(([key,r])=>({key,...r}))
+      .filter(r=>r.email===session.email&&r.fecha===f&&r.tipo_vuelo==='instruccion'&&r.estado==='aprobado');
+    if(!candidatos.length) return null;
+    candidatos.sort((a,b)=>(a.hora||'').localeCompare(b.hora||''));
+    return candidatos[0];
+  }catch(e){
+    console.warn('No se pudo chequear turno de instrucción propio (se sigue con reglas de piloto):',e);
+    return null;
+  }
+}
 // Sin .indexOn en /reservas (limitación conocida de Firebase RTDB en este
 // proyecto) → traer todo el nodo y filtrar client-side, mismo patrón que
 // el resto de la app. Turno de hoy para este email, no cancelado; si hay
@@ -3359,7 +3425,7 @@ function persistir(){
 // aparte con su propio chequeo (shaTrackeando); ahora es un solo handler que
 // mira cuál de los dos flujos está activo según session.rol.
 $('btn-logout').addEventListener('click',()=>{
-  if(session?.rol==='alumno'){
+  if(modoAlumnoEfectivo){
     if(shaTrackeando){ if(!confirm('Hay un tracking GPS en curso. ¿Salir igual? (se pierde lo grabado desde la última vez que se guardó)')) return; }
   } else {
     if(tsInicio&&!tsFin){if(!confirm('Hay un vuelo iniciado. ¿Salir igual?'))return;}
