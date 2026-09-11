@@ -2,6 +2,25 @@
 <!--
 ==================================================================================
   VUELO — App de registro de vuelo · Aeroclub Río Grande
+  v5.93 · 2026-09-11
+  Pedido de Daniel (corrección sobre v5.92): "que desaparezca todo, que solo
+  queden las cosas que te pedí, que no haya nada que por un toque accidental
+  haga que se vaya de esa pantalla". bloquearNavDuranteVuelo(true) ahora
+  también oculta gps-toggle-card y gps-warning al iniciar el vuelo (v5.92
+  solo ocultaba tab-bar/links-row/"Otro vuelo"). Al restaurar, cada punto de
+  salida (idle/resetVuelo) sigue decidiendo por su cuenta si corresponde
+  mostrar el toggle GPS de nuevo.
+
+  v5.92 · 2026-09-11
+  Pedido de Daniel: un toque accidental en el botón "Otro vuelo" durante un
+  vuelo en curso reseteaba todo (turnoActual, timers, localStorage) y volvía
+  al menú sin confirmación — perdió el log de un vuelo de más de una hora.
+  Mientras hay un vuelo en curso (desde que se toca INICIAR hasta FINALIZAR),
+  la pantalla queda reducida a hero del turno + timer + botones finalizar/
+  cancelar: se ocultan tab-bar, links-row (FPL/Peso y Balance) y "Otro
+  vuelo" (nuevo bloquearNavDuranteVuelo()). No se tocan datos, solo se sacan
+  de circulación los elementos que podían tocarse por error.
+
   v5.91 · 2026-09-10
   Pedido de Daniel: TOQUE_ALTURA_MAX_FT (techo de altura para considerar un
   punto candidato a "toque y despegue" — detección de toques motor) bajado
@@ -1847,7 +1866,7 @@ select.sin-elegir{border-color:var(--amber);box-shadow:0 0 0 2px rgba(240,165,0,
   </div>
 
   <!-- Links a otras apps del Aeroclub (v5.18) -->
-  <div class="links-row">
+  <div class="links-row" id="links-row">
     <span class="avnc-panel">
     <a href="fpl.html?volver=vuelo.html" class="avnc-btn fpl-link"><span>PLAN DE</span><span class="avnc-sub">vuelo</span></a>
     <a href="peso-balance.html?volver=vuelo.html" class="avnc-btn wb-link"><span>PESO Y</span><span class="avnc-sub">balance</span></a>
@@ -1855,7 +1874,7 @@ select.sin-elegir{border-color:var(--amber);box-shadow:0 0 0 2px rgba(240,165,0,
   </div>
 
   <!-- Tab bar -->
-  <div class="tab-bar">
+  <div class="tab-bar" id="tab-bar">
     <span class="avnc-panel">
     <button class="tab-btn avnc-btn active" data-tab="vuelo"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7Z"/></svg><span>Vuelo</span></button>
     <button class="tab-btn avnc-btn" data-tab="pendientes"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.17a2 2 0 0 0-.59-1.42L12 12l-4.41 4.41a2 2 0 0 0-.59 1.42V22"/><path d="M7 2v4.17a2 2 0 0 0 .59 1.42L12 12l4.41-4.41A2 2 0 0 0 17 6.17V2"/></svg><span>Pendientes</span></button>
@@ -2134,7 +2153,7 @@ const LS_PENDIENTES = 'acrg-vuelo-v2-pendientes'; // cola de vuelos guardados lo
 // límite de tiempo.
 const RESTAURAR_TURNO_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '5.91'; // ⚠ actualizar acá Y en el comentario header de arriba en cada bump
+const APP_VERSION = '5.93'; // ⚠ actualizar acá Y en el comentario header de arriba en cada bump
 
 // ── Traza GPS (opcional, la activa el instructor por vuelo) ────────────
 const LS_GPS_PUNTOS = 'acrg-vuelo-v2-gps-puntos'; // puntos del vuelo en curso (resiliencia ante recarga)
@@ -2726,6 +2745,37 @@ function mostrarVista(v){
   $('v-vuelo').style.display=v==='vuelo'?'block':'none';
 }
 
+// v5.92: pedido de Daniel — un toque accidental en "Otro vuelo" durante un
+// vuelo en curso reseteaba todo (turnoActual, timers, localStorage) y volvía
+// al menú, perdiendo el log completo de un vuelo de más de una hora sin
+// ninguna confirmación. Mientras hay un vuelo en curso (tsInicio seteado,
+// antes de tocar FINALIZAR), la pantalla queda reducida a lo mínimo: hero
+// del turno (avión/alumno/hora), timer y los botones de finalizar/cancelar.
+// Se ocultan tab-bar, links-row (FPL/Peso y Balance) y "Otro vuelo" — no se
+// tocan ni destruyen los datos, solo dejan de estar a mano para evitar el
+// toque accidental. Una vez finalizado (tsFin) el formulario de cierre ya es
+// un overlay fullscreen que tapa todo esto, así que no hace falta repetir la
+// llamada ahí.
+// v5.93: pedido de Daniel — no alcanzaba con ocultar tab-bar/links-row/"Otro
+// vuelo": "que desaparezca todo, que solo queden las cosas que te pedí, que
+// no haya nada que por un toque accidental haga que se vaya de esa
+// pantalla". Se suma el toggle de Traza GPS a lo que se oculta al iniciar
+// (no es un riesgo de perder el log como "Otro vuelo", pero tampoco estaba
+// en la lista pedida: hero del turno, timer, botones finalizar/cancelar).
+// Al restaurar (bloquear=false) NO se toca gps-toggle-card/gps-warning acá
+// — cada punto de restauración (idle, resetVuelo) ya decide explícitamente
+// si corresponde mostrarlo, según el estado al que se vuelve.
+function bloquearNavDuranteVuelo(bloquear){
+  const disp=bloquear?'none':'';
+  $('tab-bar').style.display=disp;
+  $('links-row').style.display=disp;
+  $('btn-otro-alumno').style.display=disp;
+  if(bloquear){
+    $('gps-toggle-card').style.display='none';
+    $('gps-warning').style.display='none';
+  }
+}
+
 function mostrarPantallaVuelo(turno){
   turnoActual=turno;
   mostrarVista('vuelo');
@@ -2759,6 +2809,7 @@ function mostrarPantallaVuelo(turno){
     $('v-cierre').style.display='none';
     $('v-guardado').style.display='none';
     $('btn-cambiar-turno').style.display='none';
+    bloquearNavDuranteVuelo(true);
   } else {
     // Sin iniciar
     actualizarEstado('idle');
@@ -2770,6 +2821,7 @@ function mostrarPantallaVuelo(turno){
     $('v-cierre').style.display='none';
     $('v-guardado').style.display='none';
     $('btn-cambiar-turno').style.display='';
+    bloquearNavDuranteVuelo(false);
   }
 }
 
@@ -3098,6 +3150,7 @@ $('btn-start-stop').addEventListener('click', async ()=>{
     $('btn-start-stop').className='btn btn-red';
     $('btn-cancelar-vuelo').style.display='';
     $('btn-cambiar-turno').style.display='none';
+    bloquearNavDuranteVuelo(true);
     toast('Vuelo iniciado · '+fmtLocalFull(tsInicio));
   } else {
     // STOP — confirmar antes de grabar
@@ -3326,6 +3379,7 @@ async function guardar(){
   $('btn-cancelar-vuelo').style.display='none';
   $('v-guardado').style.display='block';
   $('btn-cambiar-turno').style.display='';
+  bloquearNavDuranteVuelo(false);
   $('guardado-detalle').textContent=`${item.nombreMostrado} · ${horas} hs · ${aterr} aterrizajes`;
   toast('✓ Vuelo guardado');
 
@@ -3506,6 +3560,7 @@ function resetVuelo(){
   $('v-cierre').style.display='none';
   $('v-guardado').style.display='none';
   $('btn-cambiar-turno').style.display='';
+  bloquearNavDuranteVuelo(false);
   $('gps-toggle-card').style.display='flex';
   pintarToggleGPS();
   actualizarEstado('idle');
