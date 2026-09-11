@@ -33,6 +33,7 @@ jobs:
           EMAILJS_PUBLIC_KEY: "0IoRm88tZQepkHAdK"
           EMAILJS_TEMPLATE_CONFIRMA: "template_4nsseoo"
           EMAILJS_TEMPLATE_LIBERA: "template_41kdlo3"
+          EMAILJS_TEMPLATE_CANCELA: "template_v4qu4x6"
           MAX_INTENTOS: "8"
           # ── Secreto: Cuenta A tiene su PROPIA private key, distinta de la
           # que ya usan vencimiento-turnos.yml/recordatorio-instructor.yml
