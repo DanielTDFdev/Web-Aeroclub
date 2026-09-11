@@ -1,5 +1,13 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 8.73
+  CAMBIOS : mailAprob/mailLiberacion ya no llaman a emailjs.send() desde el
+            navegador — solo encolan en /mail_queue (fbPush). Un cron nuevo,
+            mail_queue_sender.py (cada 15min), es el único que manda esos dos
+            mails vía API REST de EmailJS (Cuenta A), para no depender de la
+            red/extensiones del instructor que aprueba/libera. Requiere el
+            secret EMAILJS_PRIVATE_KEY_A en GitHub Actions.
+
   VERSION : 8.72
   CAMBIOS : Bug reportado por Daniel: al reaprobar un turno liberado, no llegaba
             el mail de confirmación (ni siquiera como intento fallido en el log
@@ -4400,7 +4408,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.72</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.73</div>
   </div>
 
 </div>
@@ -6340,10 +6348,15 @@ const EJS_TMPL_CANCEL='template_v4qu4x6', EJS_TMPL_RESET='template_scbsgfg', EJS
 function mailCancel(r,motivo=''){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);const horaTxt=r.horaInicio&&r.horaFin?r.horaInicio+' a '+r.horaFin:(r.hora||'');emailjs.send(EJS_SVC,EJS_TMPL_CANCEL,{to_email:r.email,alumno_nombre:r.nombre,fecha:fmtFechaLinda(r.fecha),hora:horaTxt,avion:r.avion||'LV-OAD',motivo:motivo||'Sin especificar'}).catch(e=>console.warn(e));}
 function mailReset(a,np){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);emailjs.send(EJS_SVC,EJS_TMPL_RESET,{to_email:a.email,alumno_nombre:a.nombre,nueva_password:np}).catch(e=>console.warn(e));}
 function mailNuevoRegistro(nombre,email){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);emailjs.send(EJS_SVC,EJS_TMPL_REGISTRO,{alumno_nombre:nombre,alumno_email:email,email:email,fecha:new Date().toLocaleString('es-AR')}).catch(e=>console.warn('mail-registro:',e));emailjs.send(EJS_SVC,EJS_TMPL_BIENVENIDA,{alumno_nombre:nombre,alumno_email:email}).catch(e=>console.warn('mail-bienvenida:',e));}
-// v8.72: mailAprob/mailLiberacion eran fire-and-forget con error tragado en
-// console.warn — si emailjs no cargaba (adblock/Shields/red) o el send() fallaba,
-// nadie se enteraba (ni el instructor, ni Daniel via log de EmailJS, porque el
-// request nunca salía del browser). Ahora avisan en pantalla con reintento.
+// v8.73: mailAprob/mailLiberacion YA NO llaman a emailjs.send() desde el
+// navegador. Antes, si la red del instructor bloqueaba ese request (visto en
+// producción), el mail se perdía sin dejar rastro en ningún lado (v8.72 lo
+// mitigaba con un toast, pero seguía dependiendo del browser). Ahora solo
+// encolan la intención en /mail_queue con fbPush — el mismo tipo de escritura
+// a Firebase que ya funciona siempre — y un cron server-side
+// (mail_queue_sender.py, cada 15min) es el único que efectivamente manda el
+// mail vía API REST de EmailJS. mostrarToastMailError() queda para el caso
+// (raro) de que falle el propio fbPush de encolado.
 function mostrarToastMailError(msg,retryFn){
   const old=document.getElementById('toast-mail-error');if(old)old.remove();
   const div=document.createElement('div');div.id='toast-mail-error';
@@ -6363,17 +6376,25 @@ function mostrarToastMailError(msg,retryFn){
   document.body.appendChild(div);
   setTimeout(()=>{if(document.body.contains(div))div.remove();},15000);
 }
-function mailAprob(r,instructorNombre){
-  const retry=()=>mailAprob(r,instructorNombre);
-  if(typeof emailjs==='undefined'){mostrarToastMailError('No se pudo enviar el mail de confirmación a '+(r.nombre||'el alumno')+' (EmailJS no cargó).',retry);return;}
-  emailjs.init(EJS_KEY);const horaTxt=r.horaInicio&&r.horaFin?r.horaInicio+' a '+r.horaFin:(r.hora||'');
-  emailjs.send(EJS_SVC,EJS_TMPL_CONFIRMA,{to_email:r.email,alumno_nombre:r.nombre,fecha:fmtFechaLinda(r.fecha),hora:horaTxt,avion:r.avion||'LV-OAD',instructor:instructorNombre||session?.nombre||''}).catch(e=>{console.warn('mail-aprob:',e);mostrarToastMailError('No se pudo enviar el mail de confirmación a '+(r.nombre||'el alumno')+'.',retry);});
+async function mailAprob(r,reservaKey){
+  const retry=()=>mailAprob(r,reservaKey);
+  if(!reservaKey){console.warn('mail-aprob: falta reservaKey, no se puede encolar');return;}
+  try{
+    await fbPush('mail_queue',{tipo:'confirma',reserva_key:reservaKey,ts:new Date().toISOString()});
+  }catch(e){
+    console.warn('mail-aprob-encolar:',e);
+    mostrarToastMailError('No se pudo encolar el mail de confirmación a '+(r.nombre||'el alumno')+'.',retry);
+  }
 }
-function mailLiberacion(r){
-  const retry=()=>mailLiberacion(r);
-  if(typeof emailjs==='undefined'){mostrarToastMailError('No se pudo enviar el mail de reprogramación a '+(r.nombre||'el alumno')+' (EmailJS no cargó).',retry);return;}
-  emailjs.init(EJS_KEY);const horaTxt=r.horaInicio&&r.horaFin?r.horaInicio+' a '+r.horaFin:(r.hora||'');
-  emailjs.send(EJS_SVC,EJS_TMPL_LIBERA,{to_email:r.email,alumno_nombre:r.nombre,fecha:fmtFechaLinda(r.fecha),hora:horaTxt,avion:r.avion||'LV-OAD'}).catch(e=>{console.warn('mail-libera:',e);mostrarToastMailError('No se pudo enviar el mail de reprogramación a '+(r.nombre||'el alumno')+'.',retry);});
+async function mailLiberacion(r,reservaKey){
+  const retry=()=>mailLiberacion(r,reservaKey);
+  if(!reservaKey){console.warn('mail-libera: falta reservaKey, no se puede encolar');return;}
+  try{
+    await fbPush('mail_queue',{tipo:'libera',reserva_key:reservaKey,ts:new Date().toISOString()});
+  }catch(e){
+    console.warn('mail-libera-encolar:',e);
+    mostrarToastMailError('No se pudo encolar el mail de reprogramación a '+(r.nombre||'el alumno')+'.',retry);
+  }
 }
 
 function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');}
@@ -9731,7 +9752,7 @@ window.abrirModal=function(key){
         const nombreAprobador=esParticular?r.nombre:session.nombre;
         await fbUpdate('reservas/'+key,{estado:'aprobado',instructor:nombreAprobador,aprobado_por:nombreAprobador});
         await registrarAuditoria('aprobacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(r.avion||'LV-OAD')+' — '+r.fecha+' '+r.hora+' hs — alumno: '+r.nombre+(esParticular?' — particular, aprobado a nombre propio del piloto':''));
-        mailAprob(r);
+        mailAprob(r,key);
         cerrarModal();
       };
       actions.appendChild(ba);
@@ -9784,7 +9805,7 @@ window.abrirModal=function(key){
     if(puedeCancelar){
       const bl=document.createElement('button');bl.textContent='LIBERAR TURNO';
       bl.style.cssText='background:rgba(240,165,0,.1);color:var(--amber);border-color:var(--amber)';
-      bl.onclick=async()=>{if(!confirm('¿Liberar este turno?\n\nVolverá a estado PENDIENTE y quedará disponible para que otro instructor lo tome. El alumno conserva su reserva y recibirá un aviso por mail.'))return;const rv=await fbGet('reservas/'+key);if(rv){await fbUpdate('reservas/'+key,{estado:'pendiente',instructor:null,aprobado_por:null,recordatorio_inst_enviado:null,recordatorio_inst_ts:null});await registrarAuditoria('liberacion_turno',session.rol||'instructor','exito',(session.nombre||session.user)+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — liberado por '+(rv.aprobado_por||rv.instructor||'?'));mailLiberacion(rv);}cerrarModal();};
+      bl.onclick=async()=>{if(!confirm('¿Liberar este turno?\n\nVolverá a estado PENDIENTE y quedará disponible para que otro instructor lo tome. El alumno conserva su reserva y recibirá un aviso por mail.'))return;const rv=await fbGet('reservas/'+key);if(rv){await fbUpdate('reservas/'+key,{estado:'pendiente',instructor:null,aprobado_por:null,recordatorio_inst_enviado:null,recordatorio_inst_ts:null});await registrarAuditoria('liberacion_turno',session.rol||'instructor','exito',(session.nombre||session.user)+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — liberado por '+(rv.aprobado_por||rv.instructor||'?'));mailLiberacion(rv,key);}cerrarModal();};
       const bc=document.createElement('button');bc.className='danger';bc.textContent='CANCELAR TURNO';
       bc.onclick=async()=>{const motivo=await pedirMotivoCancelacion(true);if(motivo===null)return;if(!confirm('¿Cancelar el turno de '+r.nombre+'? Motivo: '+motivo))return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre,cancelado_por:session.nombre,cancelado_rol:'instructor',ts_cancelacion:serverTimestamp()};upd.obs_cancelacion='Cancelado por el instructor — '+motivo;await fbUpdate('reservas/'+key,upd);await registrarAuditoria('cancelacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — '+motivo);if(!turnoYaPaso(rv))mailCancel(rv,motivo);}cerrarModal();};
       if(puedeLiberar&&!turnoYaPaso(r)) actions.appendChild(bl);
