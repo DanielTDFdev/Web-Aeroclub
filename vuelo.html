@@ -2,6 +2,11 @@
 <!--
 ==================================================================================
   VUELO — App de registro de vuelo · Aeroclub Río Grande
+  v5.94 · 2026-09-11
+  Pedido de Daniel: sacados los links "PLAN DE VUELO" y "PESO Y BALANCE"
+  (links-row) de esta pantalla — div y su handling en bloquearNavDuranteVuelo()
+  eliminados.
+
   v5.93 · 2026-09-11
   Pedido de Daniel (corrección sobre v5.92): "que desaparezca todo, que solo
   queden las cosas que te pedí, que no haya nada que por un toque accidental
@@ -1446,7 +1451,7 @@ body{background:var(--bg);color:var(--white);font-family:var(--ui)}
 .disp-chip.marcado{border-width:2px}
 .disp-chip-check{position:absolute;top:4px;right:6px;font-size:10px;color:inherit;opacity:.85}
 
-/* v5.18: links a fpl.html/peso-balance.html — pedido de Daniel: poder gestionar todo
+/* [ELIMINADO v5.94] links a fpl.html/peso-balance.html — pedido de Daniel: poder gestionar todo
    (vuelo + plan de vuelo + peso y balance) sin salir de esta app. Mismo nombre de
    clase que turnos.html (.fpl-link/.wb-link) por consistencia de proyecto, pero
    adaptado a este layout mobile-first: fila propia entre top-bar y tab-bar, mitad y
@@ -1865,14 +1870,6 @@ select.sin-elegir{border-color:var(--amber);box-shadow:0 0 0 2px rgba(240,165,0,
     </div>
   </div>
 
-  <!-- Links a otras apps del Aeroclub (v5.18) -->
-  <div class="links-row" id="links-row">
-    <span class="avnc-panel">
-    <a href="fpl.html?volver=vuelo.html" class="avnc-btn fpl-link"><span>PLAN DE</span><span class="avnc-sub">vuelo</span></a>
-    <a href="peso-balance.html?volver=vuelo.html" class="avnc-btn wb-link"><span>PESO Y</span><span class="avnc-sub">balance</span></a>
-    </span>
-  </div>
-
   <!-- Tab bar -->
   <div class="tab-bar" id="tab-bar">
     <span class="avnc-panel">
@@ -2153,7 +2150,7 @@ const LS_PENDIENTES = 'acrg-vuelo-v2-pendientes'; // cola de vuelos guardados lo
 // límite de tiempo.
 const RESTAURAR_TURNO_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '5.93'; // ⚠ actualizar acá Y en el comentario header de arriba en cada bump
+const APP_VERSION = '5.94'; // ⚠ actualizar acá Y en el comentario header de arriba en cada bump
 
 // ── Traza GPS (opcional, la activa el instructor por vuelo) ────────────
 const LS_GPS_PUNTOS = 'acrg-vuelo-v2-gps-puntos'; // puntos del vuelo en curso (resiliencia ante recarga)
@@ -2768,7 +2765,6 @@ function mostrarVista(v){
 function bloquearNavDuranteVuelo(bloquear){
   const disp=bloquear?'none':'';
   $('tab-bar').style.display=disp;
-  $('links-row').style.display=disp;
   $('btn-otro-alumno').style.display=disp;
   if(bloquear){
     $('gps-toggle-card').style.display='none';

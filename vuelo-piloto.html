@@ -2,6 +2,10 @@
 <!--
 ==================================================================================
   VUELO PILOTO — Registro de vuelo para pilotos · Aeroclub Río Grande
+  v4.71 · 2026-09-11
+  Pedido de Daniel: sacados los links "PLAN DE VUELO" y "PESO Y BALANCE"
+  (links-row) de esta pantalla.
+
   v4.70 · 2026-09-10
   Pedido de Daniel: TOQUE_ALTURA_MAX_FT (techo de altura para considerar un
   punto candidato a "toque y despegue" — detección de toques motor) bajado
@@ -1499,14 +1503,6 @@ select:disabled{opacity:.55}
     </div>
   </div>
 
-  <!-- Links a otras apps del Aeroclub (v3.2) -->
-  <div class="links-row">
-    <span class="avnc-panel">
-    <a href="fpl.html?volver=vuelo-piloto.html" class="avnc-btn fpl-link"><span>PLAN DE</span><span class="avnc-sub">vuelo</span></a>
-    <a href="peso-balance.html?volver=vuelo-piloto.html" class="avnc-btn wb-link"><span>PESO Y</span><span class="avnc-sub">balance</span></a>
-    </span>
-  </div>
-
   <!-- v4.50: banner de vuelos propios (piloto) sin datos cargados — pedido de Daniel,
        mismo concepto que el banner de instructores en turnos.html. Fetch único al abrir
        la app (chequearVuelosPendientesPiloto, ver script): esta app no tiene listener
@@ -1789,7 +1785,7 @@ const LS_PENDIENTES = 'acrg-piloto-v1-pendientes'; // cola de vuelos guardados l
 // avión "sin arrancar todavía" que sobrevivía indefinidamente en localStorage.
 const RESTAURAR_AVION_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '4.70';
+const APP_VERSION = '4.71';
 document.querySelectorAll('.ver').forEach(el=>el.textContent='v'+APP_VERSION);
 
 // ── Traza GPS (opcional) ─────────────────────────────────
