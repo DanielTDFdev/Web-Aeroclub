@@ -1,5 +1,23 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 8.75
+  CAMBIOS : Vuelta atrás de v8.73/8.74 — pedido explícito de Daniel. El cron
+            server-side (mail_queue_sender.py) funcionaba, pero el trigger
+            `schedule` de GitHub Actions demostró demoras erráticas en
+            producción (15 a 60+ min, sin patrón — "best effort" de GitHub,
+            sin SLA). Prefiere el envío directo desde el navegador (v8.72),
+            que llega al toque cuando funciona, con el toast+"Reintentar"
+            como capa de protección ante fallos de red del instructor.
+            mailCancel/mailAprob/mailLiberacion vuelven a llamar
+            emailjs.send() directo. De paso, fix de bug real: en el alta de
+            turno manual con instructor asignado, mailAprob(nuevo,
+            instructorSel) pasaba el NOMBRE del instructor como reservaKey
+            (en vez de la key real de fbPush) — con el esquema de cola esto
+            hacía que esos mails se descartaran en silencio ("reserva no
+            existe"). Ahora se captura la key real de fbPush('reservas',...).
+            /mail_queue, mail_queue_sender.py y mail-queue.yml quedan sin uso
+            en el repo (no rotos, simplemente nadie los llama).
+
   VERSION : 8.74
   CAMBIOS : mailCancel() sigue el mismo patrón que mailAprob/mailLiberacion
             (v8.73) — ya no llama a emailjs.send() desde el navegador, solo
@@ -4418,7 +4436,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.74</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.75</div>
   </div>
 
 </div>
@@ -6357,25 +6375,38 @@ const EJS_TMPL_CANCEL='template_v4qu4x6', EJS_TMPL_RESET='template_scbsgfg', EJS
 // Instancias separadas por cuenta para evitar sobreescritura del init global
 async function mailCancel(r,reservaKey){
   const retry=()=>mailCancel(r,reservaKey);
-  if(!reservaKey){console.warn('mail-cancel: falta reservaKey, no se puede encolar');return;}
+  if(!r.email){console.warn('mail-cancel: reserva sin email, no se manda');return;}
+  const params={to_email:r.email,alumno_nombre:r.nombre||'',fecha:fmtFechaLinda(r.fecha),hora:_horaTextoMail(r),avion:r.avion||'LV-OAD',motivo:r.obs_cancelacion||'Sin especificar'};
   try{
-    await fbPush('mail_queue',{tipo:'cancela',reserva_key:reservaKey,ts:new Date().toISOString()});
+    await _enviarMailDirecto(EJS_TMPL_CANCEL,params);
+    if(reservaKey) fbUpdate('reservas/'+reservaKey,{mail_cancela_enviado:true,mail_cancela_ts:new Date().toISOString()}).catch(()=>{});
   }catch(e){
-    console.warn('mail-cancel-encolar:',e);
-    mostrarToastMailError('No se pudo encolar el mail de cancelación a '+(r.nombre||'el alumno')+'.',retry);
+    console.warn('mail-cancel:',e);
+    mostrarToastMailError('No se pudo enviar el mail de cancelación a '+(r.nombre||'el alumno')+'.',retry);
   }
 }
 function mailReset(a,np){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);emailjs.send(EJS_SVC,EJS_TMPL_RESET,{to_email:a.email,alumno_nombre:a.nombre,nueva_password:np}).catch(e=>console.warn(e));}
 function mailNuevoRegistro(nombre,email){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);emailjs.send(EJS_SVC,EJS_TMPL_REGISTRO,{alumno_nombre:nombre,alumno_email:email,email:email,fecha:new Date().toLocaleString('es-AR')}).catch(e=>console.warn('mail-registro:',e));emailjs.send(EJS_SVC,EJS_TMPL_BIENVENIDA,{alumno_nombre:nombre,alumno_email:email}).catch(e=>console.warn('mail-bienvenida:',e));}
-// v8.73: mailAprob/mailLiberacion YA NO llaman a emailjs.send() desde el
-// navegador. Antes, si la red del instructor bloqueaba ese request (visto en
-// producción), el mail se perdía sin dejar rastro en ningún lado (v8.72 lo
-// mitigaba con un toast, pero seguía dependiendo del browser). Ahora solo
-// encolan la intención en /mail_queue con fbPush — el mismo tipo de escritura
-// a Firebase que ya funciona siempre — y un cron server-side
-// (mail_queue_sender.py, cada 15min) es el único que efectivamente manda el
-// mail vía API REST de EmailJS. mostrarToastMailError() queda para el caso
-// (raro) de que falle el propio fbPush de encolado.
+// v8.75: vuelta atrás de v8.73/8.74. El cron server-side (mail_queue_sender.py
+// + mail-queue.yml) funcionaba pero el trigger `schedule` de GitHub Actions
+// demostró ser errático en producción — demoras reales de 15 a 60+ min sin
+// patrón fijo ("best effort" de GitHub, no hay SLA). Pedido explícito de
+// Daniel: preferir el envío directo desde el navegador (llega al toque
+// cuando funciona) por sobre depender del timing de GitHub. Se mantiene la
+// mitigación de v8.72 (toast con botón "Reintentar" si emailjs no cargó o
+// send() falla) como capa de protección ante fallos de red del instructor.
+// NOTA: /mail_queue, mail_queue_sender.py y .github/workflows/mail-queue.yml
+// quedan sin uso en el repo — Daniel los puede borrar cuando quiera, no
+// hace falta para que esto funcione.
+function _horaTextoMail(r){
+  if(r.horaInicio&&r.horaFin) return r.horaInicio+' a '+r.horaFin;
+  return r.hora||'';
+}
+async function _enviarMailDirecto(templateId,params){
+  if(typeof emailjs==='undefined') throw new Error('emailjs no cargó (adblock/red bloqueando el script)');
+  emailjs.init(EJS_KEY);
+  return await emailjs.send(EJS_SVC,templateId,params);
+}
 function mostrarToastMailError(msg,retryFn){
   const old=document.getElementById('toast-mail-error');if(old)old.remove();
   const div=document.createElement('div');div.id='toast-mail-error';
@@ -6397,22 +6428,27 @@ function mostrarToastMailError(msg,retryFn){
 }
 async function mailAprob(r,reservaKey){
   const retry=()=>mailAprob(r,reservaKey);
-  if(!reservaKey){console.warn('mail-aprob: falta reservaKey, no se puede encolar');return;}
+  if(!r.email){console.warn('mail-aprob: reserva sin email, no se manda');return;}
+  const instructor=r.aprobado_por||r.instructor||'';
+  const params={to_email:r.email,alumno_nombre:r.nombre||'',fecha:fmtFechaLinda(r.fecha),hora:_horaTextoMail(r),avion:r.avion||'LV-OAD',instructor};
   try{
-    await fbPush('mail_queue',{tipo:'confirma',reserva_key:reservaKey,ts:new Date().toISOString()});
+    await _enviarMailDirecto(EJS_TMPL_CONFIRMA,params);
+    if(reservaKey) fbUpdate('reservas/'+reservaKey,{mail_confirma_enviado:true,mail_confirma_ts:new Date().toISOString()}).catch(()=>{});
   }catch(e){
-    console.warn('mail-aprob-encolar:',e);
-    mostrarToastMailError('No se pudo encolar el mail de confirmación a '+(r.nombre||'el alumno')+'.',retry);
+    console.warn('mail-aprob:',e);
+    mostrarToastMailError('No se pudo enviar el mail de confirmación a '+(r.nombre||'el alumno')+'.',retry);
   }
 }
 async function mailLiberacion(r,reservaKey){
   const retry=()=>mailLiberacion(r,reservaKey);
-  if(!reservaKey){console.warn('mail-libera: falta reservaKey, no se puede encolar');return;}
+  if(!r.email){console.warn('mail-libera: reserva sin email, no se manda');return;}
+  const params={to_email:r.email,alumno_nombre:r.nombre||'',fecha:fmtFechaLinda(r.fecha),hora:_horaTextoMail(r),avion:r.avion||'LV-OAD'};
   try{
-    await fbPush('mail_queue',{tipo:'libera',reserva_key:reservaKey,ts:new Date().toISOString()});
+    await _enviarMailDirecto(EJS_TMPL_LIBERA,params);
+    if(reservaKey) fbUpdate('reservas/'+reservaKey,{mail_libera_enviado:true,mail_libera_ts:new Date().toISOString()}).catch(()=>{});
   }catch(e){
-    console.warn('mail-libera-encolar:',e);
-    mostrarToastMailError('No se pudo encolar el mail de reprogramación a '+(r.nombre||'el alumno')+'.',retry);
+    console.warn('mail-libera:',e);
+    mostrarToastMailError('No se pudo enviar el mail de reprogramación a '+(r.nombre||'el alumno')+'.',retry);
   }
 }
 
@@ -11434,13 +11470,13 @@ window.guardarTurnoManual=async function(){
   if(consumeCupo) nuevo.consume_cupo=true;
   if(instructorSel){ nuevo.instructor=instructorSel; nuevo.aprobado_por=instructorSel; }
   try{
-    await fbPush('reservas',nuevo);
+    const refNueva=await fbPush('reservas',nuevo);
     const labelHora=horaFin?hora+' a '+horaFin+' hs':hora+' hs';
     const estadoTxt=esParticular?' — particular, aprobado automático':(instructorSel?' — aprobado por '+instructorSel:' — pendiente');
     await registrarAuditoria('alta_turno_manual',session.rol||'instructor','exito',
       (session.nombre||session.user)+' cargó turno — '+avion+' — '+fecha+' '+labelHora+
       ' — alumno: '+nuevo.nombre+estadoTxt);
-    if(instructorSel&&nuevo.email) mailAprob(nuevo,instructorSel);
+    if(instructorSel&&nuevo.email) mailAprob(nuevo,refNueva.key);
     showOk('ct-ok','// TURNO CARGADO'+(nuevo.estado==='aprobado'?' Y APROBADO':' (PENDIENTE)'));
     // No hace falta refrescar nada a mano: hay un onValue(ref(db,'reservas')) en vivo
     // que ya re-renderiza toda la pantalla apenas el fbPush escribe el nodo nuevo.
