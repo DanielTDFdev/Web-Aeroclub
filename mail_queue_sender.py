@@ -2,16 +2,18 @@
 # -*- coding: utf-8 -*-
 """
 mail_queue_sender.py — Drena /mail_queue y manda los mails de confirmación
-de turno ('confirma') y liberación de turno ('libera') server-side.
+de turno ('confirma'), liberación de turno ('libera') y cancelación de
+turno ('cancela') server-side.
 
-POR QUÉ EXISTE: mailAprob()/mailLiberacion() en turnos.html llamaban a
-emailjs.send() directo desde el navegador del instructor. Si esa red
-bloqueaba el request (visto en producción 2026-09-10/11), el mail se
+POR QUÉ EXISTE: mailAprob()/mailLiberacion()/mailCancel() en turnos.html
+llamaban a emailjs.send() directo desde el navegador del instructor. Si esa
+red bloqueaba el request (visto en producción 2026-09-10/11), el mail se
 perdía sin que quedara registro en ningún lado — ni en EmailJS (el
-request nunca salía del browser) ni para Daniel. Desde turnos.html v8.73,
-aprobar/liberar un turno solo ENCOLA la intención en /mail_queue (mismo
-fbPush que ya funciona siempre); este cron es el único que efectivamente
-manda el mail, así no depende de la red/extensiones de quien aprueba.
+request nunca salía del browser) ni para Daniel. Desde turnos.html v8.74,
+aprobar/liberar/cancelar un turno solo ENCOLA la intención en /mail_queue
+(mismo fbPush que ya funciona siempre); este cron es el único que
+efectivamente manda el mail, así no depende de la red/extensiones de quien
+hace la acción.
 
 Corre desde GitHub Actions cada 15 min. En cada ejecución:
   1. Lee /mail_queue completo (las keys de push ya vienen en orden
@@ -20,6 +22,10 @@ Corre desde GitHub Actions cada 15 min. En cada ejecución:
      - tipo 'confirma': si la reserva ya no existe, o su estado ya no es
        'aprobado' (se liberó/canceló antes de que corriera el cron), el
        evento quedó superado — se borra la entrada SIN mandar mail.
+     - tipo 'cancela': si la reserva ya no existe, o su estado ya no es
+       'cancelado', evento superado, se borra sin mandar. El motivo viaja
+       en el propio campo obs_cancelacion de la reserva (ya lo graba
+       turnos.html antes de encolar) — no hace falta pasarlo en la cola.
      - tipo 'libera': se manda igual mientras la reserva exista (es aviso
        de un hecho pasado, no depende del estado actual).
   3. Manda el mail vía API REST de EmailJS (Cuenta A — service_8yqlptz,
@@ -41,6 +47,7 @@ Variables de entorno (las setea el workflow):
   EMAILJS_PRIVATE_KEY_A private key de Cuenta A — SECRET, GitHub Secrets
   EMAILJS_TEMPLATE_CONFIRMA  template_4nsseoo
   EMAILJS_TEMPLATE_LIBERA    template_41kdlo3
+  EMAILJS_TEMPLATE_CANCELA   template_v4qu4x6
   MAX_INTENTOS          reintentos antes de abandonar una entrada (default 8,
                          ~2hs a razón de 1 corrida cada 15min)
   DRY_RUN               "1" para probar sin enviar ni tocar Firebase (default "0")
@@ -60,6 +67,7 @@ PUBLIC_KEY    = os.environ.get("EMAILJS_PUBLIC_KEY", "")
 PRIVATE_KEY   = os.environ.get("EMAILJS_PRIVATE_KEY_A", "")
 TMPL_CONFIRMA = os.environ.get("EMAILJS_TEMPLATE_CONFIRMA", "")
 TMPL_LIBERA   = os.environ.get("EMAILJS_TEMPLATE_LIBERA", "")
+TMPL_CANCELA  = os.environ.get("EMAILJS_TEMPLATE_CANCELA", "")
 MAX_INTENTOS  = int(os.environ.get("MAX_INTENTOS", "8"))
 DRY_RUN       = os.environ.get("DRY_RUN", "0") == "1"
 
@@ -75,6 +83,7 @@ def faltan_config():
         ("FIREBASE_DB_URL", DB_URL), ("EMAILJS_SERVICE_ID", SERVICE_ID),
         ("EMAILJS_PUBLIC_KEY", PUBLIC_KEY), ("EMAILJS_PRIVATE_KEY_A", PRIVATE_KEY),
         ("EMAILJS_TEMPLATE_CONFIRMA", TMPL_CONFIRMA), ("EMAILJS_TEMPLATE_LIBERA", TMPL_LIBERA),
+        ("EMAILJS_TEMPLATE_CANCELA", TMPL_CANCELA),
     ] if not v]
     return faltan
 
@@ -158,7 +167,7 @@ def main():
         reserva_key = item.get("reserva_key")
         intentos = int(item.get("intentos") or 0)
 
-        if tipo not in ("confirma", "libera") or not reserva_key:
+        if tipo not in ("confirma", "libera", "cancela") or not reserva_key:
             print("  ! entrada inválida en cola, se borra:", qkey, item)
             if not DRY_RUN:
                 fb_delete("mail_queue/" + qkey)
@@ -174,6 +183,14 @@ def main():
 
         if tipo == "confirma" and r.get("estado") != "aprobado":
             print("  - {} ({}): estado actual '{}' ya no es 'aprobado', evento "
+                  "superado, se descarta.".format(qkey, tipo, r.get("estado")))
+            descartados += 1
+            if not DRY_RUN:
+                fb_delete("mail_queue/" + qkey)
+            continue
+
+        if tipo == "cancela" and r.get("estado") != "cancelado":
+            print("  - {} ({}): estado actual '{}' ya no es 'cancelado', evento "
                   "superado, se descarta.".format(qkey, tipo, r.get("estado")))
             descartados += 1
             if not DRY_RUN:
@@ -198,6 +215,16 @@ def main():
             }
             marca_ok = {"mail_confirma_enviado": True,
                         "mail_confirma_ts": datetime.now(timezone.utc).isoformat()}
+        elif tipo == "cancela":
+            template_id = TMPL_CANCELA
+            motivo = r.get("obs_cancelacion") or "Sin especificar"
+            params = {
+                "to_email": r["email"], "alumno_nombre": r.get("nombre", ""),
+                "fecha": fecha_linda(r["fecha"]), "hora": hora_texto(r),
+                "avion": r.get("avion", "LV-OAD"), "motivo": motivo,
+            }
+            marca_ok = {"mail_cancela_enviado": True,
+                        "mail_cancela_ts": datetime.now(timezone.utc).isoformat()}
         else:
             template_id = TMPL_LIBERA
             params = {
