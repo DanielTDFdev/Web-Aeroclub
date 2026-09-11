@@ -2,6 +2,20 @@
 <!--
 ==================================================================================
   VUELO — App de registro de vuelo · Aeroclub Río Grande
+  v5.98 · 2026-09-11
+  Pedido de Daniel: declutter agresivo de la pantalla pre-vuelo — en
+  celular se veía muy poblada y los botones de acción (Iniciar Vuelo,
+  Otro vuelo, Cambiar turno) quedaban afuera del viewport, obligando a
+  scrollear. Se sacan del todo las cards "📍 Traza GPS" y "⚠ MANTENÉ LA
+  PANTALLA ENCENDIDA" (ambas puramente informativas desde que el GPS es
+  obligatorio, v5.96 — no aportaban nada accionable). gps-banner-vuelo (el
+  cartel que aparece SOLO durante el vuelo) no se toca. Limpieza de todas
+  las referencias JS a los 2 elementos eliminados (bloquearNavDuranteVuelo,
+  pintarToggleGPS, mostrarPantallaVuelo, resetVuelo) — sin esto la app
+  hubiera roto con un error de referencia nula en cada transición de
+  estado. Orden final ya cumplía la prioridad pedida (Iniciar Vuelo →
+  Otro vuelo → Cambiar turno), no hizo falta reordenar el DOM.
+
   v5.97 · 2026-09-11
   Pedido de Daniel: tracking GPS en paralelo. Se saca el candado de
   exclusión mutua (gps_tracker_activo, v5.17/v5.78) que hacía que solo uno
@@ -1957,29 +1971,16 @@ select.sin-elegir{border-color:var(--amber);box-shadow:0 0 0 2px rgba(240,165,0,
         <div class="ts-sub" id="ev-sub"></div>
       </div>
 
-      <!-- Traza GPS — v5.96: ya no es opcional, pedido de Daniel: tracking
-           obligatorio siempre. Card informativa (no clickeable) antes de
-           iniciar + banner fijo mientras se está volando (gps-banner-vuelo,
-           NO se oculta con bloquearNavDuranteVuelo — es justamente lo que
-           tiene que quedar visible en vuelo). -->
-      <div class="card" id="gps-toggle-card" style="display:flex;align-items:center;gap:12px">
-        <div>
-          <div class="card-title" style="margin-bottom:2px">📍 Traza GPS</div>
-          <div style="font-family:var(--mono);font-size:11px;color:var(--gray)" id="gps-toggle-sub">Registra el recorrido del vuelo automáticamente</div>
-        </div>
-      </div>
+      <!-- v5.98: pedido de Daniel — declutter agresivo, la pantalla se veía
+           muy poblada en celular y los botones de acción quedaban afuera
+           del viewport. Se sacan las cards "Traza GPS" y "Mantené la
+           pantalla encendida" (ambas puramente informativas desde que el
+           GPS es obligatorio, v5.96 — no aportaban nada accionable acá).
+           gps-banner-vuelo (el cartel que aparece DURANTE el vuelo) no se
+           toca, sigue igual. -->
       <div id="gps-banner-vuelo" style="display:none;background:rgba(0,200,212,.1);border:1px solid rgba(0,200,212,.4);border-radius:12px;padding:10px 14px;margin-bottom:0;text-align:center">
         <div style="font-family:var(--mono);font-size:12px;color:var(--cyan);font-weight:700;letter-spacing:.06em">📍 TRACKING GPS ACTIVO</div>
         <div style="font-family:var(--mono);font-size:10px;color:var(--cyan);opacity:.8;margin-top:2px" id="gps-banner-vuelo-sub"></div>
-      </div>
-
-      <!-- Aviso de pantalla para GPS (visible solo cuando GPS activo) -->
-      <div id="gps-warning" style="display:none;background:rgba(240,165,0,.1);border:1px solid rgba(240,165,0,.35);border-radius:12px;padding:12px 14px;margin-bottom:0">
-        <div style="font-family:var(--mono);font-size:11px;color:var(--amber);font-weight:700;letter-spacing:.06em;margin-bottom:6px">⚠ MANTENÉ LA PANTALLA ENCENDIDA</div>
-        <div style="font-family:var(--mono);font-size:10px;color:var(--amber);opacity:.85;line-height:1.6">
-          Si la pantalla se bloquea, el GPS deja de registrar.<br>
-          <span style="color:var(--white);opacity:.7">Samsung: Ajustes → Apps → Chrome → Batería → Sin restricciones</span>
-        </div>
       </div>
 
       <!-- Botón principal -->
@@ -2188,7 +2189,7 @@ const LS_PENDIENTES = 'acrg-vuelo-v2-pendientes'; // cola de vuelos guardados lo
 // límite de tiempo.
 const RESTAURAR_TURNO_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '5.97'; // ⚠ actualizar acá Y en el comentario header de arriba en cada bump
+const APP_VERSION = '5.98'; // ⚠ actualizar acá Y en el comentario header de arriba en cada bump
 
 // ── Traza GPS (obligatoria, siempre activa — v5.96) ────────────
 const LS_GPS_PUNTOS = 'acrg-vuelo-v2-gps-puntos'; // puntos del vuelo en curso (resiliencia ante recarga)
@@ -2828,9 +2829,8 @@ function mostrarVista(v){
 // pantalla". Se suma el toggle de Traza GPS a lo que se oculta al iniciar
 // (no es un riesgo de perder el log como "Otro vuelo", pero tampoco estaba
 // en la lista pedida: hero del turno, timer, botones finalizar/cancelar).
-// Al restaurar (bloquear=false) NO se toca gps-toggle-card/gps-warning acá
-// — cada punto de restauración (idle, resetVuelo) ya decide explícitamente
-// si corresponde mostrarlo, según el estado al que se vuelve.
+// v5.98: gps-toggle-card/gps-warning ya no existen (declutter, ver más
+// arriba) — no hay nada más que ocultar acá aparte de tab-bar/otro-alumno.
 // v5.96: gps-banner-vuelo (cartel "TRACKING GPS ACTIVO") a propósito NO se
 // oculta acá — es justamente lo único nuevo que debe quedar visible durante
 // el vuelo, junto con hero/timer/finalizar/cancelar.
@@ -2838,10 +2838,6 @@ function bloquearNavDuranteVuelo(bloquear){
   const disp=bloquear?'none':'';
   $('tab-bar').style.display=disp;
   $('btn-otro-alumno').style.display=disp;
-  if(bloquear){
-    $('gps-toggle-card').style.display='none';
-    $('gps-warning').style.display='none';
-  }
 }
 
 function mostrarPantallaVuelo(turno){
@@ -2863,14 +2859,12 @@ function mostrarPantallaVuelo(turno){
   if(tsFin){
     // Ya finalizó — mostrar formulario de cierre
     actualizarEstado('finalizado');
-    $('gps-toggle-card').style.display='none';
     $('gps-banner-vuelo').style.display='none';
     $('btn-cancelar-vuelo').style.display='';
     mostrarCierre();
   } else if(tsInicio){
     // En vuelo
     actualizarEstado('en-vuelo');
-    $('gps-toggle-card').style.display='flex';
     pintarToggleGPS();
     $('btn-start-stop').textContent='⏹ FINALIZAR VUELO';
     $('btn-start-stop').className='btn btn-red';
@@ -2882,7 +2876,6 @@ function mostrarPantallaVuelo(turno){
   } else {
     // Sin iniciar
     actualizarEstado('idle');
-    $('gps-toggle-card').style.display='flex';
     pintarToggleGPS();
     $('btn-start-stop').textContent='▶ INICIAR VUELO';
     $('btn-start-stop').className='btn btn-cyan';
@@ -2915,20 +2908,13 @@ function actualizarEstado(estado){
   }
 }
 
-// ── GPS obligatorio (v5.96, ya no hay toggle) ─────────────
+// ── GPS obligatorio (v5.96, ya no hay toggle; v5.98: sin card informativa) ─
 function pintarToggleGPS(){
   const bloqueado=!!tsInicio; // en vuelo
-  // Card informativa: visible antes de iniciar, oculta en vuelo (la
-  // reemplaza gps-banner-vuelo, que bloquearNavDuranteVuelo NO oculta).
-  $('gps-toggle-card').style.display=bloqueado?'none':'flex';
   $('gps-banner-vuelo').style.display=bloqueado?'block':'none';
   if(bloqueado){
     $('gps-banner-vuelo-sub').textContent='Registrando cada '+(GPS_MUESTREO_MS/1000)+'s...';
   }
-  // Aviso de pantalla: visible antes de iniciar (mismo criterio que v5.93 —
-  // durante el vuelo queda oculto junto con el resto de la nav, a pedido
-  // explícito de Daniel en esa versión).
-  $('gps-warning').style.display=bloqueado?'none':'block';
 }
 
 // ── Captura de traza GPS ─────────────────────────────────
@@ -3587,7 +3573,6 @@ function resetVuelo(){
   $('v-guardado').style.display='none';
   $('btn-cambiar-turno').style.display='';
   bloquearNavDuranteVuelo(false);
-  $('gps-toggle-card').style.display='flex';
   pintarToggleGPS();
   actualizarEstado('idle');
 }
