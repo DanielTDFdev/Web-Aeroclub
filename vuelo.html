@@ -2,6 +2,39 @@
 <!--
 ==================================================================================
   VUELO — App de registro de vuelo · Aeroclub Río Grande
+  v5.97 · 2026-09-11
+  Pedido de Daniel: tracking GPS en paralelo. Se saca el candado de
+  exclusión mutua (gps_tracker_activo, v5.17/v5.78) que hacía que solo uno
+  de los dos lados (instructor/alumno) trackeara por vez — ahora ambos
+  trackean siempre, de forma independiente, sin consultarse al arrancar.
+  guardarTrazaSinPisar() pasa de "el primero en escribir gana" a "gana el
+  que tenga más puntos": compara atómicamente (runTransaction sobre
+  vuelo_tracks/{key}) contra lo que ya haya guardado — la traza con más
+  puntos queda en vuelo_tracks/{key}, la otra se reubica en
+  vuelo_tracks/{key}_2 (nunca se descarta nada, mismo criterio que v5.78).
+  Cubre el caso de que un lado se caiga a mitad de vuelo sin perder la
+  traza completa del otro. Limpieza de código muerto: gpsLockTomadoPorMi,
+  GPS_LOCK_STALE_MS, _lockVencido() y la liberación del candado en
+  FINALIZAR/CANCELAR ya no existen.
+
+  v5.96 · 2026-09-11
+  Pedido de Daniel: tracking GPS deja de ser opcional — antes había un
+  toggle (activar/desactivar por vuelo, preferencia recordada en
+  localStorage). Ahora gpsHabilitado es siempre true, sin forma de
+  desactivarlo. Se saca el switch del "card" de Traza GPS (queda solo
+  informativo, no clickeable) y se agrega gps-banner-vuelo: un cartel fijo
+  "📍 TRACKING GPS ACTIVO" visible mientras se está volando — a propósito
+  el único elemento nuevo que bloquearNavDuranteVuelo() NO oculta (v5.93
+  ocultaba todo salvo hero/timer/finalizar/cancelar; este cartel se suma
+  a lo que queda visible). gps-warning ("mantené la pantalla encendida")
+  sigue con el mismo criterio de v5.93 — oculto durante el vuelo.
+
+  v5.95 · 2026-09-11
+  Pedido de Daniel: nt-avion ("Iniciar turno sin reserva previa") ahora
+  filtra por /config/{avion}.activo, igual que vuelo-piloto.html ya hacía
+  (poblarAviones()) — antes era una lista fija de 3 opciones, sin chequear
+  si el club deshabilitó algún avión. Nueva poblarNtAvion().
+
   v5.94 · 2026-09-11
   Pedido de Daniel: sacados los links "PLAN DE VUELO" y "PESO Y BALANCE"
   (links-row) de esta pantalla — div y su handling en bloquearNavDuranteVuelo()
@@ -1924,15 +1957,20 @@ select.sin-elegir{border-color:var(--amber);box-shadow:0 0 0 2px rgba(240,165,0,
         <div class="ts-sub" id="ev-sub"></div>
       </div>
 
-      <!-- Traza GPS (opcional, a criterio del instructor) -->
-      <div class="card" id="gps-toggle-card" style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer">
+      <!-- Traza GPS — v5.96: ya no es opcional, pedido de Daniel: tracking
+           obligatorio siempre. Card informativa (no clickeable) antes de
+           iniciar + banner fijo mientras se está volando (gps-banner-vuelo,
+           NO se oculta con bloquearNavDuranteVuelo — es justamente lo que
+           tiene que quedar visible en vuelo). -->
+      <div class="card" id="gps-toggle-card" style="display:flex;align-items:center;gap:12px">
         <div>
           <div class="card-title" style="margin-bottom:2px">📍 Traza GPS</div>
-          <div style="font-family:var(--mono);font-size:11px;color:var(--gray)" id="gps-toggle-sub">Registra el recorrido del vuelo (opcional)</div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--gray)" id="gps-toggle-sub">Registra el recorrido del vuelo automáticamente</div>
         </div>
-        <div id="gps-toggle-track" style="width:38px;height:20px;border-radius:10px;position:relative;transition:background .2s;flex:none">
-          <div id="gps-toggle-thumb" style="width:16px;height:16px;border-radius:50%;background:#fff;position:absolute;top:2px;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.3)"></div>
-        </div>
+      </div>
+      <div id="gps-banner-vuelo" style="display:none;background:rgba(0,200,212,.1);border:1px solid rgba(0,200,212,.4);border-radius:12px;padding:10px 14px;margin-bottom:0;text-align:center">
+        <div style="font-family:var(--mono);font-size:12px;color:var(--cyan);font-weight:700;letter-spacing:.06em">📍 TRACKING GPS ACTIVO</div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--cyan);opacity:.8;margin-top:2px" id="gps-banner-vuelo-sub"></div>
       </div>
 
       <!-- Aviso de pantalla para GPS (visible solo cuando GPS activo) -->
@@ -2150,16 +2188,15 @@ const LS_PENDIENTES = 'acrg-vuelo-v2-pendientes'; // cola de vuelos guardados lo
 // límite de tiempo.
 const RESTAURAR_TURNO_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '5.94'; // ⚠ actualizar acá Y en el comentario header de arriba en cada bump
+const APP_VERSION = '5.97'; // ⚠ actualizar acá Y en el comentario header de arriba en cada bump
 
-// ── Traza GPS (opcional, la activa el instructor por vuelo) ────────────
+// ── Traza GPS (obligatoria, siempre activa — v5.96) ────────────
 const LS_GPS_PUNTOS = 'acrg-vuelo-v2-gps-puntos'; // puntos del vuelo en curso (resiliencia ante recarga)
 const LS_GPS_HUECOS = 'acrg-vuelo-v2-gps-huecos'; // v5.29: huecos detectados (ver gpsGaps)
-const LS_GPS_PREF    = 'acrg-vuelo-gps-pref';      // preferencia recordada entre vuelos (on/off)
 const GPS_MUESTREO_MS = 2000; // 2s entre puntos (v5.73 — bajado de 3s a pedido de Daniel, más margen de puntos aún en vuelos cortos)
 const GPS_WATCHDOG_INTERVALO_MS = 15000; // v5.27: cada cuánto chequea el watchdog
 const GPS_WATCHDOG_UMBRAL_MS    = 45000; // v5.27: sin actividad de GPS por más de esto, reinicia el watch
-let gpsHabilitado  = localStorage.getItem(LS_GPS_PREF) === '1'; // toggle actual (editable solo antes de iniciar)
+let gpsHabilitado = true; // v5.96: ya no es un toggle — pedido de Daniel: tracking obligatorio, siempre activo
 let gpsWatchId     = null;   // id de navigator.geolocation.watchPosition, null si no está corriendo
 let gpsWatchdogId  = null;   // v5.27
 let gpsUltimaLlegada = 0;    // v5.27: última vez que llegó CUALQUIER dato de GPS (referencia del watchdog, no del throttle)
@@ -2167,58 +2204,64 @@ let gpsPoints      = [];     // [{lat,lng,alt,ts}] del vuelo en curso
 let gpsGaps        = [];     // v5.29: [{desde,hasta}] huecos detectados al volver de background — ver visibilitychange
 let _gpsHiddenAt   = 0;      // v5.29: Date.now() de cuándo la pestaña pasó a hidden (0 = no está oculta)
 let gpsUltimoPunto = 0;      // Date.now() del último punto guardado, para el muestreo cada 10s
-// Candado gps_tracker_activo (v5.17, ver también vuelo-piloto.html v3.0): evita
-// que instructor y alumno trackeen el mismo vuelo en simultáneo desde sus apps.
-// gpsLockTomadoPorMi indica si ESTA sesión tomó el candado como 'instructor' —
-// solo entonces lo suelta al FINALIZAR VUELO; si el candado lo tiene el alumno,
-// el instructor no lo toca (para no pisarle el track a mitad de vuelo).
-const GPS_LOCK_STALE_MS = 4*60*60*1000; // 4 horas — candado huérfano se considera vencido
-let gpsLockTomadoPorMi = false;
-// v5.78 — RED DE SEGURIDAD contra el pisado de trazas. Aunque el candado
-// ahora sea atómico (runTransaction), quedan caminos por los que dos trazas
-// pueden terminar apuntando a la misma reserva: un candado vencido por
-// huérfano que se retoma mientras el primero seguía grabando en background, o
-// una cola de pendientes que sincroniza mucho después (offline / app cerrada)
-// cuando el otro ya guardó la suya. set() reemplaza el nodo ENTERO, así que
-// en esos casos la traza vieja se perdía en silencio.
-// Acá se lee primero: si ya hay una traza guardada con puntos, la nueva se
-// guarda al lado (misma key + sufijo) en vez de encima. Nunca se descarta
-// nada: que sobre un nodo es recuperable, que falte no.
+// v5.97: se saca el candado gps_tracker_activo (v5.17) que evitaba que
+// instructor y alumno trackearan el mismo vuelo en simultáneo — ver
+// changelog de esta versión más arriba. Ahora ambos lados trackean
+// siempre, y guardarTrazaSinPisar() decide cuál guardar según cuál tenga
+// más puntos.
+// v5.97 — REDISEÑO: "gana el más rico". Pedido de Daniel: ya no hay candado
+// de exclusión mutua al arrancar (ver INICIAR VUELO) — instructor y alumno
+// trackean siempre en paralelo, cada uno su propio GPS, sin consultarse
+// entre sí. La decisión de cuál traza es "la buena" se mueve a este único
+// punto (guardarTrazaSinPisar, mismo choke point que ya usaban los 2 set()
+// de este archivo antes de v5.78). Se compara ATÓMICAMENTE (runTransaction
+// sobre vuelo_tracks/{key} mismo, no sobre el candado) la cantidad de
+// puntos contra lo que ya haya guardado ahí: gana quien tenga más — esa
+// queda en vuelo_tracks/{key}, la otra se reubica en vuelo_tracks/{key}_2
+// (nunca se descarta nada, igual que en v5.78). runTransaction resuelve
+// del lado del servidor cualquier carrera real (los dos guardando en el
+// mismo instante): reintenta sola si el valor cambió en el medio, así que
+// solo una escritura "gana" incluso con dos que empiezan al mismo tiempo.
 async function guardarTrazaSinPisar(key, payload){
-  let destino = `vuelo_tracks/${key}`;
+  const miCantidad = Array.isArray(payload.puntos) ? payload.puntos.length : 0;
+  let gane = false, previaDesplazada = null;
   try{
-    const prev = await get(ref(db, destino));
-    const val = prev.val();
-    if(val && val.puntos && val.puntos.length){
-      // Ya hay traza de este vuelo cargada por la otra app. Se busca el primer
-      // sufijo libre en vez de pisarla.
-      let i = 2;
-      while(i < 10){
-        const alt = `vuelo_tracks/${key}_${i}`;
-        const s = await get(ref(db, alt));
-        if(!s.exists()){ destino = alt; break; }
-        i++;
+    const trRes = await runTransaction(ref(db, `vuelo_tracks/${key}`), (actual)=>{
+      const actualCantidad = (actual && Array.isArray(actual.puntos)) ? actual.puntos.length : -1;
+      if(actualCantidad < miCantidad){
+        if(actual) previaDesplazada = actual; // no se pierde, se reubica abajo
+        return payload;
       }
-      if(destino === `vuelo_tracks/${key}`) destino = `vuelo_tracks/${key}_${Date.now()}`; // fallback improbable
-      console.warn('[traza] ya existía una traza para', key, '— esta se guarda en', destino);
+      return; // undefined = abortar, lo que ya hay es igual o más rico
+    });
+    gane = trRes.committed;
+  }catch(e){
+    console.warn('[traza] no se pudo comparar/guardar por transacción, cae a guardado de respaldo:', e);
+  }
+  if(gane){
+    if(previaDesplazada) await _guardarTrazaEnSufijoLibre(key, previaDesplazada);
+    return `vuelo_tracks/${key}`;
+  }
+  // Perdí la comparación (la que ya estaba tenía más puntos) o falló la
+  // transacción — igual guardo la mía, nunca se descarta.
+  return await _guardarTrazaEnSufijoLibre(key, payload);
+}
+async function _guardarTrazaEnSufijoLibre(key, payload){
+  let destino = `vuelo_tracks/${key}_${Date.now()}`; // fallback improbable
+  try{
+    let i = 2;
+    while(i < 10){
+      const alt = `vuelo_tracks/${key}_${i}`;
+      const s = await get(ref(db, alt));
+      if(!s.exists()){ destino = alt; break; }
+      i++;
     }
   }catch(e){
-    // Si no se puede leer (permisos/red), se sigue con el destino original:
-    // mejor guardar la traza que perderla por un chequeo que falló.
-    console.warn('[traza] no se pudo verificar traza previa, se guarda en el destino normal:', e);
+    console.warn('[traza] no se pudo buscar sufijo libre, uso timestamp:', e);
   }
   await conTimeout(set(ref(db, destino), payload));
+  console.warn('[traza] guardada en', destino, '(no fue la más rica, o hubo conflicto de escritura)');
   return destino;
-}
-
-
-// v5.78: ¿el candado que figura en esta reserva ya venció por huérfano? Se
-// evalúa con el snapshot leído ANTES de la transacción, porque adentro del
-// callback de runTransaction solo se ve el nodo gps_tracker_activo y no su
-// timestamp hermano.
-function _lockVencido(reservaSnap){
-  const ts = reservaSnap?.gps_tracker_ts ? new Date(reservaSnap.gps_tracker_ts).getTime() : 0;
-  return (Date.now()-ts) >= GPS_LOCK_STALE_MS;
 }
 document.querySelectorAll('.ver').forEach(el=>el.textContent='v'+APP_VERSION);
 
@@ -2281,11 +2324,6 @@ function init(){
         try{ gpsPoints=JSON.parse(localStorage.getItem(LS_GPS_PUNTOS)||'[]'); }catch{ gpsPoints=[]; }
         try{ gpsGaps=JSON.parse(localStorage.getItem(LS_GPS_HUECOS)||'[]'); }catch{ gpsGaps=[]; }
         iniciarTrackGPS();
-        // Se asume que el candado ya lo había tomado esta misma sesión antes
-        // del reload (si no había turnoActual.key no se tomó nunca). No se
-        // re-chequea contra el alumno acá: si de casualidad el alumno arrancó
-        // en el medio, se resuelve solo al soltar/re-tomar en el próximo vuelo.
-        if(turnoActual?.key) gpsLockTomadoPorMi=true;
       }
     }
   }catch{}
@@ -2448,7 +2486,7 @@ async function cargarTabVuelo(forzar=false){
           : `<div class="empty-libro" style="padding:24px 0">Ningún turno para este momento.<br>Tenés ${vencidosViejos.length} turno${vencidosViejos.length>1?'s':''} vencido${vencidosViejos.length>1?'s':''} sin cerrar de hoy.</div>`;
       $('btn-ver-vencidos').style.display=vencidosViejos.length?'':'none';
       $('v-nuevo-wrap').style.display='block';
-      pintarEstadoNtAvion();
+      await poblarNtAvion();
       mostrarVista('lista');
     } else if(!forzar&&vigentes.filter(r=>r._diffAbs===vigentes[0]._diffAbs).length===1){
       // Caso normal: un único turno es el más cercano a la hora actual — entrada directa
@@ -2463,7 +2501,7 @@ async function cargarTabVuelo(forzar=false){
       // propio. Ahora la búsqueda queda siempre disponible en la vista forzada.
       $('btn-ver-vencidos').style.display='none';
       $('v-nuevo-wrap').style.display='block';
-      pintarEstadoNtAvion();
+      await poblarNtAvion();
       // v5.26: nombre sin escapar interpolado en innerHTML — XSS almacenado,
       // mismo origen de datos que el ya arreglado en btnTraza/btnExportGPS
       // (v5.23). No detectado antes porque acá no pasaba por un atributo
@@ -2611,6 +2649,37 @@ async function cargarAlumnosParaBusqueda(){
 // que elegir explícito — pintarEstadoNtAvion() resalta en ámbar + aviso mientras
 // siga sin elegir, y crearTurnoInSitu() corta con un toast si se toca un resultado
 // de búsqueda sin haber elegido avión.
+// v5.95: pedido de Daniel — el selector de "Iniciar turno sin reserva previa"
+// (nt-avion) era una lista estática de 3 opciones, sin chequear si el avión
+// está deshabilitado por el club (/config/{avion}.activo). vuelo-piloto.html
+// ya filtraba por este mismo flag desde hace tiempo (poblarAviones()); acá
+// nunca se había portado. Mismo patrón: pinta la lista completa al toque
+// (sin depender de red) y la recorta apenas responde /config; si la lectura
+// falla o tarda, se queda con la lista completa (fallback seguro — no
+// bloquear al instructor por un problema de red).
+const NT_AVIONES=['LV-OAD','LV-ART','LV-MPH'];
+async function poblarNtAvion(){
+  const sel=$('nt-avion');
+  const valorPrevio=sel.value;
+  const render=(habilitados)=>{
+    sel.innerHTML='<option value="" disabled selected>— Elegí el avión —</option>'+
+      habilitados.map(a=>`<option value="${a}">${a}</option>`).join('');
+    if(habilitados.includes(valorPrevio)) sel.value=valorPrevio;
+    pintarEstadoNtAvion();
+  };
+  render(NT_AVIONES); // pinta ya mismo, sin depender de red
+  try{
+    const cfgSnap=await Promise.race([
+      get(ref(db,'config')),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout de conexión')),5000))
+    ]);
+    const cfg=cfgSnap.val()||{};
+    const habilitados=NT_AVIONES.filter(a=>cfg[a]?.activo!==false);
+    if(habilitados.length) render(habilitados);
+  }catch(e){
+    console.warn('poblarNtAvion: no se pudo chequear aviones habilitados (o tardó demasiado), se mantienen todos:',e);
+  }
+}
 function pintarEstadoNtAvion(){
   const sel=$('nt-avion');
   const vacio=!sel.value;
@@ -2691,7 +2760,7 @@ async function _turnoDuplicadoHoy(persona){
 async function crearTurnoInSitu(persona){
   const yaExiste=await _turnoDuplicadoHoy(persona);
   if(yaExiste){
-    const detalle=`${yaExiste.avion||'—'} ${yaExiste.hora||''} hs${yaExiste.gps_tracker_activo?' · GPS activo ahora mismo':''}`;
+    const detalle=`${yaExiste.avion||'—'} ${yaExiste.hora||''} hs`;
     const seguir=confirm(
       `⚠ ${persona.nombre} ya tiene un turno hoy (${detalle}).\n\n`+
       `Si es el MISMO vuelo, cancelá acá y usá ese turno (botón "Cambiar turno"): `+
@@ -2762,6 +2831,9 @@ function mostrarVista(v){
 // Al restaurar (bloquear=false) NO se toca gps-toggle-card/gps-warning acá
 // — cada punto de restauración (idle, resetVuelo) ya decide explícitamente
 // si corresponde mostrarlo, según el estado al que se vuelve.
+// v5.96: gps-banner-vuelo (cartel "TRACKING GPS ACTIVO") a propósito NO se
+// oculta acá — es justamente lo único nuevo que debe quedar visible durante
+// el vuelo, junto con hero/timer/finalizar/cancelar.
 function bloquearNavDuranteVuelo(bloquear){
   const disp=bloquear?'none':'';
   $('tab-bar').style.display=disp;
@@ -2792,6 +2864,7 @@ function mostrarPantallaVuelo(turno){
     // Ya finalizó — mostrar formulario de cierre
     actualizarEstado('finalizado');
     $('gps-toggle-card').style.display='none';
+    $('gps-banner-vuelo').style.display='none';
     $('btn-cancelar-vuelo').style.display='';
     mostrarCierre();
   } else if(tsInicio){
@@ -2842,30 +2915,21 @@ function actualizarEstado(estado){
   }
 }
 
-// ── Toggle GPS ───────────────────────────────────────────
+// ── GPS obligatorio (v5.96, ya no hay toggle) ─────────────
 function pintarToggleGPS(){
-  const track=$('gps-toggle-track'), sub=$('gps-toggle-sub'), card=$('gps-toggle-card');
-  const bloqueado=!!tsInicio; // no se puede cambiar con el vuelo ya iniciado
-  track.style.background=gpsHabilitado?'var(--cyan)':'var(--gray2)';
-  $('gps-toggle-thumb').style.left=gpsHabilitado?'20px':'2px';
-  card.style.opacity=bloqueado?'.6':'1';
-  card.style.cursor=bloqueado?'default':'pointer';
+  const bloqueado=!!tsInicio; // en vuelo
+  // Card informativa: visible antes de iniciar, oculta en vuelo (la
+  // reemplaza gps-banner-vuelo, que bloquearNavDuranteVuelo NO oculta).
+  $('gps-toggle-card').style.display=bloqueado?'none':'flex';
+  $('gps-banner-vuelo').style.display=bloqueado?'block':'none';
   if(bloqueado){
-    sub.textContent=gpsHabilitado?'Registrando cada '+(GPS_MUESTREO_MS/1000)+'s...':'Desactivada para este vuelo';
-  } else {
-    sub.textContent='Registra el recorrido del vuelo (opcional)';
+    $('gps-banner-vuelo-sub').textContent='Registrando cada '+(GPS_MUESTREO_MS/1000)+'s...';
   }
-  // Mostrar aviso de pantalla solo cuando GPS está habilitado y aún no se inició
-  const warn=$('gps-warning');
-  if(warn) warn.style.display=(gpsHabilitado&&!bloqueado)?'block':'none';
+  // Aviso de pantalla: visible antes de iniciar (mismo criterio que v5.93 —
+  // durante el vuelo queda oculto junto con el resto de la nav, a pedido
+  // explícito de Daniel en esa versión).
+  $('gps-warning').style.display=bloqueado?'none':'block';
 }
-function toggleGPS(){
-  if(tsInicio) return; // bloqueado durante el vuelo
-  gpsHabilitado=!gpsHabilitado;
-  localStorage.setItem(LS_GPS_PREF,gpsHabilitado?'1':'0');
-  pintarToggleGPS();
-}
-$('gps-toggle-card').addEventListener('click',toggleGPS);
 
 // ── Captura de traza GPS ─────────────────────────────────
 function _armarWatchGPS(){
@@ -3102,42 +3166,16 @@ $('btn-start-stop').addEventListener('click', async ()=>{
     metarInicio=null;metarInicioListo=false;
     obtenerMetar('inicio'); // en segundo plano, no bloquea
     if(gpsHabilitado){
-      // Chequear candado ANTES de arrancar el GPS propio — si el alumno ya
-      // está trackeando este vuelo desde vuelo-piloto.html, no arrancamos
-      // un segundo stream de puntos (pedido de Daniel: bloquear, no permitir
-      // los dos). Esto NO bloquea el resto de "Iniciar Vuelo" — el instructor
-      // sigue registrando el vuelo (tiempo, aterrizajes) igual; solo se salta
-      // el GPS de este lado.
-      // v5.78 — el candado pasa a tomarse de forma ATÓMICA (runTransaction).
-      // Antes era get() -> decidir -> update(), tres pasos separados: si el
-      // alumno arrancaba en la ventana entre el get y el update (con red
-      // lenta puede ser más de un par de segundos), los DOS leían el candado
-      // libre, los dos lo tomaban, y los dos trackeaban el mismo vuelo. Al
-      // cerrar, cada uno hace set(vuelo_tracks/{key}) — que reemplaza el
-      // nodo entero — así que el segundo en guardar BORRABA la traza del
-      // primero, en silencio. runTransaction resuelve el conflicto del lado
-      // del servidor: reintenta si el valor cambió, así que solo uno gana.
-      let bloqueadoPorAlumno=false;
-      if(turnoActual?.key){
-        try{
-          const snap=await get(ref(db,'reservas/'+turnoActual.key));
-          const actual=snap.val();
-          const trRes=await runTransaction(ref(db,'reservas/'+turnoActual.key+'/gps_tracker_activo'), (valActual)=>{
-            if(valActual && valActual!=='instructor' && !_lockVencido(actual)) return; // undefined = abortar
-            return 'instructor';
-          });
-          if(!trRes.committed || trRes.snapshot.val()!=='instructor') bloqueadoPorAlumno=true;
-          else {
-            gpsLockTomadoPorMi=true;
-            update(ref(db,'reservas/'+turnoActual.key),{gps_tracker_ts:new Date().toISOString()}).catch(e=>console.warn('No se pudo sellar la hora del candado GPS:',e));
-          }
-        }catch(e){ console.warn('No se pudo chequear candado GPS (sigue igual sin bloquear):',e); }
-      }
-      if(bloqueadoPorAlumno){
-        toast('📍 El alumno ya está trackeando el GPS de este vuelo desde su app — no hace falta activarlo también acá.',4500);
-      } else {
-        gpsPoints=[]; gpsGaps=[]; gpsUltimoPunto=0; _wakeLockWarnMostrado=false; iniciarTrackGPS(); adquirirWakeLock();
-      }
+      // v5.97: pedido de Daniel — ya no hay candado de exclusión mutua acá.
+      // Antes, si el alumno ya estaba trackeando desde vuelo-piloto.html,
+      // este lado se abstenía de arrancar su propio GPS (evitaba "pisar" la
+      // traza al guardar). Ahora ambos lados trackean SIEMPRE en paralelo,
+      // sin consultarse — la decisión de cuál traza es la buena se mueve al
+      // momento de GUARDAR (guardarTrazaSinPisar(), más abajo: gana la que
+      // tenga más puntos, la otra queda de respaldo en vuelo_tracks/{key}_2).
+      // Esto cubre el caso de que un lado se caiga a mitad de vuelo (celular
+      // cerrado, sin señal) sin perder la traza completa del otro lado.
+      gpsPoints=[]; gpsGaps=[]; gpsUltimoPunto=0; _wakeLockWarnMostrado=false; iniciarTrackGPS(); adquirirWakeLock();
     }
     persistir();
     actualizarEstado('en-vuelo');
@@ -3156,10 +3194,6 @@ $('btn-start-stop').addEventListener('click', async ()=>{
     obtenerMetar('fin'); // en segundo plano, no bloquea
     detenerTrackGPS();
     liberarWakeLock(); // liberar wake lock al aterrizar
-    if(gpsLockTomadoPorMi&&turnoActual?.key){
-      update(ref(db,'reservas/'+turnoActual.key),{gps_tracker_activo:null}).catch(e=>console.warn('No se pudo soltar el candado GPS:',e));
-      gpsLockTomadoPorMi=false;
-    }
     persistir();
     actualizarEstado('finalizado');
     $('btn-start-stop').style.display='none';
@@ -3197,10 +3231,6 @@ $('btn-start-stop').addEventListener('click', async ()=>{
 function cancelarVuelo(){
   detenerTrackGPS(); gpsPoints=[]; gpsGaps=[]; localStorage.removeItem(LS_GPS_PUNTOS); localStorage.removeItem(LS_GPS_HUECOS);
   liberarWakeLock();
-  if(gpsLockTomadoPorMi&&turnoActual?.key){
-    update(ref(db,'reservas/'+turnoActual.key),{gps_tracker_activo:null}).catch(e=>console.warn('No se pudo soltar el candado GPS:',e));
-    gpsLockTomadoPorMi=false;
-  }
   tsInicio=null; tsFin=null; metarInicio=null; metarFin=null; metarInicioListo=false; metarFinListo=false; guardadoExitoso=false;
   persistir();
   mostrarPantallaVuelo(turnoActual);
