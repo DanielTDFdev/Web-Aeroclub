@@ -1,5 +1,15 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 8.74
+  CAMBIOS : mailCancel() sigue el mismo patrón que mailAprob/mailLiberacion
+            (v8.73) — ya no llama a emailjs.send() desde el navegador, solo
+            encola tipo:'cancela' en /mail_queue. mail_queue_sender.py pasa
+            a manejar los tres tipos. Los 5 call sites de mailCancel (turno
+            individual x3, bloqueo masivo de avión, conflicto de
+            disponibilidad instructor) ahora pasan la key de la reserva en
+            vez del motivo — el cron lee motivo desde obs_cancelacion, que
+            ya se graba siempre en la reserva antes de encolar.
+
   VERSION : 8.73
   CAMBIOS : mailAprob/mailLiberacion ya no llaman a emailjs.send() desde el
             navegador — solo encolan en /mail_queue (fbPush). Un cron nuevo,
@@ -4408,7 +4418,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.73</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.74</div>
   </div>
 
 </div>
@@ -6345,7 +6355,16 @@ let calMesActual=ahoraServidor(); calMesActual.setDate(1);
 const EJS_SVC='service_8yqlptz', EJS_KEY='0IoRm88tZQepkHAdK';
 const EJS_TMPL_CANCEL='template_v4qu4x6', EJS_TMPL_RESET='template_scbsgfg', EJS_TMPL_REGISTRO='template_wg7simn', EJS_TMPL_BIENVENIDA='template_q69sjhp', EJS_TMPL_CONFIRMA='template_4nsseoo', EJS_TMPL_LIBERA='template_41kdlo3';
 // Instancias separadas por cuenta para evitar sobreescritura del init global
-function mailCancel(r,motivo=''){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);const horaTxt=r.horaInicio&&r.horaFin?r.horaInicio+' a '+r.horaFin:(r.hora||'');emailjs.send(EJS_SVC,EJS_TMPL_CANCEL,{to_email:r.email,alumno_nombre:r.nombre,fecha:fmtFechaLinda(r.fecha),hora:horaTxt,avion:r.avion||'LV-OAD',motivo:motivo||'Sin especificar'}).catch(e=>console.warn(e));}
+async function mailCancel(r,reservaKey){
+  const retry=()=>mailCancel(r,reservaKey);
+  if(!reservaKey){console.warn('mail-cancel: falta reservaKey, no se puede encolar');return;}
+  try{
+    await fbPush('mail_queue',{tipo:'cancela',reserva_key:reservaKey,ts:new Date().toISOString()});
+  }catch(e){
+    console.warn('mail-cancel-encolar:',e);
+    mostrarToastMailError('No se pudo encolar el mail de cancelación a '+(r.nombre||'el alumno')+'.',retry);
+  }
+}
 function mailReset(a,np){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);emailjs.send(EJS_SVC,EJS_TMPL_RESET,{to_email:a.email,alumno_nombre:a.nombre,nueva_password:np}).catch(e=>console.warn(e));}
 function mailNuevoRegistro(nombre,email){if(typeof emailjs==='undefined')return;emailjs.init(EJS_KEY);emailjs.send(EJS_SVC,EJS_TMPL_REGISTRO,{alumno_nombre:nombre,alumno_email:email,email:email,fecha:new Date().toLocaleString('es-AR')}).catch(e=>console.warn('mail-registro:',e));emailjs.send(EJS_SVC,EJS_TMPL_BIENVENIDA,{alumno_nombre:nombre,alumno_email:email}).catch(e=>console.warn('mail-bienvenida:',e));}
 // v8.73: mailAprob/mailLiberacion YA NO llaman a emailjs.send() desde el
@@ -8831,7 +8850,7 @@ async function cancelarTurnosPorBloqueo(lista,motivo){
     await fbUpdate('reservas/'+key,upd);
     await registrarAuditoria('cancelacion_turno',session.rol||'instructor','exito',
       session.nombre+' — '+(r.avion||'LV-OAD')+' — '+r.fecha+' '+(r.hora||((r.horaInicio||'')+(r.horaFin?' a '+r.horaFin:'')))+' hs — alumno: '+r.nombre+' — '+motivo);
-    mailCancel(r,motivo);
+    mailCancel(r,key);
   }
 }
 
@@ -9795,7 +9814,7 @@ window.abrirModal=function(key){
       actions.appendChild(nota);
     }
     const bc=document.createElement('button');bc.className='danger';bc.textContent='CANCELAR TURNO';
-    bc.onclick=async()=>{const motivo=await pedirMotivoCancelacion(true);if(motivo===null)return;if(!confirm('¿Cancelar el turno de '+r.nombre+'? Motivo: '+motivo))return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre,cancelado_por:session.nombre,cancelado_rol:'instructor',ts_cancelacion:serverTimestamp()};upd.obs_cancelacion='Cancelado por el instructor — '+motivo;await fbUpdate('reservas/'+key,upd);await registrarAuditoria('cancelacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — '+motivo);if(!turnoYaPaso(rv))mailCancel(rv,motivo);}cerrarModal();};
+    bc.onclick=async()=>{const motivo=await pedirMotivoCancelacion(true);if(motivo===null)return;if(!confirm('¿Cancelar el turno de '+r.nombre+'? Motivo: '+motivo))return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre,cancelado_por:session.nombre,cancelado_rol:'instructor',ts_cancelacion:serverTimestamp()};upd.obs_cancelacion='Cancelado por el instructor — '+motivo;await fbUpdate('reservas/'+key,upd);await registrarAuditoria('cancelacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — '+motivo);if(!turnoYaPaso(rv))mailCancel(rv,key);}cerrarModal();};
     actions.appendChild(bc);
   } else if(r.estado==='aprobado'){
     const aprobador=r.aprobado_por||r.instructor||'';
@@ -9807,7 +9826,7 @@ window.abrirModal=function(key){
       bl.style.cssText='background:rgba(240,165,0,.1);color:var(--amber);border-color:var(--amber)';
       bl.onclick=async()=>{if(!confirm('¿Liberar este turno?\n\nVolverá a estado PENDIENTE y quedará disponible para que otro instructor lo tome. El alumno conserva su reserva y recibirá un aviso por mail.'))return;const rv=await fbGet('reservas/'+key);if(rv){await fbUpdate('reservas/'+key,{estado:'pendiente',instructor:null,aprobado_por:null,recordatorio_inst_enviado:null,recordatorio_inst_ts:null});await registrarAuditoria('liberacion_turno',session.rol||'instructor','exito',(session.nombre||session.user)+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — liberado por '+(rv.aprobado_por||rv.instructor||'?'));mailLiberacion(rv,key);}cerrarModal();};
       const bc=document.createElement('button');bc.className='danger';bc.textContent='CANCELAR TURNO';
-      bc.onclick=async()=>{const motivo=await pedirMotivoCancelacion(true);if(motivo===null)return;if(!confirm('¿Cancelar el turno de '+r.nombre+'? Motivo: '+motivo))return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre,cancelado_por:session.nombre,cancelado_rol:'instructor',ts_cancelacion:serverTimestamp()};upd.obs_cancelacion='Cancelado por el instructor — '+motivo;await fbUpdate('reservas/'+key,upd);await registrarAuditoria('cancelacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — '+motivo);if(!turnoYaPaso(rv))mailCancel(rv,motivo);}cerrarModal();};
+      bc.onclick=async()=>{const motivo=await pedirMotivoCancelacion(true);if(motivo===null)return;if(!confirm('¿Cancelar el turno de '+r.nombre+'? Motivo: '+motivo))return;const rv=await fbGet('reservas/'+key);if(rv){const upd={estado:'cancelado',instructor:session.nombre,cancelado_por:session.nombre,cancelado_rol:'instructor',ts_cancelacion:serverTimestamp()};upd.obs_cancelacion='Cancelado por el instructor — '+motivo;await fbUpdate('reservas/'+key,upd);await registrarAuditoria('cancelacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — '+motivo);if(!turnoYaPaso(rv))mailCancel(rv,key);}cerrarModal();};
       if(puedeLiberar&&!turnoYaPaso(r)) actions.appendChild(bl);
       actions.appendChild(bc);
     } else {
@@ -9863,7 +9882,7 @@ window.abrirModal=function(key){
           upd.obs_cancelacion='Cancelado por el instructor (corrección de turno vencido) — '+motivo;
           await fbUpdate('reservas/'+key,upd);
           await registrarAuditoria('cancelacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — corrección de vencido a cancelado — '+(rv.avion||'LV-OAD')+' — '+rv.fecha+' '+rv.hora+' hs — alumno: '+rv.nombre+' — '+motivo);
-          if(!turnoYaPaso(rv))mailCancel(rv,motivo);
+          if(!turnoYaPaso(rv))mailCancel(rv,key);
         }
         cerrarModal();
       };
@@ -12506,7 +12525,7 @@ window.dispToggle=async function(cb){
       const ok=confirm(`⚠ Tenés un turno TUYO aprobado en este horario:\n  ${r.fecha} ${r.hora}hs — ${r.nombre}\n\n¿Cancelarlo y quitar tu disponibilidad?`);
       if(!ok){cb.checked=true;return;}
       await fbUpdate('reservas/'+rk,{estado:'cancelado',instructor:session.nombre,cancelado_por:session.nombre,cancelado_rol:'instructor',ts_cancelacion:serverTimestamp(),obs_cancelacion:'Instructor sin disponibilidad en este horario'});
-      mailCancel(r);
+      mailCancel(r,rk);
     }
   }
   // Actualizar estado local y visual
