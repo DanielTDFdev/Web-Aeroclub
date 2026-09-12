@@ -2,6 +2,11 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.09 · Pedido de Daniel: más permisivo con la distancia lateral de
+  INICIAL. Banda verde pasa de 1400±70m a 1400±200m (1200-1600m), amarillo
+  a 1400±250m (1150-1650m) — derivado con el mismo criterio de v2.08
+  (tol=200/1.4≈142.86m).
+
   v2.08 · Pedido de Daniel: la nota de calidad (verde/amarillo/rojo) de la
   fase INICIAL suma un tercer criterio, distancia lateral al eje de pista.
   Ideal 1400m ±5% como límite EXACTO del verde (no banda de cero penalidad
@@ -1841,7 +1846,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.08</span>
+    <span class="badge" id="ver-badge">v2.09</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -2353,8 +2358,13 @@ const OFFSET_INICIAL_MIN_M = 150; // inicial: a más de esto del eje de pista
 // como límite EXACTO del verde (no como banda de cero penalidad, a diferencia
 // de ALT_IDEAL_TOL_FT) — por eso el tol de devConTolerancia es 50m
 // (70/1.4=50), para que dev=0.4 caiga justo en offset=1470m/1330m.
+// v2.09 — pedido de Daniel: más permisivo. La banda verde de distancia
+// lateral pasa de ±70m a ±200m (1200-1600m). Mismo criterio de derivación
+// que v2.08: tol se ajusta para que dev=0.4 (borde del verde) caiga
+// exactamente en offset=1400±200m, no en offset=1400±tol. tol=200/1.4≈142.86m
+// (amarillo deriva solo: dev=0.75 → tol×1.75≈250m → 1150-1650m).
 const OFFSET_INICIAL_IDEAL_M = 1400;
-const OFFSET_INICIAL_IDEAL_TOL_M = 50; // vara para la nota de calidad, no para detectar (ver OFFSET_INICIAL_MIN_M)
+const OFFSET_INICIAL_IDEAL_TOL_M = 200/1.4; // ≈142.86m — vara para la nota de calidad, no para detectar (ver OFFSET_INICIAL_MIN_M)
 // v1.76 — pedido de Daniel: la nota de calidad (verde/amarillo/rojo) medía el
 // desvío de altura contra el ANCHO DE LA BANDA de detección (±300ft), que es
 // deliberadamente ancha para no perder puntos válidos. Eso permitía que algo
