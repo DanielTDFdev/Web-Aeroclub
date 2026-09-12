@@ -2,6 +2,20 @@
 <!--
 ==================================================================================
   VUELO — App de registro de vuelo · Aeroclub Río Grande
+  v5.99 · 2026-09-11
+  Pedido de Daniel: el botón "⏻ Salir" pasa a ser un slider tipo iPhone
+  ("slide to power off") — se arrastra el círculo hasta el final del track
+  para confirmar el logout, en vez de un tap directo. Nuevo componente
+  `.logout-slider` (Pointer Events, unifica touch/mouse, cálculo de
+  distancia contra `getBoundingClientRect()` en tiempo real, sin px
+  hardcodeados). Si se suelta antes del 82% del recorrido, el thumb vuelve
+  solo al inicio (spring-back) y no pasa nada. El chequeo "hay un vuelo
+  iniciado, ¿salir igual?" se conserva igual que antes, ahora disparado al
+  completar el slide en vez de al hacer click — si se cancela ese confirm,
+  el thumb también vuelve al inicio. `ejecutarLogout()` es el mismo cuerpo
+  que antes vivía inline en el listener de click de `btn-logout`, extraído
+  para que el slider lo dispare.
+
   v5.98 · 2026-09-11
   Pedido de Daniel: declutter agresivo de la pantalla pre-vuelo — en
   celular se veía muy poblada y los botones de acción (Iniciar Vuelo,
@@ -1458,6 +1472,35 @@ body{background:var(--bg);color:var(--white);font-family:var(--ui)}
 }
 .btn-sm:active{background:rgba(255,255,255,.06)}
 
+/* v5.99: slider "Salir" estilo iPhone (slide to power off). Track fijo,
+   thumb arrastrable con Pointer Events (unifica touch/mouse). El fill y el
+   label son visuales puros (pointer-events:none) — todo el drag se calcula
+   en JS contra getBoundingClientRect() del track, no hay nada hardcodeado
+   en px que se pueda desincronizar si cambia el CSS. */
+.logout-slider{flex:none}
+.logout-slider-track{
+  position:relative;width:120px;height:35px;border-radius:18px;
+  background:var(--bg2);border:1px solid var(--gray2);overflow:hidden;
+}
+.logout-slider-fill{
+  position:absolute;top:0;left:0;height:100%;width:31px;
+  background:rgba(0,200,212,.18);border-radius:18px;
+  transition:width .25s ease;pointer-events:none;
+}
+.logout-slider-label{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:10px;letter-spacing:.04em;color:var(--gray);
+  opacity:.85;pointer-events:none;transition:opacity .15s linear;white-space:nowrap;
+}
+.logout-slider-thumb{
+  position:absolute;top:2px;left:2px;width:29px;height:29px;border-radius:50%;
+  background:var(--cyan);color:#04202a;display:flex;align-items:center;justify-content:center;
+  font-size:14px;line-height:1;cursor:grab;touch-action:none;user-select:none;
+  transition:left .25s ease,background .15s linear;box-shadow:0 1px 4px rgba(0,0,0,.35);
+}
+.logout-slider-thumb.dragging{transition:none;cursor:grabbing}
+.logout-slider-thumb.armado{background:var(--red)}
+
 /* Tab bar */
 /* v5.43: pedido de Daniel — unificar el estilo de la barra de pestañas
    (Vuelo/Pendientes/Libro/Reporte) con el de los botones de link de arriba
@@ -1911,7 +1954,18 @@ select.sin-elegir{border-color:var(--amber);box-shadow:0 0 0 2px rgba(240,165,0,
     <div class="top-actions">
       <div class="top-actions-row">
         <img src="repo_fotos/instructor_icon.png" alt="" class="user-icon">
-        <button class="btn-sm" id="btn-logout">⏻ Salir</button>
+        <!-- v5.99: pedido de Daniel — "Salir" pasa de botón a slider tipo
+             iPhone (slide to power off). Evita el logout accidental de un
+             toque sin querer; reemplaza al confirm() nativo que existía
+             para el caso "hay un vuelo iniciado" (ver JS: si hay vuelo en
+             curso, el slide completo abre ESE confirm en vez de saltearlo). -->
+        <div class="logout-slider" id="logout-slider">
+          <div class="logout-slider-track" id="logout-slider-track">
+            <div class="logout-slider-fill" id="logout-slider-fill"></div>
+            <span class="logout-slider-label" id="logout-slider-label">Deslizá para salir</span>
+            <div class="logout-slider-thumb" id="logout-slider-thumb">⏻</div>
+          </div>
+        </div>
       </div>
       <div class="ver" id="app-ver">—</div>
     </div>
@@ -2189,7 +2243,7 @@ const LS_PENDIENTES = 'acrg-vuelo-v2-pendientes'; // cola de vuelos guardados lo
 // límite de tiempo.
 const RESTAURAR_TURNO_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '5.98'; // ⚠ actualizar acá Y en el comentario header de arriba en cada bump
+const APP_VERSION = '5.99'; // ⚠ actualizar acá Y en el comentario header de arriba en cada bump
 
 // ── Traza GPS (obligatoria, siempre activa — v5.96) ────────────
 const LS_GPS_PUNTOS = 'acrg-vuelo-v2-gps-puntos'; // puntos del vuelo en curso (resiliencia ante recarga)
@@ -4752,8 +4806,11 @@ function cerrarModalMapa(){
 $('btn-map-close-float').addEventListener('click', cerrarModalMapa);
 
 // ── LOGOUT ────────────────────────────────────────────────
-$('btn-logout').addEventListener('click',()=>{
-  if(tsInicio&&!tsFin){if(!confirm('Hay un vuelo iniciado. ¿Salir igual?'))return;}
+// v5.99: "Salir" pasa de botón a slider (slide to power off, estilo
+// iPhone). ejecutarLogout() es el mismo cuerpo que antes vivía inline en
+// el listener de click de btn-logout — se extrae para que el slider lo
+// dispare al llegar al umbral, en vez de un tap.
+function ejecutarLogout(){
   const pendientesAlSalir=leerPendientes().length;
   session=null;sessionStorage.removeItem('lvoad-session');
   if(!tsInicio) localStorage.removeItem(LS);
@@ -4765,7 +4822,64 @@ $('btn-logout').addEventListener('click',()=>{
   // y la sincronización sigue intentando sola mientras la pestaña siga
   // abierta — solo se avisa para que quede claro, no bloquea el logout.
   if(pendientesAlSalir) toast(`⏳ Quedan ${pendientesAlSalir} vuelo${pendientesAlSalir>1?'s':''} sincronizando en segundo plano`,4000);
-});
+}
+
+// Slider "Salir": Pointer Events unifican touch/mouse. Todo el cálculo de
+// distancia se hace contra getBoundingClientRect() del track en tiempo
+// real — nada de px hardcodeados que se puedan desincronizar con el CSS.
+(function(){
+  const track=$('logout-slider-track'), thumb=$('logout-slider-thumb'),
+        fill=$('logout-slider-fill'), label=$('logout-slider-label');
+  const UMBRAL=0.82; // % del recorrido para considerar "confirmado"
+  let arrancoEnX=0, maxRecorrido=0, arrastrando=false;
+
+  function setPos(px){
+    thumb.style.left=(2+px)+'px';
+    fill.style.width=(29+px)+'px';
+    label.style.opacity=Math.max(0,.85-(px/maxRecorrido)*1.1);
+    thumb.classList.toggle('armado',(px/maxRecorrido)>=UMBRAL);
+  }
+  function resetLogoutSlider(){
+    thumb.classList.remove('dragging');
+    thumb.style.left='2px';
+    fill.style.width='31px';
+    label.style.opacity='.85';
+    thumb.classList.remove('armado');
+  }
+  window.resetLogoutSlider=resetLogoutSlider; // reusado por abrirApp()
+
+  thumb.addEventListener('pointerdown',(e)=>{
+    e.preventDefault();
+    maxRecorrido=track.clientWidth-thumb.clientWidth-4;
+    arrancoEnX=e.clientX;
+    arrastrando=true;
+    thumb.classList.add('dragging');
+    thumb.setPointerCapture(e.pointerId);
+  });
+  thumb.addEventListener('pointermove',(e)=>{
+    if(!arrastrando) return;
+    const px=Math.min(maxRecorrido,Math.max(0,e.clientX-arrancoEnX));
+    setPos(px);
+  });
+  function soltar(e){
+    if(!arrastrando) return;
+    arrastrando=false;
+    thumb.classList.remove('dragging');
+    const px=Math.min(maxRecorrido,Math.max(0,e.clientX-arrancoEnX));
+    if((px/maxRecorrido)>=UMBRAL){
+      if(tsInicio&&!tsFin){
+        if(!confirm('Hay un vuelo iniciado. ¿Salir igual?')){ resetLogoutSlider(); return; }
+      }
+      setPos(maxRecorrido); // deja el thumb al final un instante, se ve intencional
+      ejecutarLogout();
+      resetLogoutSlider(); // listo para la próxima sesión (la app no recarga)
+    } else {
+      resetLogoutSlider();
+    }
+  }
+  thumb.addEventListener('pointerup',soltar);
+  thumb.addEventListener('pointercancel',soltar);
+})();
 
 // ── AUTO-REFRESH ──────────────────────────────────────────
 // La app corre standalone (PWA) sin botón de recarga, así que los turnos
