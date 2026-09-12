@@ -2,6 +2,18 @@
 <!--
 ==================================================================================
   VUELO PILOTO — Registro de vuelo para pilotos · Aeroclub Río Grande
+  v4.76 · 2026-09-11
+  Pedido de Daniel: tracking GPS deja de ser opcional en el flujo piloto —
+  mismo cambio que vuelo.html v5.96, aplicado acá con retraso (esta app
+  todavía tenía su propio toggle, `gps-toggle-card` con slider on/off,
+  preferencia en localStorage vía `LS_GPS_PREF`). Se saca la card entera
+  (no solo el switch — pedido explícito: "sacá el slider y el cartel de
+  traza gps"), `gpsHabilitado` pasa a ser siempre `true`. El aviso "⚠
+  MANTENÉ LA PANTALLA ENCENDIDA" (`gps-warning`) se conserva, ahora
+  visible siempre que no se esté volando (antes dependía de `gpsHabilitado`,
+  que ya no varía). Limpieza de código muerto: `LS_GPS_PREF`, `toggleGPS()`
+  y las referencias sueltas a `gps-toggle-card` en `renderPantalla()`.
+
   v4.75 · 2026-09-11
   Pedido de Daniel: el botón "⏻ Salir" pasa a ser un slider tipo iPhone
   ("slide to power off") — mismo componente que vuelo.html v5.99 (ver ese
@@ -1648,16 +1660,9 @@ select:disabled{opacity:.55}
       <div class="ts-sub" id="ev-sub"></div>
     </div>
 
-    <!-- Traza GPS (opcional) -->
-    <div class="card" id="gps-toggle-card" style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer">
-      <div>
-        <div class="card-title" style="margin-bottom:2px">📍 Traza GPS</div>
-        <div style="font-family:var(--mono);font-size:11px;color:var(--gray)" id="gps-toggle-sub">Registra el recorrido del vuelo (opcional)</div>
-      </div>
-      <div id="gps-toggle-track" style="width:38px;height:20px;border-radius:10px;position:relative;transition:background .2s;flex:none">
-        <div id="gps-toggle-thumb" style="width:16px;height:16px;border-radius:50%;background:#fff;position:absolute;top:2px;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.3)"></div>
-      </div>
-    </div>
+    <!-- v4.76: pedido de Daniel — se saca la card "Traza GPS" (con el
+         slider on/off) del flujo piloto. El GPS pasa a ser obligatorio,
+         siempre ON por default — mismo criterio que vuelo.html v5.96. -->
 
     <!-- Aviso de pantalla para GPS (visible solo cuando GPS activo) -->
     <div id="gps-warning" style="display:none;background:rgba(240,165,0,.1);border:1px solid rgba(240,165,0,.35);border-radius:12px;padding:12px 14px;margin-bottom:0">
@@ -1883,17 +1888,16 @@ const LS_PENDIENTES = 'acrg-piloto-v1-pendientes'; // cola de vuelos guardados l
 // avión "sin arrancar todavía" que sobrevivía indefinidamente en localStorage.
 const RESTAURAR_AVION_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '4.75';
+const APP_VERSION = '4.76';
 document.querySelectorAll('.ver').forEach(el=>el.textContent='v'+APP_VERSION);
 
-// ── Traza GPS (opcional) ─────────────────────────────────
+// ── Traza GPS (obligatoria, siempre activa — v4.76) ──────────
 const LS_GPS_PUNTOS = 'acrg-piloto-v1-gps-puntos';
 const LS_GPS_HUECOS = 'acrg-piloto-v1-gps-huecos'; // v4.7: huecos detectados (ver gpsGaps)
-const LS_GPS_PREF   = 'acrg-piloto-gps-pref';
 const GPS_MUESTREO_MS = 2000; // 2s entre puntos (v4.58 — bajado de 3s a pedido de Daniel, mismo cambio en vuelo.html v5.73)
 const GPS_WATCHDOG_INTERVALO_MS = 15000; // v4.5: cada cuánto chequea el watchdog
 const GPS_WATCHDOG_UMBRAL_MS    = 45000; // v4.5: sin actividad de GPS por más de esto, reinicia el watch
-let gpsHabilitado  = localStorage.getItem(LS_GPS_PREF) === '1';
+let gpsHabilitado = true; // v4.76: ya no es un toggle — pedido de Daniel, siempre ON por default
 let gpsWatchId     = null;
 let gpsWatchdogId  = null; // v4.5
 let gpsUltimaLlegada = 0;  // v4.5: última vez que llegó CUALQUIER dato de GPS (referencia del watchdog, no del throttle)
@@ -1993,8 +1997,7 @@ function init(){
       metarFinListo=est.metarFinListo||false;
       if(est.avion&&(est.tsInicio||!est.ts||(Date.now()-est.ts)<RESTAURAR_AVION_MAX_MS)) _avionRestaurado=est.avion; // se aplica en poblarAviones(), el <select> todavía no tiene opciones acá
       if(est.cAterr||est.cObs||est.tManualValor) _cierreRestaurado={cAterr:est.cAterr,cObs:est.cObs,tManualVisible:est.tManualVisible,tManualValor:est.tManualValor};
-      if(tsInicio&&!tsFin&&est.gpsHabilitado){
-        gpsHabilitado=true;
+      if(tsInicio&&!tsFin){
         try{ gpsPoints=JSON.parse(localStorage.getItem(LS_GPS_PUNTOS)||'[]'); }catch{ gpsPoints=[]; }
         try{ gpsGaps=JSON.parse(localStorage.getItem(LS_GPS_HUECOS)||'[]'); }catch{ gpsGaps=[]; }
         iniciarTrackGPS();
@@ -2417,13 +2420,11 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 function renderPantalla(){
   if(tsFin){
     actualizarEstado('finalizado');
-    $('gps-toggle-card').style.display='none';
     $('v-avion-wrap').style.display='none';
     $('btn-cancelar-vuelo').style.display='';
     mostrarCierre();
   } else if(tsInicio){
     actualizarEstado('en-vuelo');
-    $('gps-toggle-card').style.display='flex';
     pintarToggleGPS();
     $('v-avion-wrap').style.display='none';
     $('btn-start-stop').style.display='';
@@ -2434,7 +2435,6 @@ function renderPantalla(){
     $('v-guardado').style.display='none';
   } else {
     actualizarEstado('idle');
-    $('gps-toggle-card').style.display='flex';
     pintarToggleGPS();
     aplicarTurnoVinculado(); // v4.0: respeta el turno vinculado en vez de mostrar el selector siempre
     $('p-avion').disabled=false;
@@ -2468,29 +2468,12 @@ function actualizarEstado(estado){
   }
 }
 
-// ── Toggle GPS ───────────────────────────────────────────
+// ── GPS obligatorio (v4.76, ya no hay toggle) ─────────────
 function pintarToggleGPS(){
-  const track=$('gps-toggle-track'), sub=$('gps-toggle-sub'), card=$('gps-toggle-card');
   const bloqueado=!!tsInicio;
-  track.style.background=gpsHabilitado?'var(--cyan)':'var(--gray2)';
-  $('gps-toggle-thumb').style.left=gpsHabilitado?'20px':'2px';
-  card.style.opacity=bloqueado?'.6':'1';
-  card.style.cursor=bloqueado?'default':'pointer';
-  if(bloqueado){
-    sub.textContent=gpsHabilitado?'Registrando cada '+(GPS_MUESTREO_MS/1000)+'s...':'Desactivada para este vuelo';
-  } else {
-    sub.textContent='Registra el recorrido del vuelo (opcional)';
-  }
   const warn=$('gps-warning');
-  if(warn) warn.style.display=(gpsHabilitado&&!bloqueado)?'block':'none';
+  if(warn) warn.style.display=!bloqueado?'block':'none';
 }
-function toggleGPS(){
-  if(tsInicio) return;
-  gpsHabilitado=!gpsHabilitado;
-  localStorage.setItem(LS_GPS_PREF,gpsHabilitado?'1':'0');
-  pintarToggleGPS();
-}
-$('gps-toggle-card').addEventListener('click',toggleGPS);
 
 function _armarWatchGPS(){
   gpsUltimaLlegada=Date.now(); // v4.5: referencia del watchdog — cualquier llegada cuenta, incluso descartada por throttle
