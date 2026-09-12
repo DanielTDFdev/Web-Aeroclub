@@ -2,6 +2,12 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.10 · Pedido de Daniel: dos cambios. (1) Banda verde de distancia lateral
+  de INICIAL sube otros 100m, de ±200m a ±300m (1100-1700m), amarillo a
+  ±375m (1025-1775m) — tol=300/1.4≈214.29m. (2) Panning con clic derecho:
+  se invierte el signo del eje vertical (up/down se sentía al revés);
+  horizontal no se toca.
+
   v2.09 · Pedido de Daniel: más permisivo con la distancia lateral de
   INICIAL. Banda verde pasa de 1400±70m a 1400±200m (1200-1600m), amarillo
   a 1400±250m (1150-1650m) — derivado con el mismo criterio de v2.08
@@ -1846,7 +1852,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.09</span>
+    <span class="badge" id="ver-badge">v2.10</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -2363,8 +2369,11 @@ const OFFSET_INICIAL_MIN_M = 150; // inicial: a más de esto del eje de pista
 // que v2.08: tol se ajusta para que dev=0.4 (borde del verde) caiga
 // exactamente en offset=1400±200m, no en offset=1400±tol. tol=200/1.4≈142.86m
 // (amarillo deriva solo: dev=0.75 → tol×1.75≈250m → 1150-1650m).
+// v2.10 — pedido de Daniel: 100m más de margen sobre v2.09. Banda verde pasa
+// de ±200m a ±300m (1100-1700m), amarillo a ±375m (1025-1775m). Mismo
+// criterio de derivación: tol=300/1.4≈214.29m.
 const OFFSET_INICIAL_IDEAL_M = 1400;
-const OFFSET_INICIAL_IDEAL_TOL_M = 200/1.4; // ≈142.86m — vara para la nota de calidad, no para detectar (ver OFFSET_INICIAL_MIN_M)
+const OFFSET_INICIAL_IDEAL_TOL_M = 300/1.4; // ≈214.29m — vara para la nota de calidad, no para detectar (ver OFFSET_INICIAL_MIN_M)
 // v1.76 — pedido de Daniel: la nota de calidad (verde/amarillo/rojo) medía el
 // desvío de altura contra el ANCHO DE LA BANDA de detección (±300ft), que es
 // deliberadamente ancha para no perder puntos válidos. Eso permitía que algo
@@ -4731,7 +4740,8 @@ function panCamera(dxPix, dyPix, radio){
   const rightX = Math.cos(camTheta), rightZ = -Math.sin(camTheta);
   const upX = -Math.sin(camTheta)*Math.cos(camPhi), upY = Math.sin(camPhi), upZ = -Math.cos(camTheta)*Math.cos(camPhi);
   const factor = -radio*0.0015; // v1.61: signo invertido (pedido de Daniel) — escala con el zoom, mismo criterio que aplicarZoom
-  const dx = -dxPix*factor, dy = dyPix*factor;
+  const dx = -dxPix*factor, dy = -dyPix*factor; // v2.10: se invierte SOLO el signo de dy (pedido de Daniel — el pan
+  // vertical se sentía al revés). dx queda igual que antes; no se toca el horizontal.
   panTarget.x += rightX*dx + upX*dy;
   panTarget.y += upY*dy;
   panTarget.z += rightZ*dx + upZ*dy;
