@@ -1,6 +1,21 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 8.75 
+  VERSION : 8.76
+  CAMBIOS : FIX (Daniel, con captura) — en Config→Bloq.Aviones, buildCfgAvionTabs()
+            marcaba visualmente el tab LV-ART (AVIONES[0]) como activo pero no
+            actualizaba la variable activeDiasAvion, que quedaba con el valor de
+            una pestaña/sesión anterior (default 'LV-OAD'). Resultado: tab LV-ART
+            resaltado, mostrando el toggle ON/OFF y el calendario de días
+            bloqueados de otro avión. Ahora activeDiasAvion se sincroniza con el
+            primer tab al construir cfg-dias-avion-tabs.
+            Además, pedido de Daniel: toggleActivoAvion() ahora pide confirmación
+            ("¿Confirmás cambiar de disponibilidad al LV-XXX?") tanto al habilitar
+            como al deshabilitar (antes solo confirmaba al deshabilitar). Se usa
+            confirmModal() (modal custom ya existente), no confirm() nativo —
+            agregado white-space:pre-line a #confirm-simple-msg para que el
+            aviso de turnos afectados siga mostrando el salto de línea.
+
+  VERSION : 8.75
   CAMBIOS : Vuelta atrás de v8.73/8.74 — pedido explícito de Daniel. El cron
             server-side (mail_queue_sender.py) funcionaba, pero el trigger
             `schedule` de GitHub Actions demostró demoras erráticas en
@@ -4436,7 +4451,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.75</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.76</div>
   </div>
 
 </div>
@@ -4980,7 +4995,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="modal-overlay" id="modal-confirm-simple" style="z-index:1100">
     <div class="modal" style="max-width:360px">
       <div class="modal-title" id="confirm-simple-title">◈ Confirmar</div>
-      <div id="confirm-simple-msg" style="font-family:var(--font-mono);font-size:13px;color:var(--text2);margin-bottom:1rem;letter-spacing:.03em;line-height:1.5"></div>
+      <div id="confirm-simple-msg" style="font-family:var(--font-mono);font-size:13px;color:var(--text2);margin-bottom:1rem;letter-spacing:.03em;line-height:1.5;white-space:pre-line"></div>
       <div style="display:flex;gap:8px;justify-content:flex-end">
         <button id="confirm-simple-btn-no" style="font-family:var(--font-mono);font-size:12px;padding:7px 16px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);border-radius:var(--radius);cursor:pointer">Volver</button>
         <button id="confirm-simple-btn-si" class="danger" style="font-family:var(--font-mono);font-size:12px;padding:7px 16px">Sí</button>
@@ -10445,6 +10460,10 @@ function buildCfgAvionTabs(){
   const tabsD=document.getElementById('cfg-dias-avion-tabs');
   if(tabsD){
     tabsD.innerHTML=AVIONES.map((av,i)=>`<button class="nav-btn${i===0?' active':''}" onclick="selectDiasAvion('${av.key}')">${av.key}</button>`).join('');
+    activeDiasAvion=AVIONES[0].key; // v8.76: FIX — el tab visual siempre marcaba AVIONES[0] como activo,
+    // pero activeDiasAvion no se actualizaba acá y quedaba con el valor de una sesión/tab anterior
+    // (ej. 'LV-OAD' inicial). Resultado: el tab LV-ART aparecía resaltado pero el toggle ON/OFF y el
+    // calendario de días bloqueados mostraban los datos de otro avión. Reportado por Daniel con captura.
   }
 }
 
@@ -10603,13 +10622,15 @@ window.toggleActivoAvion=async function(){
   const actual=configs[avion].activo!==false;
   const nuevo=!actual;
   let afectados=[];
+  // v8.76: pedido de Daniel — confirmación explícita en AMBOS sentidos (antes solo
+  // se confirmaba al deshabilitar). Usa confirmModal (custom), no confirm() nativo.
+  let msg='¿Confirmás cambiar de disponibilidad al '+avion+'?';
   if(!nuevo){
     afectados=await turnosFuturosParaCancelarPorBloqueo(avion);
-    const aviso=afectados.length
-      ?'\n\n⚠ Hay '+afectados.length+' turno(s) aprobado(s)/pendiente(s) a partir de ahora en '+avion+'. Se cancelarán automáticamente y se avisará por mail a cada usuario.'
-      :'';
-    if(!confirm('¿Deshabilitar '+avion+'? Los usuarios no podrán verla ni reservarla hasta que la vuelvas a habilitar.'+aviso))return;
+    if(afectados.length)
+      msg+='\n\n⚠ Hay '+afectados.length+' turno(s) aprobado(s)/pendiente(s) a partir de ahora en '+avion+'. Se cancelarán automáticamente y se avisará por mail a cada usuario.';
   }
+  if(!(await confirmModal(msg,'Sí, confirmar')))return;
   configs[avion].activo=nuevo;
   await saveConfigAvion(avion);
   await registrarAuditoria(nuevo?'avion_habilitado':'avion_deshabilitado',session.rol||'instructor','exito',
