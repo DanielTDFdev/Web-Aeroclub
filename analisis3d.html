@@ -2,6 +2,18 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.15 · Daniel: "resuelto lo del zoom in, pero ahora hago zoom out y el
+  parche no crece". Causa: v2.14 introdujo MAX_RADIO_FOOTPRINT_M=3000m, un
+  tope FIJO para no perseguir el horizonte al infinito en una mirada
+  rasante. Pero el target de la cámara orbita a la altitud EXAGERADA x4 del
+  avión (ver v2.14) — mirar hacia ESE punto elevado ya es, respecto del piso
+  real muy por debajo, una mirada bastante rasante, así que hasta un zoom
+  out moderado pegaba contra el tope fijo y el parche dejaba de crecer
+  aunque el usuario siguiera alejándose. Se reemplaza la constante por
+  _capFootprintM(), que deriva el tope del radio de órbita ACTUAL
+  (camRadioSeguir/Libre, el mismo que ya usa aplicarZoom) — el tope ahora
+  crece con cuánto zoom out pida el usuario en vez de ser un número fijo.
+
   v2.14 · REHECHO DE RAÍZ del mapa satelital, otra vez. Daniel mandó captura:
   en zoom cercano seguía quedando un parche del tamaño del avión con cielo
   liso alrededor, incluso después de v2.13. Causa de fondo (v2.13 no la
@@ -1911,7 +1923,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.14</span>
+    <span class="badge" id="ver-badge">v2.15</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -4079,41 +4091,54 @@ let _mapaSatCargando = false;
 // cielo mientras el punto más lejano de piso todavía visible está más
 // abajo, en esa misma columna. La distancia al horizonte tiende a infinito
 // a medida que el ángulo de mirada se acerca a paralelo al piso — se la
-// capa a MAX_RADIO_FOOTPRINT_M para no terminar pidiendo un mosaico del
-// tamaño de la provincia; más allá de ese tope es una franja angosta cerca
-// del horizonte, el trade-off honesto (mismo espíritu que "el zoom baja al
-// alejarse" de v1.43: se prefiere cobertura completa a menor resolución
-// antes que un hueco).
-const MAX_RADIO_FOOTPRINT_M = 3000;
+// capa para no terminar pidiendo un mosaico del tamaño de la provincia;
+// más allá de ese tope es una franja angosta cerca del horizonte, el
+// trade-off honesto (mismo espíritu que "el zoom baja al alejarse" de
+// v1.43: se prefiere cobertura completa a menor resolución antes que un
+// hueco).
+// v2.15 — Daniel: "hago zoom out y el parche no crece". Causa: el primer
+// intento de este fix (v2.14) usaba un tope FIJO (3000m) — pensado para el
+// caso rasante extremo, pero el target de la cámara orbita a la altitud
+// EXAGERADA x4 del avión (ver arriba); mirar hacia ESE punto elevado ya es,
+// respecto del piso real muy por debajo, una mirada bastante rasante — así
+// que hasta un zoom out moderado pegaba contra el tope fijo y el parche
+// dejaba de crecer aunque el usuario siguiera alejándose. El tope tiene que
+// crecer con cuánto zoom out pidió el usuario, no ser una constante — se
+// deriva del radio de órbita ACTUAL (mismo radio que ya usa aplicarZoom).
+function _capFootprintM(){
+  const radioCam = seguirChk.checked ? camRadioSeguir : camRadioLibre;
+  return Math.max(2000, radioCam*4);
+}
 const _groundPlaneMapa = new THREE.Plane(new THREE.Vector3(0,1,0), -Y_MAPA);
 const _rcFootprint = new THREE.Raycaster();
 const _COLUMNAS_NDC = [-1, -0.5, 0, 0.5, 1]; // muestras a lo ancho de la pantalla
 // Punto de piso más lejano visible en la columna `nx` (NDC horizontal,
 // -1..1), o null si ni el borde inferior de esa columna toca piso dentro
 // del tope (cámara mirando para arriba — no debería pasar en uso normal).
-function _tocaPisoEnNDC(nx, ny){
+function _tocaPisoEnNDC(nx, ny, capM){
   _rcFootprint.setFromCamera({x:nx, y:ny}, camera);
   const hit = new THREE.Vector3();
   if(!_rcFootprint.ray.intersectPlane(_groundPlaneMapa, hit)) return null; // apunta al cielo
   const d = Math.hypot(hit.x-camera.position.x, hit.z-camera.position.z);
-  return d<=MAX_RADIO_FOOTPRINT_M ? hit : null; // más allá del tope: se trata como "no hay piso útil ahí"
+  return d<=capM ? hit : null; // más allá del tope: se trata como "no hay piso útil ahí"
 }
-function _horizonteEnColumna(nx){
-  if(!_tocaPisoEnNDC(nx,-1)) return null; // ni el borde inferior toca piso dentro del tope
-  const arriba = _tocaPisoEnNDC(nx,1);
+function _horizonteEnColumna(nx, capM){
+  if(!_tocaPisoEnNDC(nx,-1,capM)) return null; // ni el borde inferior toca piso dentro del tope
+  const arriba = _tocaPisoEnNDC(nx,1,capM);
   if(arriba) return arriba; // toda la columna es piso dentro del tope: el punto más lejano es el de arriba
   let lo=-1, hi=1; // lo: último ny que sabemos toca piso; hi: primero que no (cielo o más allá del tope)
   for(let i=0;i<10;i++){
     const mid=(lo+hi)/2;
-    if(_tocaPisoEnNDC(nx,mid)) lo=mid; else hi=mid;
+    if(_tocaPisoEnNDC(nx,mid,capM)) lo=mid; else hi=mid;
   }
-  return _tocaPisoEnNDC(nx,lo);
+  return _tocaPisoEnNDC(nx,lo,capM);
 }
 function _footprintCamara(){
   camera.updateMatrixWorld(); // por si se llama antes de que el render del frame la actualice
+  const capM = _capFootprintM();
   let xMin=Infinity, xMax=-Infinity, zMin=Infinity, zMax=-Infinity;
   for(const nx of _COLUMNAS_NDC){
-    const hit = _horizonteEnColumna(nx);
+    const hit = _horizonteEnColumna(nx, capM);
     if(!hit) continue;
     xMin=Math.min(xMin,hit.x); xMax=Math.max(xMax,hit.x);
     zMin=Math.min(zMin,hit.z); zMax=Math.max(zMax,hit.z);
