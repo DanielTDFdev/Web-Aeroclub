@@ -2,6 +2,29 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.14 · REHECHO DE RAÍZ del mapa satelital, otra vez. Daniel mandó captura:
+  en zoom cercano seguía quedando un parche del tamaño del avión con cielo
+  liso alrededor, incluso después de v2.13. Causa de fondo (v2.13 no la
+  tocaba): TODO el diseño desde v1.43 elegía cuánto terreno pedir a partir de
+  la DISTANCIA DE ÓRBITA de la cámara — un número ciego a hacia dónde mira.
+  Con camPhi cerca de su tope (canvas.pointermove) y el target de la cámara
+  siguiendo al avión con su altitud EXAGERADA x4 para el dibujo, "cerca del
+  avión" en radio de órbita no es "cerca del piso real": el terreno que
+  realmente entra en cuadro se extiende mucho más lejos y de forma asimétrica
+  — ningún radio centrado en el avión puede describirlo. Reemplazo: en vez
+  de inferir, se CALCULA el terreno realmente visible — por cada columna de
+  pantalla se busca por bisección el punto de piso más lejano que esa
+  columna muestra (cruce de cada rayo de cámara con el plano Y_MAPA), capado
+  a MAX_RADIO_FOOTPRINT_M=3000m para no pedir un mosaico del tamaño de la
+  provincia en una mirada rasante (más allá de eso, franja angosta cerca del
+  horizonte, trade-off honesto). El primer intento de este mismo fix (mirar
+  solo las 4 esquinas) subestimaba el caso donde el horizonte cae a MITAD de
+  pantalla, no en el borde — de ahí la bisección por columna en vez de un
+  muestreo fijo. También se agrega _chequearMapaPorCamara (reemplaza
+  _chequearMapaSeguimiento): corre en el loop, throttleado a 400ms, y
+  dispara por zoom, pan, ROTACIÓN y seguimiento del avión por igual — antes
+  girar la cámara a un ángulo rasante no recalculaba nada.
+
   v2.13 · Pedido de Daniel con captura: en zoom cercano el parche de mapa
   queda del tamaño del avión (borde visible pegadísimo, el resto del suelo
   desaparece porque el pasto se apaga con el mapa activo). Causa:
@@ -1888,7 +1911,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.13</span>
+    <span class="badge" id="ver-badge">v2.14</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -3864,13 +3887,27 @@ function _tileEsquinaLngLat(tx, ty, zoom){ // esquina noroeste del tile (tx,ty)
   const latRad = Math.atan(Math.sinh(Math.PI*(1-2*ty/n)));
   return {lat: latRad*180/Math.PI, lng};
 }
-// v1.35: bbox lat/lng CENTRADO en un punto de mundo (x,z) con un radio en
-// metros — para el parche de acercamiento (área chica, no todo el vuelo).
-function _bboxLatLngCentroRadio(xCentro, zCentro, radioMetros){
-  const xMin=xCentro-radioMetros, xMax=xCentro+radioMetros, zMin=zCentro-radioMetros, zMax=zCentro+radioMetros;
+// Convierte un bbox en metros (mundo ENU, x=E z=N desde lat0/lng0) a lat/lng.
+// v2.14: generalizado desde el viejo _bboxLatLngCentroRadio (centro+radio,
+// solo servía para círculos) — el footprint real de cámara (ver más abajo)
+// es un rectángulo arbitrario, no necesariamente centrado en el avión.
+function _bboxLatLngDeXZ(xMin, xMax, zMin, zMax){
   const lngDe = x => lng0 + x/(R*Math.cos(lat0Rad))*180/Math.PI;
   const latDe = z => lat0 + z/R*180/Math.PI;
   return { lngMin:lngDe(xMin), lngMax:lngDe(xMax), latMin:latDe(zMin), latMax:latDe(zMax) };
+}
+// Inversa: bbox de tiles ya elegido -> cobertura real en metros (mundo ENU)
+// que ese mosaico va a representar. Necesario para saber, después, si el
+// mosaico activo YA cubre lo que la cámara necesita en el frame siguiente.
+function _coberturaMundoDeTiles(zoom, txMin, txMax, tyMin, tyMax){
+  const no = _tileEsquinaLngLat(txMin, tyMin, zoom);
+  const se = _tileEsquinaLngLat(txMax+1, tyMax+1, zoom);
+  return {
+    xMin: R*(no.lng-lng0)*Math.PI/180*Math.cos(lat0Rad),
+    xMax: R*(se.lng-lng0)*Math.PI/180*Math.cos(lat0Rad),
+    zMin: R*(se.lat-lat0)*Math.PI/180,
+    zMax: R*(no.lat-lat0)*Math.PI/180,
+  };
 }
 // cuerpo de descarga+canvas+mesh — parametrizado por zoom/rango de tiles YA
 // elegidos, y por la altura Y donde va a quedar el plano (para poder separar
@@ -4007,66 +4044,133 @@ const TILES_PRESUPUESTO = 144;  // 12x12 nominal (antes 64/8x8); el redondeo
 const Y_MAPA = -0.15;          // altura del plano del mapa (la de siempre)
 const _mapaCache = new Map();  // clave = rango de tiles -> Promise<THREE.Mesh>
 let mapaSatMeshActivo = null;  // el único mosaico visible en este momento
-let _mapaVistaActual = null;   // {x,z,radio} de la vista con la que se pidió
-let _ultimoChequeoMapa = 0;    // throttle del chequeo de seguimiento en el loop
+let _mapaVistaActual = null;   // {xMin,xMax,zMin,zMax}: cobertura REAL en metros del mosaico activo
+let _ultimoChequeoMapa = 0;    // throttle del chequeo por cámara en el loop
 let _mapaSatCargando = false;
 
-// Radio de terreno (metros) que conviene tener cubierto para la distancia de
-// cámara actual. El 1.8 da margen alrededor de lo estrictamente visible, para
-// que girar la cámara o avanzar un poco no deje bordes sin mapa.
-function _radioVistaDeseado(){
-  const radioCam = seguirChk.checked ? camRadioSeguir : camRadioLibre;
-  return Math.max(200, radioCam*1.8);
+// ============================================================================
+// v2.14 — REHECHO DE RAÍZ (otra vez). Daniel mandó dos capturas seguidas:
+// zoom cercano en modo seguir seguía dejando un parche del tamaño del avión
+// con el cielo (azul liso, sin pasto — se apaga junto con el mapa) visible
+// alrededor, incluso después de v2.13 (que solo hacía crecer el parche
+// hasta agotar el presupuesto de tiles a un radio heurístico, sin cambiar
+// DE DÓNDE salía ese radio).
+//
+// Diagnóstico real: TODO el diseño desde v1.43 elegía el área a cubrir a
+// partir de la DISTANCIA DE ÓRBITA de la cámara (camRadioSeguir/Libre) — un
+// número que no sabe nada de hacia dónde mira la cámara. canvas.pointermove
+// deja inclinar camPhi hasta casi rasante (Math.PI/2-0.02). Con la cámara
+// mirando casi al ras (o, como acá, orbitando un avión en altitud — el
+// target de la cámara sigue al avión con su altura EXAGERADA x4 para el
+// dibujo, así que "cerca del avión" en radio de órbita no es "cerca del
+// piso real" en absoluto) el terreno que realmente entra en el cuadro se
+// extiende mucho más lejos — y en direcciones asimétricas, no un círculo
+// parejo — de lo que cualquier radio centrado en el avión puede describir.
+// Ningún ajuste al radio heurístico (v2.13 incluido) puede arreglar esto de
+// fondo: el radio nunca supo hacia dónde apuntaba la cámara.
+//
+// Reemplazo: en vez de inferir cuánto terreno hace falta, se lo CALCULA
+// directamente — por cada columna vertical de la pantalla se busca, por
+// bisección, el punto de piso más lejano que esa columna todavía muestra
+// (el borde piso/cielo, o el tope de distancia — lo que llegue primero).
+// Solo mirar las 4 esquinas (primer intento de este mismo fix) SUBESTIMA
+// esto: en una vista inclinada el horizonte real puede caer a MITAD de
+// pantalla, no en el borde superior — la esquina de arriba ya muestra
+// cielo mientras el punto más lejano de piso todavía visible está más
+// abajo, en esa misma columna. La distancia al horizonte tiende a infinito
+// a medida que el ángulo de mirada se acerca a paralelo al piso — se la
+// capa a MAX_RADIO_FOOTPRINT_M para no terminar pidiendo un mosaico del
+// tamaño de la provincia; más allá de ese tope es una franja angosta cerca
+// del horizonte, el trade-off honesto (mismo espíritu que "el zoom baja al
+// alejarse" de v1.43: se prefiere cobertura completa a menor resolución
+// antes que un hueco).
+const MAX_RADIO_FOOTPRINT_M = 3000;
+const _groundPlaneMapa = new THREE.Plane(new THREE.Vector3(0,1,0), -Y_MAPA);
+const _rcFootprint = new THREE.Raycaster();
+const _COLUMNAS_NDC = [-1, -0.5, 0, 0.5, 1]; // muestras a lo ancho de la pantalla
+// Punto de piso más lejano visible en la columna `nx` (NDC horizontal,
+// -1..1), o null si ni el borde inferior de esa columna toca piso dentro
+// del tope (cámara mirando para arriba — no debería pasar en uso normal).
+function _tocaPisoEnNDC(nx, ny){
+  _rcFootprint.setFromCamera({x:nx, y:ny}, camera);
+  const hit = new THREE.Vector3();
+  if(!_rcFootprint.ray.intersectPlane(_groundPlaneMapa, hit)) return null; // apunta al cielo
+  const d = Math.hypot(hit.x-camera.position.x, hit.z-camera.position.z);
+  return d<=MAX_RADIO_FOOTPRINT_M ? hit : null; // más allá del tope: se trata como "no hay piso útil ahí"
 }
-// Centro de la vista: en modo seguir, el avión; en cámara libre, el centro del
-// vuelo (que es alrededor de lo que orbita la cámara libre).
-function _centroVista(){
-  if(seguirChk.checked){ const m = muestraEn(currentT); return {x:m.x, z:m.z}; }
-  return {x:centro.x, z:centro.z};
+function _horizonteEnColumna(nx){
+  if(!_tocaPisoEnNDC(nx,-1)) return null; // ni el borde inferior toca piso dentro del tope
+  const arriba = _tocaPisoEnNDC(nx,1);
+  if(arriba) return arriba; // toda la columna es piso dentro del tope: el punto más lejano es el de arriba
+  let lo=-1, hi=1; // lo: último ny que sabemos toca piso; hi: primero que no (cielo o más allá del tope)
+  for(let i=0;i<10;i++){
+    const mid=(lo+hi)/2;
+    if(_tocaPisoEnNDC(nx,mid)) lo=mid; else hi=mid;
+  }
+  return _tocaPisoEnNDC(nx,lo);
 }
-// El mayor zoom nativo cuyo mosaico para este área entre en el presupuesto.
-// Misma idea que _elegirZoomYTiles pero partiendo de centro+radio en metros
-// (no de un bbox ya armado) y sin tope configurable — acá el presupuesto es
-// una sola constante para todo el visor.
-function _elegirVista(cx, cz, radio){
+function _footprintCamara(){
+  camera.updateMatrixWorld(); // por si se llama antes de que el render del frame la actualice
+  let xMin=Infinity, xMax=-Infinity, zMin=Infinity, zMax=-Infinity;
+  for(const nx of _COLUMNAS_NDC){
+    const hit = _horizonteEnColumna(nx);
+    if(!hit) continue;
+    xMin=Math.min(xMin,hit.x); xMax=Math.max(xMax,hit.x);
+    zMin=Math.min(zMin,hit.z); zMax=Math.max(zMax,hit.z);
+  }
+  // red de seguridad: siempre entran la posición de la cámara (cubre el
+  // borde CERCANO, entre cámara y horizonte) y el punto que mira (target) —
+  // por si alguna/todas las columnas no tocaron piso (cámara mirando para
+  // arriba). Con esto el bbox siempre queda con área positiva.
+  const t = seguirChk.checked ? muestraEn(currentT) : centro;
+  for(const p of [camera.position, t]){
+    xMin=Math.min(xMin,p.x); xMax=Math.max(xMax,p.x);
+    zMin=Math.min(zMin,p.z); zMax=Math.max(zMax,p.z);
+  }
+  // margen del 12%: un giro/paneo chico no debe disparar un refetch inmediato.
+  const mx = (xMax-xMin)*0.12 || 50, mz = (zMax-zMin)*0.12 || 50;
+  return {xMin:xMin-mx, xMax:xMax+mx, zMin:zMin-mz, zMax:zMax+mz};
+}
+
+// El mayor zoom nativo cuyo mosaico para este bbox (metros, mundo ENU) entre
+// en el presupuesto de tiles. Si sobra presupuesto a ese zoom, se crece el
+// parche parejo en las 4 direcciones hasta agotarlo (v2.13) — da margen para
+// que el footprint del frame siguiente siga entrando sin recalcular.
+function _elegirVistaBBox(xMin, xMax, zMin, zMax){
   for(let zoom=17; zoom>=8; zoom--){
-    const b = _bboxLatLngCentroRadio(cx, cz, radio);
+    const b = _bboxLatLngDeXZ(xMin, xMax, zMin, zMax);
     const no = _lngLatATileFrac(b.lngMin, b.latMax, zoom);
     const se = _lngLatATileFrac(b.lngMax, b.latMin, zoom);
     let txMin=Math.floor(no.x), txMax=Math.floor(se.x);
     let tyMin=Math.floor(no.y), tyMax=Math.floor(se.y);
     if((txMax-txMin+1)*(tyMax-tyMin+1) <= TILES_PRESUPUESTO){
-      // v2.13 — Daniel reportó que en zoom cercano el parche queda del
-      // tamaño del avión. Causa: el bbox de arriba es el MÍNIMO que cubre
-      // `radio` (piso de 200m en cámara seguir), y a zoom 17 eso son ~3x3
-      // tiles — muy por debajo del presupuesto de 144 (12x12). Se crece el
-      // parche parejo en las 4 direcciones mientras siga entrando en el
-      // presupuesto, así el borde del mosaico queda lejos del avión en vez
-      // de pegado al radio mínimo pedido.
       while((txMax-txMin+3)*(tyMax-tyMin+3) <= TILES_PRESUPUESTO){ txMin--; txMax++; tyMin--; tyMax++; }
       return {zoom,txMin,txMax,tyMin,tyMax};
     }
   }
-  const b = _bboxLatLngCentroRadio(cx, cz, radio);
+  const b = _bboxLatLngDeXZ(xMin, xMax, zMin, zMax);
   const no = _lngLatATileFrac(b.lngMin, b.latMax, 8);
   const se = _lngLatATileFrac(b.lngMax, b.latMin, 8);
   return {zoom:8, txMin:Math.floor(no.x), txMax:Math.floor(se.x), tyMin:Math.floor(no.y), tyMax:Math.floor(se.y)};
 }
 
-// Pide (o reusa del cache) el mosaico que corresponde a la vista actual y lo
-// muestra, ocultando el anterior. Cachea por RANGO DE TILES (v1.37): moverse
-// o zoomear un poco suele caer en el mismo rango y no pega a la red.
+// Pide (o reusa del cache) el mosaico que corresponde al footprint real de
+// cámara y lo muestra, ocultando el anterior. Si lo que la cámara necesita
+// AHORA ya entra en la cobertura real del mosaico activo, no hace nada — ni
+// siquiera recalcula tiles (containment barato, sin red).
 // IMPORTANTE: el mosaico viejo se oculta recién DESPUÉS de que el nuevo está
 // listo — si se ocultara antes del await, quedaría un parpadeo sin mapa
 // (pasto/vacío) durante toda la descarga.
 async function actualizarMapaSatelital(){
   if(!mapaSatChk.checked || _mapaSatCargando) return;
-  const c = _centroVista();
-  const radio = _radioVistaDeseado();
-  const v = _elegirVista(c.x, c.z, radio);
+  const fp = _footprintCamara();
+  if(_mapaVistaActual &&
+     fp.xMin>=_mapaVistaActual.xMin && fp.xMax<=_mapaVistaActual.xMax &&
+     fp.zMin>=_mapaVistaActual.zMin && fp.zMax<=_mapaVistaActual.zMax) return; // ya cubierto
+  const v = _elegirVistaBBox(fp.xMin, fp.xMax, fp.zMin, fp.zMax);
   const key = `${v.zoom}:${v.txMin}:${v.txMax}:${v.tyMin}:${v.tyMax}`;
   if(mapaSatMeshActivo && mapaSatMeshActivo.userData.mapaKey === key){
-    _mapaVistaActual = {x:c.x, z:c.z, radio}; // misma imagen sirve; se refresca el centro de referencia
+    _mapaVistaActual = _coberturaMundoDeTiles(v.zoom,v.txMin,v.txMax,v.tyMin,v.tyMax);
     return;
   }
   _mapaSatCargando = true;
@@ -4083,24 +4187,22 @@ async function actualizarMapaSatelital(){
     if(mapaSatMeshActivo && mapaSatMeshActivo !== mesh) mapaSatMeshActivo.visible = false;
     mesh.visible = true;
     mapaSatMeshActivo = mesh;
-    _mapaVistaActual = {x:c.x, z:c.z, radio};
+    _mapaVistaActual = _coberturaMundoDeTiles(v.zoom,v.txMin,v.txMax,v.tyMin,v.tyMax);
   } finally {
     _mapaSatCargando = false;
   }
 }
 
-// Llamado desde el loop: repide el mosaico si el avión (modo seguir) se alejó
-// del centro con el que se pidió el actual. Throttleado — no en cada frame.
-function _chequearMapaSeguimiento(ahoraMs, m){
-  if(!mapaSatChk.checked || !seguirChk.checked) return; // en cámara libre el
-    // centro es fijo (centro del vuelo): no hay nada que seguir.
-  if(ahoraMs - _ultimoChequeoMapa < 700) return;
+// Llamado desde el loop, throttleado: chequea si lo que la cámara está
+// viendo AHORA (footprint real — zoom, pan, rotación y seguimiento del
+// avión, los cuatro por igual) sigue entrando en el mosaico activo. Antes
+// (_chequearMapaSeguimiento) solo miraba desplazamiento del avión en modo
+// seguir — GIRAR la cámara a un ángulo rasante no disparaba nada.
+function _chequearMapaPorCamara(ahoraMs){
+  if(!mapaSatChk.checked || _mapaSatCargando) return;
+  if(ahoraMs - _ultimoChequeoMapa < 400) return;
   _ultimoChequeoMapa = ahoraMs;
-  if(!_mapaVistaActual) return;
-  const dx = m.x - _mapaVistaActual.x, dz = m.z - _mapaVistaActual.z;
-  // v1.97: 0.35 -> 0.6 (patch más grande de TILES_PRESUPUESTO, se deja
-  // alejar proporcionalmente más antes de recentrar).
-  if(Math.hypot(dx,dz) > _mapaVistaActual.radio*0.6) actualizarMapaSatelital();
+  actualizarMapaSatelital(); // no pide nada por red si el footprint ya entra en lo cargado
 }
 
 const mapaSatChk = document.getElementById('mapaSat');
@@ -5075,7 +5177,6 @@ function loop(now){
   }
   if(_heliceRef && playing){ _heliceRef.rotation.y += dt*22; } // gira mientras reproduce, de yapa
   const m = muestraEn(currentT);
-  _chequearMapaSeguimiento(now, m); // v1.43: repide el mosaico si el avión salió del área cubierta
   aplicarRevelado(idxFraccEnTiempo(currentT).idxF); // v1.30: modo "dibujar a medida que avanza" / v1.55: + ventana de sobrevida por DISTANCIA
   // v1.52: sin tubo, el offset se recalibra contra el borde superior de la
   // CORTINA — que está exactamente en ry(m.y), sin ningún radio de por medio
@@ -5174,6 +5275,7 @@ function loop(now){
 
   const siguiendo = seguirChk.checked;
   actualizarCamara(siguiendo ? pos : centro, siguiendo ? camRadioSeguir : camRadioLibre);
+  _chequearMapaPorCamara(now); // v2.14: footprint real de cámara — después de actualizarCamara, ya con la pose de este frame
   actualizarInfo(m);
 
   // v1.66 — la rosa fue reconstruida con vértices relativos al grupo (antes
