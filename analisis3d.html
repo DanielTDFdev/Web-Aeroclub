@@ -2,6 +2,22 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.17 · Daniel mandó captura: acercando MUCHO la cámara al avión en pleno
+  vuelo (960ft), con la cámara casi al ras respecto del avión, el corte de
+  mapa seguía viéndose — pidió explícitamente que desde NINGÚN ángulo quede
+  sin verse mapa. Causa: _capFootprintM (v2.15) basaba el tope de distancia
+  en el RADIO DE ÓRBITA de la cámara — pero ese radio no dice nada de qué
+  tan alta está la cámara sobre el piso REAL cuando el target (el avión)
+  está arriba en altitud. Con radio de órbita chico (cámara "pegada" al
+  avión) y camPhi cerca de su tope, la cámara sigue estando, en metros
+  reales, a la altura de vuelo del avión (960ft×4 de exageración ≈ 1170
+  unidades) mirando casi al ras DESDE ESA ALTURA — un radio de órbita de
+  30m no tiene relación con la distancia real (>2000m) que ese ángulo
+  necesita para tocar el piso. Se reemplaza el tope por la ALTURA REAL de
+  la cámara sobre Y_MAPA (camera.position.y, ya calculada por
+  actualizarCamara para este frame) — la cantidad que de verdad determina
+  cuánto hace falta buscar, sea cual sea el radio de órbita.
+
   v2.16 · Daniel: "se arregló el zoom out, pero ahora zoom in no actualiza y
   deja el tile de baja resolución". Causa: el chequeo de "ya cubierto" en
   actualizarMapaSatelital (desde v2.14) solo miraba ÁREA — si el footprint
@@ -1936,7 +1952,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.16</span>
+    <span class="badge" id="ver-badge">v2.17</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -4116,11 +4132,23 @@ let _mapaSatCargando = false;
 // respecto del piso real muy por debajo, una mirada bastante rasante — así
 // que hasta un zoom out moderado pegaba contra el tope fijo y el parche
 // dejaba de crecer aunque el usuario siguiera alejándose. El tope tiene que
-// crecer con cuánto zoom out pidió el usuario, no ser una constante — se
-// deriva del radio de órbita ACTUAL (mismo radio que ya usa aplicarZoom).
+// crecer con cuánto zoom out pidió el usuario, no ser una constante.
+// v2.17 — Daniel mandó captura: acercando MUCHO la cámara al avión (radio de
+// órbita chico) en pleno vuelo (960ft) el corte seguía viéndose. v2.15 basaba
+// el tope en el RADIO DE ÓRBITA (camRadioSeguir) — pero ese radio no dice
+// nada de qué tan alta está la cámara sobre el piso REAL cuando el target
+// (el avión) está arriba en altitud: con radio de órbita chico (cámara
+// "pegada" al avión) y camPhi cerca de su tope (mirada casi horizontal
+// respecto del avión), la cámara sigue estando, en metros reales, a la
+// altura de vuelo del avión (960ft×4 de exageración ≈ 1170 unidades) —
+// mirando casi al ras DE ESA ALTURA hacia el piso, muy por debajo. Un radio
+// de órbita de 30m no tiene relación con esa distancia real de más de 2000m
+// que ese ángulo necesita para tocar el piso. Se reemplaza por la ALTURA
+// REAL de la cámara sobre Y_MAPA — la cantidad que de verdad determina qué
+// tan lejos hace falta buscar el piso, sea cual sea el radio de órbita.
 function _capFootprintM(){
-  const radioCam = seguirChk.checked ? camRadioSeguir : camRadioLibre;
-  return Math.max(2000, radioCam*4);
+  const alturaCam = Math.max(1, camera.position.y - Y_MAPA);
+  return Math.max(1500, alturaCam*10);
 }
 const _groundPlaneMapa = new THREE.Plane(new THREE.Vector3(0,1,0), -Y_MAPA);
 const _rcFootprint = new THREE.Raycaster();
