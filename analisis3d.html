@@ -2,6 +2,16 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.13 · Pedido de Daniel con captura: en zoom cercano el parche de mapa
+  queda del tamaño del avión (borde visible pegadísimo, el resto del suelo
+  desaparece porque el pasto se apaga con el mapa activo). Causa:
+  _elegirVista arma el bbox MÍNIMO que cubre `radio` (piso de 200m en modo
+  seguir), y a zoom 17 eso entra en apenas ~3x3 tiles — muy por debajo del
+  presupuesto de 144 (12x12) que ya existía pero no se aprovechaba. Se agrega
+  un crecimiento parejo del rango de tiles, en las 4 direcciones, mientras
+  siga entrando en el presupuesto — el parche ahora siempre usa el
+  presupuesto completo a cada zoom, no solo lo mínimo indispensable.
+
   v2.12 · Pedido de Daniel: "cada zoom in/out recarga todo el mapa desde
   internet". Causa real: _mapaCache cachea el MOSAICO completo con clave =
   rango exacto de tiles, que sale de centro/radio de cámara CONTINUOS — un
@@ -1878,7 +1888,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.12</span>
+    <span class="badge" id="ver-badge">v2.13</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -4023,9 +4033,19 @@ function _elegirVista(cx, cz, radio){
     const b = _bboxLatLngCentroRadio(cx, cz, radio);
     const no = _lngLatATileFrac(b.lngMin, b.latMax, zoom);
     const se = _lngLatATileFrac(b.lngMax, b.latMin, zoom);
-    const txMin=Math.floor(no.x), txMax=Math.floor(se.x);
-    const tyMin=Math.floor(no.y), tyMax=Math.floor(se.y);
-    if((txMax-txMin+1)*(tyMax-tyMin+1) <= TILES_PRESUPUESTO) return {zoom,txMin,txMax,tyMin,tyMax};
+    let txMin=Math.floor(no.x), txMax=Math.floor(se.x);
+    let tyMin=Math.floor(no.y), tyMax=Math.floor(se.y);
+    if((txMax-txMin+1)*(tyMax-tyMin+1) <= TILES_PRESUPUESTO){
+      // v2.13 — Daniel reportó que en zoom cercano el parche queda del
+      // tamaño del avión. Causa: el bbox de arriba es el MÍNIMO que cubre
+      // `radio` (piso de 200m en cámara seguir), y a zoom 17 eso son ~3x3
+      // tiles — muy por debajo del presupuesto de 144 (12x12). Se crece el
+      // parche parejo en las 4 direcciones mientras siga entrando en el
+      // presupuesto, así el borde del mosaico queda lejos del avión en vez
+      // de pegado al radio mínimo pedido.
+      while((txMax-txMin+3)*(tyMax-tyMin+3) <= TILES_PRESUPUESTO){ txMin--; txMax++; tyMin--; tyMax++; }
+      return {zoom,txMin,txMax,tyMin,tyMax};
+    }
   }
   const b = _bboxLatLngCentroRadio(cx, cz, radio);
   const no = _lngLatATileFrac(b.lngMin, b.latMax, 8);
