@@ -2,6 +2,21 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.11 · /revisar exhaustivo de detectarManiobras() y calcularFasesCircuito().
+  Dos bugs reales encontrados y corregidos. (1) La fusión de huecos cortos de
+  fase (FUSION_HUECO_S) rellenaba TODO el tramo entre dos puntos de la misma
+  fase sin mirar qué había en el medio — si un punto real de OTRA fase caía
+  ahí (ruido geométrico en zona de transición), lo pisaba. Ahora la búsqueda
+  corta apenas encuentra cualquier punto ya clasificado, sea o no la misma
+  fase. (2) EMERGENCIA SIMULADA: la extensión de idxFin (buscando el ascenso
+  sostenido que cierra la ventana) no volvía a chequear lejosDelCampo — un
+  descenso sostenido que arranca a >1NM del campo y sigue derecho hasta el
+  aterrizaje real (una final larga con buen rate of descent, sin volver a
+  subir) se tragaba hasta el touchdown como si fuera la emergencia completa.
+  Se agrega el corte por lejosDelCampo también en la extensión — de paso
+  acota el costo de haySubidaSostenida, que podía recorrer el resto del
+  track en el peor caso.
+
   v2.10 · Pedido de Daniel: dos cambios. (1) Banda verde de distancia lateral
   de INICIAL sube otros 100m, de ±200m a ±300m (1100-1700m), amarillo a
   ±375m (1025-1775m) — tol=300/1.4≈214.29m. (2) Panning con clic derecho:
@@ -1852,7 +1867,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.10</span>
+    <span class="badge" id="ver-badge">v2.11</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -2671,6 +2686,7 @@ function detectarManiobras(track, viento){
       // real arranca (ahí sí termina la maniobra).
       let idxFin = j-1;
       for(let k=j-1; k<n; k++){
+        if(!lejosDelCampo(k)) break; // se acercó al campo: es el aterrizaje real, no la emergencia
         if(haySubidaSostenida(k)) break;
         idxFin = k;
       }
@@ -3110,9 +3126,12 @@ function calcularFasesCircuito(track, lat0, lng0, R){
   for(let a=0; a<crudo.length; a++){
     if(crudo[a]==null) continue;
     for(let b=a+1; b<crudo.length && track[b].t-track[a].t<=FUSION_HUECO_S; b++){
-      if(crudo[b]!=null && crudo[b].fase===crudo[a].fase){
-        for(let k=a+1; k<b; k++) crudo[k] = {fase:crudo[a].fase, dev:Math.max(crudo[a].dev, crudo[b].dev)};
-        a = b-1; break;
+      if(crudo[b]!=null){
+        if(crudo[b].fase===crudo[a].fase){
+          for(let k=a+1; k<b; k++) crudo[k] = {fase:crudo[a].fase, dev:Math.max(crudo[a].dev, crudo[b].dev)};
+          a = b-1;
+        }
+        break; // punto clasificado en el medio (misma fase: ya fusionado arriba; otra fase: no pisarla)
       }
     }
   }
