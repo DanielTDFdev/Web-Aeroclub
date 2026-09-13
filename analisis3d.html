@@ -2,6 +2,19 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.16 · Daniel: "se arregló el zoom out, pero ahora zoom in no actualiza y
+  deja el tile de baja resolución". Causa: el chequeo de "ya cubierto" en
+  actualizarMapaSatelital (desde v2.14) solo miraba ÁREA — si el footprint
+  pedido entraba dentro del mosaico activo, cortaba ahí sin mirar el ZOOM de
+  ese mosaico. Al hacer zoom in el área pedida se achica y entra trivialmente
+  dentro del mosaico grande de baja resolución que ya estaba mostrado — el
+  código nunca llegaba a preguntarse si esa área más chica ahora admitía un
+  zoom nativo mejor dentro del presupuesto de tiles. Se agrega la condición
+  v.zoom<=zoom del mosaico activo: si el área actual admite más resolución
+  que la ya mostrada, se refina aunque el área ya estuviera cubierta.
+  _mapaVistaActual ahora guarda también el zoom del mosaico, no solo su
+  bbox en metros.
+
   v2.15 · Daniel: "resuelto lo del zoom in, pero ahora hago zoom out y el
   parche no crece". Causa: v2.14 introdujo MAX_RADIO_FOOTPRINT_M=3000m, un
   tope FIJO para no perseguir el horizonte al infinito en una mirada
@@ -1923,7 +1936,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.15</span>
+    <span class="badge" id="ver-badge">v2.16</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -4180,22 +4193,29 @@ function _elegirVistaBBox(xMin, xMax, zMin, zMax){
 }
 
 // Pide (o reusa del cache) el mosaico que corresponde al footprint real de
-// cámara y lo muestra, ocultando el anterior. Si lo que la cámara necesita
-// AHORA ya entra en la cobertura real del mosaico activo, no hace nada — ni
-// siquiera recalcula tiles (containment barato, sin red).
+// cámara y lo muestra, ocultando el anterior.
 // IMPORTANTE: el mosaico viejo se oculta recién DESPUÉS de que el nuevo está
 // listo — si se ocultara antes del await, quedaría un parpadeo sin mapa
 // (pasto/vacío) durante toda la descarga.
 async function actualizarMapaSatelital(){
   if(!mapaSatChk.checked || _mapaSatCargando) return;
   const fp = _footprintCamara();
-  if(_mapaVistaActual &&
-     fp.xMin>=_mapaVistaActual.xMin && fp.xMax<=_mapaVistaActual.xMax &&
-     fp.zMin>=_mapaVistaActual.zMin && fp.zMax<=_mapaVistaActual.zMax) return; // ya cubierto
   const v = _elegirVistaBBox(fp.xMin, fp.xMax, fp.zMin, fp.zMax);
+  // v2.16 — Daniel: "hago zoom in y no actualiza, deja el tile de baja
+  // resolución". Causa: el chequeo de "ya cubierto" solo miraba ÁREA
+  // (containment del bbox pedido dentro del mosaico activo) — al achicar el
+  // área (zoom in) esa área nueva entra trivialmente en el mosaico grande
+  // de baja resolución que ya estaba cargado, así que nunca se disparaba el
+  // refetch al zoom NATIVO mejor que ahora sí entraría en el presupuesto de
+  // tiles para un área más chica. Ahora también se exige v.zoom<=zoom
+  // activo — si el área actual admite más resolución que la que ya se está
+  // mostrando, se refina aunque el área ya estuviera "cubierta".
+  if(_mapaVistaActual && v.zoom<=_mapaVistaActual.zoom &&
+     fp.xMin>=_mapaVistaActual.xMin && fp.xMax<=_mapaVistaActual.xMax &&
+     fp.zMin>=_mapaVistaActual.zMin && fp.zMax<=_mapaVistaActual.zMax) return; // ya cubierto, ni el zoom mejora
   const key = `${v.zoom}:${v.txMin}:${v.txMax}:${v.tyMin}:${v.tyMax}`;
   if(mapaSatMeshActivo && mapaSatMeshActivo.userData.mapaKey === key){
-    _mapaVistaActual = _coberturaMundoDeTiles(v.zoom,v.txMin,v.txMax,v.tyMin,v.tyMax);
+    _mapaVistaActual = {..._coberturaMundoDeTiles(v.zoom,v.txMin,v.txMax,v.tyMin,v.tyMax), zoom:v.zoom};
     return;
   }
   _mapaSatCargando = true;
@@ -4212,7 +4232,7 @@ async function actualizarMapaSatelital(){
     if(mapaSatMeshActivo && mapaSatMeshActivo !== mesh) mapaSatMeshActivo.visible = false;
     mesh.visible = true;
     mapaSatMeshActivo = mesh;
-    _mapaVistaActual = _coberturaMundoDeTiles(v.zoom,v.txMin,v.txMax,v.tyMin,v.tyMax);
+    _mapaVistaActual = {..._coberturaMundoDeTiles(v.zoom,v.txMin,v.txMax,v.tyMin,v.tyMax), zoom:v.zoom};
   } finally {
     _mapaSatCargando = false;
   }
