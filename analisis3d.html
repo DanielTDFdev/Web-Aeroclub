@@ -2,6 +2,17 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.12 · Pedido de Daniel: "cada zoom in/out recarga todo el mapa desde
+  internet". Causa real: _mapaCache cachea el MOSAICO completo con clave =
+  rango exacto de tiles, que sale de centro/radio de cámara CONTINUOS — un
+  cambio mínimo de radio corre el bbox y el redondeo a tile entero cae en un
+  rango distinto, mosaico entero "no cacheado" aunque casi todos sus tiles ya
+  se habían bajado para el mosaico anterior. Se agrega _tileImgCache, un
+  segundo cache por URL de tile individual (independiente del rango del
+  mosaico) — _fetchMosaicoParaZoom ahora reusa cualquier tile ya bajado en
+  vez de crear un Image() nuevo, así el corrimiento del bbox en cada zoom ya
+  no fuerza red para los tiles que se solapan con el mosaico anterior.
+
   v2.11 · /revisar exhaustivo de detectarManiobras() y calcularFasesCircuito().
   Dos bugs reales encontrados y corregidos. (1) La fusión de huecos cortos de
   fase (FUSION_HUECO_S) rellenaba TODO el tramo entre dos puntos de la misma
@@ -1867,7 +1878,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.11</span>
+    <span class="badge" id="ver-badge">v2.12</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -3854,6 +3865,32 @@ function _bboxLatLngCentroRadio(xCentro, zCentro, radioMetros){
 // cuerpo de descarga+canvas+mesh — parametrizado por zoom/rango de tiles YA
 // elegidos, y por la altura Y donde va a quedar el plano (para poder separar
 // el parche del mosaico de fondo y que no compitan por el mismo pixel).
+// v2.11 — Daniel reportó que cada zoom in/out volvía a bajar TODO de internet.
+// Causa real: _mapaCache (más abajo) cachea el MOSAICO completo, con clave =
+// rango exacto de tiles — y ese rango sale de centro/radio de cámara, que son
+// CONTINUOS (aplicarZoom multiplica el radio por un factor cada tick). Un
+// cambio mínimo de radio corre el bbox en metros lo suficiente para que el
+// redondeo a tile entero caiga en un rango distinto: nueva clave, mosaico
+// entero declarado "no cacheado" — aunque la enorme mayoría de esos tiles
+// individuales ya se habían bajado segundos antes para el mosaico anterior.
+// _fetchMosaicoParaZoom creaba un Image() nuevo por tile en cada llamada, sin
+// mirar si esa URL exacta ya se había pedido. Se agrega un segundo cache, por
+// URL de tile individual (independiente del rango del mosaico al que
+// pertenezca) — así un tile ya bajado se reusa sin red aunque el mosaico que
+// lo contiene sea "nuevo" por el corrimiento del bbox.
+const _tileImgCache = new Map(); // url del tile -> Promise<{img,ok}>
+function _cargarTile(url){
+  if(!_tileImgCache.has(url)){
+    _tileImgCache.set(url, new Promise(resolve=>{
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = ()=>resolve({img, ok:true});
+      img.onerror = ()=>{ console.warn('[mapaSat] falló el tile', url); resolve({img:null, ok:false}); };
+      img.src = url;
+    }));
+  }
+  return _tileImgCache.get(url);
+}
 async function _fetchMosaicoParaZoom(zoom, txMin, txMax, tyMin, tyMax, yPos, etiqueta){
   const nx=txMax-txMin+1, ny=tyMax-tyMin+1;
   const canvas = document.createElement('canvas');
@@ -3863,19 +3900,11 @@ async function _fetchMosaicoParaZoom(zoom, txMin, txMax, tyMin, tyMax, yPos, eti
   const promesas = [];
   for(let ty=tyMin; ty<=tyMax; ty++){
     for(let tx=txMin; tx<=txMax; tx++){
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
       const px=(tx-txMin)*256, py=(ty-tyMin)*256;
       const url = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${ty}/${tx}`;
-      promesas.push(new Promise(resolve=>{
-        img.onload = ()=>{ ctx.drawImage(img,px,py,256,256); ok++; resolve(); };
-        img.onerror = ()=>{ fail++; console.warn('[mapaSat] falló el tile', url); resolve(); };
-          // tile que falló: queda el hueco transparente, no rompe el resto —
-          // pero si fallan MUCHOS, avisamos abajo (posible bloqueo CORS del
-          // servidor de tiles al pedirlos con crossOrigin, necesario para
-          // poder dibujarlos en un canvas/textura de WebGL).
+      promesas.push(_cargarTile(url).then(r=>{
+        if(r.ok){ ctx.drawImage(r.img,px,py,256,256); ok++; } else fail++;
       }));
-      img.src = url;
     }
   }
   await Promise.all(promesas);
