@@ -2,6 +2,23 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.19 · Daniel probó el modo POV de v2.18 y reportó los dos supuestos de
+  signo marcados como "a confirmar" — ambos estaban mal:
+  1) CÁMARA MIRABA PARA ATRÁS: el supuesto de que el "adelante" local del
+     GLB es -Z (a partir de HUMO_OFFSET_LOCAL con Z positivo) era al revés.
+     Fix: +Math.PI al yaw de la cámara POV.
+  2) HORIZONTE SIEMPRE "FULL NOSE DOWN": no era un problema de signo de
+     pitch, sino de CENTRADO — el grupo del disco (cielo/tierra) se
+     construyó con coordenadas alrededor de y=0 local, pero nunca se lo
+     recentró en (100,100), el centro real del viewBox 0-200. Sin ese
+     translate, la ventana visible (recortada por el clipPath, y≈8..192)
+     caía ENTERA dentro del rectángulo de tierra (y 0..350) — se veía
+     "todo tierra" sin importar el pitch real, coincidencia que explica
+     por qué el síntoma no dependía del valor de pitch. Fix: transform
+     ahora es translate(100 100) rotate(bank) translate(0 pitchPx), en
+     vez de rotate(bank 100 100) translate(0 pitchPx) — mismo orden de
+     aplicación (pitch en marco local sin rotar, después bank), pero con
+     el disco centrado en el punto correcto antes de rotar.
   v2.18 · Pedido de Daniel: modo POV "vista cabina", cámara en el punto del
   piloto siguiendo la actitud real del avión (bank/pitch/rumbo SIN la
   exageración vertical de EXAG_VERT que usa avion.rotation — acá se busca la
@@ -2021,7 +2038,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.18</span>
+    <span class="badge" id="ver-badge">v2.19</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -5171,8 +5188,18 @@ function actualizarHUD(m){
   // orden del transform SVG: aplica de derecha a izquierda — primero
   // translate (offset de pitch, disco SIN rotar) y recién después rotate
   // (banqueo, alrededor del centro) — mismo orden que un horizonte real.
+  // v2.19 FIX: Daniel probó y el horizonte mostraba SIEMPRE full nose-down
+  // sin importar el pitch real — al disco (sky/tierra construidos alrededor
+  // de y=0 local) le faltaba centrarlo en (100,100), el centro real del
+  // viewBox. Sin ese translate(100 100) de base, la ventana visible
+  // (recortada por el clipPath, y≈8..192) caía ENTERA dentro del rectángulo
+  // de tierra (y 0..350) — se veía "todo tierra" a cualquier pitch. Orden
+  // (derecha a izquierda): 1) translate(0,pitchPx) en el marco local SIN
+  // rotar, 2) rotate(bank) alrededor del origen local (que, recién DESPUÉS
+  // del translate(100,100) exterior, cae exactamente en el centro real del
+  // instrumento), 3) translate(100,100) para llevar todo al centro del viewBox.
   _povHorizonteGrp.setAttribute('transform',
-    `rotate(${bankDeg} 100 100) translate(0 ${pitchDeg*POV_PITCH_PX_POR_GRADO})`);
+    `translate(100 100) rotate(${bankDeg}) translate(0 ${pitchDeg*POV_PITCH_PX_POR_GRADO})`);
   _povPunteroGrp.setAttribute('transform', `rotate(${bankDeg} 100 100)`);
   document.getElementById('pov-bank').textContent = Math.round(bankDeg)+'°';
   document.getElementById('pov-pitch').textContent = Math.round(pitchDeg)+'°';
@@ -5543,7 +5570,11 @@ function loop(now){
   const siguiendo = povActivo || seguirChk.checked; // en POV, rosa/etc. se
     // comportan como si estuvieran "siguiendo" al avión — no hay cámara libre acá
   if(povActivo){
-    _povEuler.set(-m.pitch, m.hdgDeg*Math.PI/180, -m.bank, 'YXZ'); // SIN
+    // v2.19 FIX: Daniel probó y la cámara miraba para atrás — el supuesto
+    // de eje del changelog v2.18 (HUMO_OFFSET_LOCAL con Z positivo hacia la
+    // cola) era al revés: el "adelante" local del GLB es +Z, no -Z. Se
+    // suma PI al yaw para mirar hacia la cola opuesta (la nariz real).
+    _povEuler.set(-m.pitch, m.hdgDeg*Math.PI/180 + Math.PI, -m.bank, 'YXZ'); // SIN
       // pitchRender: acá se busca la actitud REAL, no la exagerada para el
       // dibujo del tubo/cortina (ver changelog v2.18)
     camera.quaternion.setFromEuler(_povEuler);
