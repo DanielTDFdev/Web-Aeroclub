@@ -2,6 +2,20 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.30 · Daniel mandó una referencia de chevron y 3 pedidos más.
+  1) Chevron de FD: pasa de ser 2 líneas con punta redonda a 2 cuñas
+  sólidas rellenas (polígonos), imitando la referencia — más ancho hacia
+  afuera, en punta hacia el centro.
+  2) Arco de banqueo "de strip a strip": el ancho ya no es un clamp con
+  techo fijo, se calcula restando el espacio real que ocupan las dos
+  cintas (misma expresión que .pov-tape-izq/der) al 100% del viewport —
+  y el svg pasa a preserveAspectRatio="none" para que el contenido
+  realmente estire hasta ese ancho en vez de quedar centrado con margen
+  vacío a los costados.
+  3) Se sacan los números de grado del arco (agregados en v2.29) — solo
+  quedan los ticks, pedido explícito de Daniel.
+  4) Cielo (fondo de #stage, detrás del canvas transparente — y el mismo
+  gradiente en #carga, por consistencia) un poco más oscuro.
   v2.29 · Daniel marcó a mano sobre una captura: 2 pedidos.
   1) Arco de banqueo bastante más amplio (radio 46→130, viewBox interno
   300x100→400x160, contenedor hasta 720px de ancho) y con el número de
@@ -1963,7 +1977,7 @@
      transparente (alpha:true) así que este fondo se ve DETRÁS de la escena 3D en
      vez del negro sólido de antes. */
   #stage{position:relative;flex:1;min-height:0;
-    background:linear-gradient(to bottom, #dff3fa 0%, #86cbe8 40%, #3f9dc7 100%)}
+    background:linear-gradient(to bottom, #c3e4f2 0%, #5fa3c9 40%, #2d7ea8 100%)}
   #stage canvas{display:block;width:100%;height:100%;cursor:grab;touch-action:none;
     /* v1.24 FIX: three.js, con un mundo Y-arriba (est.=+X, norte=+Z) visto
     desde arriba, dibuja el Este espejado — es una propiedad matemática de
@@ -2141,12 +2155,17 @@
 
   /* arco de banqueo, arriba y centrado — reemplaza al horizonte artificial.
      v2.28: bastante más grande y en amarillo (no se notaba contra el cielo).
-     v2.29: Daniel pidió, con foto marcada a mano, un arco todavía más
-     amplio (más radio = domo más pronunciado) y con los grados marcados en
-     número junto a cada tick — el viewBox interno pasa de 300x100 a
-     400x160 (ver JS) para dar lugar a ese radio mayor. */
-  .pov-bankarc{position:absolute;width:clamp(420px,74vw,720px);height:150px;
-    left:50%;top:8px;transform:translateX(-50%)}
+     v2.29: todavía más amplio, con número de grado en cada tick.
+     v2.30: Daniel pidió que llegue "de strip a strip" — el ancho se calcula
+     restando a 100% (el viewport, ya que #pov-hud es inset:0) el espacio
+     que ocupan las dos cintas a cada lado (mismas expresiones que
+     .pov-tape-izq/der + un margen chico), en vez de un clamp con techo
+     fijo. preserveAspectRatio="none" en el svg (ver HTML) para que el
+     contenido realmente estire hasta ese ancho en vez de quedar centrado
+     con bandas vacías a los costados (el viewBox interno no es tan ancho). */
+  .pov-bankarc{position:absolute;
+    width:calc(100% - 2*(clamp(22px,6vw,64px) + clamp(56px,9vw,76px) + 14px));
+    height:130px;left:50%;top:8px;transform:translateX(-50%)}
   .pov-bankarc svg{display:block;width:100%;height:100%}
 
   /* v2.27 FIX: a las 3 reglas de abajo (.pov-tape/.pov-vs, y .pov-bankarc
@@ -2212,7 +2231,7 @@
     font-size:8px;color:#7fe0ff;letter-spacing:.06em;background:rgba(0,0,0,.4);
     padding:0 3px;border-radius:2px;white-space:nowrap}
   #carga{height:100%;display:flex;align-items:center;justify-content:center;
-    background:linear-gradient(to bottom,#dff3fa 0%,#86cbe8 40%,#3f9dc7 100%)}
+    background:linear-gradient(to bottom,#c3e4f2 0%,#5fa3c9 40%,#2d7ea8 100%)}
   #carga .caja{font-family:var(--font-mono);font-size:13px;color:var(--text);text-align:center;
     background:rgba(15,20,32,.85);border:1px solid var(--border);border-radius:10px;padding:20px 26px}
   #carga .error-box{border-color:#e0554a;color:#ffb4ac}
@@ -2232,7 +2251,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.29</span>
+    <span class="badge" id="ver-badge">v2.30</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -2272,7 +2291,7 @@
          centro, minimapa "track up" abajo a la izquierda. -->
     <div id="pov-hud" style="display:none">
       <div class="pov-bankarc">
-        <svg viewBox="0 0 400 160">
+        <svg viewBox="0 0 400 160" preserveAspectRatio="none">
           <g id="pov-bank-ticks"></g>
           <polygon points="200,4 193,18 207,18" fill="none" stroke="#ffd400" stroke-width="2"/><!-- índice fijo, 0° -->
           <g id="pov-bank-puntero"><polygon points="200,20 186,44 214,44" fill="#ffd400"/></g>
@@ -2280,8 +2299,8 @@
       </div>
       <div class="pov-fd">
         <svg viewBox="0 0 260 90">
-          <line x1="10" y1="60" x2="115" y2="25" stroke="#ffd400" stroke-width="11" stroke-linecap="round"/>
-          <line x1="145" y1="25" x2="250" y2="60" stroke="#ffd400" stroke-width="11" stroke-linecap="round"/>
+          <polygon points="128,35 10,50 12,66" fill="#ffd400" stroke="#8a5a00" stroke-width="1"/>
+          <polygon points="132,35 250,50 248,66" fill="#ffd400" stroke="#8a5a00" stroke-width="1"/>
         </svg>
       </div>
       <div class="pov-tape pov-tape-izq">
@@ -5413,15 +5432,6 @@ const POV_BANK_PIVOTE = {x:200, y:140};
     // para distinguirse del resto sin cambiar de color).
     grp.appendChild(_povEl('line', {x1,y1,x2,y2,
       stroke:'#ffd400', 'stroke-width': a===0?'4':'2.5'}));
-    // v2.29: número de grado junto a cada tick MAYOR (no en 0°, que ya
-    // tiene el índice fijo). Radio de la etiqueta un poco por fuera de r1,
-    // texto SIN rotar (se lee derecho, como en la referencia de Daniel).
-    if(a!==0){
-      const rTxt = r1+18;
-      const xt = POV_BANK_PIVOTE.x+rTxt*Math.sin(rad), yt = POV_BANK_PIVOTE.y-rTxt*Math.cos(rad);
-      grp.appendChild(_povEl('text', {x:xt, y:yt+4, fill:'#ffd400',
-        'font-size':'15', 'font-weight':'700', 'text-anchor':'middle'}, Math.abs(a)));
-    }
   });
 })();
 const _povBankPuntero = document.getElementById('pov-bank-puntero');
