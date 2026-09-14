@@ -2,6 +2,27 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.28 · 4 pedidos de Daniel sobre v2.27, con captura.
+  1) El chevron de FD apuntaba para abajo — se invierten las dos líneas
+  (antes valle, ahora pico hacia arriba).
+  2) Arco de banqueo mucho más grande (220-340px → 340-560px de ancho,
+  64px → 120px de alto) y en amarillo — en blanco no se notaba contra el
+  cielo (ticks e índice fijo, antes #eef3fa, ahora #ffd400).
+  3) VS rehecho de raíz: pasa de ser una tira vertical con ticks al
+  costado de la cinta de altitud a una AGUJA debajo de esa cinta, que
+  pivota sobre un punto fijo a la derecha (74,25) y apunta a la
+  izquierda — ángulo positivo (arriba) para ascenso, negativo (abajo)
+  para descenso. Señal a favor de verificar la cuenta de rotación ANTES
+  de escribirla (en vez de tantear signos como en el bug de la cámara
+  POV): rotate() de SVG es horario para ángulo positivo (y crece hacia
+  abajo) — con la aguja arrancando apuntando a las 9, un giro horario la
+  lleva hacia las 12 (arriba), así que ángulo positivo YA sube la punta,
+  sin necesitar ningún signo extra. Verificado con la fórmula de
+  rotación a mano antes de escribir el código.
+  4) Los carteles flotantes (#info, #panel-vuelo — "ANÁLISIS DEL VUELO")
+  se ocultan mientras el modo POV está activo y vuelven a aparecer al
+  salir — ya tenían la misma lógica desde v2.26 para #info, ahora se
+  extiende a #panel-vuelo.
   v2.27 · Daniel probó v2.26 con captura: las dos cintas aparecían apiladas
   una debajo de la otra, las dos pegadas al borde izquierdo — la de
   altitud nunca llegó a la derecha. Causa: a `.pov-tape`, `.pov-vs` y
@@ -2111,8 +2132,10 @@
     background:linear-gradient(135deg, rgba(255,255,255,.16) 0%, rgba(255,255,255,0) 32%,
       rgba(255,255,255,0) 68%, rgba(255,255,255,.06) 100%);pointer-events:none}
 
-  /* arco de banqueo, arriba y centrado — reemplaza al horizonte artificial */
-  .pov-bankarc{position:absolute;width:clamp(220px,42vw,340px);height:64px;
+  /* arco de banqueo, arriba y centrado — reemplaza al horizonte artificial.
+     v2.28: Daniel probó v2.27 y no se notaba contra el cielo — bastante más
+     grande y en amarillo en vez de blanco (ver también los ticks en JS). */
+  .pov-bankarc{position:absolute;width:clamp(340px,58vw,560px);height:120px;
     left:50%;top:8px;transform:translateX(-50%)}
   .pov-bankarc svg{display:block;width:100%;height:100%}
 
@@ -2139,12 +2162,19 @@
   .pov-tape-unit{position:absolute;left:0;right:0;bottom:-16px;text-align:center;
     font-size:9px;color:var(--cyan);letter-spacing:.06em;white-space:nowrap}
 
-  /* tira de VS, pegada al costado interior de la cinta de altitud */
-  .pov-vs{position:absolute;width:clamp(22px,4vw,30px);height:clamp(150px,34vh,260px);
-    top:50%;right:calc(clamp(56px,9vw,76px) + clamp(22px,6vw,64px) + 3px);
-    transform:translateY(-50%)}
+  /* v2.28 — Daniel pidió rehacer el VS: en vez de tira vertical al costado
+     de la cinta de altitud, ahora es una AGUJA debajo de esa cinta, que
+     pivota sobre un punto fijo a la DERECHA y apunta hacia la izquierda —
+     ángulo positivo (arriba) para ascenso, negativo (abajo) para descenso.
+     Se posiciona con el mismo right que .pov-tape-der (queda alineada
+     debajo) y top = borde inferior de la cinta de altitud + margen: la
+     cinta centra verticalmente con top:50%+translateY(-50%), así que su
+     borde inferior es 50% + mitad de su alto. */
+  .pov-vs{position:absolute;width:clamp(56px,9vw,76px);height:50px;
+    right:clamp(22px,6vw,64px);
+    top:calc(50% + (clamp(190px,42vh,320px) / 2) + 10px)}
   .pov-vs svg{display:block;width:100%;height:100%}
-  .pov-vs-val{position:absolute;left:50%;bottom:-16px;transform:translateX(-50%);
+  .pov-vs-val{position:absolute;left:0;right:0;bottom:-14px;text-align:center;
     font-size:9px;color:var(--text2);white-space:nowrap}
 
   /* chevron de flight director, fijo en el centro exacto de pantalla —
@@ -2192,7 +2222,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.27</span>
+    <span class="badge" id="ver-badge">v2.28</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -2234,14 +2264,14 @@
       <div class="pov-bankarc">
         <svg viewBox="0 0 300 100">
           <g id="pov-bank-ticks"></g>
-          <polygon points="150,4 143,18 157,18" fill="#eef3fa"/><!-- índice fijo, 0° -->
+          <polygon points="150,4 143,18 157,18" fill="none" stroke="#ffd400" stroke-width="2"/><!-- índice fijo, 0° -->
           <g id="pov-bank-puntero"><polygon points="150,22 142,38 158,38" fill="#ffd400"/></g>
         </svg>
       </div>
       <div class="pov-fd">
         <svg viewBox="0 0 180 60">
-          <line x1="8" y1="12" x2="78" y2="42" stroke="#ffd400" stroke-width="7" stroke-linecap="round"/>
-          <line x1="102" y1="42" x2="172" y2="12" stroke="#ffd400" stroke-width="7" stroke-linecap="round"/>
+          <line x1="8" y1="42" x2="78" y2="12" stroke="#ffd400" stroke-width="7" stroke-linecap="round"/>
+          <line x1="102" y1="12" x2="172" y2="42" stroke="#ffd400" stroke-width="7" stroke-linecap="round"/>
         </svg>
       </div>
       <div class="pov-tape pov-tape-izq">
@@ -2261,10 +2291,15 @@
         <div class="pov-tape-unit">ALT ft</div>
       </div>
       <div class="pov-vs">
-        <svg viewBox="0 0 30 220">
-          <g id="pov-vs-ticks"></g>
-          <line x1="4" y1="110" x2="26" y2="110" stroke="#eef3fa" stroke-width="1.4"/>
-          <polygon id="pov-vs-puntero" points="4,110 18,104 18,116" fill="#7fe0ff"/>
+        <svg viewBox="0 0 80 50">
+          <!-- referencia horizontal fija (VS=0) -->
+          <line x1="8" y1="25" x2="74" y2="25" stroke="#eef3fa" stroke-width="1" stroke-dasharray="2,3" opacity="0.6"/>
+          <!-- pivote a la derecha -->
+          <circle cx="74" cy="25" r="2.6" fill="#7fe0ff"/>
+          <!-- aguja: nace en el pivote (derecha) y apunta a la izquierda, rota alrededor de (74,25) -->
+          <g id="pov-vs-aguja">
+            <line x1="74" y1="25" x2="10" y2="25" stroke="#7fe0ff" stroke-width="3" stroke-linecap="round"/>
+          </g>
         </svg>
         <div class="pov-vs-val">VS <span id="pov-vs">—</span> fpm</div>
       </div>
@@ -5361,8 +5396,11 @@ const POV_BANK_PIVOTE = {x:150, y:90};
     const r1 = 46, r2 = (a===0 || Math.abs(a)===30 || Math.abs(a)===60) ? 32 : 38;
     const x1 = POV_BANK_PIVOTE.x+r1*Math.sin(rad), y1 = POV_BANK_PIVOTE.y-r1*Math.cos(rad);
     const x2 = POV_BANK_PIVOTE.x+r2*Math.sin(rad), y2 = POV_BANK_PIVOTE.y-r2*Math.cos(rad);
+    // v2.28: Daniel probó v2.27 — en blanco no se notaba contra el cielo.
+    // Todo el arco pasa a amarillo (el índice 0° un poco más grueso/opaco
+    // para distinguirse del resto sin cambiar de color).
     grp.appendChild(_povEl('line', {x1,y1,x2,y2,
-      stroke: a===0?'#ffd400':'#eef3fa', 'stroke-width': a===0?'3':'2'}));
+      stroke:'#ffd400', 'stroke-width': a===0?'4':'2.5'}));
   });
 })();
 const _povBankPuntero = document.getElementById('pov-bank-puntero');
@@ -5397,17 +5435,21 @@ const POV_ALT_MINOR = 100, POV_ALT_MAJOR = 500;
   }
 })();
 
-// --- Vector de VS (fpm), tira angosta junto a la cinta de altitud ---------
-const POV_VS_MAX_FPM = 2000, POV_VS_PX_POR_FPM = 100/POV_VS_MAX_FPM; // ±100px desde el centro (y=110)
-(function _construirTicksVsPOV(){
-  const grp = document.getElementById('pov-vs-ticks');
-  [-2000,-1000,0,1000,2000].forEach(v=>{
-    const y = 110 - v*POV_VS_PX_POR_FPM;
-    grp.appendChild(_povEl('line', {x1:20, y1:y, x2:26, y2:y,
-      stroke: v===0?'#ffd400':'#eef3fa', 'stroke-width': v===0?'2':'1'}));
-  });
-})();
-const _povVsPuntero = document.getElementById('pov-vs-puntero');
+// --- Vector de VS (fpm) — aguja debajo de la cinta de altitud, pivota
+// sobre un punto FIJO a la derecha (74,25) y apunta a la izquierda.
+// Ángulo positivo (sentido antihorario, punta sube) = ascenso; negativo
+// (horario, punta baja) = descenso. Rango ±POV_VS_MAX_FPM mapeado a
+// ±POV_VS_MAX_DEG, clamp más allá de eso (la aguja no sigue creciendo).
+const POV_VS_MAX_FPM = 1500, POV_VS_MAX_DEG = 50;
+// Nota de signo: rotate() en SVG es HORARIO para ángulo positivo (y crece
+// hacia abajo). La aguja arranca apuntando a la izquierda ("9 en punto"
+// relativo al pivote); un giro horario desde esa posición la lleva hacia
+// arriba (9→12, como las agujas de un reloj) — así que ángulo positivo YA
+// sube la punta sin necesitar ningún signo extra. Verificado a mano con la
+// fórmula de rotación (x'=dx·cosθ−dy·senθ, y'=dx·senθ+dy·cosθ) antes de
+// escribirlo, para no repetir la cadena de señales al tanteo del bug de la
+// cámara POV.
+const _povVsAguja = document.getElementById('pov-vs-aguja');
 
 // --- Giro direccional (HSI simulado) ---------------------------------------
 (function _construirTarjetaHsiPOV(){
@@ -5460,8 +5502,8 @@ function actualizarHUD(m){
   document.getElementById('pov-vs').textContent = Math.round(vsFpm);
 
   const vsClamp = Math.max(-POV_VS_MAX_FPM, Math.min(POV_VS_MAX_FPM, vsFpm));
-  const vsY = 110 - vsClamp*POV_VS_PX_POR_FPM;
-  _povVsPuntero.setAttribute('points', `4,${vsY} 18,${vsY-6} 18,${vsY+6}`);
+  const vsAngulo = vsClamp/POV_VS_MAX_FPM*POV_VS_MAX_DEG; // ver nota de signo en la constante arriba
+  _povVsAguja.setAttribute('transform', `rotate(${vsAngulo} 74 25)`);
 
   const hdgNorm = ((m.hdgDeg%360)+360)%360;
   _povHsiCard.setAttribute('transform', `rotate(${-hdgNorm} 100 100)`);
@@ -5841,12 +5883,14 @@ function loop(now){
   // recién termine de cargar con el modo ya activado.
   const povActivo = povChk.checked;
   avion.visible = !povActivo;
-  // v2.26: el panel #info (ALT/GS/RUMBO/BANK/PITCH/VS en vivo) queda
-  // redundante con el HUD nuevo (cintas+HSI ya muestran esos datos) —
-  // se oculta mientras POV está activo, sin tocar #panel-vuelo (resumen de
-  // viento/calidad, que no se duplica en ningún lado).
+  // v2.26/v2.28: los carteles flotantes de la interfaz (datos en vivo,
+  // resumen "ANÁLISIS DEL VUELO") quedan redundantes o simplemente estorban
+  // en modo POV, que ya tiene su propio HUD — se ocultan mientras está
+  // activo y vuelven a aparecer al salir.
   const _infoPanel = document.getElementById('info');
   if(_infoPanel) _infoPanel.style.display = povActivo ? 'none' : '';
+  const _panelVuelo = document.getElementById('panel-vuelo');
+  if(_panelVuelo) _panelVuelo.style.display = povActivo ? 'none' : '';
   const siguiendo = povActivo || seguirChk.checked; // en POV, rosa/etc. se
     // comportan como si estuvieran "siguiendo" al avión — no hay cámara libre acá
   if(povActivo){
