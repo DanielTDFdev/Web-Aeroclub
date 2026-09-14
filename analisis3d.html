@@ -2,6 +2,12 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.21 · Daniel probó v2.20 (bank invertido) y seguía viéndose al revés —
+  invertir una vez no resolvió nada, así que se vuelve al signo de v2.18
+  (bankDeg sin invertir). Un signo binario solo tiene dos estados y el otro
+  ya se descartó; si ESTE también se ve mal, el bug no es de signo sino de
+  otra cosa (ver nota en el código) — necesito el detalle exacto de qué se
+  ve para no seguir adivinando.
   v2.20 · Daniel probó v2.19 y el sentido de giro del horizonte con el bank
   seguía invertido — el segundo supuesto marcado "a confirmar" en v2.18,
   ya con la cámara y el centrado corregidos. Se invierte el signo de
@@ -2043,7 +2049,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.20</span>
+    <span class="badge" id="ver-badge">v2.21</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -5203,13 +5209,18 @@ function actualizarHUD(m){
   // rotar, 2) rotate(bank) alrededor del origen local (que, recién DESPUÉS
   // del translate(100,100) exterior, cae exactamente en el centro real del
   // instrumento), 3) translate(100,100) para llevar todo al centro del viewBox.
-  // v2.20 FIX: Daniel probó y el sentido de giro del horizonte con el bank
-  // estaba invertido — el otro supuesto marcado "a confirmar" en v2.18.
-  // Se invierte el signo de bankDeg para el disco Y para el puntero (tienen
-  // que girar siempre juntos, son el mismo banqueo).
+  // v2.21 FIX: Daniel probó v2.20 (bank invertido) y seguía mal — invertirlo
+  // una vez no alcanzó, así que el problema no era simplemente "el signo
+  // contrario": se vuelve al signo de v2.18 (bankDeg sin invertir), que es
+  // matemáticamente el único que queda sin probar (dos inversiones de un
+  // signo binario solo pueden dar dos resultados, y el invertido ya se
+  // descartó). Si con ESTE también se ve al revés, el bug no es de signo —
+  // avisar con el detalle exacto (banco a la derecha: ¿la línea del
+  // horizonte baja del lado derecho o del izquierdo de la esfera?) para no
+  // seguir probando a ciegas.
   _povHorizonteGrp.setAttribute('transform',
-    `translate(100 100) rotate(${-bankDeg}) translate(0 ${pitchDeg*POV_PITCH_PX_POR_GRADO})`);
-  _povPunteroGrp.setAttribute('transform', `rotate(${-bankDeg} 100 100)`);
+    `translate(100 100) rotate(${bankDeg}) translate(0 ${pitchDeg*POV_PITCH_PX_POR_GRADO})`);
+  _povPunteroGrp.setAttribute('transform', `rotate(${bankDeg} 100 100)`);
   document.getElementById('pov-bank').textContent = Math.round(bankDeg)+'°';
   document.getElementById('pov-pitch').textContent = Math.round(pitchDeg)+'°';
   document.getElementById('pov-gs').textContent = Math.round(m.gs*1.94384);
