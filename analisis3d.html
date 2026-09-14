@@ -2,6 +2,42 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.18 · Pedido de Daniel: modo POV "vista cabina", cámara en el punto del
+  piloto siguiendo la actitud real del avión (bank/pitch/rumbo SIN la
+  exageración vertical de EXAG_VERT que usa avion.rotation — acá se busca la
+  sensación real de vuelo, no la lectura fácil del tubo/cortina), con HUD
+  tipo "six pack" superpuesto: horizonte artificial (el más grande y
+  centrado, pedido explícito de Daniel: "debe ser lo más destacado del
+  HUD") + tres esferas más chicas de velocidad/altura/VS con bisel "de
+  vidrio" a los costados. No hay modelo 3D de cabina interior (el GLB es
+  solo el exterior del avión) — la "cabina virtual" es este overlay 2D fijo
+  en pantalla, no geometría 3D nueva. El avión (avion.visible) se oculta
+  mientras el modo está activo, para no tapar la vista desde adentro; los
+  cartelitos de rumbo/fase (pensados para vista de tercera persona) también
+  se ocultan. Checkbox nuevo "Vista cabina (POV)" en Ajustes de vista,
+  arranca DESTILDADO (no cambia el comportamiento por default).
+  Horizonte artificial construido en SVG (no divs/CSS anidados): la
+  geometría de rotación-alrededor-de-un-punto + traslación es mucho más
+  simple y robusta con <g transform="rotate(...) translate(...)"> que
+  reproduciendo lo mismo con transform-origin en píxeles sobre elementos
+  HTML de tamaño variable (clamp()). Orden del transform SVG (aplica de
+  derecha a izquierda, igual que CSS): primero translate (offset de pitch,
+  en el marco SIN rotar del disco) y recién después rotate (banqueo,
+  alrededor del centro del instrumento) — es el mismo orden que usa
+  cualquier horizonte artificial real.
+  ⚠ DOS SUPUESTOS DE SIGNO A CONFIRMAR VISUALMENTE (no se pueden probar sin
+  ver el render):
+  1) Dirección de la cámara: se asume que el "adelante" local del GLB es
+     -Z (mismo eje que mira una cámara three.js por defecto), a partir de
+     que HUMO_OFFSET_LOCAL sale con Z POSITIVO (hacia la cola, si el humo
+     sale por detrás). Si la vista de cabina queda mirando para la cola en
+     vez de para adelante, sumar Math.PI al yaw en el bloque POV de loop().
+  2) Sentido de giro del horizonte con el bank: se asume que banquear a la
+     derecha (m.bank>0, mismo signo que ya usa avion.rotation) debe rotar
+     el disco en sentido horario (rotate(bankDeg) tal cual, sin invertir).
+     Si en el HUD un banqueo a la derecha se ve girar para el lado
+     contrario de lo que se ve por la ventanilla, invertir el signo de
+     bankDeg en actualizarHUD().
   v2.17 · Daniel mandó captura: acercando MUCHO la cámara al avión en pleno
   vuelo (960ft), con la cámara casi al ras respecto del avión, el corte de
   mapa seguía viéndose — pidió explícitamente que desde NINGÚN ángulo quede
@@ -1931,6 +1967,39 @@
   @media (max-width:640px){
     header .hdr-copy{display:none}
   }
+  /* v2.18 — HUD "six pack" del modo POV (vista cabina). Overlay 2D fijo,
+     pointer-events:none (no debe interceptar el drag/pan del canvas de
+     abajo, aunque en POV la cámara ignora esos gestos igual). */
+  #pov-hud{position:absolute;inset:0;z-index:8;pointer-events:none;
+    font-family:var(--font-mono);color:var(--text)}
+  .pov-instr{position:absolute;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #2a3346, #0b0f18 72%);
+    box-shadow:0 0 0 3px #05070c, 0 0 0 5px #3a4560, 0 8px 18px rgba(0,0,0,.55),
+      inset 0 0 22px rgba(0,0,0,.7);overflow:hidden}
+  /* reflejo "de vidrio": franja diagonal semitransparente por encima de todo */
+  .pov-instr::after{content:'';position:absolute;inset:0;border-radius:50%;
+    background:linear-gradient(135deg, rgba(255,255,255,.16) 0%, rgba(255,255,255,0) 32%,
+      rgba(255,255,255,0) 68%, rgba(255,255,255,.06) 100%);pointer-events:none}
+  /* horizonte artificial: el instrumento principal — más grande, centrado,
+     "lo más destacado del HUD" (pedido explícito de Daniel) */
+  .pov-ai{width:clamp(160px,30vh,270px);height:clamp(160px,30vh,270px);
+    left:50%;top:50%;transform:translate(-50%,-50%);z-index:2;
+    border:2px solid #4a566f}
+  .pov-ai svg{display:block;width:100%;height:100%}
+  .pov-ai-valores{position:absolute;left:50%;bottom:-22px;transform:translateX(-50%);
+    white-space:nowrap;font-size:11px;color:var(--text2);letter-spacing:.03em}
+  /* instrumentos secundarios: velocidad/altura/VS — más chicos y a los
+     costados, para que el horizonte quede como protagonista sin competir */
+  .pov-gauge{width:clamp(78px,14vh,116px);height:clamp(78px,14vh,116px);
+    top:50%;transform:translateY(-50%);display:flex;flex-direction:column;
+    align-items:center;justify-content:center;z-index:1}
+  .pov-gauge-izq{left:clamp(10px,4vw,40px)}
+  .pov-gauge-der{right:clamp(10px,4vw,40px)}
+  .pov-gauge-vs{right:clamp(10px,4vw,40px);top:auto;bottom:clamp(60px,15vh,105px);
+    transform:none;width:clamp(62px,10vh,86px);height:clamp(62px,10vh,86px)}
+  .pov-gauge-lbl{font-size:10px;color:var(--cyan);letter-spacing:.08em}
+  .pov-gauge-val{font-size:clamp(15px,3vh,20px);font-weight:700;color:var(--text)}
+  .pov-gauge-unit{font-size:9px;color:var(--text3)}
   #carga{height:100%;display:flex;align-items:center;justify-content:center;
     background:linear-gradient(to bottom,#dff3fa 0%,#86cbe8 40%,#3f9dc7 100%)}
   #carga .caja{font-family:var(--font-mono);font-size:13px;color:var(--text);text-align:center;
@@ -1952,7 +2021,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.17</span>
+    <span class="badge" id="ver-badge">v2.18</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -1982,6 +2051,50 @@
     <div id="etiqueta-avion">070° · 0 ft</div>
     <div id="etiqueta-fase"></div>
     <div id="debug-fase"></div>
+    <!-- v2.18: HUD "six pack" del modo POV — oculto por default, lo prende
+         el checkbox "pov" (ver povChk.onchange). El horizonte artificial
+         (SVG) es el instrumento grande y centrado; los tres de al costado
+         (velocidad/altura/VS) son lecturas digitales dentro de un bisel
+         "de vidrio", deliberadamente más chicos y discretos. -->
+    <div id="pov-hud" style="display:none">
+      <div class="pov-instr pov-ai">
+        <svg viewBox="0 0 200 200">
+          <defs><clipPath id="pov-ai-clip"><circle cx="100" cy="100" r="92"/></clipPath></defs>
+          <g clip-path="url(#pov-ai-clip)">
+            <g id="pov-ai-horizonte-grp">
+              <rect x="-150" y="-350" width="500" height="350" fill="#5fa8ea"/>
+              <rect x="-150" y="0" width="500" height="350" fill="#4a3018"/>
+              <line x1="-150" y1="0" x2="350" y2="0" stroke="#eef3fa" stroke-width="2.2"/>
+              <g id="pov-ai-escala"></g>
+            </g>
+          </g>
+          <circle cx="100" cy="100" r="92" fill="none" stroke="#3a4560" stroke-width="3"/>
+          <g id="pov-ai-ticks"></g>
+          <g id="pov-ai-puntero-grp"><polygon points="100,14 94,26 106,26" fill="#ffd400"/></g>
+          <g fill="#ffd400" stroke="#05070c" stroke-width="0.6">
+            <rect x="58" y="98" width="34" height="4"/>
+            <rect x="108" y="98" width="34" height="4"/>
+            <circle cx="100" cy="100" r="3.4"/>
+          </g>
+        </svg>
+        <div class="pov-ai-valores">BANK <span id="pov-bank">0°</span> · PITCH <span id="pov-pitch">0°</span></div>
+      </div>
+      <div class="pov-instr pov-gauge pov-gauge-izq">
+        <div class="pov-gauge-lbl">GS</div>
+        <div class="pov-gauge-val" id="pov-gs">—</div>
+        <div class="pov-gauge-unit">kt</div>
+      </div>
+      <div class="pov-instr pov-gauge pov-gauge-der">
+        <div class="pov-gauge-lbl">ALT</div>
+        <div class="pov-gauge-val" id="pov-alt">—</div>
+        <div class="pov-gauge-unit">ft</div>
+      </div>
+      <div class="pov-instr pov-gauge pov-gauge-vs">
+        <div class="pov-gauge-lbl">VS</div>
+        <div class="pov-gauge-val" id="pov-vs">—</div>
+        <div class="pov-gauge-unit">fpm</div>
+      </div>
+    </div>
     <div id="config-backdrop"></div>
     <div id="panel-config">
       <div class="config-head">
@@ -2005,6 +2118,7 @@
           <label class="toggle"><input type="checkbox" id="circuito" checked><span class="track"></span>Fases de circuito</label>
           <label class="toggle"><input type="checkbox" id="maniobras" checked><span class="track"></span>Maniobras</label>
           <label class="toggle"><input type="checkbox" id="circuito-debug"><span class="track"></span>Diagnóstico de circuito</label>
+          <label class="toggle"><input type="checkbox" id="pov"><span class="track"></span>Vista cabina (POV)</label>
         </div>
       </div>
     </div>
@@ -4991,6 +5105,81 @@ function panCamera(dxPix, dyPix, radio){
 }
 const canvas = renderer.domElement;
 const seguirChk = document.getElementById('seguir');
+
+// ----------------------------------------------------------------------
+// v2.18 — MODO POV (vista cabina). Cámara propia, independiente del
+// esquema seguir/libre de arriba: en POV la cámara no orbita nada, sigue
+// directamente la actitud real del avión cada frame (ver bloque en loop()).
+// ----------------------------------------------------------------------
+const povChk = document.getElementById('pov');
+const povHud = document.getElementById('pov-hud');
+povChk.onchange = ()=>{ povHud.style.display = povChk.checked ? 'block' : 'none'; };
+// Punto de ojo del piloto, relativo al mismo "pos" que ya usa avion.position
+// (world position sobre el borde de la cortina). Un poco arriba y adelante
+// del CG, en la unidad ya usada para todo lo demás (AVION_LARGO_MUNDO).
+// Z negativo = adelante, bajo el supuesto de eje documentado en el
+// changelog de v2.18 (a confirmar visualmente).
+const POV_OJO_ARRIBA_M = AVION_LARGO_MUNDO*0.12;
+const POV_OJO_ADELANTE_M = -AVION_LARGO_MUNDO*0.15;
+const _povEuler = new THREE.Euler();
+const _povOjoLocal = new THREE.Vector3();
+
+// Escala de cabeceo del horizonte artificial (líneas cada 10°) y marcas de
+// banqueo del bisel: geometría FIJA, se arma una sola vez acá — lo único
+// que cambia cuadro a cuadro es el transform de los grupos que las
+// contienen (ver actualizarHUD), no la geometría en sí.
+const POV_PITCH_PX_POR_GRADO = 3.6; // calibrado a ojo sobre el viewBox 0-200 del SVG
+(function _construirEscalaCabeceoPOV(){
+  const grp = document.getElementById('pov-ai-escala');
+  const svgNS = 'http://www.w3.org/2000/svg';
+  [-30,-20,-10,10,20,30].forEach(g=>{
+    const y = g*POV_PITCH_PX_POR_GRADO;
+    const ancho = Math.abs(g)===30 ? 60 : Math.abs(g)===20 ? 40 : 24;
+    const ln = document.createElementNS(svgNS,'line');
+    ln.setAttribute('x1', 100-ancho/2); ln.setAttribute('x2', 100+ancho/2);
+    ln.setAttribute('y1', y); ln.setAttribute('y2', y);
+    ln.setAttribute('stroke','#eef3fa'); ln.setAttribute('stroke-width','2');
+    grp.appendChild(ln);
+    const txt = document.createElementNS(svgNS,'text');
+    txt.setAttribute('x', 100-ancho/2-13); txt.setAttribute('y', y+3);
+    txt.setAttribute('fill','#eef3fa'); txt.setAttribute('font-size','9');
+    txt.setAttribute('font-family','var(--font-mono)');
+    txt.textContent = Math.abs(g);
+    grp.appendChild(txt);
+  });
+})();
+(function _construirTicksBankPOV(){
+  const grp = document.getElementById('pov-ai-ticks');
+  const svgNS = 'http://www.w3.org/2000/svg';
+  [-60,-45,-30,-20,-10,0,10,20,30,45,60].forEach(a=>{
+    const rad = a*Math.PI/180;
+    const r1 = 92, r2 = (a===0 || Math.abs(a)===30 || Math.abs(a)===60) ? 80 : 85;
+    const x1 = 100+r1*Math.sin(rad), y1 = 100-r1*Math.cos(rad);
+    const x2 = 100+r2*Math.sin(rad), y2 = 100-r2*Math.cos(rad);
+    const ln = document.createElementNS(svgNS,'line');
+    ln.setAttribute('x1',x1); ln.setAttribute('y1',y1); ln.setAttribute('x2',x2); ln.setAttribute('y2',y2);
+    ln.setAttribute('stroke', a===0 ? '#ffd400' : '#eef3fa');
+    ln.setAttribute('stroke-width', a===0 ? '3' : '2');
+    grp.appendChild(ln);
+  });
+})();
+const _povHorizonteGrp = document.getElementById('pov-ai-horizonte-grp');
+const _povPunteroGrp = document.getElementById('pov-ai-puntero-grp');
+function actualizarHUD(m){
+  const bankDeg = m.bank*180/Math.PI; // ver nota de signo en el changelog v2.18
+  const pitchDeg = m.pitch*180/Math.PI;
+  // orden del transform SVG: aplica de derecha a izquierda — primero
+  // translate (offset de pitch, disco SIN rotar) y recién después rotate
+  // (banqueo, alrededor del centro) — mismo orden que un horizonte real.
+  _povHorizonteGrp.setAttribute('transform',
+    `rotate(${bankDeg} 100 100) translate(0 ${pitchDeg*POV_PITCH_PX_POR_GRADO})`);
+  _povPunteroGrp.setAttribute('transform', `rotate(${bankDeg} 100 100)`);
+  document.getElementById('pov-bank').textContent = Math.round(bankDeg)+'°';
+  document.getElementById('pov-pitch').textContent = Math.round(pitchDeg)+'°';
+  document.getElementById('pov-gs').textContent = Math.round(m.gs*1.94384);
+  document.getElementById('pov-alt').textContent = Math.round(m.y*3.28084);
+  document.getElementById('pov-vs').textContent = Math.round(m.vs*196.85);
+}
 // v1.36 — FIX: cambiar de modo (seguir avión ↔ cámara libre) no disparaba
 // ningún recálculo del parche satelital, que solo reaccionaba a eventos de
 // zoom (rueda/pellizco). Si el mapa ya estaba activo y el usuario tildaba
@@ -5346,8 +5535,24 @@ function loop(now){
   lineaVert.geometry.setFromPoints([pos, new THREE.Vector3(m.x,0,m.z)]);
   lineaVert.computeLineDistances();
 
-  const siguiendo = seguirChk.checked;
-  actualizarCamara(siguiendo ? pos : centro, siguiendo ? camRadioSeguir : camRadioLibre);
+  // v2.18 — MODO POV: cámara propia, no orbital. avion.visible se apaga
+  // cada frame (no solo al togglear) para cubrir el caso de que el GLB
+  // recién termine de cargar con el modo ya activado.
+  const povActivo = povChk.checked;
+  avion.visible = !povActivo;
+  const siguiendo = povActivo || seguirChk.checked; // en POV, rosa/etc. se
+    // comportan como si estuvieran "siguiendo" al avión — no hay cámara libre acá
+  if(povActivo){
+    _povEuler.set(-m.pitch, m.hdgDeg*Math.PI/180, -m.bank, 'YXZ'); // SIN
+      // pitchRender: acá se busca la actitud REAL, no la exagerada para el
+      // dibujo del tubo/cortina (ver changelog v2.18)
+    camera.quaternion.setFromEuler(_povEuler);
+    _povOjoLocal.set(0, POV_OJO_ARRIBA_M, POV_OJO_ADELANTE_M).applyQuaternion(camera.quaternion);
+    camera.position.copy(pos).add(_povOjoLocal);
+    actualizarHUD(m);
+  } else {
+    actualizarCamara(siguiendo ? pos : centro, siguiendo ? camRadioSeguir : camRadioLibre);
+  }
   _chequearMapaPorCamara(now); // v2.14: footprint real de cámara — después de actualizarCamara, ya con la pose de este frame
   actualizarInfo(m);
 
@@ -5391,8 +5596,8 @@ function loop(now){
     // largo del vuelo. 42/7=6, esa es la proporción que se mantiene ahora.
   const ndc = puntoEtiqueta.project(camera);
   const etiqueta = document.getElementById('etiqueta-avion');
-  if(ndc.z > 1){
-    etiqueta.style.display = 'none'; // el avión quedó detrás de la cámara
+  if(povActivo || ndc.z > 1){
+    etiqueta.style.display = 'none'; // POV (cartel pensado para 3ra persona) o avión detrás de cámara
   } else {
     etiqueta.style.display = 'block';
     // v1.24: el canvas ahora tiene transform:scaleX(-1) (ver CSS) para
@@ -5417,7 +5622,7 @@ function loop(now){
   // para reconocer cada maniobra, no tolerancias de ejecución, así que
   // pintarlas con el semáforo sugeriría una calificación que no tenemos.
   const maniobraAct = (!ventanaFase && maniobrasChk.checked) ? maniobraEnT(currentT) : null;
-  if((ventanaFase || maniobraAct) && ndc.z<=1){
+  if(!povActivo && (ventanaFase || maniobraAct) && ndc.z<=1){
     const esFase = !!ventanaFase;
     const nombre = esFase
       ? (ventanaFase.fase==='INICIAL' ? 'INICIAL' : ventanaFase.fase==='BASICA' ? 'BÁSICA' : 'FINAL')
