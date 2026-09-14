@@ -2,6 +2,31 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.26 · Pedido de Daniel con foto de referencia (PFD tipo G1000/G3000):
+  rediseño completo del HUD del modo POV. Se saca el horizonte artificial
+  (el mundo 3D real detrás del HUD ya cumple ese papel — "reemplazarlo por
+  el mapa, casi como está ahora") y se agrega: arco de banqueo arriba
+  (semicírculo con ticks, mismo radio/ángulos que tenía el bisel del
+  horizonte viejo), cinta de velocidad (GS) a la izquierda, cinta de
+  altitud (ALT) a la derecha con vector de VS en tira aparte pegada al
+  costado, giro direccional simulado (HSI: tarjeta de rumbo que rota,
+  N/E/S/O + marcas cada 10°, sin agujas de OBS/glideslope ni insets de
+  motor) abajo al centro, y minimapa "track up" abajo a la izquierda con
+  la estela de los últimos 4 minutos y un marcador de norte que gira
+  alrededor del aro según el rumbo. Las cintas son ladders SVG construidos
+  UNA sola vez (geometría fija, rango 0-220kt / -200-12000ft) — cada frame
+  solo se les aplica un translate proporcional al valor actual, mismo
+  patrón que ya usaba la escala de cabeceo del horizonte viejo. El
+  minimapa proyecta cada punto del track con la misma fórmula rumbo→vector
+  que ya usa el resto del archivo (estimarViento, cámara POV — norte=+Z,
+  este=+X), solo que acá se separa en componentes "adelante/derecha" del
+  avión para lograr el efecto de rotación track-up. Ningún ángulo de este
+  HUD necesita compensar el espejo scaleX(-1) del canvas 3D: es un overlay
+  HTML aparte que no pasa por él (confirmado en la sesión del bug de
+  cámara POV — el bank del horizonte artificial viejo, en este mismo
+  overlay, ya giraba bien sin ningún ajuste de signo por espejo).
+  De paso, el panel #info (ALT/GS/RUMBO en vivo) se oculta mientras POV
+  está activo — quedaba redundante con las lecturas nuevas del HUD.
   v2.25 · Daniel probó v2.24: cámara mirando 3/4 trasero y el mundo
   rolleando al revés del horizonte artificial del HUD (que SÍ estaba bien,
   por no pasar por el canvas espejado). Causa real, no un signo de rumbo:
@@ -2048,9 +2073,17 @@
   @media (max-width:640px){
     header .hdr-copy{display:none}
   }
-  /* v2.18 — HUD "six pack" del modo POV (vista cabina). Overlay 2D fijo,
-     pointer-events:none (no debe interceptar el drag/pan del canvas de
-     abajo, aunque en POV la cámara ignora esos gestos igual). */
+  /* v2.18 — HUD del modo POV (vista cabina). Overlay 2D fijo, pointer-events:
+     none (no debe interceptar el drag/pan del canvas de abajo, aunque en POV
+     la cámara ignora esos gestos igual).
+     v2.26 — REDISEÑO pedido por Daniel con foto de referencia (PFD tipo
+     G1000/G3000): se saca el horizonte artificial (el mundo 3D ya hace ese
+     papel, se ve directo detrás del HUD) y se reemplaza por: arco de
+     banqueo arriba, cinta de velocidad a la izquierda, cinta de altitud +
+     vector de VS a la derecha, giro direccional (HSI) abajo al centro y
+     minimapa abajo a la izquierda. `.pov-instr` (bisel "de vidrio"
+     circular) se conserva para HSI y minimapa; las cintas usan su propio
+     panel rectangular (`.pov-tape`). */
   #pov-hud{position:absolute;inset:0;z-index:8;pointer-events:none;
     font-family:var(--font-mono);color:var(--text)}
   .pov-instr{position:absolute;border-radius:50%;
@@ -2061,26 +2094,50 @@
   .pov-instr::after{content:'';position:absolute;inset:0;border-radius:50%;
     background:linear-gradient(135deg, rgba(255,255,255,.16) 0%, rgba(255,255,255,0) 32%,
       rgba(255,255,255,0) 68%, rgba(255,255,255,.06) 100%);pointer-events:none}
-  /* horizonte artificial: el instrumento principal — más grande, centrado,
-     "lo más destacado del HUD" (pedido explícito de Daniel) */
-  .pov-ai{width:clamp(160px,30vh,270px);height:clamp(160px,30vh,270px);
-    left:50%;top:50%;transform:translate(-50%,-50%);z-index:2;
-    border:2px solid #4a566f}
-  .pov-ai svg{display:block;width:100%;height:100%}
-  .pov-ai-valores{position:absolute;left:50%;bottom:-22px;transform:translateX(-50%);
-    white-space:nowrap;font-size:11px;color:var(--text2);letter-spacing:.03em}
-  /* instrumentos secundarios: velocidad/altura/VS — más chicos y a los
-     costados, para que el horizonte quede como protagonista sin competir */
-  .pov-gauge{width:clamp(78px,14vh,116px);height:clamp(78px,14vh,116px);
-    top:50%;transform:translateY(-50%);display:flex;flex-direction:column;
-    align-items:center;justify-content:center;z-index:1}
-  .pov-gauge-izq{left:clamp(10px,4vw,40px)}
-  .pov-gauge-der{right:clamp(10px,4vw,40px)}
-  .pov-gauge-vs{right:clamp(10px,4vw,40px);top:auto;bottom:clamp(60px,15vh,105px);
-    transform:none;width:clamp(62px,10vh,86px);height:clamp(62px,10vh,86px)}
-  .pov-gauge-lbl{font-size:10px;color:var(--cyan);letter-spacing:.08em}
-  .pov-gauge-val{font-size:clamp(15px,3vh,20px);font-weight:700;color:var(--text)}
-  .pov-gauge-unit{font-size:9px;color:var(--text3)}
+
+  /* arco de banqueo, arriba y centrado — reemplaza al horizonte artificial */
+  .pov-bankarc{width:clamp(220px,42vw,340px);height:64px;left:50%;top:8px;
+    transform:translateX(-50%)}
+  .pov-bankarc svg{display:block;width:100%;height:100%}
+
+  /* cintas de velocidad (izq) y altitud (der), estilo PFD */
+  .pov-tape{width:clamp(56px,9vw,76px);height:clamp(190px,42vh,320px);
+    top:50%;transform:translateY(-50%);border-radius:4px;
+    background:rgba(10,14,22,.55);box-shadow:0 0 0 2px #05070c,0 0 0 3px #3a4560,
+      0 6px 14px rgba(0,0,0,.5)}
+  .pov-tape-izq{left:clamp(8px,3vw,28px)}
+  .pov-tape-der{right:clamp(8px,3vw,28px)}
+  .pov-tape svg{display:block;width:100%;height:100%}
+  .pov-tape-caja{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);
+    background:#0a0e16;border-top:2px solid #ffd400;border-bottom:2px solid #ffd400;
+    text-align:center;font-size:clamp(14px,2.4vh,18px);font-weight:700;
+    color:var(--text);padding:2px 0}
+  .pov-tape-unit{position:absolute;left:0;right:0;bottom:-16px;text-align:center;
+    font-size:9px;color:var(--cyan);letter-spacing:.06em;white-space:nowrap}
+
+  /* tira de VS, pegada al costado interior de la cinta de altitud */
+  .pov-vs{width:clamp(22px,4vw,30px);height:clamp(150px,34vh,260px);top:50%;
+    right:calc(clamp(56px,9vw,76px) + clamp(8px,3vw,28px) + 3px);
+    transform:translateY(-50%)}
+  .pov-vs svg{display:block;width:100%;height:100%}
+  .pov-vs-val{position:absolute;left:50%;bottom:-16px;transform:translateX(-50%);
+    font-size:9px;color:var(--text2);white-space:nowrap}
+
+  /* giro direccional (HSI simulado), abajo al centro */
+  .pov-hsi{width:clamp(120px,20vh,170px);height:clamp(120px,20vh,170px);
+    left:50%;bottom:clamp(70px,10vh,100px);transform:translateX(-50%)}
+  .pov-hsi svg{display:block;width:100%;height:100%}
+  .pov-hsi-hdg{position:absolute;left:50%;top:-20px;transform:translateX(-50%);
+    background:#0a0e16;border:1px solid #ffd400;border-radius:3px;padding:1px 6px;
+    font-size:12px;font-weight:700;color:var(--text);white-space:nowrap}
+
+  /* minimapa "track up", abajo a la izquierda */
+  .pov-minimap{width:clamp(96px,16vh,140px);height:clamp(96px,16vh,140px);
+    left:clamp(8px,3vw,28px);bottom:clamp(16px,4vh,32px)}
+  .pov-minimap svg{display:block;width:100%;height:100%}
+  .pov-minimap-lbl{position:absolute;left:50%;bottom:3px;transform:translateX(-50%);
+    font-size:8px;color:#7fe0ff;letter-spacing:.06em;background:rgba(0,0,0,.4);
+    padding:0 3px;border-radius:2px;white-space:nowrap}
   #carga{height:100%;display:flex;align-items:center;justify-content:center;
     background:linear-gradient(to bottom,#dff3fa 0%,#86cbe8 40%,#3f9dc7 100%)}
   #carga .caja{font-family:var(--font-mono);font-size:13px;color:var(--text);text-align:center;
@@ -2102,7 +2159,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.25</span>
+    <span class="badge" id="ver-badge">v2.26</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -2132,48 +2189,62 @@
     <div id="etiqueta-avion">070° · 0 ft</div>
     <div id="etiqueta-fase"></div>
     <div id="debug-fase"></div>
-    <!-- v2.18: HUD "six pack" del modo POV — oculto por default, lo prende
-         el checkbox "pov" (ver povChk.onchange). El horizonte artificial
-         (SVG) es el instrumento grande y centrado; los tres de al costado
-         (velocidad/altura/VS) son lecturas digitales dentro de un bisel
-         "de vidrio", deliberadamente más chicos y discretos. -->
+    <!-- v2.18: HUD del modo POV — oculto por default, lo prende el checkbox
+         "pov" (ver povChk.onchange).
+         v2.26: rediseño tipo PFD (G1000/G3000), pedido de Daniel con foto de
+         referencia. Sin horizonte artificial (el mundo 3D detrás ya cumple
+         ese papel) — arco de banqueo arriba, cinta de velocidad a la
+         izquierda, cinta de altitud + vector de VS a la derecha, giro
+         direccional (HSI simulado, sin insets de motor/etc.) abajo al
+         centro, minimapa "track up" abajo a la izquierda. -->
     <div id="pov-hud" style="display:none">
-      <div class="pov-instr pov-ai">
-        <svg viewBox="0 0 200 200">
-          <defs><clipPath id="pov-ai-clip"><circle cx="100" cy="100" r="92"/></clipPath></defs>
-          <g clip-path="url(#pov-ai-clip)">
-            <g id="pov-ai-horizonte-grp">
-              <rect x="-150" y="-350" width="500" height="350" fill="#5fa8ea"/>
-              <rect x="-150" y="0" width="500" height="350" fill="#4a3018"/>
-              <line x1="-150" y1="0" x2="350" y2="0" stroke="#eef3fa" stroke-width="2.2"/>
-              <g id="pov-ai-escala"></g>
-            </g>
-          </g>
-          <circle cx="100" cy="100" r="92" fill="none" stroke="#3a4560" stroke-width="3"/>
-          <g id="pov-ai-ticks"></g>
-          <g id="pov-ai-puntero-grp"><polygon points="100,14 94,26 106,26" fill="#ffd400"/></g>
-          <g fill="#ffd400" stroke="#05070c" stroke-width="0.6">
-            <rect x="58" y="98" width="34" height="4"/>
-            <rect x="108" y="98" width="34" height="4"/>
-            <circle cx="100" cy="100" r="3.4"/>
-          </g>
+      <div class="pov-bankarc">
+        <svg viewBox="0 0 300 100">
+          <g id="pov-bank-ticks"></g>
+          <polygon points="150,4 143,18 157,18" fill="#eef3fa"/><!-- índice fijo, 0° -->
+          <g id="pov-bank-puntero"><polygon points="150,22 142,38 158,38" fill="#ffd400"/></g>
         </svg>
-        <div class="pov-ai-valores">BANK <span id="pov-bank">0°</span> · PITCH <span id="pov-pitch">0°</span></div>
       </div>
-      <div class="pov-instr pov-gauge pov-gauge-izq">
-        <div class="pov-gauge-lbl">GS</div>
-        <div class="pov-gauge-val" id="pov-gs">—</div>
-        <div class="pov-gauge-unit">kt</div>
+      <div class="pov-tape pov-tape-izq">
+        <svg viewBox="0 0 70 220">
+          <defs><clipPath id="pov-spd-clip"><rect x="0" y="0" width="70" height="220"/></clipPath></defs>
+          <g clip-path="url(#pov-spd-clip)"><g id="pov-spd-ladder"></g></g>
+        </svg>
+        <div class="pov-tape-caja" id="pov-gs">—</div>
+        <div class="pov-tape-unit">GS kt</div>
       </div>
-      <div class="pov-instr pov-gauge pov-gauge-der">
-        <div class="pov-gauge-lbl">ALT</div>
-        <div class="pov-gauge-val" id="pov-alt">—</div>
-        <div class="pov-gauge-unit">ft</div>
+      <div class="pov-tape pov-tape-der">
+        <svg viewBox="0 0 70 220">
+          <defs><clipPath id="pov-alt-clip"><rect x="0" y="0" width="70" height="220"/></clipPath></defs>
+          <g clip-path="url(#pov-alt-clip)"><g id="pov-alt-ladder"></g></g>
+        </svg>
+        <div class="pov-tape-caja" id="pov-alt">—</div>
+        <div class="pov-tape-unit">ALT ft</div>
       </div>
-      <div class="pov-instr pov-gauge pov-gauge-vs">
-        <div class="pov-gauge-lbl">VS</div>
-        <div class="pov-gauge-val" id="pov-vs">—</div>
-        <div class="pov-gauge-unit">fpm</div>
+      <div class="pov-vs">
+        <svg viewBox="0 0 30 220">
+          <g id="pov-vs-ticks"></g>
+          <line x1="4" y1="110" x2="26" y2="110" stroke="#eef3fa" stroke-width="1.4"/>
+          <polygon id="pov-vs-puntero" points="4,110 18,104 18,116" fill="#7fe0ff"/>
+        </svg>
+        <div class="pov-vs-val">VS <span id="pov-vs">—</span> fpm</div>
+      </div>
+      <div class="pov-instr pov-hsi">
+        <svg viewBox="0 0 200 200">
+          <g id="pov-hsi-card"></g>
+          <polygon points="100,6 94,20 106,20" fill="#ffd400"/>
+          <polygon points="100,100 94,86 106,86" fill="#eef3fa" stroke="#05070c" stroke-width="0.6"/>
+        </svg>
+        <div class="pov-hsi-hdg" id="pov-hdg">000°</div>
+      </div>
+      <div class="pov-instr pov-minimap">
+        <svg viewBox="0 0 140 140">
+          <circle cx="70" cy="70" r="68" fill="#16321d" stroke="#3a4560" stroke-width="2"/>
+          <text id="pov-mini-norte" font-size="9" fill="#ffd400" text-anchor="middle">N</text>
+          <polyline id="pov-mini-trail" fill="none" stroke="#7fe0ff" stroke-width="2" stroke-linejoin="round"/>
+          <polygon points="70,58 65,76 70,71 75,76" fill="#ffd400" stroke="#05070c" stroke-width="0.6"/>
+        </svg>
+        <div class="pov-minimap-lbl">TRACK UP</div>
       </div>
     </div>
     <div id="config-backdrop"></div>
@@ -5222,80 +5293,154 @@ const _povWorldUp = new THREE.Vector3(0,1,0);
 const _povMat = new THREE.Matrix4();
 const _povOjoOffset = new THREE.Vector3();
 
-// Escala de cabeceo del horizonte artificial (líneas cada 10°) y marcas de
-// banqueo del bisel: geometría FIJA, se arma una sola vez acá — lo único
-// que cambia cuadro a cuadro es el transform de los grupos que las
-// contienen (ver actualizarHUD), no la geometría en sí.
-const POV_PITCH_PX_POR_GRADO = 3.6; // calibrado a ojo sobre el viewBox 0-200 del SVG
-(function _construirEscalaCabeceoPOV(){
-  const grp = document.getElementById('pov-ai-escala');
-  const svgNS = 'http://www.w3.org/2000/svg';
-  [-30,-20,-10,10,20,30].forEach(g=>{
-    const y = g*POV_PITCH_PX_POR_GRADO;
-    const ancho = Math.abs(g)===30 ? 60 : Math.abs(g)===20 ? 40 : 24;
-    const ln = document.createElementNS(svgNS,'line');
-    ln.setAttribute('x1', 100-ancho/2); ln.setAttribute('x2', 100+ancho/2);
-    ln.setAttribute('y1', y); ln.setAttribute('y2', y);
-    ln.setAttribute('stroke','#eef3fa'); ln.setAttribute('stroke-width','2');
-    grp.appendChild(ln);
-    const txt = document.createElementNS(svgNS,'text');
-    txt.setAttribute('x', 100-ancho/2-13); txt.setAttribute('y', y+3);
-    txt.setAttribute('fill','#eef3fa'); txt.setAttribute('font-size','9');
-    txt.setAttribute('font-family','var(--font-mono)');
-    txt.textContent = Math.abs(g);
-    grp.appendChild(txt);
-  });
-})();
-(function _construirTicksBankPOV(){
-  const grp = document.getElementById('pov-ai-ticks');
-  const svgNS = 'http://www.w3.org/2000/svg';
+// v2.26 — REDISEÑO DEL HUD (PFD tipo G1000/G3000), pedido de Daniel con foto
+// de referencia. Toda esta geometría (arco de banqueo, escalas de las
+// cintas, ticks de VS, tarjeta del HSI) es FIJA y se arma una sola vez acá;
+// lo único que cambia cuadro a cuadro son los transform/atributos que
+// actualizarHUD() les aplica. El signo de bankDeg/hdgDeg NO necesita ningún
+// ajuste de espejo: este HUD es un overlay HTML aparte, no pasa por el
+// canvas con scaleX(-1) (eso quedó confirmado en la sesión del bug de la
+// cámara POV — el horizonte artificial viejo, que vivía en este mismo
+// overlay, ya giraba bien sin compensar nada).
+const svgNS = 'http://www.w3.org/2000/svg';
+function _povEl(tag, attrs, texto){
+  const el = document.createElementNS(svgNS, tag);
+  for(const k in attrs) el.setAttribute(k, attrs[k]);
+  if(texto!=null) el.textContent = texto;
+  return el;
+}
+
+// --- Arco de banqueo (reemplaza al horizonte artificial) ------------------
+// Mismos ángulos/radios que el bisel de bank del viejo horizonte, solo que
+// ahora viven en un arco arriba de pantalla en vez de alrededor de una
+// esfera. Pivote en (150,90).
+const POV_BANK_PIVOTE = {x:150, y:90};
+(function _construirArcoBankPOV(){
+  const grp = document.getElementById('pov-bank-ticks');
   [-60,-45,-30,-20,-10,0,10,20,30,45,60].forEach(a=>{
     const rad = a*Math.PI/180;
-    const r1 = 92, r2 = (a===0 || Math.abs(a)===30 || Math.abs(a)===60) ? 80 : 85;
-    const x1 = 100+r1*Math.sin(rad), y1 = 100-r1*Math.cos(rad);
-    const x2 = 100+r2*Math.sin(rad), y2 = 100-r2*Math.cos(rad);
-    const ln = document.createElementNS(svgNS,'line');
-    ln.setAttribute('x1',x1); ln.setAttribute('y1',y1); ln.setAttribute('x2',x2); ln.setAttribute('y2',y2);
-    ln.setAttribute('stroke', a===0 ? '#ffd400' : '#eef3fa');
-    ln.setAttribute('stroke-width', a===0 ? '3' : '2');
-    grp.appendChild(ln);
+    const r1 = 46, r2 = (a===0 || Math.abs(a)===30 || Math.abs(a)===60) ? 32 : 38;
+    const x1 = POV_BANK_PIVOTE.x+r1*Math.sin(rad), y1 = POV_BANK_PIVOTE.y-r1*Math.cos(rad);
+    const x2 = POV_BANK_PIVOTE.x+r2*Math.sin(rad), y2 = POV_BANK_PIVOTE.y-r2*Math.cos(rad);
+    grp.appendChild(_povEl('line', {x1,y1,x2,y2,
+      stroke: a===0?'#ffd400':'#eef3fa', 'stroke-width': a===0?'3':'2'}));
   });
 })();
-const _povHorizonteGrp = document.getElementById('pov-ai-horizonte-grp');
-const _povPunteroGrp = document.getElementById('pov-ai-puntero-grp');
+const _povBankPuntero = document.getElementById('pov-bank-puntero');
+
+// --- Cinta de velocidad (GS, kt) -------------------------------------------
+const POV_SPD_MAX = 220, POV_SPD_PX_POR_KT = 3.2, POV_SPD_MINOR = 10, POV_SPD_MAJOR = 20;
+const POV_TAPE_CENTRO_Y = 110; // centro vertical del viewBox 70x220
+(function _construirCintaVelocidadPOV(){
+  const grp = document.getElementById('pov-spd-ladder');
+  for(let v=0; v<=POV_SPD_MAX; v+=POV_SPD_MINOR){
+    const y = -v*POV_SPD_PX_POR_KT;
+    const major = v % POV_SPD_MAJOR === 0;
+    grp.appendChild(_povEl('line', {x1: major?46:54, y1:y, x2:66, y2:y,
+      stroke:'#eef3fa', 'stroke-width': major?'1.6':'1'}));
+    if(major) grp.appendChild(_povEl('text', {x:40, y:y+3, fill:'#eef3fa',
+      'font-size':'9', 'text-anchor':'end'}, v));
+  }
+})();
+
+// --- Cinta de altitud (ALT, ft) --------------------------------------------
+const POV_ALT_MIN = -200, POV_ALT_MAX = 12000, POV_ALT_PX_POR_FT = 0.09;
+const POV_ALT_MINOR = 100, POV_ALT_MAJOR = 500;
+(function _construirCintaAltitudPOV(){
+  const grp = document.getElementById('pov-alt-ladder');
+  for(let v=POV_ALT_MIN; v<=POV_ALT_MAX; v+=POV_ALT_MINOR){
+    const y = -v*POV_ALT_PX_POR_FT;
+    const major = v % POV_ALT_MAJOR === 0;
+    grp.appendChild(_povEl('line', {x1:4, y1:y, x2: major?24:16, y2:y,
+      stroke:'#eef3fa', 'stroke-width': major?'1.6':'1'}));
+    if(major) grp.appendChild(_povEl('text', {x:30, y:y+3, fill:'#eef3fa',
+      'font-size':'9', 'text-anchor':'start'}, v));
+  }
+})();
+
+// --- Vector de VS (fpm), tira angosta junto a la cinta de altitud ---------
+const POV_VS_MAX_FPM = 2000, POV_VS_PX_POR_FPM = 100/POV_VS_MAX_FPM; // ±100px desde el centro (y=110)
+(function _construirTicksVsPOV(){
+  const grp = document.getElementById('pov-vs-ticks');
+  [-2000,-1000,0,1000,2000].forEach(v=>{
+    const y = 110 - v*POV_VS_PX_POR_FPM;
+    grp.appendChild(_povEl('line', {x1:20, y1:y, x2:26, y2:y,
+      stroke: v===0?'#ffd400':'#eef3fa', 'stroke-width': v===0?'2':'1'}));
+  });
+})();
+const _povVsPuntero = document.getElementById('pov-vs-puntero');
+
+// --- Giro direccional (HSI simulado) ---------------------------------------
+(function _construirTarjetaHsiPOV(){
+  const grp = document.getElementById('pov-hsi-card');
+  const letras = {0:'N', 90:'E', 180:'S', 270:'O'};
+  for(let a=0; a<360; a+=10){
+    const rad = a*Math.PI/180;
+    const r1 = 92, r2 = a%30===0 ? 78 : 84;
+    const x1 = 100+r1*Math.sin(rad), y1 = 100-r1*Math.cos(rad);
+    const x2 = 100+r2*Math.sin(rad), y2 = 100-r2*Math.cos(rad);
+    grp.appendChild(_povEl('line', {x1,y1,x2,y2, stroke:'#eef3fa',
+      'stroke-width': a%30===0?'2':'1'}));
+    if(letras[a]) grp.appendChild(_povEl('text', {
+      x:100+70*Math.sin(rad), y:100-70*Math.cos(rad)+4,
+      fill:'#ffd400', 'font-size':'15', 'font-weight':'700', 'text-anchor':'middle'}, letras[a]));
+    else if(a%30===0) grp.appendChild(_povEl('text', {
+      x:100+68*Math.sin(rad), y:100-68*Math.cos(rad)+3,
+      fill:'#eef3fa', 'font-size':'9', 'text-anchor':'middle'}, a/10));
+  }
+})();
+const _povHsiCard = document.getElementById('pov-hsi-card');
+
+// --- Minimapa "track up" ----------------------------------------------------
+// Proyecta un punto del mundo (offset dx=este, dz=norte respecto del avión)
+// al plano de pantalla del minimapa, rotado para que el rumbo actual quede
+// siempre "arriba" — misma fórmula de rumbo→vector que estimarViento/POV
+// (norte=+Z, este=+X), solo que acá se invierte para pasar de vector-mundo
+// a offset-en-pantalla.
+const POV_MINI_RADIO_M = 750, POV_MINI_PX_POR_M = 60/POV_MINI_RADIO_M;
+function _povMiniProyectar(dx, dz, sinH, cosH){
+  const adelante = dx*sinH + dz*cosH; // proyección sobre "adelante" del avión
+  const derecha  = dx*cosH - dz*sinH; // proyección sobre "derecha" del avión
+  return {x: 70+derecha*POV_MINI_PX_POR_M, y: 70-adelante*POV_MINI_PX_POR_M};
+}
+const _povMiniTrail = document.getElementById('pov-mini-trail');
+const _povMiniNorte = document.getElementById('pov-mini-norte');
+const POV_MINI_VENTANA_S = 240; // últimos 4min de traza detrás del avión
+
 function actualizarHUD(m){
-  const bankDeg = m.bank*180/Math.PI; // ver nota de signo en el changelog v2.18
-  const pitchDeg = m.pitch*180/Math.PI;
-  // orden del transform SVG: aplica de derecha a izquierda — primero
-  // translate (offset de pitch, disco SIN rotar) y recién después rotate
-  // (banqueo, alrededor del centro) — mismo orden que un horizonte real.
-  // v2.19 FIX: Daniel probó y el horizonte mostraba SIEMPRE full nose-down
-  // sin importar el pitch real — al disco (sky/tierra construidos alrededor
-  // de y=0 local) le faltaba centrarlo en (100,100), el centro real del
-  // viewBox. Sin ese translate(100 100) de base, la ventana visible
-  // (recortada por el clipPath, y≈8..192) caía ENTERA dentro del rectángulo
-  // de tierra (y 0..350) — se veía "todo tierra" a cualquier pitch. Orden
-  // (derecha a izquierda): 1) translate(0,pitchPx) en el marco local SIN
-  // rotar, 2) rotate(bank) alrededor del origen local (que, recién DESPUÉS
-  // del translate(100,100) exterior, cae exactamente en el centro real del
-  // instrumento), 3) translate(100,100) para llevar todo al centro del viewBox.
-  // v2.21 FIX: Daniel probó v2.20 (bank invertido) y seguía mal — invertirlo
-  // una vez no alcanzó, así que el problema no era simplemente "el signo
-  // contrario": se vuelve al signo de v2.18 (bankDeg sin invertir), que es
-  // matemáticamente el único que queda sin probar (dos inversiones de un
-  // signo binario solo pueden dar dos resultados, y el invertido ya se
-  // descartó). Si con ESTE también se ve al revés, el bug no es de signo —
-  // avisar con el detalle exacto (banco a la derecha: ¿la línea del
-  // horizonte baja del lado derecho o del izquierdo de la esfera?) para no
-  // seguir probando a ciegas.
-  _povHorizonteGrp.setAttribute('transform',
-    `translate(100 100) rotate(${bankDeg}) translate(0 ${pitchDeg*POV_PITCH_PX_POR_GRADO})`);
-  _povPunteroGrp.setAttribute('transform', `rotate(${bankDeg} 100 100)`);
-  document.getElementById('pov-bank').textContent = Math.round(bankDeg)+'°';
-  document.getElementById('pov-pitch').textContent = Math.round(pitchDeg)+'°';
-  document.getElementById('pov-gs').textContent = Math.round(m.gs*1.94384);
-  document.getElementById('pov-alt').textContent = Math.round(m.y*3.28084);
-  document.getElementById('pov-vs').textContent = Math.round(m.vs*196.85);
+  const bankDeg = m.bank*180/Math.PI;
+  _povBankPuntero.setAttribute('transform', `rotate(${bankDeg} ${POV_BANK_PIVOTE.x} ${POV_BANK_PIVOTE.y})`);
+
+  const gsKt = m.gs*1.94384, altFt = m.y*3.28084, vsFpm = m.vs*196.85;
+  document.getElementById('pov-spd-ladder').setAttribute('transform',
+    `translate(0 ${POV_TAPE_CENTRO_Y + gsKt*POV_SPD_PX_POR_KT})`);
+  document.getElementById('pov-alt-ladder').setAttribute('transform',
+    `translate(0 ${POV_TAPE_CENTRO_Y + altFt*POV_ALT_PX_POR_FT})`);
+  document.getElementById('pov-gs').textContent = Math.round(gsKt);
+  document.getElementById('pov-alt').textContent = Math.round(altFt);
+  document.getElementById('pov-vs').textContent = Math.round(vsFpm);
+
+  const vsClamp = Math.max(-POV_VS_MAX_FPM, Math.min(POV_VS_MAX_FPM, vsFpm));
+  const vsY = 110 - vsClamp*POV_VS_PX_POR_FPM;
+  _povVsPuntero.setAttribute('points', `4,${vsY} 18,${vsY-6} 18,${vsY+6}`);
+
+  const hdgNorm = ((m.hdgDeg%360)+360)%360;
+  _povHsiCard.setAttribute('transform', `rotate(${-hdgNorm} 100 100)`);
+  document.getElementById('pov-hdg').textContent = String(Math.round(hdgNorm)).padStart(3,'0')+'°';
+
+  // minimapa: estela de los últimos POV_MINI_VENTANA_S segundos, proyectada
+  // en el marco "adelante/derecha" del avión (track-up).
+  const hdgRad = m.hdgDeg*Math.PI/180;
+  const sinH = Math.sin(hdgRad), cosH = Math.cos(hdgRad);
+  const pts = [];
+  for(const p of track){
+    if(p.t > m.t || p.t < m.t-POV_MINI_VENTANA_S) continue;
+    const pr = _povMiniProyectar(p.x-m.x, p.z-m.z, sinH, cosH);
+    pts.push(pr.x.toFixed(1)+','+pr.y.toFixed(1));
+  }
+  _povMiniTrail.setAttribute('points', pts.join(' '));
+  const norte = _povMiniProyectar(0, POV_MINI_RADIO_M, sinH, cosH);
+  _povMiniNorte.setAttribute('x', norte.x); _povMiniNorte.setAttribute('y', norte.y+3);
 }
 // v1.36 — FIX: cambiar de modo (seguir avión ↔ cámara libre) no disparaba
 // ningún recálculo del parche satelital, que solo reaccionaba a eventos de
@@ -5657,6 +5802,12 @@ function loop(now){
   // recién termine de cargar con el modo ya activado.
   const povActivo = povChk.checked;
   avion.visible = !povActivo;
+  // v2.26: el panel #info (ALT/GS/RUMBO/BANK/PITCH/VS en vivo) queda
+  // redundante con el HUD nuevo (cintas+HSI ya muestran esos datos) —
+  // se oculta mientras POV está activo, sin tocar #panel-vuelo (resumen de
+  // viento/calidad, que no se duplica en ningún lado).
+  const _infoPanel = document.getElementById('info');
+  if(_infoPanel) _infoPanel.style.display = povActivo ? 'none' : '';
   const siguiendo = povActivo || seguirChk.checked; // en POV, rosa/etc. se
     // comportan como si estuvieran "siguiendo" al avión — no hay cámara libre acá
   if(povActivo){
