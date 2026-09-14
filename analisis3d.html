@@ -2,6 +2,32 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.23 · "No nos entendemos" (Daniel) — mi análisis de v2.22 (compensar el
+  espejo del canvas invirtiendo a +m.bank) estaba mal, probado y seguía al
+  revés. Dato que no había usado: avion.rotation.z YA usa -m.bank para
+  pintar el banqueo del AVIÓN en 3ra persona, a través de este mismo canvas
+  espejado (scaleX(-1), v1.24) — y ese signo está probado y anduvo bien
+  siempre. La cámara en primera persona es RÍGIDA con el avión (el piloto
+  banquea exactamente lo mismo que el avión, ni más ni menos, ni al revés)
+  — no hay ningún motivo para que necesite un signo DISTINTO al que ya usa
+  el avión para lo mismo, sea cual sea el efecto del espejo (el espejo
+  actúa igual sobre cualquier objeto que rote frente a él, el avión o la
+  cámara). Se vuelve a -m.bank en la cámara, igual que avion.rotation —
+  confirmado por Daniel con la referencia exacta: viraje a la izquierda →
+  la parte izquierda del horizonte y del canvas suben.
+  v2.22 · Daniel aclaró el reporte de v2.21: el horizonte artificial del
+  HUD estaba bien desde v2.18 (las dos vueltas de signo en v2.20/v2.21
+  fueron sobre un instrumento que ya andaba) — lo que se inclinaba al
+  revés era el CANVAS, el mundo 3D real detrás del HUD. Causa real: el
+  canvas tiene transform:scaleX(-1) a nivel CSS (v1.24, para el espejado
+  este-oeste de la cámara orbital de 3ra persona) — un espejado horizontal
+  invierte el SENTIDO de cualquier rotación alrededor del eje de vista
+  (roll), sin afectar pitch/yaw. La cámara orbital nunca hace roll (solo
+  orbita alrededor de un target), así que ese efecto lateral del espejo
+  nunca se había manifestado hasta esta cámara en primera persona, la
+  primera que banquea sobre su propio eje. Fix: se invierte el signo de
+  m.bank SOLO en la cámara real (+m.bank en vez de -m.bank); el bankDeg
+  del HUD 2D (actualizarHUD, independiente del canvas) queda como en v2.18.
   v2.21 · Daniel probó v2.20 (bank invertido) y seguía viéndose al revés —
   invertir una vez no resolvió nada, así que se vuelve al signo de v2.18
   (bankDeg sin invertir). Un signo binario solo tiene dos estados y el otro
@@ -2049,7 +2075,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.21</span>
+    <span class="badge" id="ver-badge">v2.23</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -5594,9 +5620,16 @@ function loop(now){
     // de eje del changelog v2.18 (HUMO_OFFSET_LOCAL con Z positivo hacia la
     // cola) era al revés: el "adelante" local del GLB es +Z, no -Z. Se
     // suma PI al yaw para mirar hacia la cola opuesta (la nariz real).
-    _povEuler.set(-m.pitch, m.hdgDeg*Math.PI/180 + Math.PI, -m.bank, 'YXZ'); // SIN
-      // pitchRender: acá se busca la actitud REAL, no la exagerada para el
-      // dibujo del tubo/cortina (ver changelog v2.18)
+    // v2.23 FIX: mi análisis de v2.22 (compensar el espejo invirtiendo a
+    // +m.bank) estaba mal — Daniel lo probó y seguía al revés. Dato de
+    // referencia que faltaba usar: avion.rotation.z YA usa -m.bank para
+    // pintar el banqueo del avión en 3ra persona, a través de ESTE MISMO
+    // canvas espejado, y ese signo está probado y anda bien desde siempre
+    // (nadie reportó nunca un banqueo visual al revés en 3ra persona). No
+    // hay motivo para que la cámara necesite un signo DISTINTO al del
+    // avión — las dos son "rotar algo sobre su eje de roll y renderizarlo
+    // por este mismo canvas". Se vuelve a -m.bank, igual que avion.rotation.
+    _povEuler.set(-m.pitch, m.hdgDeg*Math.PI/180 + Math.PI, -m.bank, 'YXZ');
     camera.quaternion.setFromEuler(_povEuler);
     _povOjoLocal.set(0, POV_OJO_ARRIBA_M, POV_OJO_ADELANTE_M).applyQuaternion(camera.quaternion);
     camera.position.copy(pos).add(_povOjoLocal);
