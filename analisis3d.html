@@ -2,6 +2,22 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.27 · Daniel probó v2.26 con captura: las dos cintas aparecían apiladas
+  una debajo de la otra, las dos pegadas al borde izquierdo — la de
+  altitud nunca llegó a la derecha. Causa: a `.pov-tape`, `.pov-vs` y
+  `.pov-bankarc` les faltaba `position:absolute` — sin eso, `left/right/
+  top` de esas reglas no hacen nada y el elemento cae en el flujo normal
+  del documento (de ahí el apilado vertical a la izquierda: bloques
+  block-level uno debajo del otro, arrancando en (0,0) de #pov-hud). El
+  HSI y el minimapa se salvaron porque además tienen la clase `.pov-instr`
+  (esa sí trae position:absolute). Se agrega, de paso: más margen entre
+  las cintas y el centro (8-28px → 22-64px), transparencia en HSI/minimapa
+  (opacity:.82, pedido de Daniel para no tapar el terreno de abajo del
+  todo) y un chevron de flight director fijo en el boresight (centro
+  exacto de pantalla) imitando la referencia — es puramente decorativo, no
+  hay perfil de guiado real calculado detrás (no tenemos target de FD),
+  mismo criterio que ya se usaba para el símbolo de ala del horizonte
+  viejo.
   v2.26 · Pedido de Daniel con foto de referencia (PFD tipo G1000/G3000):
   rediseño completo del HUD del modo POV. Se saca el horizonte artificial
   (el mundo 3D real detrás del HUD ya cumple ese papel — "reemplazarlo por
@@ -2096,17 +2112,25 @@
       rgba(255,255,255,0) 68%, rgba(255,255,255,.06) 100%);pointer-events:none}
 
   /* arco de banqueo, arriba y centrado — reemplaza al horizonte artificial */
-  .pov-bankarc{width:clamp(220px,42vw,340px);height:64px;left:50%;top:8px;
-    transform:translateX(-50%)}
+  .pov-bankarc{position:absolute;width:clamp(220px,42vw,340px);height:64px;
+    left:50%;top:8px;transform:translateX(-50%)}
   .pov-bankarc svg{display:block;width:100%;height:100%}
 
+  /* v2.27 FIX: a las 3 reglas de abajo (.pov-tape/.pov-vs, y .pov-bankarc
+     arriba) les faltaba position:absolute — sin eso "left/right/top" no
+     hacen nada y el elemento cae en el flujo normal del documento. Por eso
+     Daniel vio las dos cintas apiladas una debajo de la otra, las dos
+     pegadas al borde izquierdo (la de altitud NUNCA llegó a posicionarse a
+     la derecha) — no era un tema de separación, faltaba la base para que
+     "left/right" tuvieran efecto. De paso, más margen desde el borde
+     (8-28px → 22-64px) para que quede más aire hacia el centro. */
   /* cintas de velocidad (izq) y altitud (der), estilo PFD */
-  .pov-tape{width:clamp(56px,9vw,76px);height:clamp(190px,42vh,320px);
+  .pov-tape{position:absolute;width:clamp(56px,9vw,76px);height:clamp(190px,42vh,320px);
     top:50%;transform:translateY(-50%);border-radius:4px;
     background:rgba(10,14,22,.55);box-shadow:0 0 0 2px #05070c,0 0 0 3px #3a4560,
       0 6px 14px rgba(0,0,0,.5)}
-  .pov-tape-izq{left:clamp(8px,3vw,28px)}
-  .pov-tape-der{right:clamp(8px,3vw,28px)}
+  .pov-tape-izq{left:clamp(22px,6vw,64px)}
+  .pov-tape-der{right:clamp(22px,6vw,64px)}
   .pov-tape svg{display:block;width:100%;height:100%}
   .pov-tape-caja{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);
     background:#0a0e16;border-top:2px solid #ffd400;border-bottom:2px solid #ffd400;
@@ -2116,24 +2140,33 @@
     font-size:9px;color:var(--cyan);letter-spacing:.06em;white-space:nowrap}
 
   /* tira de VS, pegada al costado interior de la cinta de altitud */
-  .pov-vs{width:clamp(22px,4vw,30px);height:clamp(150px,34vh,260px);top:50%;
-    right:calc(clamp(56px,9vw,76px) + clamp(8px,3vw,28px) + 3px);
+  .pov-vs{position:absolute;width:clamp(22px,4vw,30px);height:clamp(150px,34vh,260px);
+    top:50%;right:calc(clamp(56px,9vw,76px) + clamp(22px,6vw,64px) + 3px);
     transform:translateY(-50%)}
   .pov-vs svg{display:block;width:100%;height:100%}
   .pov-vs-val{position:absolute;left:50%;bottom:-16px;transform:translateX(-50%);
     font-size:9px;color:var(--text2);white-space:nowrap}
 
-  /* giro direccional (HSI simulado), abajo al centro */
+  /* chevron de flight director, fijo en el centro exacto de pantalla —
+     pedido de Daniel imitando la referencia. Es puramente visual (no hay
+     cálculo de guiado real detrás, no tenemos perfil objetivo de FD): un
+     símbolo fijo en el boresight, igual que el ala del horizonte viejo. */
+  .pov-fd{position:absolute;width:180px;height:60px;left:50%;top:50%;
+    transform:translate(-50%,-50%);z-index:3}
+  .pov-fd svg{display:block;width:100%;height:100%}
+
+  /* giro direccional (HSI simulado), abajo al centro — pedido de Daniel:
+     con transparencia, para no tapar del todo el terreno de abajo. */
   .pov-hsi{width:clamp(120px,20vh,170px);height:clamp(120px,20vh,170px);
-    left:50%;bottom:clamp(70px,10vh,100px);transform:translateX(-50%)}
+    left:50%;bottom:clamp(70px,10vh,100px);transform:translateX(-50%);opacity:.82}
   .pov-hsi svg{display:block;width:100%;height:100%}
   .pov-hsi-hdg{position:absolute;left:50%;top:-20px;transform:translateX(-50%);
     background:#0a0e16;border:1px solid #ffd400;border-radius:3px;padding:1px 6px;
     font-size:12px;font-weight:700;color:var(--text);white-space:nowrap}
 
-  /* minimapa "track up", abajo a la izquierda */
+  /* minimapa "track up", abajo a la izquierda — misma transparencia que el HSI */
   .pov-minimap{width:clamp(96px,16vh,140px);height:clamp(96px,16vh,140px);
-    left:clamp(8px,3vw,28px);bottom:clamp(16px,4vh,32px)}
+    left:clamp(8px,3vw,28px);bottom:clamp(16px,4vh,32px);opacity:.82}
   .pov-minimap svg{display:block;width:100%;height:100%}
   .pov-minimap-lbl{position:absolute;left:50%;bottom:3px;transform:translateX(-50%);
     font-size:8px;color:#7fe0ff;letter-spacing:.06em;background:rgba(0,0,0,.4);
@@ -2159,7 +2192,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.26</span>
+    <span class="badge" id="ver-badge">v2.27</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -2203,6 +2236,12 @@
           <g id="pov-bank-ticks"></g>
           <polygon points="150,4 143,18 157,18" fill="#eef3fa"/><!-- índice fijo, 0° -->
           <g id="pov-bank-puntero"><polygon points="150,22 142,38 158,38" fill="#ffd400"/></g>
+        </svg>
+      </div>
+      <div class="pov-fd">
+        <svg viewBox="0 0 180 60">
+          <line x1="8" y1="12" x2="78" y2="42" stroke="#ffd400" stroke-width="7" stroke-linecap="round"/>
+          <line x1="102" y1="42" x2="172" y2="12" stroke="#ffd400" stroke-width="7" stroke-linecap="round"/>
         </svg>
       </div>
       <div class="pov-tape pov-tape-izq">
