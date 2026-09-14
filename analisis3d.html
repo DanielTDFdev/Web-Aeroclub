@@ -2,6 +2,10 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.36 · Pedido de Daniel: números/letras del HSI con orientación radial
+  (apuntando hacia afuera desde el centro), mismo patrón que ya resolvió
+  compassRing() en vor-trainer.html — cada <text> rota según SU PROPIO
+  ángulo (rotate(a, lx, ly) sobre su propio punto), no como grupo rígido.
   v2.35 · FIX real (con evidencia, no otro tanteo a ciegas): el signo del
   bank en la cámara POV estaba invertido desde la reescritura a vectores
   de v2.24. Daniel mandó 2 capturas separadas por 6s confirmando el rumbo
@@ -2348,7 +2352,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.35</span>
+    <span class="badge" id="ver-badge">v2.36</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -5667,12 +5671,24 @@ const _povVsAguja = document.getElementById('pov-vs-aguja');
     const x2 = 100+r2*Math.sin(rad), y2 = 100-r2*Math.cos(rad);
     grp.appendChild(_povEl('line', {x1,y1,x2,y2, stroke:'#eef3fa',
       'stroke-width': a%30===0?'2':'1'}));
-    if(letras[a]) grp.appendChild(_povEl('text', {
-      x:100+70*Math.sin(rad), y:100-70*Math.cos(rad)+4,
-      fill:'#ffd400', 'font-size':'15', 'font-weight':'700', 'text-anchor':'middle'}, letras[a]));
-    else if(a%30===0) grp.appendChild(_povEl('text', {
-      x:100+68*Math.sin(rad), y:100-68*Math.cos(rad)+3,
-      fill:'#eef3fa', 'font-size':'9', 'text-anchor':'middle'}, a/10));
+    // v2.36 — Daniel pidió orientación RADIAL para los números/letras, igual
+    // que compassRing() en vor-trainer.html: cada <text> rota según SU
+    // PROPIO ángulo (no como grupo rígido, eso invertiría todos a la vez al
+    // girar la tarjeta) — transform="rotate(a lx ly)" sobre el mismo punto
+    // donde ya se posiciona el texto. dominant-baseline:middle reemplaza el
+    // ajuste manual +3/+4 en "y" que tenía antes (ya no hace falta, y con
+    // texto rotado ese offset fijo en Y dejaba de tener sentido).
+    if(letras[a]){
+      const lx=100+70*Math.sin(rad), ly=100-70*Math.cos(rad);
+      grp.appendChild(_povEl('text', {x:lx, y:ly, transform:`rotate(${a} ${lx} ${ly})`,
+        fill:'#ffd400', 'font-size':'15', 'font-weight':'700',
+        'text-anchor':'middle', 'dominant-baseline':'middle'}, letras[a]));
+    } else if(a%30===0){
+      const lx=100+68*Math.sin(rad), ly=100-68*Math.cos(rad);
+      grp.appendChild(_povEl('text', {x:lx, y:ly, transform:`rotate(${a} ${lx} ${ly})`,
+        fill:'#eef3fa', 'font-size':'9', 'text-anchor':'middle',
+        'dominant-baseline':'middle'}, a/10));
+    }
   }
 })();
 const _povHsiCard = document.getElementById('pov-hsi-card');
