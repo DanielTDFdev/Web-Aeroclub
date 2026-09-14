@@ -2,6 +2,14 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.32 · 4 ajustes de Daniel sobre v2.31.
+  1) Verde de OAT/RA: era muy claro (#3ddc73), pasa a verde oscuro (#146c34).
+  2) RA off se muda de la cinta de velocidad a la de ALTITUD (antes
+  compartía cartel con OAT arriba de la de velocidad).
+  3) GS KT pasa a estar ADENTRO de la cinta de velocidad (arriba), no
+  flotando por fuera.
+  4) ALT FT pasa a estar ADENTRO de la cinta de altitud (arriba), mismo
+  criterio.
   v2.31 · Daniel marcó en una captura + 3 pedidos más.
   1) La aguja de VS se mueve DENTRO de la cinta de altitud (zona baja,
   superpuesta a los ticks) en vez de quedar como elemento aparte debajo —
@@ -2205,25 +2213,28 @@
     text-align:center;font-size:clamp(14px,2.4vh,18px);font-weight:700;
     color:var(--text);padding:2px 0}
   /* v2.31 — Daniel pidió el título (GS KT / ALT FT) en la CABECERA de cada
-     cinta en vez de al pie (antes bottom:-16px). */
-  .pov-tape-unit{position:absolute;left:0;right:0;top:-16px;text-align:center;
+     cinta en vez de al pie (antes bottom:-16px).
+     v2.32 — y ahora ADENTRO de la cinta (arriba), no flotando por fuera. */
+  .pov-tape-unit{position:absolute;left:0;right:0;top:6px;text-align:center;
     font-size:9px;color:var(--cyan);letter-spacing:.06em;white-space:nowrap}
 
-  /* v2.31 — OAT y RA (radioaltímetro), pedido de Daniel: van arriba de la
-     cinta de VELOCIDAD, en verde, tipografía monoespaciada con look "de
-     computadora" (letter-spacing + leve resplandor). OAT sale del METAR de
-     despegue (temperaturaDeMetar, ver JS) — es la temperatura de SUPERFICIE
-     al arranque del vuelo, no un OAT real en vivo (no hay sensor de
-     temperatura en la traza GPS). RA queda fijo en "off": no hay radio
-     altímetro real en este simulador, es puramente decorativo/estético,
-     imitando el instrumento de referencia.
-     Ambas se anclan sobre .pov-tape-izq (que ya es position:absolute, así
-     que sirve de containing block sin necesitar un wrapper aparte). */
-  .pov-oat, .pov-ra{position:absolute;left:0;right:0;text-align:center;
-    font-family:var(--font-mono);font-size:11px;font-weight:700;color:#3ddc73;
-    letter-spacing:.09em;white-space:nowrap;text-shadow:0 0 5px rgba(61,220,115,.65)}
-  .pov-oat{top:-54px}
-  .pov-ra{top:-38px}
+  /* v2.31 — OAT y RA (radioaltímetro), pedido de Daniel: verde, tipografía
+     monoespaciada con look "de computadora" (letter-spacing + leve
+     resplandor). OAT sale del METAR de despegue (temperaturaDeMetar, ver
+     JS) — es la temperatura de SUPERFICIE al arranque del vuelo, no un OAT
+     real en vivo (no hay sensor de temperatura en la traza GPS). RA queda
+     fijo en "off": no hay radioaltímetro real en este simulador, es
+     puramente decorativo/estético, imitando el instrumento de referencia.
+     v2.32 — Daniel: verde OSCURO (antes #3ddc73, muy claro) y RA pasa a ir
+     arriba de la cinta de ALTITUD (antes compartía la de velocidad con
+     OAT) — cada título de cinta quedó adentro (ver .pov-tape-unit), así
+     que arriba de cada cinta ahora sobra lugar para un solo cartel: OAT
+     sobre la de velocidad, RA sobre la de altitud. Ambas se anclan sobre
+     su .pov-tape-* (que ya es position:absolute, sirve de containing block
+     sin wrapper aparte). */
+  .pov-oat, .pov-ra{position:absolute;left:0;right:0;top:-20px;text-align:center;
+    font-family:var(--font-mono);font-size:11px;font-weight:700;color:#146c34;
+    letter-spacing:.09em;white-space:nowrap;text-shadow:0 0 5px rgba(20,108,52,.55)}
 
   /* v2.28 — Daniel pidió rehacer el VS: en vez de tira vertical al costado
      de la cinta de altitud, pasa a ser una AGUJA que pivota sobre un punto
@@ -2289,7 +2300,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.31</span>
+    <span class="badge" id="ver-badge">v2.32</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -2343,7 +2354,6 @@
       </div>
       <div class="pov-tape pov-tape-izq">
         <div class="pov-oat" id="pov-oat">OAT —°</div>
-        <div class="pov-ra">RA off</div>
         <svg viewBox="0 0 70 220">
           <defs><clipPath id="pov-spd-clip"><rect x="0" y="0" width="70" height="220"/></clipPath></defs>
           <g clip-path="url(#pov-spd-clip)"><g id="pov-spd-ladder"></g></g>
@@ -2352,6 +2362,7 @@
         <div class="pov-tape-unit">GS KT</div>
       </div>
       <div class="pov-tape pov-tape-der">
+        <div class="pov-ra">RA off</div>
         <svg viewBox="0 0 70 220">
           <defs><clipPath id="pov-alt-clip"><rect x="0" y="0" width="70" height="220"/></clipPath></defs>
           <g clip-path="url(#pov-alt-clip)"><g id="pov-alt-ladder"></g></g>
