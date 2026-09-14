@@ -2,6 +2,13 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.29 · Daniel marcó a mano sobre una captura: 2 pedidos.
+  1) Arco de banqueo bastante más amplio (radio 46→130, viewBox interno
+  300x100→400x160, contenedor hasta 720px de ancho) y con el número de
+  grado junto a cada tick mayor (10/20/30/45/60), sin rotar, igual que en
+  la referencia — antes solo estaban las marcas, sin texto.
+  2) Chevron de FD más grande y más grueso (viewBox 180x60→260x90,
+  stroke-width 7→11), mismo gap al centro que ya tenía.
   v2.28 · 4 pedidos de Daniel sobre v2.27, con captura.
   1) El chevron de FD apuntaba para abajo — se invierten las dos líneas
   (antes valle, ahora pico hacia arriba).
@@ -2133,9 +2140,12 @@
       rgba(255,255,255,0) 68%, rgba(255,255,255,.06) 100%);pointer-events:none}
 
   /* arco de banqueo, arriba y centrado — reemplaza al horizonte artificial.
-     v2.28: Daniel probó v2.27 y no se notaba contra el cielo — bastante más
-     grande y en amarillo en vez de blanco (ver también los ticks en JS). */
-  .pov-bankarc{position:absolute;width:clamp(340px,58vw,560px);height:120px;
+     v2.28: bastante más grande y en amarillo (no se notaba contra el cielo).
+     v2.29: Daniel pidió, con foto marcada a mano, un arco todavía más
+     amplio (más radio = domo más pronunciado) y con los grados marcados en
+     número junto a cada tick — el viewBox interno pasa de 300x100 a
+     400x160 (ver JS) para dar lugar a ese radio mayor. */
+  .pov-bankarc{position:absolute;width:clamp(420px,74vw,720px);height:150px;
     left:50%;top:8px;transform:translateX(-50%)}
   .pov-bankarc svg{display:block;width:100%;height:100%}
 
@@ -2181,8 +2191,8 @@
      pedido de Daniel imitando la referencia. Es puramente visual (no hay
      cálculo de guiado real detrás, no tenemos perfil objetivo de FD): un
      símbolo fijo en el boresight, igual que el ala del horizonte viejo. */
-  .pov-fd{position:absolute;width:180px;height:60px;left:50%;top:50%;
-    transform:translate(-50%,-50%);z-index:3}
+  .pov-fd{position:absolute;width:clamp(220px,34vw,320px);height:110px;
+    left:50%;top:50%;transform:translate(-50%,-50%);z-index:3}
   .pov-fd svg{display:block;width:100%;height:100%}
 
   /* giro direccional (HSI simulado), abajo al centro — pedido de Daniel:
@@ -2222,7 +2232,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.28</span>
+    <span class="badge" id="ver-badge">v2.29</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -2262,16 +2272,16 @@
          centro, minimapa "track up" abajo a la izquierda. -->
     <div id="pov-hud" style="display:none">
       <div class="pov-bankarc">
-        <svg viewBox="0 0 300 100">
+        <svg viewBox="0 0 400 160">
           <g id="pov-bank-ticks"></g>
-          <polygon points="150,4 143,18 157,18" fill="none" stroke="#ffd400" stroke-width="2"/><!-- índice fijo, 0° -->
-          <g id="pov-bank-puntero"><polygon points="150,22 142,38 158,38" fill="#ffd400"/></g>
+          <polygon points="200,4 193,18 207,18" fill="none" stroke="#ffd400" stroke-width="2"/><!-- índice fijo, 0° -->
+          <g id="pov-bank-puntero"><polygon points="200,20 186,44 214,44" fill="#ffd400"/></g>
         </svg>
       </div>
       <div class="pov-fd">
-        <svg viewBox="0 0 180 60">
-          <line x1="8" y1="42" x2="78" y2="12" stroke="#ffd400" stroke-width="7" stroke-linecap="round"/>
-          <line x1="102" y1="12" x2="172" y2="42" stroke="#ffd400" stroke-width="7" stroke-linecap="round"/>
+        <svg viewBox="0 0 260 90">
+          <line x1="10" y1="60" x2="115" y2="25" stroke="#ffd400" stroke-width="11" stroke-linecap="round"/>
+          <line x1="145" y1="25" x2="250" y2="60" stroke="#ffd400" stroke-width="11" stroke-linecap="round"/>
         </svg>
       </div>
       <div class="pov-tape pov-tape-izq">
@@ -5385,15 +5395,17 @@ function _povEl(tag, attrs, texto){
 }
 
 // --- Arco de banqueo (reemplaza al horizonte artificial) ------------------
-// Mismos ángulos/radios que el bisel de bank del viejo horizonte, solo que
-// ahora viven en un arco arriba de pantalla en vez de alrededor de una
-// esfera. Pivote en (150,90).
-const POV_BANK_PIVOTE = {x:150, y:90};
+// Mismos ángulos que el bisel de bank del viejo horizonte, solo que ahora
+// viven en un arco arriba de pantalla en vez de alrededor de una esfera.
+// v2.29: Daniel pidió (foto marcada a mano) un arco bastante más amplio y
+// con los grados en número junto a cada tick — pivote y radio escalados al
+// viewBox más grande (400x160, antes 300x100) y se agregan las etiquetas.
+const POV_BANK_PIVOTE = {x:200, y:140};
 (function _construirArcoBankPOV(){
   const grp = document.getElementById('pov-bank-ticks');
   [-60,-45,-30,-20,-10,0,10,20,30,45,60].forEach(a=>{
     const rad = a*Math.PI/180;
-    const r1 = 46, r2 = (a===0 || Math.abs(a)===30 || Math.abs(a)===60) ? 32 : 38;
+    const r1 = 130, r2 = (a===0 || Math.abs(a)===30 || Math.abs(a)===60) ? 100 : 112;
     const x1 = POV_BANK_PIVOTE.x+r1*Math.sin(rad), y1 = POV_BANK_PIVOTE.y-r1*Math.cos(rad);
     const x2 = POV_BANK_PIVOTE.x+r2*Math.sin(rad), y2 = POV_BANK_PIVOTE.y-r2*Math.cos(rad);
     // v2.28: Daniel probó v2.27 — en blanco no se notaba contra el cielo.
@@ -5401,6 +5413,15 @@ const POV_BANK_PIVOTE = {x:150, y:90};
     // para distinguirse del resto sin cambiar de color).
     grp.appendChild(_povEl('line', {x1,y1,x2,y2,
       stroke:'#ffd400', 'stroke-width': a===0?'4':'2.5'}));
+    // v2.29: número de grado junto a cada tick MAYOR (no en 0°, que ya
+    // tiene el índice fijo). Radio de la etiqueta un poco por fuera de r1,
+    // texto SIN rotar (se lee derecho, como en la referencia de Daniel).
+    if(a!==0){
+      const rTxt = r1+18;
+      const xt = POV_BANK_PIVOTE.x+rTxt*Math.sin(rad), yt = POV_BANK_PIVOTE.y-rTxt*Math.cos(rad);
+      grp.appendChild(_povEl('text', {x:xt, y:yt+4, fill:'#ffd400',
+        'font-size':'15', 'font-weight':'700', 'text-anchor':'middle'}, Math.abs(a)));
+    }
   });
 })();
 const _povBankPuntero = document.getElementById('pov-bank-puntero');
