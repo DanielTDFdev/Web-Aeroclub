@@ -2,6 +2,23 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.24 · Daniel probó v2.23 (vuelta a -m.bank) y seguía al revés — con eso
+  ya se probaron los DOS únicos signos posibles para el bank vía Euler
+  (v2.22 y v2.23), ambos mal. Eso descarta que el problema sea "el signo
+  está cambiado": la cuenta no cierra para un signo binario, así que el bug
+  real estaba en otro lado. Sospecha: _povEuler copiaba los mismos ángulos
+  que avion.rotation, pero avion.rotation gira un modelo GLB cuyo eje
+  "adelante" local es una convención propia del modelo (por eso hizo falta
+  parchear con +PI en v2.19) — mezclar esa corrección de yaw con un roll en
+  el mismo Euler 'YXZ' puede acoplar mal los ejes de un modo que un simple
+  cambio de signo no arregla.
+  Reescrito de raíz con vectores explícitos en vez de Euler: el "adelante"
+  de la cámara sale DIRECTO del rumbo (misma fórmula ya probada en
+  estimarViento: vx=gs·sin(r), vz=gs·cos(r) — norte=+Z, este=+X), sin pasar
+  por el eje local del GLB ni necesitar ningún parche de +PI. Right/Up se
+  arman con productos cruz (perpendiculares correctos por construcción) y
+  el banqueo rota ese par alrededor de "adelante" — matriz de cámara armada
+  directo con Matrix4.makeBasis(), sin Euler de por medio.
   v2.23 · "No nos entendemos" (Daniel) — mi análisis de v2.22 (compensar el
   espejo del canvas invirtiendo a +m.bank) estaba mal, probado y seguía al
   revés. Dato que no había usado: avion.rotation.z YA usa -m.bank para
@@ -2075,7 +2092,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.23</span>
+    <span class="badge" id="ver-badge">v2.24</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -5174,9 +5191,26 @@ povChk.onchange = ()=>{ povHud.style.display = povChk.checked ? 'block' : 'none'
 // Z negativo = adelante, bajo el supuesto de eje documentado en el
 // changelog de v2.18 (a confirmar visualmente).
 const POV_OJO_ARRIBA_M = AVION_LARGO_MUNDO*0.12;
-const POV_OJO_ADELANTE_M = -AVION_LARGO_MUNDO*0.15;
-const _povEuler = new THREE.Euler();
-const _povOjoLocal = new THREE.Vector3();
+const POV_OJO_ADELANTE_M = AVION_LARGO_MUNDO*0.15;
+// v2.24 — vectores explícitos en vez de Euler 'YXZ' + parche de yaw. Las
+// dos vueltas de signo anteriores (v2.22/v2.23) no convergieron pese a
+// haber probado los dos únicos signos posibles para el bank — señal de que
+// el problema no era el signo en sí, sino la combinación Euler+PI de
+// corrección de yaw (que copiaba los mismos ángulos que avion.rotation,
+// pero avion.rotation gira un GLB cuyo eje "adelante" local es una
+// convención propia del modelo — no necesariamente la misma convención que
+// las fórmulas de rumbo que ya usa el resto del archivo, como
+// estimarViento). Achicando el problema: waypoint/rumbo→vector es una
+// fórmula YA probada y usada en el archivo (estimarViento: vx=gs·sin(r),
+// vz=gs·cos(r), r=hdgDeg·π/180 — norte=+Z, este=+X), así que el "adelante"
+// de la cámara sale DIRECTO de esa fórmula, sin pasar por el eje local del
+// GLB ni necesitar ningún parche de +PI.
+const _povForward = new THREE.Vector3();
+const _povRight = new THREE.Vector3();
+const _povUp = new THREE.Vector3();
+const _povWorldUp = new THREE.Vector3(0,1,0);
+const _povMat = new THREE.Matrix4();
+const _povOjoOffset = new THREE.Vector3();
 
 // Escala de cabeceo del horizonte artificial (líneas cada 10°) y marcas de
 // banqueo del bisel: geometría FIJA, se arma una sola vez acá — lo único
@@ -5620,19 +5654,28 @@ function loop(now){
     // de eje del changelog v2.18 (HUMO_OFFSET_LOCAL con Z positivo hacia la
     // cola) era al revés: el "adelante" local del GLB es +Z, no -Z. Se
     // suma PI al yaw para mirar hacia la cola opuesta (la nariz real).
-    // v2.23 FIX: mi análisis de v2.22 (compensar el espejo invirtiendo a
-    // +m.bank) estaba mal — Daniel lo probó y seguía al revés. Dato de
-    // referencia que faltaba usar: avion.rotation.z YA usa -m.bank para
-    // pintar el banqueo del avión en 3ra persona, a través de ESTE MISMO
-    // canvas espejado, y ese signo está probado y anda bien desde siempre
-    // (nadie reportó nunca un banqueo visual al revés en 3ra persona). No
-    // hay motivo para que la cámara necesite un signo DISTINTO al del
-    // avión — las dos son "rotar algo sobre su eje de roll y renderizarlo
-    // por este mismo canvas". Se vuelve a -m.bank, igual que avion.rotation.
-    _povEuler.set(-m.pitch, m.hdgDeg*Math.PI/180 + Math.PI, -m.bank, 'YXZ');
-    camera.quaternion.setFromEuler(_povEuler);
-    _povOjoLocal.set(0, POV_OJO_ARRIBA_M, POV_OJO_ADELANTE_M).applyQuaternion(camera.quaternion);
-    camera.position.copy(pos).add(_povOjoLocal);
+    // v2.24 FIX: reescrito con vectores explícitos (ver constantes POV_* /
+    // _pov* arriba) — las dos vueltas de signo en el bank vía Euler no
+    // convergieron. "Adelante" real sale directo del rumbo (misma fórmula
+    // ya probada en estimarViento), sin depender del eje local del GLB.
+    const hdgRad = m.hdgDeg*Math.PI/180;
+    const cosH = Math.cos(hdgRad), sinH = Math.sin(hdgRad);
+    const cosP = Math.cos(m.pitch), sinP = Math.sin(m.pitch); // SIN pitchRender: actitud real
+    _povForward.set(sinH*cosP, sinP, cosH*cosP);
+    _povRight.crossVectors(_povWorldUp, _povForward).normalize(); // ej.: rumbo norte (hdg=0) → derecha = este (+X), correcto
+    _povUp.crossVectors(_povForward, _povRight);
+    // banqueo: rota right/up alrededor de "adelante". m.bank>0 = viraje a
+    // la izquierda (mismo signo que ya usa avion.rotation.z=-m.bank) — para
+    // ese caso el ala/lado DERECHO real tiene que subir.
+    const cosB = Math.cos(m.bank), sinB = Math.sin(m.bank);
+    const rx=_povRight.x, ry2=_povRight.y, rz=_povRight.z;
+    const ux=_povUp.x, uy=_povUp.y, uz=_povUp.z;
+    _povRight.set(rx*cosB+ux*sinB, ry2*cosB+uy*sinB, rz*cosB+uz*sinB);
+    _povUp.set(ux*cosB-rx*sinB, uy*cosB-ry2*sinB, uz*cosB-rz*sinB);
+    _povMat.makeBasis(_povRight, _povUp, _povForward.clone().negate()); // cámara mira hacia -Z local = "adelante"
+    camera.quaternion.setFromRotationMatrix(_povMat);
+    _povOjoOffset.set(0,0,0).addScaledVector(_povUp, POV_OJO_ARRIBA_M).addScaledVector(_povForward, POV_OJO_ADELANTE_M);
+    camera.position.copy(pos).add(_povOjoOffset);
     actualizarHUD(m);
   } else {
     actualizarCamara(siguiendo ? pos : centro, siguiendo ? camRadioSeguir : camRadioLibre);
