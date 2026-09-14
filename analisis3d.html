@@ -2,6 +2,27 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.34 · Pedido de Daniel: la banda que quedaba vacía al ocultar la barra
+  de estela en modo POV (fondo celeste de #stage asomando detrás) se
+  aprovecha para un status bar propio con DME/XPDR/ETA.
+  DME: distancia recta (x/z, sin exagerar) de la posición actual al punto
+  de despegue (track[0], ya recortado al despegue por procesarPuntos), en
+  millas náuticas — se recalcula cada frame en actualizarHUD().
+  XPDR: fijo en "1200" — no hay transponder real en este simulador, es
+  decorativo, mismo criterio que RA.
+  ETA: hora UTC del ÚLTIMO punto del track (fin de la traza registrada, no
+  un ETA real contra un destino) — se calcula una sola vez, no cambia
+  durante el vuelo, mismo criterio que el OAT.
+  Los tres en verde oscuro (#146c34), centrados, espaciados parejo.
+  De paso, se corrige CÓMO se togglean estos paneles (#info/#panel-vuelo/
+  #estela-bar/#pov-status-bar) y el propio #pov-hud: pasa de escribirse en
+  loop() (una escritura al DOM por FRAME, innecesaria) al evento
+  povChk.onchange (una sola vez, cuando de verdad cambia el modo) — y se
+  agrega una llamada a resize() ahí mismo, porque el canvas de three.js no
+  se resizea solo con un display:none/'' en su contenedor: sin ese
+  resize(), al ocultar la barra de estela #stage crecía pero el canvas
+  seguía con el tamaño viejo, dejando ver el fondo celeste de #stage por
+  debajo — la banda vacía que motivó este pedido.
   v2.33 · Pedido de Daniel: el slider de estela (barra "Estela" arriba del
   footer) no tiene sentido en modo POV — controla cuánto tubo/cortina se
   dibuja, y esa geometría ni se ve desde la cabina (avión oculto, cámara
@@ -2139,6 +2160,13 @@
   #estela-label{color:var(--text2);white-space:nowrap}
   #sobrevida{flex:1;min-width:80px;accent-color:var(--cyan)}
   #sobrevida-val{color:var(--cyan);min-width:66px;text-align:right;white-space:nowrap}
+  /* v2.34 — status bar de POV (DME/XPDR/ETA), mismo fondo/alto que
+     #estela-bar (ocupa su mismo lugar en el flujo, alternan por display) —
+     pedido de Daniel: verde oscuro, centrado, espaciado parejo entre los 3. */
+  #pov-status-bar{flex-shrink:0;background:var(--bg3);border-top:1px solid var(--border);
+    padding:8px 16px;display:flex;align-items:center;justify-content:center;gap:48px;
+    font-family:var(--font-mono);font-size:12px;font-weight:700;letter-spacing:.08em;
+    color:#146c34}
   /* Toggle tipo switch en vez del checkbox nativo del navegador */
   .toggle{display:flex;align-items:center;gap:8px;color:var(--text2);white-space:normal;cursor:pointer;user-select:none}
   .toggle input{display:none}
@@ -2305,7 +2333,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.33</span>
+    <span class="badge" id="ver-badge">v2.34</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -2443,6 +2471,17 @@
     <span id="estela-label">Estela</span>
     <input type="range" id="sobrevida" min="0" max="1000" value="0">
     <span id="sobrevida-val">4 unidades</span>
+  </div>
+  <!-- v2.34: pedido de Daniel — al ocultar estela-bar en modo POV, aprovechar
+       ese mismo lugar (misma fila, mismo lugar en el flujo) para un status
+       bar propio: DME al punto de despegue, XPDR (fijo, decorativo — no hay
+       transponder real en este simulador) y ETA (hora del último punto del
+       track). Arranca oculto — lo prende/apaga povChk.onchange (ver JS),
+       igual que el resto del HUD. -->
+  <div id="pov-status-bar" style="display:none">
+    <span id="pov-dme">DME —.- NM</span>
+    <span id="pov-xpdr">XPDR 1200</span>
+    <span id="pov-eta">ETA --:-- UTC</span>
   </div>
   <footer>
     <button id="play" title="Reproducir / pausar">▶</button>
@@ -5437,7 +5476,34 @@ const seguirChk = document.getElementById('seguir');
 // ----------------------------------------------------------------------
 const povChk = document.getElementById('pov');
 const povHud = document.getElementById('pov-hud');
-povChk.onchange = ()=>{ povHud.style.display = povChk.checked ? 'block' : 'none'; };
+// v2.34 — Daniel notó una banda vacía (el fondo celeste de #stage
+// asomando) donde vivía la barra de estela al ocultarla en POV: el canvas
+// no se resizea solo con un display:none, solo reacciona al evento
+// 'resize' de la ventana (ver función resize() más abajo) — así que
+// quedaba con el tamaño viejo mientras #stage crecía para ocupar el lugar
+// que dejó la barra. Antes esto se togleaba en loop() (una escritura al
+// DOM por FRAME, innecesario: solo cambia cuando se toglea el checkbox).
+// Se consolida acá, en el único evento que corresponde, y se llama a
+// resize() al final para que el canvas tome el tamaño real de #stage ya
+// con el layout nuevo — leer stage.clientHeight ahí fuerza el reflow
+// síncrono, no hace falta ningún setTimeout.
+// De paso, ese mismo espacio se aprovecha (pedido de Daniel) para un
+// status bar propio de POV con DME/XPDR/ETA — mismo criterio que
+// estela-bar (una sola fila fija entre #stage y el footer), alternando
+// con ella según el modo.
+const _povInfoPanel = document.getElementById('info');
+const _povPanelVuelo = document.getElementById('panel-vuelo');
+const _povEstelaBar = document.getElementById('estela-bar');
+const _povStatusBar = document.getElementById('pov-status-bar');
+povChk.onchange = ()=>{
+  const povActivo = povChk.checked;
+  povHud.style.display = povActivo ? 'block' : 'none';
+  if(_povInfoPanel) _povInfoPanel.style.display = povActivo ? 'none' : '';
+  if(_povPanelVuelo) _povPanelVuelo.style.display = povActivo ? 'none' : '';
+  if(_povEstelaBar) _povEstelaBar.style.display = povActivo ? 'none' : '';
+  if(_povStatusBar) _povStatusBar.style.display = povActivo ? 'flex' : 'none';
+  resize();
+};
 // Punto de ojo del piloto, relativo al mismo "pos" que ya usa avion.position
 // (world position sobre el borde de la cortina). Un poco arriba y adelante
 // del CG, en la unidad ya usada para todo lo demás (AVION_LARGO_MUNDO).
@@ -5490,6 +5556,20 @@ function _povEl(tag, attrs, texto){
   if(!el) return;
   const t = temperaturaDeMetar(track.metarInicio);
   el.textContent = t ? `OAT ${t.tempC}°` : 'OAT —°';
+})();
+
+// --- ETA del HUD POV: hora UTC del ÚLTIMO punto del track (fin de la
+// traza registrada) — no es un ETA real calculado contra un destino, es un
+// dato fijo que tampoco cambia durante el vuelo, mismo criterio que el OAT
+// de arriba. epocaInicioSeg + track[último].t reconstruye el timestamp
+// absoluto, mismo patrón que ya usa actualizarInfo() para la hora en vivo.
+(function _mostrarEtaPOV(){
+  const el = document.getElementById('pov-eta');
+  if(!el) return;
+  const fin = new Date((epocaInicioSeg + track[track.length-1].t)*1000);
+  const hh = String(fin.getUTCHours()).padStart(2,'0');
+  const mm = String(fin.getUTCMinutes()).padStart(2,'0');
+  el.textContent = `ETA ${hh}:${mm} UTC`;
 })();
 
 // --- Arco de banqueo (reemplaza al horizonte artificial) ------------------
@@ -5632,6 +5712,15 @@ function actualizarHUD(m){
   _povMiniTrail.setAttribute('points', pts.join(' '));
   const norte = _povMiniProyectar(0, POV_MINI_RADIO_M, sinH, cosH);
   _povMiniNorte.setAttribute('x', norte.x); _povMiniNorte.setAttribute('y', norte.y+3);
+
+  // DME al punto de despegue, para el status bar de POV. Punto de
+  // referencia: track[0] (inicio de la traza ya recortada al despegue, ver
+  // procesarPuntos) — distancia recta en el plano x/z (mundo, sin
+  // exagerar), convertida a millas náuticas (÷1852).
+  const dxDespegue = m.x-track[0].x, dzDespegue = m.z-track[0].z;
+  const dmeNm = Math.hypot(dxDespegue,dzDespegue)/1852;
+  const elDme = document.getElementById('pov-dme');
+  if(elDme) elDme.textContent = `DME ${dmeNm.toFixed(1)} NM`;
 }
 // v1.36 — FIX: cambiar de modo (seguir avión ↔ cámara libre) no disparaba
 // ningún recálculo del parche satelital, que solo reaccionaba a eventos de
@@ -5993,18 +6082,6 @@ function loop(now){
   // recién termine de cargar con el modo ya activado.
   const povActivo = povChk.checked;
   avion.visible = !povActivo;
-  // v2.26/v2.28/v2.33: los carteles flotantes de la interfaz (datos en
-  // vivo, resumen "ANÁLISIS DEL VUELO", slider de estela) quedan
-  // redundantes o simplemente estorban en modo POV — el tubo/cortina que
-  // controla la estela ni siquiera se ve desde adentro de la cabina (avión
-  // oculto, cámara pegada a él). Se ocultan mientras POV está activo y
-  // vuelven a aparecer al salir.
-  const _infoPanel = document.getElementById('info');
-  if(_infoPanel) _infoPanel.style.display = povActivo ? 'none' : '';
-  const _panelVuelo = document.getElementById('panel-vuelo');
-  if(_panelVuelo) _panelVuelo.style.display = povActivo ? 'none' : '';
-  const _estelaBar = document.getElementById('estela-bar');
-  if(_estelaBar) _estelaBar.style.display = povActivo ? 'none' : '';
   const siguiendo = povActivo || seguirChk.checked; // en POV, rosa/etc. se
     // comportan como si estuvieran "siguiendo" al avión — no hay cámara libre acá
   if(povActivo){
