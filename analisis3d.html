@@ -2,6 +2,16 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.25 · Daniel probó v2.24: cámara mirando 3/4 trasero y el mundo
+  rolleando al revés del horizonte artificial del HUD (que SÍ estaba bien,
+  por no pasar por el canvas espejado). Causa real, no un signo de rumbo:
+  right×up da +forward por construcción (right⊥forward, up=forward×right),
+  pero makeBasis() recibía zAxis=-forward — matriz con DETERMINANTE -1
+  (reflexión, no rotación), que setFromRotationMatrix() no valida y
+  convierte en un cuaternión sin sentido físico. Fix: se niega SOLO el eje
+  right al armar la matriz final (determinante vuelve a +1) — que además
+  es la misma compensación de espejo (scaleX(-1)) que se había encontrado
+  en v2.22 y se perdió en la reescritura a vectores de v2.24.
   v2.24 · Daniel probó v2.23 (vuelta a -m.bank) y seguía al revés — con eso
   ya se probaron los DOS únicos signos posibles para el bank vía Euler
   (v2.22 y v2.23), ambos mal. Eso descarta que el problema sea "el signo
@@ -2092,7 +2102,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.24</span>
+    <span class="badge" id="ver-badge">v2.25</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -5672,7 +5682,18 @@ function loop(now){
     const ux=_povUp.x, uy=_povUp.y, uz=_povUp.z;
     _povRight.set(rx*cosB+ux*sinB, ry2*cosB+uy*sinB, rz*cosB+uz*sinB);
     _povUp.set(ux*cosB-rx*sinB, uy*cosB-ry2*sinB, uz*cosB-rz*sinB);
-    _povMat.makeBasis(_povRight, _povUp, _povForward.clone().negate()); // cámara mira hacia -Z local = "adelante"
+    // v2.25 FIX: right×up da +forward por construcción (right⊥forward,
+    // up=forward×right) — pero acá se pedía zAxis=-forward, así que la
+    // matriz (right,up,-forward) tenía DETERMINANTE -1 (reflexión, no
+    // rotación pura). setFromRotationMatrix() no lo valida y devuelve
+    // un cuaternión sin sentido físico — esto era la causa real de la
+    // vista de 3/4 trasero, no un problema de signo de rumbo/bank.
+    // Fix: negar SOLO el eje right al armar la matriz (determinante
+    // vuelve a +1 — ver detalle) — que de paso es exactamente la
+    // compensación que ya necesitaba el espejo scaleX(-1) del canvas
+    // para el sentido del roll (mismo hallazgo de v2.22, perdido en la
+    // reescritura de v2.24).
+    _povMat.makeBasis(_povRight.clone().negate(), _povUp, _povForward.clone().negate()); // cámara mira hacia -Z local = "adelante"
     camera.quaternion.setFromRotationMatrix(_povMat);
     _povOjoOffset.set(0,0,0).addScaledVector(_povUp, POV_OJO_ARRIBA_M).addScaledVector(_povForward, POV_OJO_ADELANTE_M);
     camera.position.copy(pos).add(_povOjoOffset);
