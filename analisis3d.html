@@ -2,6 +2,21 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.35 · FIX real (con evidencia, no otro tanteo a ciegas): el signo del
+  bank en la cámara POV estaba invertido desde la reescritura a vectores
+  de v2.24. Daniel mandó 2 capturas separadas por 6s confirmando el rumbo
+  SUBIENDO (giro real a la derecha, lo confirmó él mismo mirando el HSI)
+  mientras el horizonte y el puntero del arco se veían inclinados a la
+  IZQUIERDA — inconsistencia clara, no ruido de dato. Repasando
+  procesarPuntos(): turnRateDegS es POSITIVO cuando el rumbo aumenta (giro
+  real a la derecha), y bank=atan(gs·turnRate/G) hereda ese signo con
+  gs/turnRate/G siempre positivos — o sea que m.bank>0 SIEMPRE fue "giro
+  real a la derecha", nunca "a la izquierda" como decía el comentario del
+  changelog v2.18/v2.24 (ese comentario, no el dato, estaba al revés). Se
+  corrige con -m.bank en la base de vectores right/up de la cámara Y en el
+  puntero del arco (bankDeg) — independiente de avion.rotation.z=-m.bank,
+  que es para un eje local del GLB en 3ra persona, sin relación con esta
+  base de vectores.
   v2.34 · Pedido de Daniel: la banda que quedaba vacía al ocultar la barra
   de estela en modo POV (fondo celeste de #stage asomando detrás) se
   aprovecha para un status bar propio con DME/XPDR/ETA.
@@ -2333,7 +2348,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.34</span>
+    <span class="badge" id="ver-badge">v2.35</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -5679,7 +5694,9 @@ const _povMiniNorte = document.getElementById('pov-mini-norte');
 const POV_MINI_VENTANA_S = 240; // últimos 4min de traza detrás del avión
 
 function actualizarHUD(m){
-  const bankDeg = m.bank*180/Math.PI;
+  // v2.35: mismo signo que la cámara (ver fix en loop()) — bank>0 es giro
+  // real a la derecha, así que el puntero tiene que rotar con -m.bank.
+  const bankDeg = -m.bank*180/Math.PI;
   _povBankPuntero.setAttribute('transform', `rotate(${bankDeg} ${POV_BANK_PIVOTE.x} ${POV_BANK_PIVOTE.y})`);
 
   const gsKt = m.gs*1.94384, altFt = m.y*3.28084, vsFpm = m.vs*196.85;
@@ -6099,10 +6116,22 @@ function loop(now){
     _povForward.set(sinH*cosP, sinP, cosH*cosP);
     _povRight.crossVectors(_povWorldUp, _povForward).normalize(); // ej.: rumbo norte (hdg=0) → derecha = este (+X), correcto
     _povUp.crossVectors(_povForward, _povRight);
-    // banqueo: rota right/up alrededor de "adelante". m.bank>0 = viraje a
-    // la izquierda (mismo signo que ya usa avion.rotation.z=-m.bank) — para
-    // ese caso el ala/lado DERECHO real tiene que subir.
-    const cosB = Math.cos(m.bank), sinB = Math.sin(m.bank);
+    // banqueo: rota right/up alrededor de "adelante".
+    // v2.35 FIX: el supuesto de signo del changelog v2.18/v2.24 ("m.bank>0 =
+    // viraje a la izquierda") era el que estaba al revés — quedó demostrado
+    // con dos capturas de Daniel 6s apart: rumbo subiendo (confirmado por
+    // él como giro real a la derecha, convención estándar) mientras el
+    // horizonte Y el puntero del arco se veían inclinados a la IZQUIERDA.
+    // La cuenta de procesarPuntos ya lo decía bien, solo que el comentario
+    // de acá la leyó al revés: turnRateDegS = difHeading(prev,act)/dt es
+    // POSITIVO cuando el rumbo AUMENTA (giro real a la derecha), y
+    // bank=atan(gs·turnRate/G) hereda ese signo — con gs, turnRate y G > 0,
+    // bank>0 ⟺ giro real a la derecha. Así que acá hace falta EL SIGNO
+    // CONTRARIO al de antes: -m.bank, no +m.bank (nótese que esto es
+    // independiente de avion.rotation.z=-m.bank, que es para el GLB en 3ra
+    // persona — un eje local de un modelo distinto, no tiene por qué
+    // compartir signo con esta base de vectores).
+    const cosB = Math.cos(-m.bank), sinB = Math.sin(-m.bank);
     const rx=_povRight.x, ry2=_povRight.y, rz=_povRight.z;
     const ux=_povUp.x, uy=_povUp.y, uz=_povUp.z;
     _povRight.set(rx*cosB+ux*sinB, ry2*cosB+uy*sinB, rz*cosB+uz*sinB);
