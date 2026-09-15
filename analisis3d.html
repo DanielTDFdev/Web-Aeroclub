@@ -2,6 +2,20 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.37 · 3 pedidos de Daniel.
+  1) QNH del METAR de despegue, justo debajo y AFUERA de la cinta de
+  altitud (no adentro, como el VS) — verde oscuro, mismo criterio que
+  OAT/RA. Nueva función qnhDeMetar(): prueba primero el grupo Q#### (hPa,
+  formato OACI esperable acá) y si no aparece prueba A#### (centésimas de
+  pulgada de mercurio, formato EE.UU./Canadá) como respaldo.
+  2) Escala del VS más sensible: 150fpm apenas movía la aguja (5° sobre un
+  rango de ±1500fpm/±50°) — se achica el rango a ±800fpm para el mismo
+  tope de ±60°, esos mismos 150fpm ahora dan ~11°.
+  3) Daniel reportó el speed tape con los valores al revés — repasé la
+  cuenta (y la simulé con números concretos) y con el código actual v=100
+  cae arriba del centro y v=40 abajo, igual que ALT — no toqué nada ahí,
+  a la espera de una captura para no arriesgarme a romper algo que la
+  cuenta dice que está bien.
   v2.36 · Pedido de Daniel: números/letras del HSI con orientación radial
   (apuntando hacia afuera desde el centro), mismo patrón que ya resolvió
   compassRing() en vor-trainer.html — cada <text> rota según SU PROPIO
@@ -2287,6 +2301,12 @@
   .pov-oat, .pov-ra{position:absolute;left:0;right:0;top:-20px;text-align:center;
     font-family:var(--font-mono);font-size:11px;font-weight:700;color:#146c34;
     letter-spacing:.09em;white-space:nowrap;text-shadow:0 0 5px rgba(20,108,52,.55)}
+  /* v2.37 — QNH del METAR de despegue, pedido de Daniel: justo debajo y
+     AFUERA de la cinta de altitud (no adentro, como el VS) — mismo verde
+     oscuro/tipografía que OAT y RA. */
+  .pov-qnh{position:absolute;left:0;right:0;bottom:-20px;text-align:center;
+    font-family:var(--font-mono);font-size:11px;font-weight:700;color:#146c34;
+    letter-spacing:.09em;white-space:nowrap;text-shadow:0 0 5px rgba(20,108,52,.55)}
 
   /* v2.28 — Daniel pidió rehacer el VS: en vez de tira vertical al costado
      de la cinta de altitud, pasa a ser una AGUJA que pivota sobre un punto
@@ -2352,7 +2372,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.36</span>
+    <span class="badge" id="ver-badge">v2.37</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -2421,6 +2441,7 @@
         </svg>
         <div class="pov-tape-caja" id="pov-alt">—</div>
         <div class="pov-tape-unit">ALT FT</div>
+        <div class="pov-qnh" id="pov-qnh">QNH ----</div>
       </div>
       <div class="pov-vs">
         <svg viewBox="0 0 80 50">
@@ -3515,6 +3536,21 @@ function temperaturaDeMetar(metar){
   if(!m) return null;
   const leer = s => s[0]==='M' ? -parseInt(s.slice(1),10) : parseInt(s,10);
   return {tempC: leer(m[1]), dewC: leer(m[2])};
+}
+
+// v2.37 — Pedido de Daniel: QNH del HUD POV, mismo criterio que OAT (METAR
+// de despegue, track.metarInicio). El grupo de presión del METAR viene en
+// UNA de dos formas según la región/estación — Q#### en hectopascales
+// (estándar OACI, lo esperable acá) o A#### en centésimas de pulgada de
+// mercurio (formato usado en EE.UU./Canadá, p.ej. "A2992"=29.92 inHg). Se
+// prueba Q primero (el formato real de este aeródromo) y A como respaldo.
+function qnhDeMetar(metar){
+  if(!metar || typeof metar !== 'string') return null;
+  const q = metar.match(/\bQ(\d{4})\b/);
+  if(q) return {valor: parseInt(q[1],10), unidad:'hPa'};
+  const a = metar.match(/\bA(\d{4})\b/);
+  if(a) return {valor: parseInt(a[1],10)/100, unidad:'inHg'};
+  return null;
 }
 
 // Compara la estimación por GPS contra el METAR y devuelve un veredicto.
@@ -5577,6 +5613,16 @@ function _povEl(tag, attrs, texto){
   el.textContent = t ? `OAT ${t.tempC}°` : 'OAT —°';
 })();
 
+// --- QNH del HUD POV (sale del METAR de despegue, ver qnhDeMetar más
+// arriba) — no cambia durante el vuelo, se calcula una sola vez, mismo
+// criterio que OAT.
+(function _mostrarQnhPOV(){
+  const el = document.getElementById('pov-qnh');
+  if(!el) return;
+  const q = qnhDeMetar(track.metarInicio);
+  el.textContent = q ? `QNH ${q.unidad==='inHg' ? q.valor.toFixed(2) : q.valor}` : 'QNH ----';
+})();
+
 // --- ETA del HUD POV: hora UTC del ÚLTIMO punto del track (fin de la
 // traza registrada) — no es un ETA real calculado contra un destino, es un
 // dato fijo que tampoco cambia durante el vuelo, mismo criterio que el OAT
@@ -5649,7 +5695,12 @@ const POV_ALT_MINOR = 100, POV_ALT_MAJOR = 500;
 // Ángulo positivo (sentido antihorario, punta sube) = ascenso; negativo
 // (horario, punta baja) = descenso. Rango ±POV_VS_MAX_FPM mapeado a
 // ±POV_VS_MAX_DEG, clamp más allá de eso (la aguja no sigue creciendo).
-const POV_VS_MAX_FPM = 1500, POV_VS_MAX_DEG = 50;
+// v2.37 — Daniel probó y un ascenso de 150fpm (nada raro, régimen típico de
+// crucero/inicio de descenso) apenas si movía la aguja (150/1500·50=5°,
+// casi imperceptible). Escala más sensible: antes hacía falta ±1500fpm
+// para el tope de ±50° — ahora con ±800fpm alcanza el tope de ±60°, así
+// que esos mismos 150fpm ahora dan ~11° (más del doble).
+const POV_VS_MAX_FPM = 800, POV_VS_MAX_DEG = 60;
 // Nota de signo: rotate() en SVG es HORARIO para ángulo positivo (y crece
 // hacia abajo). La aguja arranca apuntando a la izquierda ("9 en punto"
 // relativo al pivote); un giro horario desde esa posición la lleva hacia
