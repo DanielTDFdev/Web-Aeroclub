@@ -2,6 +2,22 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.41 · 2 pedidos de Daniel con capturas de celular (iOS Safari,
+  reinicios y "Ocurrió un problema" — crash del motor de render).
+  1) HSI y minimapa se veían enormes en celular: su clamp() escala en base
+  a vh (alto de pantalla), pensado para el visor 3D en desktop — en
+  portrait de celular eso es mucho alto y poco ancho, así que rozaban su
+  techo (170px/140px) en una pantalla de ~380px de ancho. Media query
+  (max-width:700px) que los achica y pasa a escalar en base al ANCHO.
+  2) Posible aporte a los cuelgues: actualizarHUD() corre una vez por
+  frame (hasta 60/seg) y hacía 7 document.getElementById() nuevos por
+  llamada, para elementos que nunca cambian de identidad — se cachean
+  junto con el resto de los _pov* ya existentes, sacando ~420 búsquedas
+  al DOM por segundo. No es necesariamente la única causa de un crash de
+  WebGL en iOS, pero es una mejora real y sin riesgo — si sigue
+  trabándose, sería bueno un caso reproducible (cuánto dura la sesión en
+  POV antes de que pase, si es siempre en el mismo vuelo/celular) para
+  seguir cazando la causa de fondo.
   v2.40 · Pedido de Daniel: el HSI (giro direccional) más abajo, más cerca
   de la barra de fondo (DME/XPDR/ETA) — bottom clamp(70-100px)→clamp(24-40px).
   v2.39 · Pedido de Daniel: la cortina (cinta coloreada por altitud/
@@ -2380,6 +2396,17 @@
   .pov-minimap-lbl{position:absolute;left:50%;bottom:3px;transform:translateX(-50%);
     font-size:8px;color:#7fe0ff;letter-spacing:.06em;background:rgba(0,0,0,.4);
     padding:0 3px;border-radius:2px;white-space:nowrap}
+  /* v2.41 — Daniel probó en celular: HSI y minimapa se veían enormes,
+     desproporcionados. El clamp() de ambos usa vh (alto de pantalla) para
+     escalar con el tamaño del visor 3D en desktop — pero un celular en
+     vertical tiene MUCHO alto y poco ancho, así que 20vh/16vh terminaba
+     rozando el techo del clamp (170px/140px) en una pantalla de ~380px de
+     ancho, ocupando una porción enorme. En pantallas angostas, achicar en
+     base al ANCHO en vez de al alto. */
+  @media (max-width:700px){
+    .pov-hsi{width:clamp(78px,26vw,110px);height:clamp(78px,26vw,110px)}
+    .pov-minimap{width:clamp(64px,20vw,88px);height:clamp(64px,20vw,88px)}
+  }
   #carga{height:100%;display:flex;align-items:center;justify-content:center;
     background:linear-gradient(to bottom,#c3e4f2 0%,#5fa3c9 40%,#2d7ea8 100%)}
   #carga .caja{font-family:var(--font-mono);font-size:13px;color:var(--text);text-align:center;
@@ -2401,7 +2428,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.40</span>
+    <span class="badge" id="ver-badge">v2.41</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -5786,6 +5813,20 @@ const _povVsAguja = document.getElementById('pov-vs-aguja');
   }
 })();
 const _povHsiCard = document.getElementById('pov-hsi-card');
+// v2.41 — Daniel reportó que en celular la app se traba y a veces llega a
+// reiniciarse (crash del motor de render de Safari). actualizarHUD() corre
+// una vez por FRAME (hasta 60/seg) y hacía 7 document.getElementById()
+// nuevos por llamada para elementos que NUNCA cambian de identidad — se
+// cachean acá, una sola vez, junto con el resto de los _pov* ya existentes.
+// No es la única causa posible de un crash de WebGL, pero sacar ~420
+// búsquedas al DOM por segundo es una mejora real y sin riesgo.
+const _povSpdLadder = document.getElementById('pov-spd-ladder');
+const _povAltLadder = document.getElementById('pov-alt-ladder');
+const _povGsTxt = document.getElementById('pov-gs');
+const _povAltTxt = document.getElementById('pov-alt');
+const _povVsTxt = document.getElementById('pov-vs');
+const _povHdgTxt = document.getElementById('pov-hdg');
+const _povDmeTxt = document.getElementById('pov-dme');
 
 // --- Minimapa "track up" ----------------------------------------------------
 // Proyecta un punto del mundo (offset dx=este, dz=norte respecto del avión)
@@ -5810,13 +5851,13 @@ function actualizarHUD(m){
   _povBankPuntero.setAttribute('transform', `rotate(${bankDeg} ${POV_BANK_PIVOTE.x} ${POV_BANK_PIVOTE.y})`);
 
   const gsKt = m.gs*1.94384, altFt = m.y*3.28084, vsFpm = m.vs*196.85;
-  document.getElementById('pov-spd-ladder').setAttribute('transform',
+  _povSpdLadder.setAttribute('transform',
     `translate(0 ${POV_TAPE_CENTRO_Y + gsKt*POV_SPD_PX_POR_KT})`);
-  document.getElementById('pov-alt-ladder').setAttribute('transform',
+  _povAltLadder.setAttribute('transform',
     `translate(0 ${POV_TAPE_CENTRO_Y + altFt*POV_ALT_PX_POR_FT})`);
-  document.getElementById('pov-gs').textContent = Math.round(gsKt);
-  document.getElementById('pov-alt').textContent = Math.round(altFt);
-  document.getElementById('pov-vs').textContent = Math.round(vsFpm);
+  _povGsTxt.textContent = Math.round(gsKt);
+  _povAltTxt.textContent = Math.round(altFt);
+  _povVsTxt.textContent = Math.round(vsFpm);
 
   const vsClamp = Math.max(-POV_VS_MAX_FPM, Math.min(POV_VS_MAX_FPM, vsFpm));
   const vsAngulo = vsClamp/POV_VS_MAX_FPM*POV_VS_MAX_DEG; // ver nota de signo en la constante arriba
@@ -5824,7 +5865,7 @@ function actualizarHUD(m){
 
   const hdgNorm = ((m.hdgDeg%360)+360)%360;
   _povHsiCard.setAttribute('transform', `rotate(${-hdgNorm} 100 100)`);
-  document.getElementById('pov-hdg').textContent = String(Math.round(hdgNorm)).padStart(3,'0')+'°';
+  _povHdgTxt.textContent = String(Math.round(hdgNorm)).padStart(3,'0')+'°';
 
   // minimapa: estela de los últimos POV_MINI_VENTANA_S segundos, proyectada
   // en el marco "adelante/derecha" del avión (track-up).
@@ -5846,8 +5887,7 @@ function actualizarHUD(m){
   // exagerar), convertida a millas náuticas (÷1852).
   const dxDespegue = m.x-track[0].x, dzDespegue = m.z-track[0].z;
   const dmeNm = Math.hypot(dxDespegue,dzDespegue)/1852;
-  const elDme = document.getElementById('pov-dme');
-  if(elDme) elDme.textContent = `DME ${dmeNm.toFixed(1)} NM`;
+  if(_povDmeTxt) _povDmeTxt.textContent = `DME ${dmeNm.toFixed(1)} NM`;
 }
 // v1.36 — FIX: cambiar de modo (seguir avión ↔ cámara libre) no disparaba
 // ningún recálculo del parche satelital, que solo reaccionaba a eventos de
