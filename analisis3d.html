@@ -2,6 +2,12 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.39 · Pedido de Daniel: la cortina (cinta coloreada por altitud/
+  velocidad, checkbox "Cortina de altura") se ocultaba en el mundo 3D pero
+  seguía dibujándose en POV — se veía atravesando el terreno, sin sentido
+  desde adentro/pegado a ella. Se oculta al entrar a POV y, al salir, se
+  restaura según lo que diga el checkbox del usuario (no se fuerza a
+  mostrarla si ya la tenía apagada).
   v2.38 · 2 pedidos de Daniel.
   1) El triangulito fijo del centro del HSI apuntaba para abajo — se
   invierte (apex arriba).
@@ -2393,7 +2399,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.38</span>
+    <span class="badge" id="ver-badge">v2.39</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -5586,6 +5592,12 @@ povChk.onchange = ()=>{
   if(_povPanelVuelo) _povPanelVuelo.style.display = povActivo ? 'none' : '';
   if(_povEstelaBar) _povEstelaBar.style.display = povActivo ? 'none' : '';
   if(_povStatusBar) _povStatusBar.style.display = povActivo ? 'flex' : 'none';
+  // v2.39 — Daniel notó la cortina (cinta coloreada por altitud/velocidad,
+  // ver Color: Altitud en el footer) atravesando el terreno en POV — no
+  // tiene sentido verla desde adentro/pegado a ella. Se oculta al entrar y,
+  // al salir, se restaura según lo que diga el checkbox "cortina" del
+  // usuario (no se fuerza a mostrar si él ya la tenía apagada).
+  if(cortinaMesh) cortinaMesh.visible = povActivo ? false : cortinaChk.checked;
   resize();
 };
 // Punto de ojo del piloto, relativo al mismo "pos" que ya usa avion.position
