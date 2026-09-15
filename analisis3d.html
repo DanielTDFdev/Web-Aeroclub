@@ -2,6 +2,27 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.42 · Daniel: en celular, en POV, la app se reinicia sola en menos de
+  un minuto y termina en la pantalla de error de Safari ("Ocurrió un
+  problema") — estaba por sacar POV de celulares directamente. Encontré un
+  leak de memoria real, no relacionado con el fix de getElementById de
+  v2.41: _mapaCache (los mosaicos satelitales ya descargados) NUNCA tenía
+  límite ni descarte — cada mosaico nuevo (zoom+rango de tiles distinto)
+  se agregaba a la escena y quedaba en el Map PARA SIEMPRE, sin importar
+  cuántos se acumularan; al reemplazar el mosaico activo, el viejo solo se
+  ocultaba (visible=false), nunca se liberaba su textura/geometría de
+  GPU. En 3ra persona casi no se nota (la cámara orbita sobre un área
+  relativamente estable). En POV la cámara mira casi al ras del piso — un
+  ángulo mucho más rasante que cualquier chase-cam — así que el footprint
+  real tiende a cambiar de mosaico más seguido, y cada mosaico es un
+  canvas de varios MB. Acumulando sin soltar nunca el anterior, en poco
+  tiempo de vuelo se pasa el límite de memoria que iOS Safari le da a una
+  pestaña — y ahí la mata (mismo "Ocurrió un problema" reportado). Se le
+  pone tope al caché (8 mosaicos) con descarte real (dispose de geometry/
+  material/texture + sacarlo de la escena) del más viejo que no sea el
+  activo. No es un cambio exclusivo de POV — beneficia cualquier sesión
+  larga con mucho movimiento de mapa — pero el síntoma reportado era
+  específicamente ahí.
   v2.41 · 2 pedidos de Daniel con capturas de celular (iOS Safari,
   reinicios y "Ocurrió un problema" — crash del motor de render).
   1) HSI y minimapa se veían enormes en celular: su clamp() escala en base
@@ -2428,7 +2449,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.41</span>
+    <span class="badge" id="ver-badge">v2.42</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -4680,6 +4701,42 @@ const TILES_PRESUPUESTO = 144;  // 12x12 nominal (antes 64/8x8); el redondeo
   // vuelos largos, solo lo hace mucho menos seguido.
 const Y_MAPA = -0.15;          // altura del plano del mapa (la de siempre)
 const _mapaCache = new Map();  // clave = rango de tiles -> Promise<THREE.Mesh>
+// v2.42 — Daniel reportó crashes de Safari en celular en modo POV, en menos
+// de un minuto ("se reinicia y da error"). _mapaCache nunca tenía límite ni
+// descarte: cada mosaico nuevo (zoom+rango de tiles distinto) se agregaba a
+// la escena y quedaba en el Map PARA SIEMPRE — solo se ocultaba
+// (visible=false) al reemplazarlo, nunca se liberaba la textura/geometría
+// de GPU. En 3ra persona esto casi no se nota (la cámara orbita sobre un
+// área relativamente estable, pocos mosaicos distintos por sesión) pero en
+// POV la cámara mira casi al ras del piso — un ángulo mucho más rasante
+// que cualquier chase-cam — así que el footprint real (_footprintCamara)
+// tiende a ser mucho más grande/errático y a cambiar de mosaico más
+// seguido; cada mosaico nuevo es un canvas de hasta varios MB (nx·ny·256²
+// px) convertido en textura de WebGL. Acumulando uno cada tanto sin nunca
+// soltar el anterior, en poco tiempo de vuelo se pasa el límite de memoria
+// que iOS Safari le da a una pestaña — y ahí la mata (el "Ocurrió un
+// problema" es justamente eso). Se pone un tope (MAPA_CACHE_MAX) y, al
+// superarlo, se descarta (geometry/material/texture.dispose() + se saca de
+// la escena) el mosaico más viejo que NO sea el activo — nunca se libera
+// el que se está viendo ahora mismo aunque sea el más viejo.
+const MAPA_CACHE_MAX = 8;
+const _mapaCacheOrden = []; // claves en orden de creación, para descartar la más vieja primero
+function _descartarMosaico(mesh){
+  scene.remove(mesh);
+  mesh.geometry.dispose();
+  mesh.material.map.dispose();
+  mesh.material.dispose();
+}
+async function _podarMapaCache(){
+  while(_mapaCacheOrden.length > MAPA_CACHE_MAX){
+    const keyViejo = _mapaCacheOrden[0];
+    if(mapaSatMeshActivo && mapaSatMeshActivo.userData.mapaKey === keyViejo) break; // no tocar el activo
+    _mapaCacheOrden.shift();
+    const promesaVieja = _mapaCache.get(keyViejo);
+    _mapaCache.delete(keyViejo);
+    if(promesaVieja) promesaVieja.then(_descartarMosaico).catch(()=>{});
+  }
+}
 let mapaSatMeshActivo = null;  // el único mosaico visible en este momento
 let _mapaVistaActual = null;   // {xMin,xMax,zMin,zMax}: cobertura REAL en metros del mosaico activo
 let _ultimoChequeoMapa = 0;    // throttle del chequeo por cámara en el loop
@@ -4850,6 +4907,8 @@ async function actualizarMapaSatelital(){
         scene.add(mesh);
         return mesh;
       }));
+      _mapaCacheOrden.push(key);
+      _podarMapaCache();
     }
     const mesh = await _mapaCache.get(key);
     if(!mapaSatChk.checked){ mesh.visible = false; return; } // se destildó mientras esperaba
