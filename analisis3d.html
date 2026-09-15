@@ -2,6 +2,15 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.38 · 2 pedidos de Daniel.
+  1) El triangulito fijo del centro del HSI apuntaba para abajo — se
+  invierte (apex arriba).
+  2) El toggle de POV sale del menú de ajustes (⚙) y pasa a ser un botón
+  fijo en pantalla, al lado de ese mismo botón — ya no hace falta abrir el
+  bottom-sheet para prender/apagarlo. Sigue siendo el mismo <input
+  id="pov"> por debajo (todo el JS que lee povChk.checked no se tocó,
+  solo cambió dónde vive en el DOM y cómo se ve — de fila de toggle
+  adentro del panel a botón-etiqueta con estado activo vía :has()).
   v2.37 · 3 pedidos de Daniel.
   1) QNH del METAR de despegue, justo debajo y AFUERA de la cinta de
   altitud (no adentro, como el VS) — verde oscuro, mismo criterio que
@@ -2123,6 +2132,18 @@
     border-radius:50%;background:rgba(15,20,32,.88);border:1px solid var(--border);
     color:var(--text2);font-size:17px;cursor:pointer;backdrop-filter:blur(4px)}
   #btn-config:hover{color:var(--cyan);border-color:var(--cyan)}
+  /* v2.38 — botón fijo de POV, mismo bisel/blur que #btn-config, a su
+     izquierda. Es un <label> que envuelve el checkbox real (id="pov") —
+     clickearlo togglea el checkbox de forma nativa, sin JS extra para el
+     click en sí. Estado activo vía :has() (soportado en los navegadores
+     modernos que ya usa el resto del sitio). */
+  .pov-btn{position:absolute;top:12px;right:58px;z-index:10;height:38px;padding:0 14px;
+    border-radius:19px;background:rgba(15,20,32,.88);border:1px solid var(--border);
+    display:flex;align-items:center;color:var(--text2);font-size:12px;font-weight:700;
+    letter-spacing:.08em;cursor:pointer;backdrop-filter:blur(4px);user-select:none}
+  .pov-btn input{display:none}
+  .pov-btn:hover{border-color:var(--cyan);color:var(--cyan)}
+  .pov-btn:has(input:checked){background:var(--cyan);border-color:var(--cyan);color:#05070c}
   #config-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:19;
     display:none}
   #config-backdrop.open{display:block}
@@ -2372,7 +2393,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.37</span>
+    <span class="badge" id="ver-badge">v2.38</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
@@ -2398,6 +2419,15 @@
       </div>
     </div>
     <div id="panel-vuelo"></div>
+    <!-- v2.38: pedido de Daniel — el toggle de POV sale del menú de ajustes
+         (había que abrir el bottom-sheet para prenderlo/apagarlo) y pasa a
+         ser un botón fijo en pantalla, siempre a mano, al lado del de
+         ajustes. Sigue siendo el mismo <input id="pov"> por debajo (todo
+         el JS que lee povChk.checked sigue andando igual) — solo cambia
+         dónde y cómo se lo ve. -->
+    <label class="pov-btn" id="btn-pov" title="Vista cabina (POV)">
+      <input type="checkbox" id="pov"><span>POV</span>
+    </label>
     <button id="btn-config" title="Ajustes de vista">⚙</button>
     <div id="etiqueta-avion">070° · 0 ft</div>
     <div id="etiqueta-fase"></div>
@@ -2460,7 +2490,7 @@
         <svg viewBox="0 0 200 200">
           <g id="pov-hsi-card"></g>
           <polygon points="100,6 94,20 106,20" fill="#ffd400"/>
-          <polygon points="100,100 94,86 106,86" fill="#eef3fa" stroke="#05070c" stroke-width="0.6"/>
+          <polygon points="100,86 94,100 106,100" fill="#eef3fa" stroke="#05070c" stroke-width="0.6"/>
         </svg>
         <div class="pov-hsi-hdg" id="pov-hdg">000°</div>
       </div>
@@ -2497,7 +2527,6 @@
           <label class="toggle"><input type="checkbox" id="circuito" checked><span class="track"></span>Fases de circuito</label>
           <label class="toggle"><input type="checkbox" id="maniobras" checked><span class="track"></span>Maniobras</label>
           <label class="toggle"><input type="checkbox" id="circuito-debug"><span class="track"></span>Diagnóstico de circuito</label>
-          <label class="toggle"><input type="checkbox" id="pov"><span class="track"></span>Vista cabina (POV)</label>
         </div>
       </div>
     </div>
