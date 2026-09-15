@@ -2,6 +2,8 @@
 <!--
 ==================================================================================
   ANALISIS3D.HTML — Visor 3D de traza GPS · Aeroclub Río Grande
+  v2.40 · Pedido de Daniel: el HSI (giro direccional) más abajo, más cerca
+  de la barra de fondo (DME/XPDR/ETA) — bottom clamp(70-100px)→clamp(24-40px).
   v2.39 · Pedido de Daniel: la cortina (cinta coloreada por altitud/
   velocidad, checkbox "Cortina de altura") se ocultaba en el mundo 3D pero
   seguía dibujándose en POV — se veía atravesando el terreno, sin sentido
@@ -2365,7 +2367,7 @@
   /* giro direccional (HSI simulado), abajo al centro — pedido de Daniel:
      con transparencia, para no tapar del todo el terreno de abajo. */
   .pov-hsi{width:clamp(120px,20vh,170px);height:clamp(120px,20vh,170px);
-    left:50%;bottom:clamp(70px,10vh,100px);transform:translateX(-50%);opacity:.82}
+    left:50%;bottom:clamp(24px,4vh,40px);transform:translateX(-50%);opacity:.82}
   .pov-hsi svg{display:block;width:100%;height:100%}
   .pov-hsi-hdg{position:absolute;left:50%;top:-20px;transform:translateX(-50%);
     background:#0a0e16;border:1px solid #ffd400;border-radius:3px;padding:1px 6px;
@@ -2399,7 +2401,7 @@
       <span class="hdr-copy">© 2026 — by DAC</span>
     </div>
     <h1>◈ ANÁLISIS 3D</h1>
-    <span class="badge" id="ver-badge">v2.39</span>
+    <span class="badge" id="ver-badge">v2.40</span>
     <span class="nota" id="nota-vuelo">Cargando…</span>
     <a class="volver" href="javascript:history.length>1?history.back():window.close()">‹ volver</a>
   </header>
