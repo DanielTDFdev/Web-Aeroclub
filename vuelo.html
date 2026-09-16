@@ -2,6 +2,16 @@
 <!--
 ==================================================================================
   VUELO — App de registro de vuelo · Aeroclub Río Grande
+  v6.00 · 2026-09-16
+  Pedido de Daniel: si la traza GPS levantada tiene menos de
+  GPS_TRAZA_MIN_PUNTOS (100) puntos, no se graba en vuelo_tracks — antes
+  alcanzaba con 2 puntos (item.gpsPoints.length>1) para que escribirPendiente()
+  la subiera. Trazas cortas (GPS que arrancó tarde, vuelo cancelado a los
+  segundos, prueba) quedaban en la tabla sin aportar nada. Con menos de 100
+  puntos no se manda a guardarTrazaSinPisar() ni se marca tiene_traza_gps en
+  la reserva — el resto del flujo (horas, aterrizajes, observaciones) se
+  graba igual, solo se omite la traza.
+
   v5.99 · 2026-09-11
   Pedido de Daniel: el botón "⏻ Salir" pasa a ser un slider tipo iPhone
   ("slide to power off") — se arrastra el círculo hasta el final del track
@@ -2243,7 +2253,7 @@ const LS_PENDIENTES = 'acrg-vuelo-v2-pendientes'; // cola de vuelos guardados lo
 // límite de tiempo.
 const RESTAURAR_TURNO_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '5.99'; // ⚠ actualizar acá Y en el comentario header de arriba en cada bump
+const APP_VERSION = '6.00'; // ⚠ actualizar acá Y en el comentario header de arriba en cada bump
 
 // ── Traza GPS (obligatoria, siempre activa — v5.96) ────────────
 const LS_GPS_PUNTOS = 'acrg-vuelo-v2-gps-puntos'; // puntos del vuelo en curso (resiliencia ante recarga)
@@ -2251,6 +2261,7 @@ const LS_GPS_HUECOS = 'acrg-vuelo-v2-gps-huecos'; // v5.29: huecos detectados (v
 const GPS_MUESTREO_MS = 2000; // 2s entre puntos (v5.73 — bajado de 3s a pedido de Daniel, más margen de puntos aún en vuelos cortos)
 const GPS_WATCHDOG_INTERVALO_MS = 15000; // v5.27: cada cuánto chequea el watchdog
 const GPS_WATCHDOG_UMBRAL_MS    = 45000; // v5.27: sin actividad de GPS por más de esto, reinicia el watch
+const GPS_TRAZA_MIN_PUNTOS = 100; // v6.00: pedido de Daniel — trazas con menos puntos que esto no se graban en vuelo_tracks (ruido, no aportan)
 let gpsHabilitado = true; // v5.96: ya no es un toggle — pedido de Daniel: tracking obligatorio, siempre activo
 let gpsWatchId     = null;   // id de navigator.geolocation.watchPosition, null si no está corriendo
 let gpsWatchdogId  = null;   // v5.27
@@ -3492,7 +3503,7 @@ async function escribirPendiente(item){
                                      // o "CARGAR VUELO HISTÓRICO", que nunca setean esto).
   };
   Object.keys(datos).forEach(k=>{ if(datos[k]===null) delete datos[k]; });
-  const tieneTraza=item.gpsPoints&&item.gpsPoints.length>1;
+  const tieneTraza=item.gpsPoints&&item.gpsPoints.length>=GPS_TRAZA_MIN_PUNTOS; // v6.00: antes >1, ahora exige mínimo serio (ver GPS_TRAZA_MIN_PUNTOS)
 
   if(item.esInSitu){
     let key=item.key; // v5.23: si un intento previo ya creó la reserva pero
