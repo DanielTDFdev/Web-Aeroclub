@@ -2,6 +2,18 @@
 <!--
 ==================================================================================
   VUELO PILOTO — Registro de vuelo para pilotos · Aeroclub Río Grande
+  v4.78 · 2026-09-16
+  Pedido de Daniel: si la traza GPS levantada tiene menos de
+  GPS_TRAZA_MIN_PUNTOS (100) puntos, no se graba en vuelo_tracks — antes
+  alcanzaba con 2 puntos (gpsPoints.length>1). Mismo cambio en vuelo.html
+  v6.00. Dos puntos afectados: el guardado inmediato al tocar "Detener
+  tracking GPS" (toast ahora avisa "menos de 100 puntos, no se guardó
+  traza" en vez de "muy pocos puntos") y escribirPendiente() en la cola de
+  sincronización offline — en ninguno de los dos se llama a
+  guardarTrazaSinPisar() ni se marca tiene_traza_gps si no llega al
+  mínimo. El resto de los datos del vuelo (horas, aterrizajes,
+  observaciones) se sigue grabando igual.
+
   v4.77 · 2026-09-15
   Caso real reportado por Daniel: vuelo reservado en LV-ART grabado en LV-OAD.
   Causa: cuando buscarTurnoPropioParaAhora() NO encuentra match (turno no
@@ -1912,7 +1924,7 @@ const LS_PENDIENTES = 'acrg-piloto-v1-pendientes'; // cola de vuelos guardados l
 // avión "sin arrancar todavía" que sobrevivía indefinidamente en localStorage.
 const RESTAURAR_AVION_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '4.77';
+const APP_VERSION = '4.78';
 document.querySelectorAll('.ver').forEach(el=>el.textContent='v'+APP_VERSION);
 
 // ── Traza GPS (obligatoria, siempre activa — v4.76) ──────────
@@ -1921,6 +1933,7 @@ const LS_GPS_HUECOS = 'acrg-piloto-v1-gps-huecos'; // v4.7: huecos detectados (v
 const GPS_MUESTREO_MS = 2000; // 2s entre puntos (v4.58 — bajado de 3s a pedido de Daniel, mismo cambio en vuelo.html v5.73)
 const GPS_WATCHDOG_INTERVALO_MS = 15000; // v4.5: cada cuánto chequea el watchdog
 const GPS_WATCHDOG_UMBRAL_MS    = 45000; // v4.5: sin actividad de GPS por más de esto, reinicia el watch
+const GPS_TRAZA_MIN_PUNTOS = 100; // v4.78: pedido de Daniel — trazas con menos puntos que esto no se graban en vuelo_tracks (ruido, no aportan).
 let gpsHabilitado = true; // v4.76: ya no es un toggle — pedido de Daniel, siempre ON por default
 let gpsWatchId     = null;
 let gpsWatchdogId  = null; // v4.5
@@ -2819,7 +2832,7 @@ $('sha-btn-detener').addEventListener('click', async ()=>{
   shaTrackeando=false;
   $('sha-gps-warning').style.display='none';
   try{
-    if(gpsPoints.length>1){
+    if(gpsPoints.length>=GPS_TRAZA_MIN_PUNTOS){
       await guardarTrazaSinPisar(shaTurno.key,{
         puntos:gpsPoints,
         ...(gpsGaps.length?{huecos:gpsGaps}:{}),
@@ -2829,7 +2842,7 @@ $('sha-btn-detener').addEventListener('click', async ()=>{
       await conTimeout(update(ref(db,'reservas/'+shaTurno.key),{tiene_traza_gps:true}));
       toast('✓ Traza GPS guardada — '+gpsPoints.length+' puntos');
     } else {
-      toast('Tracking detenido — muy pocos puntos, no se guardó traza');
+      toast('Tracking detenido — menos de '+GPS_TRAZA_MIN_PUNTOS+' puntos, no se guardó traza'); // v4.78: antes exigía solo >1
     }
   }catch(e){
     console.error(e);
@@ -3345,7 +3358,7 @@ async function escribirPendiente(item){
     metar_fin:           item.metarFin||null,
     cargado_desde_app:   true, // v4.54 — mismo flag que vuelo.html v5.69, distingue de
                                 // una carga manual en turnos.html (obs_privada_*)
-    ...(item.gpsPoints&&item.gpsPoints.length>1?{tiene_traza_gps:true}:{})
+    ...(item.gpsPoints&&item.gpsPoints.length>=GPS_TRAZA_MIN_PUNTOS?{tiene_traza_gps:true}:{})
   };
   Object.keys(datosVuelo).forEach(k=>{ if(datosVuelo[k]===null) delete datosVuelo[k]; });
 
@@ -3415,7 +3428,7 @@ async function escribirPendiente(item){
     marcarKeyPendiente(item.id,key); // recién acá — la reserva ya quedó escrita
   }
 
-  if(item.gpsPoints&&item.gpsPoints.length>1){
+  if(item.gpsPoints&&item.gpsPoints.length>=GPS_TRAZA_MIN_PUNTOS){
     await guardarTrazaSinPisar(key,{
       puntos: item.gpsPoints,
       ...(item.gpsGaps&&item.gpsGaps.length?{huecos:item.gpsGaps}:{}),
