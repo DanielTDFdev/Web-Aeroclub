@@ -1,5 +1,31 @@
 <!--
   ARCHIVO : turnos.html
+  VERSION : 8.77
+  CAMBIOS : Pedido de Daniel: un instructor puede loguearse y reservar turno como
+            piloto particular, mismo concepto ya usado en vuelo-piloto.html v4.30
+            (instructor tratado como un piloto más — autoaprobado, cualquier avión
+            habilitado — sin necesidad de una cuenta separada en /alumnos). Acá el
+            punto de entrada es un selector en el LOGIN (no un botón dentro de
+            instructor-screen): al autenticar un instructor real (no admin/
+            administrador), nuevo modal #modal-rol-ingreso pregunta "¿Instructor o
+            Piloto?" — nueva pedirRolIngreso(). Si elige Piloto, se arma una sesión
+            {tipo:'alumno',rol:'piloto',...} con los datos de /instructores (nombre,
+            email/emailKey desde instructor.email — mismo requisito que
+            vuelo-piloto.html v4.30, botón deshabilitado si no lo tiene cargado) y
+            entra a alumno-screen por el mismo camino que loginAlumno() ya usa para
+            cualquier piloto — initAvionSelector()/showAlumnoTab()/suscribirReservas()
+            sin cambios, ese código YA soporta rol:'piloto' de punta a punta (elige
+            avión, tipo de vuelo particular/instrucción, autoaprobación fuera de
+            LV-OAD). Nueva marca session.instructorOrigen (username del instructor)
+            para distinguir esta sesión de un piloto real de /alumnos: "Mi Perfil" en
+            este modo oculta las subpestañas Datos Personales/Contraseña (escriben
+            sobre /alumnos/{emailKey}, que para este caso no existe — fbUpdate lo
+            hubiera CREADO como un alumno fantasma) y deja solo Log de Vuelos, que ya
+            era agnóstico (filtra por email, no requiere el nodo). guardarDatosPerfil/
+            cambiarClave suman el mismo guard por las dudas (defensa en profundidad,
+            los botones ya no están visibles). registrarAuditoria('login','piloto',...)
+            nuevo, para dejar rastro de que fue un instructor entrando en este modo.
+
   VERSION : 8.76
   CAMBIOS : FIX (Daniel, con captura) — en Config→Bloq.Aviones, buildCfgAvionTabs()
             marcaba visualmente el tab LV-ART (AVIONES[0]) como activo pero no
@@ -4451,7 +4477,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.76</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.77</div>
   </div>
 
 </div>
@@ -5000,6 +5026,23 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <button id="confirm-simple-btn-no" style="font-family:var(--font-mono);font-size:12px;padding:7px 16px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);border-radius:var(--radius);cursor:pointer">Volver</button>
         <button id="confirm-simple-btn-si" class="danger" style="font-family:var(--font-mono);font-size:12px;padding:7px 16px">Sí</button>
       </div>
+    </div>
+  </div>
+
+  <!-- v8.77: selector de rol al loguearse un instructor — pedido de Daniel: poder
+       entrar como piloto particular (reservar turno propio) en vez de instructor.
+       Ver pedirRolIngreso(). Botón "Piloto" se deshabilita si el instructor no
+       tiene email cargado en /instructores (mismo requisito que vuelo-piloto.html
+       v4.30 — sin email no hay con qué armar emailKey ni filtrar "mis turnos"). -->
+  <div class="modal-overlay" id="modal-rol-ingreso" style="z-index:1100">
+    <div class="modal" style="max-width:360px;text-align:center">
+      <div class="modal-title">◈ ¿Cómo querés ingresar?</div>
+      <div id="rol-ingreso-nombre" style="font-family:var(--font-mono);font-size:13px;color:var(--text2);margin-bottom:1.1rem;letter-spacing:.03em"></div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <button id="rol-ingreso-btn-instructor" class="primary" style="width:100%;padding:14px">👨‍✈️ Instructor</button>
+        <button id="rol-ingreso-btn-piloto" style="width:100%;padding:14px">✈ Piloto — sacar turno</button>
+      </div>
+      <div id="rol-ingreso-sin-email" style="display:none;font-family:var(--font-mono);font-size:11px;color:var(--amber);margin-top:.85rem;letter-spacing:.02em;line-height:1.4">⚠ Sin email cargado en Config→Instructores — no podés entrar como piloto hasta que se complete.</div>
     </div>
   </div>
 
@@ -6799,8 +6842,31 @@ window.loginAlumno=async function(){
           const cambiada=await forzarCambioClave('instructores/'+found.key);
           if(!cambiada){showErr('login-err','Para ingresar tenés que cambiar la contraseña temporal.');return;}
         }
-        if(!simulando) await registrarAuditoria('login','instructor','exito',found.nombre+' ('+found.user+')');
         guardarUsuarioRecordado(idOriginal);
+        // v8.77: pedido de Daniel — un instructor real (no admin/administrador, no un
+        // login simulado por admin) elige acá si entra como instructor o como piloto
+        // particular (mismo concepto que vuelo-piloto.html v4.30). Se pregunta ANTES
+        // de armar la sesión de instructor — si elige piloto, esta función se va por su
+        // propia rama y nunca construye session tipo:'instructor'.
+        const esInstructorReal=found.user!=='admin'&&found.user!=='administrador'&&!simulando;
+        if(esInstructorReal){
+          const rolElegido=await pedirRolIngreso(found.nombre,!!found.email);
+          if(rolElegido==='piloto'){
+            const ek2=ek(found.email);
+            await registrarAuditoria('login','piloto','exito',found.nombre+' ('+found.user+') — instructor ingresando como piloto');
+            session={tipo:'alumno',rol:'piloto',nombre:found.nombre,email:found.email,emailKey:ek2,username:found.user||'',instructorOrigen:found.user||true,simuladoPor:null};
+            guardarSesion();
+            setNavUser(found.nombre,'piloto');
+            await loadConfig();
+            showScreen('alumno-screen');
+            initAvionSelector();
+            showAlumnoTab('mis-turnos');
+            suscribirReservas();
+            startSessionTimeout();
+            return;
+          }
+        }
+        if(!simulando) await registrarAuditoria('login','instructor','exito',found.nombre+' ('+found.user+')');
         // administrador tiene acceso completo (excepto Zona Peligrosa y edición de horarios)
         const soloUsuarios=found.soloUsuarios===true&&found.user!=='admin'&&found.user!=='administrador';
         session={tipo:'instructor',nombre:found.nombre,user:found.user,soloUsuarios,simuladoPor:simulando?adminSimulador:null};
@@ -7380,6 +7446,15 @@ window.showAlumnoTab=function(tab){
   document.getElementById('al-tab-pedir').classList.toggle('active',tab==='pedir-turno');
   document.getElementById('al-tab-perfil').classList.toggle('active',tab==='perfil');
   if(tab==='perfil'){
+    // v8.77: instructor logueado como piloto (session.instructorOrigen) no tiene nodo
+    // en /alumnos — Datos Personales/Contraseña escriben sobre /alumnos/{emailKey} y
+    // lo hubieran creado como un alumno fantasma. Se ocultan esas 2 subpestañas, queda
+    // solo Log de Vuelos (agnóstico, filtra por email).
+    const esInstComoPiloto=!!session?.instructorOrigen;
+    const btnDatos=document.getElementById('ap-tabbtn-datos');
+    const btnPass=document.getElementById('ap-tabbtn-pass');
+    if(btnDatos)btnDatos.style.display=esInstComoPiloto?'none':'';
+    if(btnPass)btnPass.style.display=esInstComoPiloto?'none':'';
     showAlumnoPerfilTab('log');
   }
   if(tab==='pedir-turno'){
@@ -8218,6 +8293,36 @@ function confirmModal(mensaje,textoSi='Sí'){
     function onNo(){limpiar();resolve(false);}
     btnSi.addEventListener('click',onSi);
     btnNo.addEventListener('click',onNo);
+  });
+}
+
+// v8.77: selector de rol al loguearse un instructor — pedido de Daniel, mismo
+// concepto que vuelo-piloto.html v4.30 (instructor puede volar/reservar como
+// piloto particular) pero acá el punto de entrada es este modal en el login, no
+// un fallback silencioso. tieneEmail deshabilita el botón "Piloto" (sin email en
+// /instructores no hay con qué armar la sesión piloto — mismo requisito que
+// vuelo-piloto.html). Resuelve 'instructor' o 'piloto', nunca null — no hay forma
+// de cerrar sin elegir (a propósito: venís de loguearte, tiene que llevarte a
+// algún lado).
+function pedirRolIngreso(nombre,tieneEmail){
+  return new Promise(resolve=>{
+    const overlay=document.getElementById('modal-rol-ingreso');
+    document.getElementById('rol-ingreso-nombre').textContent=nombre||'';
+    const btnInst=document.getElementById('rol-ingreso-btn-instructor');
+    const btnPil=document.getElementById('rol-ingreso-btn-piloto');
+    const avisoSinEmail=document.getElementById('rol-ingreso-sin-email');
+    btnPil.disabled=!tieneEmail;
+    avisoSinEmail.style.display=tieneEmail?'none':'block';
+    overlay.classList.add('open');
+    function limpiar(){
+      overlay.classList.remove('open');
+      btnInst.removeEventListener('click',onInst);
+      btnPil.removeEventListener('click',onPil);
+    }
+    function onInst(){limpiar();resolve('instructor');}
+    function onPil(){if(!tieneEmail)return;limpiar();resolve('piloto');}
+    btnInst.addEventListener('click',onInst);
+    btnPil.addEventListener('click',onPil);
   });
 }
 
@@ -10150,6 +10255,10 @@ function suscribirPendientes(){
 // ── PERFIL ─────────────────────────────────────────────────────
 window.guardarDatosPerfil=async function(){
   hideEl('perfil-datos-err');hideEl('perfil-datos-ok');
+  // v8.77: defensa en profundidad — el botón ya está oculto para esta sesión
+  // (showAlumnoTab), pero acá se corta en seco: fbUpdate sobre 'alumnos/'+emailKey
+  // CREARÍA un alumno fantasma, no existe ese nodo para un instructor-como-piloto.
+  if(session?.instructorOrigen){showErr('perfil-datos-err','No disponible para instructores logueados como piloto.');return;}
   const nombre=document.getElementById('perfil-nombre').value.trim();
   const tel=document.getElementById('perfil-tel').value.trim();
   if(!nombre){showErr('perfil-datos-err','El nombre no puede estar vacío.');return;}
@@ -10162,6 +10271,8 @@ window.guardarDatosPerfil=async function(){
 
 window.cambiarClave=async function(){
   hideEl('perfil-err');hideEl('perfil-ok');
+  // v8.77: mismo guard que guardarDatosPerfil — sin nodo /alumnos para esta sesión.
+  if(session?.instructorOrigen){showErr('perfil-err','No disponible para instructores logueados como piloto.');return;}
   const actual=val('perfil-pass-actual'),nueva=val('perfil-pass-nueva'),nueva2=val('perfil-pass-nueva2');
   const alumno=await fbGet('alumnos/'+session.emailKey);
   if(!alumno){showErr('perfil-err','Error al obtener datos.');return;}
