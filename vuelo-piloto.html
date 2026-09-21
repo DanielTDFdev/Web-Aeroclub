@@ -2,6 +2,16 @@
 <!--
 ==================================================================================
   VUELO PILOTO — Registro de vuelo para pilotos · Aeroclub Río Grande
+  v4.80 · 2026-09-21
+  Pedido de Daniel: segundo duplicado (Miguel 10:00, las dos veces LV-ART) —
+  descarta el problema del avión. Hueco encontrado: turnoVinculado (turno
+  detectado al loguearse) vivía solo en memoria; si la app se recargaba a mitad
+  de vuelo (iOS mata la PWA, GPS/pantalla), init() restauraba tsInicio y avión
+  pero NO el vínculo, y como con vuelo en curso no se re-detecta, guardar()
+  mandaba turnoKey:null → escribirPendiente() creaba un turno in-situ nuevo y
+  el original quedaba sin volar. Fix: persistir() guarda turnoVinculado en LS
+  y abrirApp() lo recupera si hay vuelo en curso.
+
   v4.79 · 2026-09-21
   Pedido de Daniel: el turno reservado (ej. 13:30) aparecía duplicado — el
   vuelo activado a las 13:36 se grababa como turno nuevo aparte, en el avión
@@ -1938,7 +1948,7 @@ const LS_PENDIENTES = 'acrg-piloto-v1-pendientes'; // cola de vuelos guardados l
 // avión "sin arrancar todavía" que sobrevivía indefinidamente en localStorage.
 const RESTAURAR_AVION_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '4.79';
+const APP_VERSION = '4.80';
 document.querySelectorAll('.ver').forEach(el=>el.textContent='v'+APP_VERSION);
 
 // ── Traza GPS (obligatoria, siempre activa — v4.76) ──────────
@@ -2270,6 +2280,16 @@ async function _abrirAppInner(){
     }
   }
 
+  // v4.80: recarga a mitad de vuelo — turnoVinculado vive solo en memoria y se perdía
+  // (la app no re-detecta con vuelo en curso), así que guardar() escribía turnoKey:null
+  // y escribirPendiente() creaba un turno nuevo duplicado. Ahora persistir() lo guarda
+  // en LS y acá se recupera.
+  if(tsInicio&&!turnoVinculado){
+    try{
+      const est=JSON.parse(localStorage.getItem(LS)||'null');
+      if(est&&est.turnoVinculado&&est.turnoVinculado.key) turnoVinculado=est.turnoVinculado;
+    }catch{}
+  }
   $('app-shell').classList.add('active');
   if(turnoVinculado){ _avionRestaurado=turnoVinculado.avion; _avionRestauradoSinConfirmar=false; } // reusa el mecanismo de poblarAviones(); v4.77: turno vinculado ya es confiable, no revalidar
   await poblarAviones();
@@ -3514,7 +3534,7 @@ function resetVuelo(){
 
 function persistir(){
   localStorage.setItem(LS,JSON.stringify({
-    avion:$('p-avion').value,tsInicio,tsFin,metarInicio,metarFin,metarInicioListo,metarFinListo,gpsHabilitado,
+    avion:$('p-avion').value,turnoVinculado:turnoVinculado||null,tsInicio,tsFin,metarInicio,metarFin,metarInicioListo,metarFinListo,gpsHabilitado,
     // Borrador del formulario de cierre — así, si la app se cuelga esperando
     // conexión en CONFIRMAR (ver guardar()) y hay que recargarla, no se
     // pierde lo ya tipeado (antes solo se guardaban los timestamps).
