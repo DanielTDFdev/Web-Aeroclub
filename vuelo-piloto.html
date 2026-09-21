@@ -2,6 +2,20 @@
 <!--
 ==================================================================================
   VUELO PILOTO — Registro de vuelo para pilotos · Aeroclub Río Grande
+  v4.79 · 2026-09-21
+  Pedido de Daniel: el turno reservado (ej. 13:30) aparecía duplicado — el
+  vuelo activado a las 13:36 se grababa como turno nuevo aparte, en el avión
+  equivocado, y el original quedaba sin volar. Causa raíz: turnos.html
+  (vencerTurnosPendientes) pasa a 'vencido' todo turno aprobado apenas pasa
+  su hora, sin gracia. buscarTurnoPropioParaAhora() solo aceptaba
+  estado==='aprobado', así que a los 6 min el turno ya no era candidato, no
+  había vínculo (turnoKey null) y escribirPendiente() creaba uno in-situ.
+  Fix: se acepta también 'vencido' que nunca se voló (sin ts_despegue) DENTRO
+  de la ventana de ±30min (no como sugerido de otra hora), excepto pendientes
+  de LV-OAD nunca aprobados (sin aprobado_por/instructor). El fallback
+  'sugerido' sigue usando solo turnos 'aprobado'. escribirPendiente() ya
+  pasa 'vencido'→'volado' (solo respeta 'cancelado').
+
   v4.78 · 2026-09-16
   Pedido de Daniel: si la traza GPS levantada tiene menos de
   GPS_TRAZA_MIN_PUNTOS (100) puntos, no se graba en vuelo_tracks — antes
@@ -1924,7 +1938,7 @@ const LS_PENDIENTES = 'acrg-piloto-v1-pendientes'; // cola de vuelos guardados l
 // avión "sin arrancar todavía" que sobrevivía indefinidamente en localStorage.
 const RESTAURAR_AVION_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '4.78';
+const APP_VERSION = '4.79';
 document.querySelectorAll('.ver').forEach(el=>el.textContent='v'+APP_VERSION);
 
 // ── Traza GPS (obligatoria, siempre activa — v4.76) ──────────
@@ -2291,7 +2305,14 @@ async function buscarTurnoPropioParaAhora(){
     const candidatosHoy=todas.filter(r=>{
       if(r.email!==session.email) return false;
       if(r.fecha!==fechaHoy) return false;
-      if(r.estado!=='aprobado') return false;
+      // v4.79: turnos.html (vencerTurnosPendientes) pasa a 'vencido' TODO turno
+      // aprobado en el instante en que pasa su hora — no hay gracia. Un piloto que
+      // activa 6 min después de la hora reservada encontraba su turno ya 'vencido',
+      // el filtro estricto lo descartaba y el vuelo terminaba como turno nuevo aparte.
+      // Se acepta 'vencido' que nunca se voló, salvo que sea un pendiente de LV-OAD
+      // que nadie aprobó (LV-ART/LV-MPH se auto-aprueban sin aprobador, LV-OAD no).
+      const vencidoRecuperable=r.estado==='vencido'&&!r.ts_despegue&&(r.avion!=='LV-OAD'||!!(r.aprobado_por||r.instructor));
+      if(r.estado!=='aprobado'&&!vencidoRecuperable) return false;
       if(r.tipo_vuelo!=='particular') return false;
       if(r.piloto_tiempo_vuelo!=null) return false; // ya registrado
       return true;
@@ -2303,13 +2324,14 @@ async function buscarTurnoPropioParaAhora(){
     }).sort((a,b)=>a._diff-b._diff);
 
     const enVentana=candidatosHoy.filter(r=>r._diff<=VENTANA_MS);
+    const soloAprobados=candidatosHoy.filter(r=>r.estado==='aprobado'); // v4.79: 'vencido' solo cuenta dentro de la ventana, no como sugerido de otra hora
     if(enVentana.length>1) return {match:null,conflicto:true,sugerido:null,candidatos:enVentana};
     if(enVentana.length===1){
       const c=enVentana[0];
       return {match:{key:c.key,avion:c.avion,hora:c._hora},conflicto:false,sugerido:null,candidatos:[]};
     }
-    if(candidatosHoy.length>=1){
-      const c=candidatosHoy[0]; // el más cercano a ahora, sin importar si es antes o después
+    if(soloAprobados.length>=1){
+      const c=soloAprobados[0]; // el más cercano a ahora, sin importar si es antes o después
       return {match:null,conflicto:false,sugerido:{key:c.key,avion:c.avion,hora:c._hora},candidatos:[]};
     }
     return {match:null,conflicto:false,sugerido:null,candidatos:[]};
