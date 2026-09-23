@@ -1,7 +1,13 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 8.77
-  CAMBIOS : Pedido de Daniel: un instructor puede loguearse y reservar turno como
+  VERSION : 8.78
+  CAMBIOS : Pedido de Daniel: grilla de reservas (LISTA y SEMANA) con tres niveles de
+            línea horizontal — hora entera gruesa (3px), media hora intermedia (2px),
+            turnos en otros minutos (ej. 10:26) fina (1px). Antes solo había 2px en
+            horas enteras vs 1px el resto, y como borde inferior; ahora es borde
+            superior de la fila (línea que abre la franja). Nueva clase "hora-media"
+            en el <tr>, ver renderCalLista/renderCalSemana.
+  ANTERIOR: v8.77 — Pedido de Daniel: un instructor puede loguearse y reservar turno como
             piloto particular, mismo concepto ya usado en vuelo-piloto.html v4.30
             (instructor tratado como un piloto más — autoaprobado, cualquier avión
             habilitado — sin necesidad de una cuenta separada en /alumnos). Acá el
@@ -4200,7 +4206,11 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
    La clase "hora-entera" se decide en JS por el string de la hora (ver renderCalLista/
    renderCalSemana), no acá. border-collapse:collapse hace que este borde también
    sea el borde superior visual de la fila siguiente. */
-.cal-table tr.hora-entera td{border-bottom:2px solid var(--border2);}
+.cal-table tr.hora-entera td{border-top:3px solid var(--border2);}
+/* v8.78: tres niveles de línea separadora, aplicados como borde SUPERIOR de la fila
+   (la línea que separa esa franja de la anterior): hora entera (:00) gruesa 3px,
+   media hora (:30) intermedia 2px, cualquier otro minuto (ej. 10:26) fina 1px (default). */
+.cal-table tr.hora-media td{border-top:2px solid var(--border2);}
 .cal-table td.today-col{background:rgba(0,200,212,.03);}
 .cal-table td:first-child{font-family:var(--font-mono);font-size:11px;color:var(--text3);text-align:center;padding:6px 4px;white-space:nowrap;background:var(--bg2);border-right:1px solid var(--border2);position:sticky;left:0;z-index:2;}
 .cal-block{padding:5px 7px;border-radius:var(--radius);cursor:pointer;margin-bottom:3px;font-family:var(--font-mono);font-size:11px;line-height:1.4;transition:filter .15s;position:relative;}
@@ -4477,7 +4487,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.77</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.78</div>
   </div>
 
 </div>
@@ -8632,7 +8642,7 @@ async function renderTodasReservas(data){
     // mejor a simple vista dónde empieza cada hora. Se decide por el string de
     // 'hora' (HH:MM), no por índice de fila — así funciona igual sin importar el
     // paso configurado por avión (30min/1h/lo que sea).
-    const trCls=hora.endsWith(':00')?' class="hora-entera"':'';
+    const trCls=hora.endsWith(':00')?' class="hora-entera"':(hora.endsWith(':30')?' class="hora-media"':'');
     html+=`<tr${trCls}><td>${hora}</td>`;
     rango.forEach(({d,tipo},idx)=>{
       const ds=fmtDate(d), isHoy=ds===hoy;
@@ -8805,7 +8815,7 @@ async function renderVistaSemana(){
   horas.forEach(hora=>{
     // v7.73: mismo criterio que la vista LISTA (ver más arriba) — fila de hora en
     // punto con borde inferior más grueso.
-    const trCls=hora.endsWith(':00')?' class="hora-entera"':'';
+    const trCls=hora.endsWith(':00')?' class="hora-entera"':(hora.endsWith(':30')?' class="hora-media"':'');
     html+=`<tr${trCls}><td>${hora}</td>`;
     dias.forEach(d=>{
       const ds=fmtDate(d), isHoy=ds===hoy;
