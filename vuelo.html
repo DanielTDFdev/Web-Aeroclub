@@ -2,6 +2,10 @@
 <!--
 ==================================================================================
   VUELO — App de registro de vuelo · Aeroclub Río Grande
+  v6.01 · 2026-09-25
+  Pedido de Daniel: GPS_TRAZA_MIN_PUNTOS 100→500 (~16min 40s a 2s/punto).
+  Trazas más cortas que eso no se graban en vuelo_tracks. Mismo cambio en vuelo-piloto.html v4.81.
+
   v6.00 · 2026-09-16
   Pedido de Daniel: si la traza GPS levantada tiene menos de
   GPS_TRAZA_MIN_PUNTOS (100) puntos, no se graba en vuelo_tracks — antes
@@ -2253,7 +2257,7 @@ const LS_PENDIENTES = 'acrg-vuelo-v2-pendientes'; // cola de vuelos guardados lo
 // límite de tiempo.
 const RESTAURAR_TURNO_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '6.00'; // ⚠ actualizar acá Y en el comentario header de arriba en cada bump
+const APP_VERSION = '6.01'; // ⚠ actualizar acá Y en el comentario header de arriba en cada bump
 
 // ── Traza GPS (obligatoria, siempre activa — v5.96) ────────────
 const LS_GPS_PUNTOS = 'acrg-vuelo-v2-gps-puntos'; // puntos del vuelo en curso (resiliencia ante recarga)
@@ -2261,7 +2265,7 @@ const LS_GPS_HUECOS = 'acrg-vuelo-v2-gps-huecos'; // v5.29: huecos detectados (v
 const GPS_MUESTREO_MS = 2000; // 2s entre puntos (v5.73 — bajado de 3s a pedido de Daniel, más margen de puntos aún en vuelos cortos)
 const GPS_WATCHDOG_INTERVALO_MS = 15000; // v5.27: cada cuánto chequea el watchdog
 const GPS_WATCHDOG_UMBRAL_MS    = 45000; // v5.27: sin actividad de GPS por más de esto, reinicia el watch
-const GPS_TRAZA_MIN_PUNTOS = 100; // v6.00: pedido de Daniel — trazas con menos puntos que esto no se graban en vuelo_tracks (ruido, no aportan)
+const GPS_TRAZA_MIN_PUNTOS = 500; // v6.00: pedido de Daniel — trazas con menos puntos que esto no se graban en vuelo_tracks (v6.01: 100→500, ~16min a 2s/punto) (ruido, no aportan)
 let gpsHabilitado = true; // v5.96: ya no es un toggle — pedido de Daniel: tracking obligatorio, siempre activo
 let gpsWatchId     = null;   // id de navigator.geolocation.watchPosition, null si no está corriendo
 let gpsWatchdogId  = null;   // v5.27
