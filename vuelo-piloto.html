@@ -2,6 +2,10 @@
 <!--
 ==================================================================================
   VUELO PILOTO — Registro de vuelo para pilotos · Aeroclub Río Grande
+  v4.81 · 2026-09-25
+  Pedido de Daniel: GPS_TRAZA_MIN_PUNTOS 100→500 (~16min 40s a 2s/punto).
+  Trazas más cortas que eso no se graban en vuelo_tracks. Mismo cambio en vuelo.html v6.01.
+
   v4.80 · 2026-09-21
   Pedido de Daniel: segundo duplicado (Miguel 10:00, las dos veces LV-ART) —
   descarta el problema del avión. Hueco encontrado: turnoVinculado (turno
@@ -1948,7 +1952,7 @@ const LS_PENDIENTES = 'acrg-piloto-v1-pendientes'; // cola de vuelos guardados l
 // avión "sin arrancar todavía" que sobrevivía indefinidamente en localStorage.
 const RESTAURAR_AVION_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '4.80';
+const APP_VERSION = '4.81';
 document.querySelectorAll('.ver').forEach(el=>el.textContent='v'+APP_VERSION);
 
 // ── Traza GPS (obligatoria, siempre activa — v4.76) ──────────
@@ -1957,7 +1961,7 @@ const LS_GPS_HUECOS = 'acrg-piloto-v1-gps-huecos'; // v4.7: huecos detectados (v
 const GPS_MUESTREO_MS = 2000; // 2s entre puntos (v4.58 — bajado de 3s a pedido de Daniel, mismo cambio en vuelo.html v5.73)
 const GPS_WATCHDOG_INTERVALO_MS = 15000; // v4.5: cada cuánto chequea el watchdog
 const GPS_WATCHDOG_UMBRAL_MS    = 45000; // v4.5: sin actividad de GPS por más de esto, reinicia el watch
-const GPS_TRAZA_MIN_PUNTOS = 100; // v4.78: pedido de Daniel — trazas con menos puntos que esto no se graban en vuelo_tracks (ruido, no aportan).
+const GPS_TRAZA_MIN_PUNTOS = 500; // v4.78: pedido de Daniel — trazas con menos puntos que esto no se graban en vuelo_tracks (v4.81: 100→500, ~16min a 2s/punto) (ruido, no aportan).
 let gpsHabilitado = true; // v4.76: ya no es un toggle — pedido de Daniel, siempre ON por default
 let gpsWatchId     = null;
 let gpsWatchdogId  = null; // v4.5
