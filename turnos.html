@@ -1,7 +1,22 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 8.78
-  CAMBIOS : Pedido de Daniel: grilla de reservas (LISTA y SEMANA) con tres niveles de
+  VERSION : 8.79
+  CAMBIOS : Reporte de Daniel: el analizador de patrones de maniobra detectaba 1, a lo
+            sumo 2 por vuelo. Causa raíz: _detectarPatronesManiobra solo buscaba dentro
+            de las franjas ámbar de _clasificarTramosVuelo (top 10% de giro del vuelo) —
+            techo duro de ~6 min por hora de vuelo para TODAS las maniobras, y además
+            partía cada maniobra en pedazos (el tramo de poco banqueo de un viraje sobre
+            un punto quedaba fuera del top 10% → vuelta de <300° → sin clasificar).
+            Rediseño: detección independiente de las franjas (que no cambian). Nuevas
+            _girosPorVertice/_ventanasDeGiro/_clasificarVentana: umbral absoluto de giro
+            suavizado (2°/s en ventana de 10s, solo en vuelo sobre el piso), une pedazos
+            separados por <20s, y agrupa lóbulos en corridas — varios lóbulos grandes
+            alternados → ochos (antes solo exactamente 2), varios semicírculos → eses
+            (ahora también con 2), lóbulo ≥300° → viraje sobre un punto / espiral, con
+            vueltas y sentido en el detalle. Una ventana puede dar varios patrones.
+            _detectarPatronesManiobra recibe `piso` en vez de `bandas` (2 callers).
+            Sigue siendo solo turnos.html (prototipo).
+  ANTERIOR: v8.78 — Pedido de Daniel: grilla de reservas (LISTA y SEMANA) con tres niveles de
             línea horizontal — hora entera gruesa (3px), media hora intermedia (2px),
             turnos en otros minutos (ej. 10:26) fina (1px). Antes solo había 2px en
             horas enteras vs 1px el resto, y como borde inferior; ahora es borde
@@ -4487,7 +4502,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.78</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.79</div>
   </div>
 
 </div>
@@ -13552,110 +13567,162 @@ function _clasificarTramosVuelo(segmentos, altMinTraza){
 // etiqueta) — mejor no decir nada que decir cualquier cosa. Todo lo que sigue
 // es "posible X", no una confirmación (el instructor/alumno son quienes
 // saben realmente qué maniobra hicieron).
-const PATRON_LOBULO_MIN_DEG = 25;    // giro mínimo en un sentido para contar como lóbulo real y no ruido GPS
-const PATRON_VUELTA_COMPLETA_DEG = 300; // a partir de acá se considera "vuelta completa" (no exige 360 justo — la ejecución de un alumno rara vez cierra perfecto)
-const PATRON_OCHO_MIN_DEG = 210;     // cada lóbulo de un ocho tiene que girar bastante, si no es más bien un vaivén suelto
-const PATRON_ESE_MAX_DEG = 270;      // por encima de esto un lóbulo ya es "vuelta", no "ese"
-const PATRON_ALTURA_CAMBIO_FT = 150; // cambio de altura mínimo dentro del tramo para llamarlo espiral en vez de viraje sobre un punto
-const PATRON_DIST_MIN_KM = 0.02;     // 20m — distancia mínima entre puntos consecutivos antes de calcular el rumbo del tramo
+// v8.79 — REDISEÑO de la detección de patrones (reporte de Daniel: "detecta 1 a lo
+// sumo 2 por vuelo"). Causa raíz: los patrones solo se buscaban DENTRO de las
+// franjas ámbar de _clasificarTramosVuelo, que marca el TOP 10% de giro del vuelo.
+// (1) Ese 10% es un techo duro de tiempo: en 1h de vuelo son ~6 min en total para
+// TODAS las maniobras, no alcanza ni para un par de ochos + eses + virajes.
+// (2) Fragmentaba cada maniobra: en un viraje sobre un punto el banqueo (y el giro)
+// cae mucho en el tramo contra el viento, esa parte quedaba fuera del top 10% y la
+// vuelta se partía en pedazos de <300° que ya no clasificaban. (3) Ochos y eses
+// repetidos (4+ lóbulos grandes) no calzaban en ninguna regla.
+// Ahora la detección es independiente de las franjas ámbar: recorre todo el tramo
+// en vuelo, marca "girando" con un umbral ABSOLUTO de giro suavizado
+// (PATRON_GIRO_MIN_DEG_S sobre PATRON_SUAVIZADO_S), une pedazos separados por
+// menos de PATRON_HUECO_MAX_S (reversión de una ese, pierna recta entre pilones)
+// y dentro de cada ventana agrupa lóbulos consecutivos en CORRIDAS: varios
+// lóbulos grandes alternados → ochos, varios semicírculos alternados → eses, un
+// lóbulo ≥300° → viraje sobre un punto / espiral. Una ventana puede dar más de un
+// patrón. Los virajes del circuito (90° separados por piernas largas) no llegan a
+// PATRON_VENTANA_MIN_DEG y se descartan. Las franjas ámbar del gráfico no cambian.
+const PATRON_LOBULO_MIN_DEG = 25;       // giro mínimo en un sentido para contar como lóbulo real y no ruido GPS
+const PATRON_VUELTA_COMPLETA_DEG = 300; // lóbulo único a partir del cual es "vuelta" (viraje sobre un punto / espiral)
+const PATRON_LOBULO_GRANDE_DEG = 225;   // lóbulo de un ocho (rulo alrededor del pilón); por debajo, semicírculo de ese
+const PATRON_ESE_MIN_DEG = 110;         // semicírculo mínimo de una ese
+const PATRON_ALTURA_CAMBIO_FT = 150;    // cambio de altura dentro de la vuelta para llamarla espiral
+const PATRON_DIST_MIN_KM = 0.02;        // 20m — descarta puntos pegados antes de calcular rumbos
+const PATRON_GIRO_MIN_DEG_S = 2.0;      // giro suavizado mínimo para considerar "girando" (viraje estándar = 3°/s)
+const PATRON_SUAVIZADO_S = 10;          // ventana centrada del suavizado de giro
+const PATRON_HUECO_MAX_S = 20;          // tramos rectos más cortos que esto no cortan la maniobra
+const PATRON_VENTANA_MIN_DEG = 180;     // giro total mínimo de una ventana para analizarla
 
-// v8.50 FIX (reportado por Daniel con captura: "~1356°" en un tramo de 2min,
-// imposible — serían ~11°/s sostenido, casi 4 vueltas). La v8.49 reutilizaba
-// el mismo truco de ventana solapada de _clasificarTramosVuelo (p0=i-STEP,
-// p2=i+STEP) pero ahí ESA función solo compara la MAGNITUD punto a punto
-// contra un umbral, nunca suma. Acá sí sumábamos cada ventana para el total
-// del lóbulo — como ventanas consecutivas comparten casi todos sus puntos,
-// la misma rotación se contaba muchas veces (sobreestimación ~STEP×). Fix:
-// en vez de ventanas solapadas, se filtran puntos muy pegados (ruido GPS,
-// PATRON_DIST_MIN_KM) y se integra el giro real vértice a vértice sobre esa
-// polilínea filtrada — cada tramo del camino aporta a la suma UNA sola vez.
-function _lobulosDeGiro(pts){
-  const filtrados=[pts[0]];
+// Integra el giro vértice a vértice sobre la polilínea filtrada (fix v8.50: cada
+// tramo del camino aporta a la suma UNA sola vez, sin ventanas solapadas).
+function _girosPorVertice(pts){
+  const f=[pts[0]];
   for(let i=1;i<pts.length;i++){
-    const ult=filtrados[filtrados.length-1];
-    if(_haversineKm(ult.lat,ult.lng,pts[i].lat,pts[i].lng)>=PATRON_DIST_MIN_KM){
-      filtrados.push(pts[i]);
-    }
+    const u=f[f.length-1];
+    if(_haversineKm(u.lat,u.lng,pts[i].lat,pts[i].lng)>=PATRON_DIST_MIN_KM) f.push(pts[i]);
   }
-  if(filtrados.length<4) return [];
-  const bearings=[];
-  for(let i=0;i<filtrados.length-1;i++){
-    bearings.push(_bearingDeg(filtrados[i].lat,filtrados[i].lng,filtrados[i+1].lat,filtrados[i+1].lng));
-  }
-  const giros=[]; // uno por vértice interior: cuánto giró el rumbo de un tramo de la polilínea al siguiente
-  for(let i=1;i<bearings.length;i++){
-    let dB=bearings[i]-bearings[i-1];
+  if(f.length<4) return [];
+  const brg=[];
+  for(let i=0;i<f.length-1;i++) brg.push(_bearingDeg(f[i].lat,f[i].lng,f[i+1].lat,f[i+1].lng));
+  const g=[];
+  for(let i=1;i<brg.length;i++){
+    let dB=brg[i]-brg[i-1];
     while(dB>180) dB-=360;
     while(dB<-180) dB+=360;
-    giros.push({ts:filtrados[i].ts, dB});
+    g.push({ts:f[i].ts, t:new Date(f[i].ts).getTime()/1000, dB, alt:f[i].alt});
   }
-  if(!giros.length) return [];
-  const lobulos=[];
-  let actual={signo:(Math.sign(giros[0].dB)||1), rot:0, t0:giros[0].ts, t1:giros[0].ts};
-  for(const g of giros){
-    const signo=Math.sign(g.dB);
-    // reversión solo se confirma si el lóbulo actual ya acumuló lo mínimo —
-    // si no, es ruido de GPS y se lo sigue sumando al lóbulo en curso.
-    if(signo!==0 && signo!==actual.signo && Math.abs(actual.rot)>=PATRON_LOBULO_MIN_DEG){
-      lobulos.push(actual);
-      actual={signo, rot:0, t0:g.ts, t1:g.ts};
-    }
-    actual.rot += g.dB;
-    actual.t1 = g.ts;
-  }
-  lobulos.push(actual);
-  return lobulos.filter(l=>Math.abs(l.rot)>=PATRON_LOBULO_MIN_DEG);
+  return g;
 }
 
-function _clasificarManiobra(pts){
-  const lobulos=_lobulosDeGiro(pts);
-  if(!lobulos.length) return null;
-  const altIni=pts[0].alt, altFin=pts[pts.length-1].alt;
-  const cambioAltFt=(altIni!=null && altFin!=null)?(altFin-altIni)*3.28084:0;
-  if(lobulos.length===1){
-    const rot=Math.abs(lobulos[0].rot);
-    if(rot<PATRON_VUELTA_COMPLETA_DEG) return null;
-    if(Math.abs(cambioAltFt)>=PATRON_ALTURA_CAMBIO_FT){
-      return {tipo:'espiral', detalle:(cambioAltFt>0?'ascendente':'descendente')+' · ~'+Math.round(rot)+'°'};
+function _ventanasDeGiro(segmentos, piso){
+  const ventanas=[];
+  for(const seg of segmentos){
+    if(seg.tipo!=='real') continue;
+    const g=_girosPorVertice(seg.pts.filter(p=>p.alt!=null));
+    if(!g.length) continue;
+    const girando=new Array(g.length).fill(false);
+    let a=0, b=0, suma=0;
+    for(let i=0;i<g.length;i++){
+      while(b<g.length && g[b].t-g[i].t<=PATRON_SUAVIZADO_S/2){ suma+=g[b].dB; b++; }
+      while(a<i && g[i].t-g[a].t>PATRON_SUAVIZADO_S/2){ suma-=g[a].dB; a++; }
+      const enVuelo = piso==null || (g[i].alt-piso)*3.28084>=MANIOBRA_ALTURA_MIN_FT;
+      girando[i] = enVuelo && Math.abs(suma/PATRON_SUAVIZADO_S)>=PATRON_GIRO_MIN_DEG_S;
     }
-    return {tipo:'viraje_punto', detalle:'~'+Math.round(rot)+'°'};
-  }
-  if(lobulos.length===2){
-    const [a,b]=lobulos;
-    if(a.signo!==b.signo && Math.abs(a.rot)>=PATRON_OCHO_MIN_DEG && Math.abs(b.rot)>=PATRON_OCHO_MIN_DEG){
-      return {tipo:'ocho', detalle:'lóbulos ~'+Math.round(Math.abs(a.rot))+'°/'+Math.round(Math.abs(b.rot))+'°'};
+    let ini=-1, fin=-1;
+    const cerrar=()=>{
+      if(ini<0) return;
+      const tramo=g.slice(ini,fin+1);
+      if(tramo.reduce((s,x)=>s+Math.abs(x.dB),0)>=PATRON_VENTANA_MIN_DEG) ventanas.push(tramo);
+      ini=-1;
+    };
+    for(let i=0;i<g.length;i++){
+      if(!girando[i]) continue;
+      if(ini>=0 && g[i].t-g[fin].t>PATRON_HUECO_MAX_S) cerrar();
+      if(ini<0) ini=i;
+      fin=i;
     }
-    return null;
+    cerrar();
   }
-  let alternado=true;
-  for(let i=1;i<lobulos.length;i++){ if(lobulos[i].signo===lobulos[i-1].signo){ alternado=false; break; } }
-  const todosParciales=lobulos.every(l=>Math.abs(l.rot)<=PATRON_ESE_MAX_DEG);
-  if(alternado && todosParciales) return {tipo:'eses', detalle:lobulos.length+' lóbulos'};
-  return null;
+  return ventanas;
 }
 
-// v8.50 — se sacó el listado de texto ad-hoc arriba del gráfico (pedido de
-// Daniel): ahora cada patrón se dibuja directo sobre la curva de altitud, en
-// el punto medio (por tiempo) del tramo detectado, con color/glifo propio por
-// tipo. El detalle completo (tipo, horario, grados) queda en el tooltip
-// nativo (<title>) del marcador, no hace falta leerlo en un panel aparte.
+function _lobulosDeGiro(g){
+  if(!g.length) return [];
+  const crudos=[];
+  let act={signo:(Math.sign(g[0].dB)||1), rot:0, t0:g[0].ts, t1:g[0].ts, altIni:g[0].alt, altFin:g[0].alt};
+  for(const x of g){
+    const s=Math.sign(x.dB);
+    // reversión solo se confirma si el lóbulo actual ya acumuló lo mínimo — si
+    // no, es ruido de GPS y se sigue sumando al lóbulo en curso.
+    if(s!==0 && s!==act.signo && Math.abs(act.rot)>=PATRON_LOBULO_MIN_DEG){
+      crudos.push(act);
+      act={signo:s, rot:0, t0:x.ts, t1:x.ts, altIni:x.alt, altFin:x.alt};
+    }
+    act.rot+=x.dB; act.t1=x.ts; act.altFin=x.alt;
+  }
+  crudos.push(act);
+  // al descartar lóbulos chicos pueden quedar dos del mismo sentido pegados: se funden
+  const lob=[];
+  for(const l of crudos.filter(l=>Math.abs(l.rot)>=PATRON_LOBULO_MIN_DEG)){
+    const u=lob[lob.length-1];
+    if(u && Math.sign(u.rot)===Math.sign(l.rot)){ u.rot+=l.rot; u.t1=l.t1; u.altFin=l.altFin; }
+    else lob.push({...l});
+  }
+  return lob;
+}
+
+function _clasificarVentana(g){
+  const lob=_lobulosDeGiro(g), res=[];
+  const esGrande=l=>Math.abs(l.rot)>=PATRON_LOBULO_GRANDE_DEG;
+  const esSemi=l=>Math.abs(l.rot)>=PATRON_ESE_MIN_DEG && !esGrande(l);
+  let i=0;
+  while(i<lob.length){
+    const L=lob[i];
+    if(esGrande(L)){
+      let j=i; while(j+1<lob.length && esGrande(lob[j+1])) j++;
+      const n=j-i+1;
+      if(n>=2){
+        const grados=lob.slice(i,j+1).map(l=>'~'+Math.round(Math.abs(l.rot))+'°').join('/');
+        const ochos=Math.max(1,Math.floor(n/2));
+        res.push({tipo:'ocho', t0:L.t0, t1:lob[j].t1, detalle:ochos+' ocho'+(ochos>1?'s':'')+' · lóbulos '+grados});
+      } else if(Math.abs(L.rot)>=PATRON_VUELTA_COMPLETA_DEG){
+        const rot=Math.abs(L.rot), vueltas=Math.round(rot/360*10)/10;
+        const dAltFt=(L.altIni!=null && L.altFin!=null)?(L.altFin-L.altIni)*3.28084:0;
+        const sentido=L.rot>0?'derecha':'izquierda';
+        if(Math.abs(dAltFt)>=PATRON_ALTURA_CAMBIO_FT){
+          res.push({tipo:'espiral', t0:L.t0, t1:L.t1, detalle:(dAltFt>0?'ascendente':'descendente')+' '+Math.round(Math.abs(dAltFt))+'ft · '+vueltas+' vuelta(s) a la '+sentido});
+        } else {
+          res.push({tipo:'viraje_punto', t0:L.t0, t1:L.t1, detalle:vueltas+' vuelta(s) a la '+sentido+' · ~'+Math.round(rot)+'°'});
+        }
+      }
+      i=j+1; continue;
+    }
+    if(esSemi(L)){
+      let j=i; while(j+1<lob.length && esSemi(lob[j+1])) j++;
+      const n=j-i+1;
+      if(n>=2) res.push({tipo:'eses', t0:L.t0, t1:lob[j].t1, detalle:n+' semicírculos'});
+      i=j+1; continue;
+    }
+    i++;
+  }
+  return res;
+}
+
+// v8.50 — cada patrón se dibuja directo sobre la curva de altitud (y en el mapa,
+// v8.52), en el punto medio (por tiempo) del tramo detectado, con color/glifo
+// propio por tipo y el detalle en el tooltip.
 const PATRON_COLOR = {viraje_punto:'#4f8cff', espiral:'#a855f7', ocho:'#ec4899', eses:'#22d3ee'};
 const PATRON_GLIFO = {viraje_punto:'🔄', espiral:'🌀', ocho:'∞', eses:'S'};
 const PATRON_NOMBRES = {viraje_punto:'Viraje sobre un punto', espiral:'Espiral', ocho:'Ocho sobre pilones (posible)', eses:'Eses (posible)'};
 
-function _detectarPatronesManiobra(segmentos, bandas){
-  const reales = segmentos.filter(s=>s.tipo==='real');
+// v8.79: recibe `piso` (ver _calcPisoVirtual) en vez de las franjas ámbar.
+function _detectarPatronesManiobra(segmentos, piso){
   const resultado=[];
-  for(const b of bandas){
-    if(b.tipo!=='maniobra') continue;
-    let pts=[];
-    for(const seg of reales){
-      pts = pts.concat(seg.pts.filter(p=>p.alt!=null && p.ts>=b.t0 && p.ts<=b.t1));
-    }
-    pts.sort((x,y)=>new Date(x.ts)-new Date(y.ts));
-    const clasif = _clasificarManiobra(pts);
-    if(clasif) resultado.push({...clasif, t0:b.t0, t1:b.t1});
-  }
+  for(const v of _ventanasDeGiro(segmentos, piso)) resultado.push(..._clasificarVentana(v));
+  resultado.sort((a,b)=>new Date(a.t0)-new Date(b.t0));
   return resultado;
 }
 
@@ -13767,7 +13834,7 @@ window.abrirAnalisisVuelo = function(){
   const bandas = _clasificarTramosVuelo(segmentos, piso);
   const toques = _detectarToques(segmentos, piso);
   const aterrizaje = _detectarAterrizajeFinal(segmentos, piso);
-  const patrones = _detectarPatronesManiobra(segmentos, bandas);
+  const patrones = _detectarPatronesManiobra(segmentos, piso);
   const emergencias = _detectarEmergenciasSimuladas(segmentos, piso);
   const fmtT = iso => { const d=new Date(iso); return String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0'); };
   document.getElementById('analisis-toques-resumen').textContent = toques.length
@@ -13951,7 +14018,6 @@ window.abrirMapaVuelo = async function(key, nombre, avion, hora) {
     // comentario junto a _iconoMarkers), para que escalen con el zoom.
     _iconoMarkers = [];
     const pisoMapa = _calcPisoVirtual(segmentos, altMinTraza) ?? altMinTraza; // v8.55 — ver comentario en _calcPisoVirtual
-    const bandasMapa = _clasificarTramosVuelo(segmentos, pisoMapa);
     for(const t of _detectarToques(segmentos, pisoMapa)){
       _iconoMarkers.push({lat:t.lat, lng:t.lng, cat:'toque', color:'#f0a500', glifo:'', tooltip:'🟡 Toque y despegue — ' + fmtT(t.ts)});
     }
@@ -13959,7 +14025,7 @@ window.abrirMapaVuelo = async function(key, nombre, avion, hora) {
     if(aterrizajeMapa){
       _iconoMarkers.push({lat:aterrizajeMapa.lat, lng:aterrizajeMapa.lng, cat:'aterrizaje', color:'#39d353', glifo:'▼', tooltip:'🟢 Aterrizaje final — ' + fmtT(aterrizajeMapa.ts)});
     }
-    for(const p of _detectarPatronesManiobra(segmentos, bandasMapa)){
+    for(const p of _detectarPatronesManiobra(segmentos, pisoMapa)){
       const tMid = new Date((new Date(p.t0).getTime()+new Date(p.t1).getTime())/2).toISOString();
       let cercano=null, mejorDif=Infinity;
       for(const pt of puntos){
