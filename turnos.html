@@ -1,7 +1,11 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 8.79
-  CAMBIOS : Reporte de Daniel: el analizador de patrones de maniobra detectaba 1, a lo
+  VERSION : 8.80
+  CAMBIOS : Pedido de Daniel: en Configuración→Horarios, si el avión seleccionado está
+            fuera de servicio (activo===false) aparece un cartel rojo "✕ <AVIÓN> NO
+            DISPONIBLE" a la derecha de los tabs de avión (#cfg-avion-nodisp), se
+            re-renderiza en renderHorariosConfig (cambio de avión/día y toggle ON/OFF).
+  ANTERIOR: v8.79 — Reporte de Daniel: el analizador de patrones de maniobra detectaba 1, a lo
             sumo 2 por vuelo. Causa raíz: _detectarPatronesManiobra solo buscaba dentro
             de las franjas ámbar de _clasificarTramosVuelo (top 10% de giro del vuelo) —
             techo duro de ~6 min por hora de vuelo para TODAS las maniobras, y además
@@ -4502,7 +4506,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.79</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.80</div>
   </div>
 
 </div>
@@ -10733,6 +10737,12 @@ function renderHorariosConfig(){
   const cfgActual=configs[activeConfigAvion]||DEFAULT_CONFIG_AVION;
   const estaActivo=cfgActual.activo!==false;
   renderToggleAvion(activeConfigAvion);
+  // v8.80: cartel NO DISPONIBLE al lado de los tabs de avión si está fuera de servicio
+  const tabsAv=document.getElementById('cfg-avion-tabs');
+  if(tabsAv){
+    tabsAv.querySelector('#cfg-avion-nodisp')?.remove();
+    if(!estaActivo)tabsAv.insertAdjacentHTML('beforeend','<span id="cfg-avion-nodisp" style="align-self:center;margin-left:1.25rem;padding:5px 12px;background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.4);border-radius:var(--radius);font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--red);letter-spacing:.12em">✕ '+activeConfigAvion+' NO DISPONIBLE</span>');
+  }
   const colsGrid=AVIONES_MEDIA_HORA.includes(activeConfigAvion)?6:4;
   document.getElementById('horarios-config').innerHTML=
     '<div style="font-family:var(--font-mono);font-size:11px;color:var(--amber);margin-bottom:.6rem;letter-spacing:.1em">'+DIAS_NOMBRE[activeDow].toUpperCase()+'</div>'+
