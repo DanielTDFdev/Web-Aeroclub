@@ -1,7 +1,12 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 8.80
-  CAMBIOS : Pedido de Daniel: en Configuración→Horarios, si el avión seleccionado está
+  VERSION : 8.81
+  CAMBIOS : Pedido de Daniel: mismo cartel rojo "✕ <AVIÓN> NO DISPONIBLE" en el tab
+            Reservas del instructor, a la derecha de los tabs de avión (#cal-avion-nodisp,
+            nueva actualizarCartelNoDispCal). Con filtro TODOS lista todos los aviones
+            fuera de servicio; con un avión elegido, solo ese. Se refresca en
+            buildCalAvionTabs, setCalFiltroAvion, renderTodasReservas y toggleActivoAvion.
+  ANTERIOR: v8.80 — Pedido de Daniel: en Configuración→Horarios, si el avión seleccionado está
             fuera de servicio (activo===false) aparece un cartel rojo "✕ <AVIÓN> NO
             DISPONIBLE" a la derecha de los tabs de avión (#cfg-avion-nodisp), se
             re-renderiza en renderHorariosConfig (cambio de avión/día y toggle ON/OFF).
@@ -4506,7 +4511,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.80</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.81</div>
   </div>
 
 </div>
@@ -8389,6 +8394,19 @@ function buildCalAvionTabs(){
     html+=`<button class="cal-avion-tab" onclick="setCalFiltroAvion('${av.key}')">${av.key}</button>`;
   });
   wrap.innerHTML=html;
+  actualizarCartelNoDispCal();
+}
+
+// v8.81: cartel NO DISPONIBLE junto a los tabs de avión de Reservas (instructor).
+// Filtro TODOS → lista todos los aviones fuera de servicio; filtro por avión → solo ese.
+function actualizarCartelNoDispCal(){
+  const wrap=document.getElementById('cal-avion-tabs');
+  if(!wrap)return;
+  wrap.querySelector('#cal-avion-nodisp')?.remove();
+  const keys=(calAvionFiltro&&calAvionFiltro!=='todos'?[calAvionFiltro]:AVIONES.map(a=>a.key))
+    .filter(k=>configs[k]&&configs[k].activo===false);
+  if(!keys.length)return;
+  wrap.insertAdjacentHTML('beforeend','<span id="cal-avion-nodisp" style="align-self:center;margin-left:1rem;padding:5px 12px;background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.4);border-radius:var(--radius);font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--red);letter-spacing:.12em;white-space:nowrap">✕ '+keys.join(', ')+' NO DISPONIBLE</span>');
 }
 
 window.setCalFiltroAvion=function(key){
@@ -8398,6 +8416,7 @@ window.setCalFiltroAvion=function(key){
     const isThis=(isAll&&key==='todos')||(b.textContent===key);
     b.classList.toggle('active',isThis);
   });
+  actualizarCartelNoDispCal();
   get(ref(db,'reservas')).then(s=>renderTodasReservas(s.val()));
 };
 
@@ -8586,6 +8605,7 @@ function tipQuienesPueden(disp,fecha,hora){
 }
 
 async function renderTodasReservas(data){
+  actualizarCartelNoDispCal();
   const chkOc=document.getElementById('chk-ocultar-cancelados');
   if(chkOc) chkOc.checked=ocultarCancelados;
   const todas=rArr(data);
@@ -10784,6 +10804,7 @@ window.toggleActivoAvion=async function(){
   if(!nuevo&&afectados.length)await cancelarTurnosPorBloqueo(afectados,'Avión '+avion+' puesto fuera de servicio');
   if(enDias)renderToggleAvion(avion);
   else renderHorariosConfig();
+  actualizarCartelNoDispCal();
 };
 
 window.toggleHorario=async function(h,on){
