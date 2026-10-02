@@ -2,6 +2,11 @@
 <!--
 ==================================================================================
   REPORTE DE ACTIVIDAD DE AERONAVES — Aeroclub Río Grande 
+  v1.18 · Pedido de Daniel: el reporte por instructor ya no incluye vuelos
+         particulares (tipo_vuelo==='particular') — caían en el grupo "(sin
+         instructor registrado)". Ese grupo queda solo para instrucciones
+         cargadas sin instructor, renombrado "(instrucción sin instructor)".
+
   v1.17 · FIX reportado por Daniel: el selector de instructor omitía a los
          instructores con vacaciones===true (filtro heredado de disponibilidad,
          incorrecto en un reporte histórico) y mostraba la cuenta 'Admin'.
@@ -401,7 +406,7 @@ table.det tbody td.gray{color:var(--text3)}
     <div class="dot"></div>
     <h1>REPORTE DE ACTIVIDAD<small>AEROCLUB RÍO GRANDE</small></h1>
     <div class="sp">
-      <span class="ver">v1.17</span>
+      <span class="ver">v1.18</span>
       <a class="btn-back" href="turnos.html">← TURNERO</a>
     </div>
   </header>
@@ -1210,13 +1215,16 @@ async function generarReporteInstructor() {
     if (r.fecha < desde || r.fecha > hasta) return false;
     // Solo vuelos realizados o no-realizados con turno aprobado (para que el instructor
     // también vea sus ausencias/no-shows, no solo lo que sí voló)
+    // v1.18: los vuelos particulares no tienen instructor — no van en este reporte
+    // (ya figuran en el de aeronaves y en el de alumno/piloto).
+    if (r.tipo_vuelo === 'particular') return false;
     const cls = clasificar(r);
     return cls === 'volado' || cls === 'no_realizado';
   });
 
   // Determinar nombre del instructor para cada reserva
   // Fuente: aprobado_por > instructor (fallbacks del sistema)
-  const instDe = r => (r.aprobado_por || r.instructor || '').trim() || '(sin instructor registrado)';
+  const instDe = r => (r.aprobado_por || r.instructor || '').trim() || '(instrucción sin instructor)';
 
   // Filtrar por instructor si se eligió uno específico
   const filtrados = instFiltro === 'todos'
