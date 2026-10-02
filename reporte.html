@@ -2,6 +2,12 @@
 <!--
 ==================================================================================
   REPORTE DE ACTIVIDAD DE AERONAVES — Aeroclub Río Grande 
+  v1.17 · FIX reportado por Daniel: el selector de instructor omitía a los
+         instructores con vacaciones===true (filtro heredado de disponibilidad,
+         incorrecto en un reporte histórico) y mostraba la cuenta 'Admin'.
+         cargarInstructores() ahora excluye admin/administrador/soloUsuarios,
+         incluye los de vacaciones y ordena alfabéticamente.
+
   v1.16 · Nuevo estado real 'volado' (ver turnos.html v8.39). clasificar() ahora
          reconoce r.estado==='volado' directo — sin esto, los vuelos migrados a
          'volado' desaparecían del reporte (no matcheaban ninguna rama existente).
@@ -395,7 +401,7 @@ table.det tbody td.gray{color:var(--text3)}
     <div class="dot"></div>
     <h1>REPORTE DE ACTIVIDAD<small>AEROCLUB RÍO GRANDE</small></h1>
     <div class="sp">
-      <span class="ver">v1.16</span>
+      <span class="ver">v1.17</span>
       <a class="btn-back" href="turnos.html">← TURNERO</a>
     </div>
   </header>
@@ -941,13 +947,20 @@ async function cargarInstructores() {
     const sel = document.getElementById('i-inst');
     // Limpiar opciones anteriores excepto "Todos"
     while (sel.options.length > 1) sel.remove(1);
-    Object.entries(data).forEach(([key, inst]) => {
-      if (!inst || inst.vacaciones) return; // opcional: incluir de vacaciones igual
-      const opt = document.createElement('option');
-      opt.value = inst.nombre || key;
-      opt.textContent = inst.nombre || key;
-      sel.appendChild(opt);
-    });
+    // v1.17: antes excluía a los de vacaciones (un reporte histórico debe listarlos
+    // igual — el flag solo suspende disponibilidad futura) e incluía las cuentas
+    // admin/administrador. Mismo criterio que turnos.html: fuera admin/administrador
+    // y soloUsuarios; vacaciones SÍ se listan. Orden alfabético.
+    Object.entries(data)
+      .filter(([key, inst]) => inst && key !== 'admin' && key !== 'administrador' && inst.soloUsuarios !== true)
+      .map(([key, inst]) => inst.nombre || key)
+      .sort((a, b) => a.localeCompare(b, 'es'))
+      .forEach(nom => {
+        const opt = document.createElement('option');
+        opt.value = nom;
+        opt.textContent = nom;
+        sel.appendChild(opt);
+      });
     // Agregar también instructores que aparecen en reservas pero no en /instructores
     // (carga del historial — se hace al generar)
   } catch(e) { console.warn('No se pudo cargar instructores:', e); }
