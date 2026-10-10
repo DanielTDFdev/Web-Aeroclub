@@ -2363,6 +2363,7 @@ async function _abrirAppInner(){
   // NO se re-corre la detección de turno — el avión ya quedó fijado al
   // iniciar y no hay que tocar nada. Solo se detecta en un arranque limpio.
   if(!tsInicio){
+    _turnoRechazado=false; // v4.85: no arrastrar un "No, es otro" de una sesión anterior (Salir+login en la misma pestaña)
     const resultado=await buscarTurnoPropioParaAhora();
     if(resultado.conflicto){
       mostrarConflictoTurnos(resultado.candidatos);
@@ -2554,11 +2555,12 @@ $('btn-confirmar-turno-no').addEventListener('click',async()=>{
   // v4.85: pedido de Daniel — si no va a usar ese turno, ofrecer cancelarlo en vez
   // de dejarlo 'vencido' huérfano. Opcional: puede ser un turno de más tarde que
   // sí piensa volar ("No, lo mantengo").
+  $('app-shell').classList.add('active');
   if(rechazado&&rechazado.key){
-    const cancelar=await confirmarAccion('¿Cancelo tu turno de las '+rechazado.hora+' hs en '+rechazado.avion+'? Si lo vas a volar más tarde, mantenelo.','✕ Sí, cancelarlo');
+    // botón "No" con texto propio: "Cancelar" acá sería ambiguo (¿cancelar el turno o la pregunta?)
+    const cancelar=await confirmarAccion('¿Cancelo tu turno de las '+rechazado.hora+' hs en '+rechazado.avion+'? Si lo vas a volar más tarde, mantenelo.','✕ Sí, cancelar turno','Mantener turno');
     if(cancelar) await cancelarTurnoRechazado(rechazado);
   }
-  $('app-shell').classList.add('active');
   await poblarAviones();
   aplicarTurnoVinculado();
   renderPantalla();
@@ -3169,10 +3171,11 @@ function confirmarConflictoAvion(detalle){
 // que ya tenía el modal de cancelar (confirm() bloquea el hilo y corta
 // puntos GPS que lleguen mientras el piloto duda). textoSi es el label del
 // botón de confirmar (varía según la acción).
-function confirmarAccion(titulo,textoSi){
+function confirmarAccion(titulo,textoSi,textoNo='Cancelar'){ // v4.85: textoNo opcional
   return new Promise(resolve=>{
     $('accion-modal-title').textContent=titulo;
     $('btn-accion-modal-si').textContent=textoSi;
+    $('btn-accion-modal-no').textContent=textoNo;
     $('accion-modal-overlay').classList.add('open');
     function limpiar(){
       $('accion-modal-overlay').classList.remove('open');
