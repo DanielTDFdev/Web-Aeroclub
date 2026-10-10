@@ -2,6 +2,26 @@
 <!--
 ==================================================================================
   VUELO PILOTO — Registro de vuelo para pilotos · Aeroclub Río Grande
+  v4.85 · 2026-10-10
+  Pedido de Daniel: cerrar los huecos restantes de turnos huérfanos.
+  (1) escribirPendiente() sin turnoKey (ej. sin red al abrir → no hubo
+  detección) re-busca al sincronizar un turno del mismo email+fecha+avión sin
+  datos de vuelo (aprobado / vencido recuperable); exactamente uno → se vincula,
+  si no in-situ como antes. Lectura fallida → throw, la cola reintenta. No se
+  re-vincula si el piloto contestó "No, es otro" (item.sinRematch). Solo turnos
+  que empezaban hasta 30min después del despegue (no roba uno de más tarde).
+  (3) TDZ — CAUSA RAÍZ del avion:'' (Franco 15/9, 21/9, 10/10): init() se llama
+  antes de `let _avionRestaurado` → ReferenceError dentro del try de restauración,
+  tragado en silencio. Toda recarga a mitad de vuelo perdía avión, borrador de
+  cierre y el reinicio del GPS; guardar() mandaba avion:''. Verificado con un
+  módulo mínimo en node. Se declaran antes de init(): _avionRestaurado,
+  _avionRestauradoSinConfirmar, _cierreRestaurado, shaTurno/shaTrackeando/
+  shaTsInicio, turnoVinculado, _turnoSugerido, _turnoRechazado (las últimas las
+  leía _abrirAppInner() sincrónico con sesión guardada → login con error).
+  (2) "No, es otro" ofrece cancelar el turno rechazado (opcional, puede ser uno
+  de más tarde). cancelado_rol:'instructor' para no consumir cuota (un 'vencido'
+  sin aprobador tampoco consume).
+
   v4.84 · 2026-10-10
   Datos de Firebase de Daniel: el vuelo de Franco 12:18 NO se grabó como LV-OAD
   sino con avion:'' (turnos.html muestra '' como LV-OAD, r.avion||'LV-OAD').
@@ -1985,7 +2005,7 @@ const LS_PENDIENTES = 'acrg-piloto-v1-pendientes'; // cola de vuelos guardados l
 // avión "sin arrancar todavía" que sobrevivía indefinidamente en localStorage.
 const RESTAURAR_AVION_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '4.84';
+const APP_VERSION = '4.85';
 document.querySelectorAll('.ver').forEach(el=>el.textContent='v'+APP_VERSION);
 
 // ── Traza GPS (obligatoria, siempre activa — v4.76) ──────────
@@ -2052,6 +2072,26 @@ const NOMBRE_AVION={'LV-OAD':'Tomahawk','LV-ART':'Archer II','LV-MPH':'Lance II'
 let _libroCalYear=null, _libroCalMes=null; // mes 0-indexado
 let _libroCalSel=null;                     // 'YYYY-MM-DD' del día tocado
 let _libroCalDias=new Set();               // 'YYYY-MM-DD' con al menos un vuelo mío
+// v4.85: mismo problema de TDZ — init()→abrirApp()→_abrirAppInner() corre SINCRÓNICO
+// hasta el primer await, y con sesión guardada leía shaTrackeando (arranque limpio) o
+// turnoVinculado (recarga a mitad de vuelo, v4.80) antes de su `let` → ReferenceError
+// → catch de v4.13 → login con "Ocurrió un error". Se declaran acá.
+let shaTurno=null;       // {key,...datos de /reservas} del turno de hoy
+let shaTrackeando=false;
+let shaTsInicio=null;
+let turnoVinculado=null; // {key,avion,hora} si hubo match/confirmación al loguearse
+let _turnoSugerido=null;
+let _turnoRechazado=false; // v4.85: el piloto contestó "No, es otro" en esta sesión
+// v4.85 — EL MÁS GRAVE: init() asignaba _avionRestaurado ANTES de su `let` (declarada
+// más abajo). ReferenceError adentro del try{}catch{} de la restauración → tragado en
+// silencio. En TODA recarga a mitad de vuelo (iOS mata la PWA, pantalla, GPS) quedaba
+// restaurado tsInicio/METAR pero NO el avión, ni el borrador de cierre, ni se
+// reiniciaba el tracking GPS (iniciarTrackGPS() venía después en el mismo try).
+// Resultado: <select> en '' oculto → guardar() mandaba avion:'' (turnos.html lo
+// muestra como LV-OAD). Restauraciones de v4.51/v4.77 nunca funcionaron.
+let _avionRestaurado=null; // valor guardado en localStorage, se aplica recién cuando el <select> ya tiene opciones
+let _avionRestauradoSinConfirmar=false;
+let _cierreRestaurado=null; // borrador del formulario de cierre, se aplica en mostrarCierre()
 
 init();
 
@@ -2077,14 +2117,13 @@ function _forzarLoginSiPantallaNegra(origen,detalle){
 window.addEventListener('error',e=>_forzarLoginSiPantallaNegra('error',e.error||e.message));
 window.addEventListener('unhandledrejection',e=>_forzarLoginSiPantallaNegra('promise',e.reason));
 
-let _avionRestaurado=null; // valor guardado en localStorage, se aplica recién cuando el <select> ya tiene opciones
+// v4.85: _avionRestaurado declarada arriba de init() (TDZ, ver ahí)
 // v4.77: true cuando _avionRestaurado llegó de localStorage SIN que haya un
 // turno vinculado confirmado detrás — dispara una revalidación en INICIAR.
 // Se apaga si el piloto toca el <select> o si el avión termina viniendo de
 // un turno realmente vinculado (match o confirmación Sí/No). Ver comentario
 // completo en el header de este archivo.
-let _avionRestauradoSinConfirmar=false;
-let _cierreRestaurado=null; // borrador del formulario de cierre, se aplica en mostrarCierre()
+// v4.85: _avionRestauradoSinConfirmar/_cierreRestaurado declaradas arriba de init() (TDZ, ver ahí)
 
 function init(){
   // Restaurar sesión de turnos.html (mismo mecanismo que vuelo.html usa con
@@ -2347,6 +2386,7 @@ async function _abrirAppInner(){
     try{
       const est=JSON.parse(localStorage.getItem(LS)||'null');
       if(est&&est.turnoVinculado&&est.turnoVinculado.key) turnoVinculado=est.turnoVinculado;
+      if(est&&est.turnoRechazado) _turnoRechazado=true; // v4.85: el "No, es otro" sobrevive a una recarga a mitad de vuelo
     }catch{}
   }
   $('app-shell').classList.add('active');
@@ -2371,7 +2411,7 @@ async function _abrirAppInner(){
 // el instructor, no el autoservicio de piloto).
 // Devuelve {match, conflicto, sugerido, candidatos}. match/sugerido son
 // {key,avion,hora} o null.
-let turnoVinculado=null; // {key,avion,hora} si hubo match/confirmación al loguearse
+// v4.85: turnoVinculado declarada arriba de init() (TDZ, ver ahí)
 async function buscarTurnoPropioParaAhora(){
   try{
     const ahora=ahoraServidor();
@@ -2460,7 +2500,34 @@ $('btn-conflicto-salir').addEventListener('click',()=>{
 // en vez de atar directo (a diferencia del match silencioso dentro de la
 // ventana). _turnoSugerido guarda el candidato mientras se espera la
 // respuesta del piloto.
-let _turnoSugerido=null;
+// v4.85: _turnoSugerido/_turnoRechazado declaradas arriba de init() (TDZ, ver ahí)
+// v4.85: cancela el turno que el piloto rechazó. cancelado_rol:'instructor' A PROPÓSITO
+// (mismo criterio que cancelarTurnoPorConflicto): con 'alumno' turnosRestantesSemana()
+// lo contaría contra la cuota, y quedarse 'vencido' (sin aprobador) no cuenta — cancelar
+// no puede salir más caro que no hacer nada. Relee el estado: si ya tiene vuelo o ya
+// está cancelado, no lo toca.
+async function cancelarTurnoRechazado(t){
+  try{
+    const r=(await conTimeout(get(ref(db,'reservas/'+t.key)))).val();
+    if(!r||r.estado==='cancelado'||r.piloto_tiempo_vuelo!=null||r.ts_despegue){ toast('Ese turno ya no se puede cancelar'); return; }
+    await conTimeout(update(ref(db,'reservas/'+t.key),{
+      estado:'cancelado',
+      cancelado_por:session.nombre+' (desde vuelo-piloto)',
+      cancelado_rol:'instructor',
+      ts_cancelacion:new Date().toISOString(),
+      obs_cancelacion:'Cancelado por el piloto al activar un vuelo: indicó que no corresponde a este turno.'
+    }));
+    await conTimeout(set(push(ref(db,'auditoria')),{
+      accion:'cancelacion_turno',rol:'piloto',resultado:'exito',
+      detalle:`${session.nombre} canceló su turno ${t.avion} ${r.fecha} ${t.hora} hs al activar otro vuelo (vuelo-piloto.html)`,
+      ts:new Date().toISOString()
+    }));
+    toast('✓ Turno de las '+t.hora+' hs cancelado');
+  }catch(e){
+    console.warn('No se pudo cancelar el turno rechazado:',e);
+    toast('⚠ No se pudo cancelar el turno (sin conexión) — cancelalo desde Turnos',4500);
+  }
+}
 function mostrarConfirmarTurno(sugerido){
   _turnoSugerido=sugerido;
   $('confirmar-turno-detalle').textContent=`${sugerido.hora} hs — ${sugerido.avion}`;
@@ -2479,9 +2546,18 @@ $('btn-confirmar-turno-si').addEventListener('click',async()=>{
   chequearVuelosPendientesPiloto();
 });
 $('btn-confirmar-turno-no').addEventListener('click',async()=>{
+  const rechazado=_turnoSugerido;
   turnoVinculado=null;
   _turnoSugerido=null;
+  _turnoRechazado=true; // v4.85
   $('screen-confirmar-turno').classList.remove('active');
+  // v4.85: pedido de Daniel — si no va a usar ese turno, ofrecer cancelarlo en vez
+  // de dejarlo 'vencido' huérfano. Opcional: puede ser un turno de más tarde que
+  // sí piensa volar ("No, lo mantengo").
+  if(rechazado&&rechazado.key){
+    const cancelar=await confirmarAccion('¿Cancelo tu turno de las '+rechazado.hora+' hs en '+rechazado.avion+'? Si lo vas a volar más tarde, mantenelo.','✕ Sí, cancelarlo');
+    if(cancelar) await cancelarTurnoRechazado(rechazado);
+  }
   $('app-shell').classList.add('active');
   await poblarAviones();
   aplicarTurnoVinculado();
@@ -2813,9 +2889,7 @@ async function _guardarTrazaEnSufijoLibre(key, payload){
   return destino;
 }
 
-let shaTurno=null;       // {key,...datos de /reservas} del turno de hoy
-let shaTrackeando=false;
-let shaTsInicio=null;
+// v4.85: shaTurno/shaTrackeando/shaTsInicio declaradas arriba de init() (TDZ, ver ahí)
 
 // v4.25: pedido de Daniel — el rol alumno pasa a compartir el mismo shell/
 // tabs que piloto (antes tenía #app-shell-alumno aparte, sin Libro/Reporte
@@ -3434,8 +3508,10 @@ async function guardar(){
     creadoTs: new Date().toISOString(),
     // v4.0: si el turno se detectó/vinculó al loguearse, viaja ya resuelto —
     // escribirPendiente() lo usa directo sin tener que rematchear por ±20min.
-    turnoKey: turnoVinculado ? turnoVinculado.key : null
+    turnoKey: turnoVinculado ? turnoVinculado.key : null,
+    sinRematch: !turnoVinculado && _turnoRechazado // v4.85: dijo "No, es otro" — no re-vincular al sincronizar
   };
+  _turnoRechazado=false;
   turnoVinculado=null; // se consume acá — el próximo vuelo de la sesión ya no está atado a este turno
 
   try{
@@ -3512,6 +3588,28 @@ async function escribirPendiente(item){
                      // a crear — evita turnos duplicados.
 
   if(!key){
+    // v4.85: vuelo sin vínculo (ej. sin red al abrir la app → buscarTurnoPropioParaAhora
+    // no detectó nada) — antes de crear un turno in-situ se re-busca, al sincronizar, un
+    // turno del MISMO email+fecha+avión sin datos de vuelo (aprobado o vencido
+    // recuperable). Solo si hay exactamente uno se vincula; 0 o >1 → in-situ como antes.
+    // Si la lectura falla se propaga (throw) y la cola reintenta — no se crea a ciegas.
+    // item.sinRematch: el piloto contestó "No, es otro" a un turno sugerido — respeta.
+    if(!item.turnoKey&&!item.sinRematch){
+      const todas=rArr((await conTimeout(get(ref(db,'reservas')))).val());
+      const cands=todas.filter(r=>{
+        if(r.email!==item.email||r.fecha!==item.fecha||r.avion!==item.avion) return false;
+        if(r.tipo_vuelo!=='particular') return false;
+        if(r.piloto_tiempo_vuelo!=null||r.ts_despegue) return false;
+        // solo turnos que empezaban antes del despegue (o hasta 30min después) — nunca
+        // "robar" un turno de más tarde en el día que el piloto todavía piensa volar
+        const [hh,mm]=(r.hora||r.horaInicio||'00:00').split(':').map(Number);
+        const ini=new Date(item.tsInicio), tTurno=new Date(ini.getFullYear(),ini.getMonth(),ini.getDate(),hh,mm);
+        if(tTurno-ini>30*60000) return false;
+        if(r.estado==='aprobado') return true;
+        return r.estado==='vencido'&&(r.avion!=='LV-OAD'||!!(r.aprobado_por||r.instructor));
+      });
+      if(cands.length===1) item={...item,turnoKey:cands[0].key};
+    }
     if(item.turnoKey){
       // v4.2: además de los datos del vuelo, se corrige el campo `hora` de
       // la reserva a la hora REAL de despegue. Pedido de Daniel: si el turno
@@ -3637,7 +3735,7 @@ function resetVuelo(){
 
 function persistir(){
   localStorage.setItem(LS,JSON.stringify({
-    avion:$('p-avion').value,turnoVinculado:turnoVinculado||null,tsInicio,tsFin,metarInicio,metarFin,metarInicioListo,metarFinListo,gpsHabilitado,
+    avion:$('p-avion').value,turnoVinculado:turnoVinculado||null,turnoRechazado:_turnoRechazado,tsInicio,tsFin,metarInicio,metarFin,metarInicioListo,metarFinListo,gpsHabilitado,
     // Borrador del formulario de cierre — así, si la app se cuelga esperando
     // conexión en CONFIRMAR (ver guardar()) y hay que recargarla, no se
     // pierde lo ya tipeado (antes solo se guardaban los timestamps).
