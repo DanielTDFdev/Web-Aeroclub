@@ -2,6 +2,15 @@
 <!--
 ==================================================================================
   VUELO — App de registro de vuelo · Aeroclub Río Grande
+  v6.02 · 2026-10-10
+  Revisión exhaustiva pedida por Daniel (tras el TDZ de vuelo-piloto v4.85).
+  Arranque: sin TDZ — todo lo que init()/abrirApp() leen sincrónico está
+  declarado antes de init(). Fixes: (1) escribirPendiente() con key: el
+  chequeo de reserva borrada va ANTES de guardarTrazaSinPisar() (antes dejaba
+  vuelo_tracks/{key} huérfano). (2) guardar() bloquea con aviso si no hay
+  turnoActual con key ni in situ — antes el item se encolaba y
+  escribirPendiente() lo descartaba sin escribir nada (vuelo perdido).
+
   v6.01 · 2026-09-25
   Pedido de Daniel: GPS_TRAZA_MIN_PUNTOS 100→500 (~16min 40s a 2s/punto).
   Trazas más cortas que eso no se graban en vuelo_tracks. Mismo cambio en vuelo-piloto.html v4.81.
@@ -2257,7 +2266,7 @@ const LS_PENDIENTES = 'acrg-vuelo-v2-pendientes'; // cola de vuelos guardados lo
 // límite de tiempo.
 const RESTAURAR_TURNO_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '6.01'; // ⚠ actualizar acá Y en el comentario header de arriba en cada bump
+const APP_VERSION = '6.02'; // ⚠ actualizar acá Y en el comentario header de arriba en cada bump
 
 // ── Traza GPS (obligatoria, siempre activa — v5.96) ────────────
 const LS_GPS_PUNTOS = 'acrg-vuelo-v2-gps-puntos'; // puntos del vuelo en curso (resiliencia ante recarga)
@@ -3417,6 +3426,12 @@ async function guardar(){
   $('c-err').textContent='';
 
   if(!horas||horas<=0){$('c-err').textContent='El tiempo de vuelo no puede ser 0.';return;}
+  // v6.02: sin turnoActual (ni key ni in situ) escribirPendiente() no escribe nada y el
+  // item sale de la cola igual → vuelo perdido en silencio. Se bloquea acá con aviso.
+  if(!turnoActual||(!turnoActual.key&&!turnoActual.esInSitu)){
+    $('c-err').textContent='⚠ Este vuelo no tiene un turno asociado — no se puede guardar así. Anotá los datos y avisale a Daniel.';
+    return;
+  }
 
   const item={
     id: 'v'+Date.now()+Math.random().toString(36).slice(2),
@@ -3557,6 +3572,14 @@ async function escribirPendiente(item){
       ts:new Date().toISOString()
     }));
   } else if(item.key){
+    // v6.02: el chequeo de existencia/estado va ANTES de la traza — antes se grababa
+    // vuelo_tracks/{key} y recién después se descubría que la reserva estaba borrada
+    // (pendiente descartado) → traza huérfana en vuelo_tracks.
+    const estadoFresco=(await conTimeout(get(ref(db,`reservas/${item.key}/estado`)))).val();
+    if(estadoFresco==null){
+      console.warn('Pendiente descartado: la reserva',item.key,'ya no existe en /reservas (borrada).');
+      return;
+    }
     if(tieneTraza){
       await guardarTrazaSinPisar(item.key,{
         puntos: item.gpsPoints,
@@ -3576,11 +3599,6 @@ async function escribirPendiente(item){
     // una key inexistente la RECREA como un registro huérfano, sin nombre/email/fecha/
     // avión — solo con los campos de datos de vuelo, invisible en el calendario pero
     // contando en queries. Si no existe, se descarta el pendiente sin escribir.
-    const estadoFresco=(await conTimeout(get(ref(db,`reservas/${item.key}/estado`)))).val();
-    if(estadoFresco==null){
-      console.warn('Pendiente descartado: la reserva',item.key,'ya no existe en /reservas (borrada).');
-      return;
-    }
     if(estadoFresco!=='cancelado') datos.estado='volado';
     await conTimeout(update(ref(db,`reservas/${item.key}`),datos));
   }
