@@ -2,6 +2,15 @@
 <!--
 ==================================================================================
   VUELO PILOTO — Registro de vuelo para pilotos · Aeroclub Río Grande
+  v4.82 · 2026-10-10
+  Pedido de Daniel: Franco reservó LV-ART 11:00, activó 12:18 y el vuelo se grabó
+  como turno nuevo en LV-OAD. Causa: turnos.html pasa a 'vencido' el turno apenas
+  pasa su hora; v4.79 aceptaba 'vencido' solo dentro de ±30min, y el sugerido
+  (fuera de ventana) solo 'aprobado' → turno de hace 78min sin candidato, sin
+  vínculo, avión elegido a mano/restaurado y escribirPendiente() creó uno in-situ.
+  Fix: el sugerido acepta también 'vencido' nunca volado (mismas reglas que
+  vencidoRecuperable, LV-OAD sin aprobar sigue excluido), siempre con Sí/No.
+
   v4.81 · 2026-09-25
   Pedido de Daniel: GPS_TRAZA_MIN_PUNTOS 100→500 (~16min 40s a 2s/punto).
   Trazas más cortas que eso no se graban en vuelo_tracks. Mismo cambio en vuelo.html v6.01.
@@ -1952,7 +1961,7 @@ const LS_PENDIENTES = 'acrg-piloto-v1-pendientes'; // cola de vuelos guardados l
 // avión "sin arrancar todavía" que sobrevivía indefinidamente en localStorage.
 const RESTAURAR_AVION_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '4.81';
+const APP_VERSION = '4.82';
 document.querySelectorAll('.ver').forEach(el=>el.textContent='v'+APP_VERSION);
 
 // ── Traza GPS (obligatoria, siempre activa — v4.76) ──────────
@@ -2311,6 +2320,7 @@ async function _abrirAppInner(){
 //    a diferencia del caso 1 que es silencioso. Pedido de Daniel: evita que
 //    un turno de otra hora que nunca se voló quede huérfano en la tabla
 //    mientras el vuelo real termina como una reserva nueva aparte.
+// v4.82: también 'vencido' nunca volado (ver vencidoRecuperable), en ventana o como sugerido.
 // Solo tipo_vuelo:'particular' + estado:'aprobado' (instrucción la registra
 // el instructor, no el autoservicio de piloto).
 // Devuelve {match, conflicto, sugerido, candidatos}. match/sugerido son
@@ -2348,7 +2358,12 @@ async function buscarTurnoPropioParaAhora(){
     }).sort((a,b)=>a._diff-b._diff);
 
     const enVentana=candidatosHoy.filter(r=>r._diff<=VENTANA_MS);
-    const soloAprobados=candidatosHoy.filter(r=>r.estado==='aprobado'); // v4.79: 'vencido' solo cuenta dentro de la ventana, no como sugerido de otra hora
+    // v4.82: el sugerido (fuera de ventana, CON confirmación) también acepta 'vencido'
+    // nunca volado — candidatosHoy ya trae solo aprobados + vencidoRecuperable. Antes
+    // (v4.79) quedaba solo 'aprobado', y como turnos.html vence todo turno apenas pasa
+    // su hora, un turno activado >30min tarde (ej. 11:00 activado 12:18) no se ofrecía
+    // nunca: sin vínculo, se elegía avión a mano y se creaba un turno in-situ aparte.
+    const soloAprobados=candidatosHoy;
     if(enVentana.length>1) return {match:null,conflicto:true,sugerido:null,candidatos:enVentana};
     if(enVentana.length===1){
       const c=enVentana[0];
