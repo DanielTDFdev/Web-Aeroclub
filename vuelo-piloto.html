@@ -2,6 +2,18 @@
 <!--
 ==================================================================================
   VUELO PILOTO — Registro de vuelo para pilotos · Aeroclub Río Grande
+  v4.83 · 2026-10-10
+  Pedido de Daniel: un avión fuera de servicio (/config/{avion}.activo===false,
+  ej. LV-OAD) no se le debe ofrecer nunca al piloto. Huecos: poblarAviones()
+  pintaba FLOTA completa y recién filtraba al llegar /config (fail-open si
+  fallaba/tardaba >5s, con el avión de LS restaurado adentro); INICIAR no
+  revalidaba; buscarTurnoPropioParaAhora() no miraba activo. Fix: caché de
+  /config en LS (LS_CONFIG_CACHE) — el select se pinta con el caché y luego con
+  lo fresco; INICIAR relee /config (o caché sin red) y bloquea si está fuera de
+  servicio; candidatos de turno excluyen aviones fuera de servicio. Fail-open
+  solo sin red y sin caché. Turnos sugeridos: sin límite horario dentro del
+  mismo día (fecha===hoy), días anteriores nunca se ofrecen.
+
   v4.82 · 2026-10-10
   Pedido de Daniel: Franco reservó LV-ART 11:00, activó 12:18 y el vuelo se grabó
   como turno nuevo en LV-OAD. Causa: turnos.html pasa a 'vencido' el turno apenas
@@ -1961,7 +1973,7 @@ const LS_PENDIENTES = 'acrg-piloto-v1-pendientes'; // cola de vuelos guardados l
 // avión "sin arrancar todavía" que sobrevivía indefinidamente en localStorage.
 const RESTAURAR_AVION_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '4.82';
+const APP_VERSION = '4.83';
 document.querySelectorAll('.ver').forEach(el=>el.textContent='v'+APP_VERSION);
 
 // ── Traza GPS (obligatoria, siempre activa — v4.76) ──────────
@@ -1992,6 +2004,28 @@ let gpsUltimoPunto = 0;
 // llegaba a poblarAviones(), synchronous, antes de llegar a esta línea. Se mueven acá,
 // antes de init().
 const FLOTA=['LV-OAD','LV-ART','LV-MPH'];
+// v4.83: caché de /config para no ofrecer nunca un avión fuera de servicio
+// (activo===false) aunque falle o tarde la lectura de red. Fail-open solo si
+// no hay ni red ni caché (primera vez en el dispositivo).
+const LS_CONFIG_CACHE = 'acrg-piloto-v1-config';
+function _leerConfigCache(){ try{ return JSON.parse(localStorage.getItem(LS_CONFIG_CACHE)||'null'); }catch{ return null; } }
+function _guardarConfigCache(cfg){ try{ localStorage.setItem(LS_CONFIG_CACHE,JSON.stringify(cfg||{})); }catch{} }
+function _habilitadosSegun(cfg){ return cfg?FLOTA.filter(a=>cfg[a]?.activo!==false):FLOTA.slice(); }
+// Lee /config fresco (timeout 5s) y refresca el caché; si falla devuelve el caché (o null).
+async function _leerConfigAviones(){
+  try{
+    const cfgSnap=await Promise.race([
+      get(ref(db,'config')),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout de conexión')),5000))
+    ]);
+    const cfg=cfgSnap.val()||{};
+    _guardarConfigCache(cfg);
+    return cfg;
+  }catch(e){
+    console.warn('No se pudo leer /config, se usa el caché local:',e);
+    return _leerConfigCache();
+  }
+}
 const NOMBRE_AVION={'LV-OAD':'Tomahawk','LV-ART':'Archer II','LV-MPH':'Lance II'};
 
 // v4.15 FIX: mismo tipo de bug que el de arriba (FLOTA/NOMBRE_AVION) — estas 4
@@ -2336,9 +2370,11 @@ async function buscarTurnoPropioParaAhora(){
     ]);
     const todas=rArr(snap.val());
     const VENTANA_MS=30*60000;
+    const cfgAv=await _leerConfigAviones(); // v4.83: no ofrecer/vincular turnos de aviones fuera de servicio
     const candidatosHoy=todas.filter(r=>{
       if(r.email!==session.email) return false;
       if(r.fecha!==fechaHoy) return false;
+      if(cfgAv&&cfgAv[r.avion]?.activo===false) return false; // v4.83
       // v4.79: turnos.html (vencerTurnosPendientes) pasa a 'vencido' TODO turno
       // aprobado en el instante en que pasa su hora — no hay gracia. Un piloto que
       // activa 6 min después de la hora reservada encontraba su turno ya 'vencido',
@@ -2475,19 +2511,16 @@ async function poblarAviones(){
     if(_avionRestaurado&&habilitados.includes(_avionRestaurado)) sel.value=_avionRestaurado;
     pintarEstadoAvion();
   };
-  render(FLOTA); // pinta ya mismo, sin depender de red
+  // v4.83: antes pintaba FLOTA completa y filtraba recién al llegar /config —
+  // si la lectura fallaba/tardaba >5s quedaba ofrecido (y hasta restaurado de LS)
+  // un avión fuera de servicio. Ahora pinta según el caché y después con lo fresco.
+  render(_habilitadosSegun(_leerConfigCache()));
   try{
-    const cfgSnap=await Promise.race([
-      get(ref(db,'config')),
-      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout de conexión')),5000))
-    ]);
-    const cfg=cfgSnap.val()||{};
-    const habilitados=FLOTA.filter(a=>cfg[a]?.activo!==false);
-    if(habilitados.length) render(habilitados);
-  }catch(e){
-    console.warn('No se pudo chequear aviones habilitados (o tardó demasiado), se mantienen todos:',e);
+    const cfg=await _leerConfigAviones();
+    if(cfg) render(_habilitadosSegun(cfg));
   }finally{
     _avionRestaurado=null;
+    if(!$('p-avion').value) _avionRestauradoSinConfirmar=false; // v4.83: el restaurado quedó descartado (fuera de servicio), no hay nada que confirmar
   }
 }
 
@@ -3140,6 +3173,18 @@ $('btn-start-stop').addEventListener('click',async()=>{
       return;
     }
     const avionElegido=$('p-avion').value;
+    // v4.83: revalidación en el momento de iniciar — un avión fuera de servicio
+    // (/config/{avion}.activo===false, fresco o del caché si no hay red) no arranca.
+    {
+      const cfg=await _leerConfigAviones();
+      if(cfg&&cfg[avionElegido]?.activo===false){
+        toast('✕ '+avionElegido+' está FUERA DE SERVICIO — elegí otro avión',4500);
+        if(turnoVinculado&&turnoVinculado.avion===avionElegido) turnoVinculado=null;
+        await poblarAviones();
+        aplicarTurnoVinculado();
+        return;
+      }
+    }
     if(_avionRestauradoSinConfirmar){
       // v4.77: este valor vino de localStorage de una sesión anterior, sin
       // turno vinculado detrás — se pide confirmación explícita antes de
