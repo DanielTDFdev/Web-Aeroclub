@@ -2,6 +2,18 @@
 <!--
 ==================================================================================
   VUELO PILOTO — Registro de vuelo para pilotos · Aeroclub Río Grande
+  v4.84 · 2026-10-10
+  Datos de Firebase de Daniel: el vuelo de Franco 12:18 NO se grabó como LV-OAD
+  sino con avion:'' (turnos.html muestra '' como LV-OAD, r.avion||'LV-OAD').
+  Mismo patrón en Franco 15/9 08:37 y 21/9 08:30. Causa: ejecutarLogout() con
+  vuelo iniciado conserva tsInicio pero, al volver a loguearse en la misma
+  pestaña, abrirApp()→poblarAviones() rearma el <select> con _avionRestaurado
+  ya consumido → queda en el placeholder '' (oculto, porque hay vuelo en
+  curso) y guardar() manda avion:''. Fix: poblarAviones() con tsInicio conserva
+  el avión en uso (valor actual del select o LS) y no lo filtra aunque esté
+  fuera de servicio (v4.83 lo hubiera empeorado); guardar() nunca graba
+  avion:'' — recupera de LS o pide elegirlo.
+
   v4.83 · 2026-10-10
   Pedido de Daniel: un avión fuera de servicio (/config/{avion}.activo===false,
   ej. LV-OAD) no se le debe ofrecer nunca al piloto. Huecos: poblarAviones()
@@ -1973,7 +1985,7 @@ const LS_PENDIENTES = 'acrg-piloto-v1-pendientes'; // cola de vuelos guardados l
 // avión "sin arrancar todavía" que sobrevivía indefinidamente en localStorage.
 const RESTAURAR_AVION_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '4.83';
+const APP_VERSION = '4.84';
 document.querySelectorAll('.ver').forEach(el=>el.textContent='v'+APP_VERSION);
 
 // ── Traza GPS (obligatoria, siempre activa — v4.76) ──────────
@@ -2506,7 +2518,20 @@ function aplicarTurnoVinculado(){
 // NOMBRE_AVION se movieron arriba de init() en v3.8 (fix de TDZ).
 async function poblarAviones(){
   const sel=$('p-avion');
-  const render=(habilitados)=>{
+  // v4.84: con vuelo iniciado/finalizado (tsInicio) el avión ya está en uso — se
+  // conserva SIEMPRE: el valor actual del <select> o, si no hay, el de LS. Antes,
+  // un Salir+login a mitad de vuelo (o después de FINALIZAR) re-corría abrirApp()
+  // con _avionRestaurado ya consumido → el <select> (oculto) volvía al placeholder
+  // y guardar() grababa avion:'' — turnos.html lo muestra como LV-OAD.
+  let enUso=null;
+  if(tsInicio){
+    enUso=_avionRestaurado||sel.value||null;
+    if(!enUso){ try{ const est=JSON.parse(localStorage.getItem(LS)||'null'); if(est&&est.avion) enUso=est.avion; }catch{} }
+    if(enUso&&!FLOTA.includes(enUso)) enUso=null;
+    if(enUso) _avionRestaurado=enUso;
+  }
+  const render=(habilitadosBase)=>{
+    const habilitados=(enUso&&!habilitadosBase.includes(enUso))?FLOTA.filter(a=>a===enUso||habilitadosBase.includes(a)):habilitadosBase; // v4.84: el avión en uso no se saca aunque pase a fuera de servicio
     sel.innerHTML='<option value="" disabled selected>— Elegí el avión —</option>'+habilitados.map(a=>`<option value="${a}">${a} — ${NOMBRE_AVION[a]||''}</option>`).join('');
     if(_avionRestaurado&&habilitados.includes(_avionRestaurado)) sel.value=_avionRestaurado;
     pintarEstadoAvion();
@@ -3382,7 +3407,21 @@ async function guardar(){
 
   if(!horas||horas<=0){$('c-err').textContent='El tiempo de vuelo no puede ser 0.';return;}
 
-  const avion=$('p-avion').value;
+  let avion=$('p-avion').value;
+  // v4.84: red de seguridad — nunca grabar avion:''. Primero se intenta recuperar
+  // de LS; si tampoco está, se muestra el selector y se pide elegirlo.
+  if(!avion){
+    try{ const est=JSON.parse(localStorage.getItem(LS)||'null'); if(est&&est.avion&&FLOTA.includes(est.avion)) avion=est.avion; }catch{}
+    if(avion){ _avionRestaurado=avion; await poblarAviones(); }
+  }
+  if(!avion){
+    $('v-avion-wrap').style.display='';
+    $('turno-vinculado-banner').style.display='none';
+    $('p-avion').disabled=false;
+    pintarEstadoAvion();
+    $('c-err').textContent='⚠ No quedó registrado el avión de este vuelo. Elegilo arriba y tocá CONFIRMAR Y GUARDAR de nuevo.';
+    return;
+  }
   const item={
     id: 'p'+Date.now()+Math.random().toString(36).slice(2),
     email: session.email,
