@@ -1,7 +1,15 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 8.81
-  CAMBIOS : Pedido de Daniel: mismo cartel rojo "✕ <AVIÓN> NO DISPONIBLE" en el tab
+  VERSION : 8.82
+  CAMBIOS : Pedido de Daniel: en LV-ART, piloto pidiendo instrucción solo podía elegir UN
+            slot y no extenderlo. Causa: la disponibilidad de instructor se carga sobre la
+            grilla horaria de LV-OAD (HH:00) y LV-ART usa slots de 30 min; ningún HH:30
+            tenía instructor → quedaban fuera de la grilla (solo se veían las horas en
+            punto) y clickSlotMulti cortaba la extensión en el HH:30 contiguo.
+            Fix: slotsConInstructorParaDia recibe la grilla del avión y cubre cada HH:MM
+            con la disponibilidad HH:00 del instructor (si no está ocupado en ninguna de
+            las dos). Aplicado en renderSlots y en la validación de confirmarTurno.
+  ANTERIOR: v8.81 — Pedido de Daniel: mismo cartel rojo "✕ <AVIÓN> NO DISPONIBLE" en el tab
             Reservas del instructor, a la derecha de los tabs de avión (#cal-avion-nodisp,
             nueva actualizarCartelNoDispCal). Con filtro TODOS lista todos los aviones
             fuera de servicio; con un avión elegido, solo ese. Se refresca en
@@ -4511,7 +4519,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.81</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.82</div>
   </div>
 
 </div>
@@ -7738,7 +7746,15 @@ function instructoresOcupadosParaDia(ds,reservasData){
   });
   return map;
 }
-async function slotsConInstructorParaDia(ds,reservasData){
+// v8.82: `horasGrid` (opcional) = grilla del avión que se está reservando. La
+// disponibilidad de instructor se carga sobre la grilla HORARIA de LV-OAD (09:00, 10:00…),
+// pero LV-ART usa slots de 30 min (09:00, 09:30…): sin esto, ningún HH:30 tenía
+// instructor → quedaba fuera de la grilla y cortaba la extensión multi-slot. Ahora un slot
+// HH:MM de la grilla del avión queda cubierto si el instructor cargó HH:00 y no está
+// ocupado ni en HH:MM ni en HH:00.
+async function slotsConInstructorParaDia(ds,reservasData,horasGrid){
+  const baseHora=h=>String(h).slice(0,3)+'00';
+  const extra=Array.isArray(horasGrid)?horasGrid:[];
   const dispData=await fbGet('disponibilidad/'+ds);
   const instData=await fbGet('instructores');
   const set=new Set();
@@ -7750,12 +7766,16 @@ async function slotsConInstructorParaDia(ds,reservasData){
       if(instObj?.vacaciones===true) return; // ignorar de vacaciones
       if(!Array.isArray(arr))return;
       arr.forEach(h=>{
-        if(ocupados.get(h)?.has(instObj?.nombre))return; // este instructor ya tiene turno aprobado a esta hora — no cuenta como disponible
-        set.add(h);
+        const ocup=x=>ocupados.get(x)?.has(instObj?.nombre);
+        if(!ocup(h)) set.add(h); // este instructor ya tiene turno aprobado a esta hora — no cuenta como disponible
+        extra.forEach(g=>{ if(g!==h&&baseHora(g)===h&&!ocup(g)&&!ocup(h)) set.add(g); });
       });
     });
   } else if(dispData){
-    Object.values(dispData).forEach(arr=>{ if(Array.isArray(arr)) arr.forEach(h=>set.add(h)); });
+    Object.values(dispData).forEach(arr=>{ if(Array.isArray(arr)) arr.forEach(h=>{
+      set.add(h);
+      extra.forEach(g=>{ if(baseHora(g)===h) set.add(g); });
+    }); });
   }
   return set;
 }
@@ -7774,7 +7794,7 @@ async function renderSlots(ds,data){
   // true acá (esOAD), pero desde v8.35 el TIPO ya no está forzado — puede ser 'particular'
   // y aun así requiereInstructor da true (el aviso de "sin instructor" también aplica).
   const requiereInstructor=esOAD||(esPiloto&&selectedTipoVuelo==='instruccion');
-  const slotsConInstructor=requiereInstructor?await slotsConInstructorParaDia(ds,data):new Set();
+  const slotsConInstructor=requiereInstructor?await slotsConInstructorParaDia(ds,data,horasParaDia(ds,selectedAvion)):new Set();
   _slotsConInstructorDia=slotsConInstructor;
   _slotsConInstructorFecha=ds;
   // v8.40: pedido de Daniel — regla endurecida (bloqueo duro, no solo aviso): ya no se
@@ -8022,7 +8042,7 @@ window._guardarTurnoConfirmado=async function(){
   // (_multiDisponibles sale de avail, que ya los excluye), así que esto es defensa en
   // profundidad, no la única barrera.
   if(requiereInstructor){
-    const slotsInst=await slotsConInstructorParaDia(selectedDay);
+    const slotsInst=await slotsConInstructorParaDia(selectedDay,undefined,horasParaDia(selectedDay,selectedAvion));
     if(horasRango.some(h=>!slotsInst.has(h))){
       showErr('turno-err','⚠ No hay instructor con horario cargado para todo ese rango — no se puede pedir un turno de instrucción sin instructor disponible en cada tramo. Probá otro horario o un rango más corto.');
       return;
