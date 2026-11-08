@@ -1,11 +1,16 @@
 <!--
   ARCHIVO : index.html
-  VERSION : 3.7
+  VERSION : 3.8
   FECHA   : 2026-11-08
-  CAMBIOS : Pedido de Daniel: modal promocional de vuelos de bautismo basado
+  CAMBIOS : Pedido de Daniel: el modal de bautismo debe aparecer en cada
+            visita nueva, no bloquearse 7 días. Se pasa de localStorage a
+            sessionStorage: aparece una vez por sesión de pestaña (al
+            recargar o navegar dentro del sitio no se repite; al abrir el
+            sitio de nuevo en otra pestaña/ventana, sí).
+  v3.7 · 2026-11-08 — Pedido de Daniel: modal promocional de vuelos de bautismo basado
             en el flyer (Canva). Se abre solo a los 1,8 s de cargar la página;
             al cerrarlo no vuelve a abrirse solo por 7 días (localStorage
-            'arc-bautismo-visto'). Botón fijo "Vuelos de bautismo" en el hero
+            'arc-bautismo-visto', reemplazado en v3.8). Botón fijo "Vuelos de bautismo" en el hero
             para reabrirlo. CTA a WhatsApp con mensaje precargado. Fotos
             extraídas del PDF y comprimidas en bautismo/ (NO en fotos/, que
             alimenta el carrusel). Cierre con ✕, Esc o clic en el fondo.
@@ -346,7 +351,7 @@ body.bt-lock{overflow:hidden;}
   </div>
   <span class="footer-coords">53°46'S 67°45'O · SAWE · RÍO GRANDE, TIERRA DEL FUEGO</span>
 
-  <!-- footer-ver --><span style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.06em;opacity:.6">v3.7</span>
+  <!-- footer-ver --><span style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.06em;opacity:.6">v3.8</span>
 </footer>
 
 <script>
@@ -500,13 +505,13 @@ function toggleTheme(){
 // ── v3.7 MODAL VUELOS DE BAUTISMO ──────────────────────────────
 (function(){
   const KEY='arc-bautismo-visto';
-  const DIAS=7;
+  // v3.8: una vez por sesión de pestaña (antes: localStorage, 7 días)
   const overlay=document.getElementById('bt-overlay');
   if(!overlay)return;
   let focoPrevio=null, cargado=false;
 
-  function leer(){try{return Number(localStorage.getItem(KEY))||0;}catch(e){return 0;}}
-  function marcar(){try{localStorage.setItem(KEY,String(Date.now()));}catch(e){}}
+  function leer(){try{return sessionStorage.getItem(KEY)==='1';}catch(e){return false;}}
+  function marcar(){try{sessionStorage.setItem(KEY,'1');}catch(e){}}
 
   function cargarImagenes(){
     if(cargado)return; cargado=true;
@@ -539,7 +544,7 @@ function toggleTheme(){
   // clic en WhatsApp cuenta como "visto"
   overlay.querySelector('.bt-wa').addEventListener('click',marcar);
 
-  if(Date.now()-leer()>DIAS*864e5) setTimeout(abrir,1800);
+  if(!leer()) setTimeout(abrir,1800);
 })();
 </script>
 </body>
