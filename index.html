@@ -1,8 +1,15 @@
 <!--
   ARCHIVO : index.html
-  VERSION : 3.9
-  FECHA   : 2026-11-08
-  CAMBIOS : Pedido de Daniel: corrección de nombre — es "Cabo Peña" (sin S),
+  VERSION : 3.10
+  FECHA   : 2026-11-09
+  CAMBIOS : Pedido de Daniel: carrusel con las fotos del flyer en el modal de
+            bautismo (reemplaza la foto fija del encabezado). 8 fotos en
+            bautismo/ (1200 px, ~575 KB total), carga perezosa: cada foto se
+            pide recién cuando le toca (actual + siguiente). Avance automático
+            cada 4,5 s mientras el modal está abierto, flechas, puntos,
+            swipe en celular y ←/→ en teclado. Sin autoavance si el sistema
+            pide reducir movimiento.
+  v3.9 · 2026-11-08 — Pedido de Daniel: corrección de nombre — es "Cabo Peña" (sin S),
             no "Cabo Peñas" como figuraba en el flyer. Título, alt e imagen
             (bautismo/cabo-pena.jpg).
   v3.8 · 2026-11-08 — Pedido de Daniel: el modal de bautismo debe aparecer en cada
@@ -166,9 +173,18 @@ footer{border-top:1px solid var(--border);padding:1.5rem 2rem;display:flex;align
 .bt-overlay.open .bt-modal{transform:none;}
 .bt-close{position:absolute;top:10px;right:10px;z-index:2;width:36px;height:36px;border-radius:50%;border:1px solid rgba(255,255,255,.35);background:rgba(7,9,13,.6);color:#fff;font-size:18px;line-height:1;cursor:pointer;backdrop-filter:blur(4px);}
 .bt-close:hover{border-color:var(--cyan);color:var(--cyan);}
-.bt-hero{position:relative;height:220px;background:#0b1220 center 70%/cover no-repeat;display:flex;flex-direction:column;justify-content:flex-end;padding:1.25rem 1.5rem;}
-.bt-hero::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,9,13,.1) 30%,rgba(7,9,13,.85));}
-.bt-hero>*{position:relative;z-index:1;}
+.bt-hero{position:relative;height:280px;background:#0b1220;display:flex;flex-direction:column;justify-content:flex-end;padding:1.25rem 1.5rem;overflow:hidden;touch-action:pan-y;}
+.bt-hero::after{content:'';position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(180deg,rgba(7,9,13,.15) 0%,transparent 35%,rgba(7,9,13,.85));}
+.bt-hero>.bt-eyebrow,.bt-hero>.bt-title{position:relative;z-index:2;pointer-events:none;}
+/* v3.10 — carrusel */
+.bt-slide{position:absolute;inset:0;background:#0b1220 center/cover no-repeat;opacity:0;transition:opacity .8s ease;}
+.bt-slide.active{opacity:1;}
+.bt-arrow{position:absolute;top:50%;z-index:3;transform:translateY(-50%);width:36px;height:36px;border-radius:50%;border:1px solid rgba(255,255,255,.35);background:rgba(7,9,13,.5);color:#fff;font-size:20px;line-height:1;cursor:pointer;backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;}
+.bt-arrow:hover{border-color:var(--cyan);color:var(--cyan);}
+.bt-prev{left:10px;}.bt-next{right:10px;}
+.bt-dots{position:absolute;right:1.25rem;bottom:1.4rem;z-index:3;display:flex;gap:6px;}
+.bt-dot{width:8px;height:8px;padding:0;border-radius:50%;border:1px solid rgba(255,255,255,.7);background:transparent;cursor:pointer;}
+.bt-dot.active{background:var(--amber2);border-color:var(--amber2);box-shadow:0 0 8px rgba(240,165,0,.7);}
 .bt-eyebrow{font-family:var(--font-mono);font-size:11px;color:var(--cyan);letter-spacing:.25em;text-transform:uppercase;}
 .bt-title{font-family:var(--font-display);font-size:clamp(24px,5vw,34px);font-weight:900;color:var(--amber2);letter-spacing:.05em;text-shadow:0 0 24px rgba(240,165,0,.45);margin-top:.25rem;}
 .bt-body{padding:1.25rem 1.5rem 1.5rem;}
@@ -189,13 +205,15 @@ footer{border-top:1px solid var(--border);padding:1.5rem 2rem;display:flex;align
 .bt-later:hover{color:var(--text2);}
 body.bt-lock{overflow:hidden;}
 @media(max-width:560px){
-  .bt-hero{height:170px;}
+  .bt-hero{height:220px;}
+  .bt-arrow{display:none;}
+  .bt-dots{bottom:auto;top:18px;left:1.1rem;right:auto;}
   .bt-cabos{grid-template-columns:1fr;}
   .bt-cabo img{height:110px;}
   .bt-actions{position:sticky;bottom:-1.25rem;margin:0 -1.1rem;padding:.75rem 1.1rem;background:var(--bg2);border-top:1px solid var(--border);}
   .bt-body{padding:1rem 1.1rem 1.25rem;}
 }
-@media(prefers-reduced-motion:reduce){.bt-overlay,.bt-modal{transition:none;}}
+@media(prefers-reduced-motion:reduce){.bt-overlay,.bt-modal,.bt-slide{transition:none;}}
 </style>
 <script>if(localStorage.getItem('arc-theme')==='light')document.documentElement.classList.add('light');</script>
 </head>
@@ -354,7 +372,7 @@ body.bt-lock{overflow:hidden;}
   </div>
   <span class="footer-coords">53°46'S 67°45'O · SAWE · RÍO GRANDE, TIERRA DEL FUEGO</span>
 
-  <!-- footer-ver --><span style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.06em;opacity:.6">v3.9</span>
+  <!-- footer-ver --><span style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.06em;opacity:.6">v3.10</span>
 </footer>
 
 <script>
@@ -467,7 +485,10 @@ function toggleTheme(){
 <div class="bt-overlay" id="bt-overlay" aria-hidden="true">
   <div class="bt-modal" role="dialog" aria-modal="true" aria-labelledby="bt-title">
     <button type="button" class="bt-close" id="bt-close" aria-label="Cerrar">✕</button>
-    <div class="bt-hero" id="bt-hero">
+    <div class="bt-hero" id="bt-hero" aria-roledescription="carrusel" aria-label="Fotos del vuelo de bautismo">
+      <button type="button" class="bt-arrow bt-prev" id="bt-prev" aria-label="Foto anterior">‹</button>
+      <button type="button" class="bt-arrow bt-next" id="bt-next" aria-label="Foto siguiente">›</button>
+      <div class="bt-dots" id="bt-dots"></div>
       <div class="bt-eyebrow">▸ Aeroclub Río Grande</div>
       <h2 class="bt-title" id="bt-title">Vuelo de bautismo</h2>
     </div>
@@ -513,12 +534,60 @@ function toggleTheme(){
   if(!overlay)return;
   let focoPrevio=null, cargado=false;
 
+  // v3.10 — carrusel del encabezado
+  const FOTOS=['bautismo-portada','ciudad-ala','cabo-domingo','ciudad','cabo-pena','estepa','cabo-domingo-2','cabina']
+    .map(n=>'bautismo/'+n+'.jpg');
+  const hero=document.getElementById('bt-hero');
+  const dotsBox=document.getElementById('bt-dots');
+  const ancla=document.getElementById('bt-prev'); // slides van debajo de flechas/puntos/título
+  const slides=FOTOS.map((src,i)=>{
+    const d=document.createElement('div');
+    d.className='bt-slide'+(i===0?' active':'');
+    d.dataset.src=src;
+    hero.insertBefore(d,ancla);
+    const b=document.createElement('button');
+    b.type='button'; b.className='bt-dot'+(i===0?' active':'');
+    b.setAttribute('aria-label','Foto '+(i+1)+' de '+FOTOS.length);
+    b.addEventListener('click',()=>{ir(i);reiniciarAuto();});
+    dotsBox.appendChild(b);
+    return d;
+  });
+  const dots=[...dotsBox.children];
+  let actual=0, timer=null;
+  const sinMovimiento=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function asegurar(i){
+    const d=slides[i];
+    if(d.dataset.src){d.style.backgroundImage='url('+d.dataset.src+')';delete d.dataset.src;}
+  }
+  function ir(i){
+    i=(i+slides.length)%slides.length;
+    asegurar(i); asegurar((i+1)%slides.length);
+    slides[actual].classList.remove('active'); dots[actual].classList.remove('active');
+    actual=i;
+    slides[actual].classList.add('active'); dots[actual].classList.add('active');
+  }
+  function pararAuto(){if(timer){clearInterval(timer);timer=null;}}
+  function reiniciarAuto(){
+    pararAuto();
+    if(!sinMovimiento&&overlay.classList.contains('open')) timer=setInterval(()=>ir(actual+1),4500);
+  }
+  document.getElementById('bt-prev').addEventListener('click',()=>{ir(actual-1);reiniciarAuto();});
+  document.getElementById('bt-next').addEventListener('click',()=>{ir(actual+1);reiniciarAuto();});
+  let x0=null;
+  hero.addEventListener('touchstart',e=>{x0=e.touches[0].clientX;},{passive:true});
+  hero.addEventListener('touchend',e=>{
+    if(x0===null)return;
+    const dx=e.changedTouches[0].clientX-x0; x0=null;
+    if(Math.abs(dx)>40){ir(actual+(dx<0?1:-1));reiniciarAuto();}
+  });
+
   function leer(){try{return sessionStorage.getItem(KEY)==='1';}catch(e){return false;}}
   function marcar(){try{sessionStorage.setItem(KEY,'1');}catch(e){}}
 
   function cargarImagenes(){
     if(cargado)return; cargado=true;
-    document.getElementById('bt-hero').style.backgroundImage='url(bautismo/bautismo-portada.jpg)';
+    asegurar(actual); asegurar((actual+1)%slides.length);
     overlay.querySelectorAll('img[data-src]').forEach(img=>{img.src=img.dataset.src;});
   }
   function abrir(){
@@ -529,12 +598,14 @@ function toggleTheme(){
     overlay.setAttribute('aria-hidden','false');
     document.body.classList.add('bt-lock');
     document.getElementById('bt-close').focus();
+    reiniciarAuto();
   }
   function cerrar(){
     if(!overlay.classList.contains('open'))return;
     overlay.classList.remove('open');
     overlay.setAttribute('aria-hidden','true');
     document.body.classList.remove('bt-lock');
+    pararAuto();
     marcar();
     if(focoPrevio&&focoPrevio.focus)focoPrevio.focus();
   }
@@ -543,7 +614,12 @@ function toggleTheme(){
   document.getElementById('bt-close').addEventListener('click',cerrar);
   document.getElementById('bt-later').addEventListener('click',cerrar);
   overlay.addEventListener('click',e=>{if(e.target===overlay)cerrar();});
-  document.addEventListener('keydown',e=>{if(e.key==='Escape')cerrar();});
+  document.addEventListener('keydown',e=>{
+    if(!overlay.classList.contains('open'))return;
+    if(e.key==='Escape')cerrar();
+    else if(e.key==='ArrowRight'){ir(actual+1);reiniciarAuto();}
+    else if(e.key==='ArrowLeft'){ir(actual-1);reiniciarAuto();}
+  });
   // clic en WhatsApp cuenta como "visto"
   overlay.querySelector('.bt-wa').addEventListener('click',marcar);
 
