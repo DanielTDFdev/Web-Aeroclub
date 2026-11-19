@@ -1,7 +1,22 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 8.88
-  CAMBIOS : Pedido de Daniel: administración/tesorería pasa a un módulo aparte,
+  VERSION : 8.89
+  CAMBIOS : Pedido de Daniel — política del club: "nadie vuela como alumno/piloto si no
+            tiene su alta en el facturador". Flujo: alta de cliente en el facturador →
+            usuario en reservas → aprobación por admin/administrador con su N° de cliente.
+            (1) Aprobar usuarios pendientes: solo admin/administrador, y exige el N° de
+            cliente (campo en la fila del pendiente; se vincula antes de aprobar, si el
+            vínculo falla no se aprueba). Los instructores ven el pendiente sin botón.
+            (2) Alta manual (+ NUEVO USUARIO): admin/administrador deben cargar el N° de
+            cliente; si la hace un instructor, el usuario queda pendiente de aprobación.
+            (3) Pedir Turno: alumno/piloto sin N° de cliente ve el cartel "NO PODÉS PEDIR
+            TURNO — pedile a administración que te asigne tu N° de cliente" y no puede
+            reservar (también se revalida al confirmar). Se usa la marca /alumnos/{k}/cc_ok
+            (la escribe ccGuardarVinculo; tesoreria.html la rellena al importar) con
+            respaldo en /cc_cuenta_de si el usuario tiene Auth (y la marca se completa
+            sola). Es control de política, no de seguridad (/alumnos es escribible).
+            Instructores entrando como piloto quedan exceptuados.
+  ANTERIOR: v8.88 — Pedido de Daniel: administración/tesorería pasa a un módulo aparte,
             tesoreria.html (solo admin/administrador). Se retira de acá la pestaña
             Config → "Cta. Cte." y todo el código de importación (ccParseBiff2,
             ccInterpretar, ccRenderPanel, ccLeerArchivo, ccConfirmarImportacion,
@@ -4597,7 +4612,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.88</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.89</div>
   </div>
 
 </div>
@@ -4721,6 +4736,12 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <div style="font-size:15px;margin-bottom:.5rem">NO PODÉS PEDIR TURNO</div>
       <div id="pedir-turno-bloqueado-detalle"></div>
       <div style="margin-top:.75rem;color:var(--text3);font-size:11px">Comunicate con administración para regularizar la situación.</div>
+    </div>
+    <div id="pedir-turno-sin-cliente" style="display:none;background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.35);border-radius:var(--radius);padding:1.25rem 1.25rem;font-family:var(--font-mono);font-size:13px;color:var(--red);letter-spacing:.04em;line-height:1.7;text-align:center">
+      <div style="font-size:32px;margin-bottom:.5rem">✕</div>
+      <div style="font-size:15px;margin-bottom:.5rem">NO PODÉS PEDIR TURNO</div>
+      <div>Tu usuario todavía no tiene asignado su N° de cliente/socio del club.</div>
+      <div style="margin-top:.75rem;color:var(--text3);font-size:11px">Pedile a administración que te asigne tu N° de cliente para poder reservar.</div>
     </div>
     <div id="pedir-turno-fuera-horario" style="display:none;background:rgba(240,165,0,.08);border:1px solid rgba(240,165,0,.35);border-radius:var(--radius);padding:1.25rem 1.25rem;font-family:var(--font-mono);font-size:13px;color:var(--amber);letter-spacing:.04em;line-height:1.7;text-align:center">
       <div style="font-size:32px;margin-bottom:.5rem">🕗</div>
@@ -7656,27 +7677,9 @@ window.showAlumnoPerfilTab=function(tab){
   if(tab==='log')renderMiLogVuelosInline();
 };
 
-window.showAlumnoTab=function(tab){
-  ['mis-turnos','pedir-turno','perfil'].forEach(t=>document.getElementById('alumno-'+t).classList.toggle('active',t===tab));
-  document.getElementById('al-tab-mis').classList.toggle('active',tab==='mis-turnos');
-  document.getElementById('al-tab-pedir').classList.toggle('active',tab==='pedir-turno');
-  document.getElementById('al-tab-perfil').classList.toggle('active',tab==='perfil');
-  if(tab==='perfil'){
-    // v8.77: instructor logueado como piloto (session.instructorOrigen) no tiene nodo
-    // en /alumnos — Datos Personales/Contraseña escriben sobre /alumnos/{emailKey} y
-    // lo hubieran creado como un alumno fantasma. Se ocultan esas 2 subpestañas, queda
-    // solo Log de Vuelos (agnóstico, filtra por email).
-    const esInstComoPiloto=!!session?.instructorOrigen;
-    const btnDatos=document.getElementById('ap-tabbtn-datos');
-    const btnPass=document.getElementById('ap-tabbtn-pass');
-    if(btnDatos)btnDatos.style.display=esInstComoPiloto?'none':'';
-    if(btnPass)btnPass.style.display=esInstComoPiloto?'none':'';
-    showAlumnoPerfilTab('log');
-  }
-  if(tab==='pedir-turno'){
-    selectedDay=null;selectedSlot=null;
-    document.getElementById('slots-section').style.display='none';
-    document.getElementById('slot-confirm').style.display='none';
+// v8.89: resto de la apertura de "Pedir Turno" (antes inline en showAlumnoTab),
+// separado para poder correrlo después del chequeo async de N° de cliente.
+function _abrirPedirTurno(){
     const rol=session?.rol||'alumno';
     // v6.55: chequeo de habilitación CMA/PSA (solo alumnos). Se hace con dato fresco de
     // Firebase (no con el 'session' de login, que puede tener horas/días de antigüedad y
@@ -7706,6 +7709,53 @@ window.showAlumnoTab=function(tab){
       // horario para modo 'instrucción' se hace en cambiarTipoVuelo() (v7.04), porque acá
       // todavía no sabemos qué tipo de vuelo van a elegir.
     }
+}
+// v8.89: ¿el usuario de la sesión tiene N° de cliente del facturador? Marca cc_ok en
+// /alumnos (la escribe ccGuardarVinculo y tesoreria.html al importar); si falta, se
+// consulta /cc_cuenta_de (requiere Auth) y la marca se completa sola. Instructor
+// entrando como piloto: exceptuado. Ante error de red se deja pasar (no frenar vuelos
+// por un problema técnico); la marca es política, no seguridad.
+async function usuarioTieneCliente(){
+  if(!session||session.tipo!=='alumno'||session.instructorOrigen) return true;
+  try{
+    const a=await fbGet('alumnos/'+session.emailKey);
+    if(a?.cc_ok===true) return true;
+    let c=null;
+    try{ c=await fbGet('cc_cuenta_de/'+session.emailKey); }catch(_){ c=null; }
+    if(c){ fbUpdate('alumnos/'+session.emailKey,{cc_ok:true}).catch(()=>{}); return true; }
+    return false;
+  }catch(e){ console.warn('usuarioTieneCliente:',e); return true; }
+}
+window.showAlumnoTab=function(tab){
+  ['mis-turnos','pedir-turno','perfil'].forEach(t=>document.getElementById('alumno-'+t).classList.toggle('active',t===tab));
+  document.getElementById('al-tab-mis').classList.toggle('active',tab==='mis-turnos');
+  document.getElementById('al-tab-pedir').classList.toggle('active',tab==='pedir-turno');
+  document.getElementById('al-tab-perfil').classList.toggle('active',tab==='perfil');
+  if(tab==='perfil'){
+    // v8.77: instructor logueado como piloto (session.instructorOrigen) no tiene nodo
+    // en /alumnos — Datos Personales/Contraseña escriben sobre /alumnos/{emailKey} y
+    // lo hubieran creado como un alumno fantasma. Se ocultan esas 2 subpestañas, queda
+    // solo Log de Vuelos (agnóstico, filtra por email).
+    const esInstComoPiloto=!!session?.instructorOrigen;
+    const btnDatos=document.getElementById('ap-tabbtn-datos');
+    const btnPass=document.getElementById('ap-tabbtn-pass');
+    if(btnDatos)btnDatos.style.display=esInstComoPiloto?'none':'';
+    if(btnPass)btnPass.style.display=esInstComoPiloto?'none':'';
+    showAlumnoPerfilTab('log');
+  }
+  if(tab==='pedir-turno'){
+    selectedDay=null;selectedSlot=null;
+    document.getElementById('slots-section').style.display='none';
+    document.getElementById('slot-confirm').style.display='none';
+    // v8.89: política "sin N° de cliente no se vuela" — chequeo async primero; el resto
+    // de la apertura de la pestaña quedó en _abrirPedirTurno().
+    const sinCli=document.getElementById('pedir-turno-sin-cliente');
+    if(sinCli) sinCli.style.display='none';
+    ['pedir-turno-bloqueado','pedir-turno-fuera-horario','pedir-turno-card'].forEach(id=>{ const e=document.getElementById(id); if(e) e.style.display='none'; });
+    usuarioTieneCliente().then(ok=>{
+      if(!ok){ if(sinCli) sinCli.style.display='block'; return; }
+      _abrirPedirTurno();
+    });
   }
   if(tab==='perfil'){
     clearVal('perfil-pass-actual','perfil-pass-nueva','perfil-pass-nueva2');
@@ -8149,6 +8199,7 @@ window.cancelarSeleccion=function(){
 
 window._guardarTurnoConfirmado=async function(){
   hideEl('turno-err');hideEl('turno-ok');
+  if(!await usuarioTieneCliente()){showErr('turno-err','⚠ Tu usuario no tiene N° de cliente asignado. Pedile a administración que te lo asigne para poder reservar.');return;} // v8.89
   if(!selectedAvion){showErr('turno-err','Seleccioná un avión.');return;}
   // v6.97/v8.35: defensa en profundidad — el calendario de días ya queda bloqueado hasta
   // elegir tipo de vuelo (renderDaysGrid), pero se revalida acá por si se llega a este
@@ -11328,6 +11379,7 @@ window.filtrarAlumnosList=function filtrarAlumnosList(){
 
   const pendientes=todos.filter(([k,a])=>a.estado==='pendiente_aprobacion');
   const aprobados=todos.filter(([k,a])=>a.estado!=='pendiente_aprobacion');
+  if(pendientes.length&&ccEsAdmin()) ccCargarClientes(); // v8.89: nombres al tipear el N° de cliente
   let html='';
   if(pendientes.length){
     html+=`<div style="font-family:var(--font-mono);font-size:11px;color:var(--amber);letter-spacing:.1em;text-transform:uppercase;margin-bottom:.6rem;padding:.5rem .75rem;background:rgba(240,165,0,.07);border:1px solid rgba(240,165,0,.2);border-radius:var(--radius)">⚠ ${pendientes.length} USUARIO(S) PENDIENTE(S) DE APROBACIÓN</div>`;
@@ -11339,11 +11391,13 @@ window.filtrarAlumnosList=function filtrarAlumnosList(){
           ${a.tel?`<div style="font-family:var(--font-mono);font-size:11px;color:var(--text3)">☎ ${a.tel}</div>`:''}
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-          <select id="rol-select-${k}" style="font-family:var(--font-mono);font-size:12px;padding:4px 8px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text)">
+          ${ccEsAdmin()?`<select id="rol-select-${k}" style="font-family:var(--font-mono);font-size:12px;padding:4px 8px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text)">
             <option value="alumno">Alumno</option>
             <option value="piloto">Piloto</option>
           </select>
+          <input type="text" inputmode="numeric" id="ap-cc-${k}" placeholder="N° cliente" autocomplete="off" style="max-width:100px;font-size:12px;padding:4px 8px" oninput="ccMostrarNombreCliente('ap-cc-${k}','ap-cc-nom-${k}')">
           <button class="primary" onclick="aprobarUsuario('${k}')" style="font-size:11px;padding:4px 12px">APROBAR</button>
+          <span id="ap-cc-nom-${k}" style="font-family:var(--font-mono);font-size:10px;color:var(--text3);flex-basis:100%;text-align:right"></span>`:`<span style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">Lo aprueba administración</span>`}
           <button class="danger" onclick="rechazarUsuario('${k}','${a.email}')" style="font-size:11px;padding:4px 12px">RECHAZAR</button>
         </div>
       </div>`;
@@ -11385,9 +11439,16 @@ window.filtrarAlumnosList=function filtrarAlumnosList(){
 }
 
 window.aprobarUsuario=async function(key){
+  // v8.89: solo admin/administrador, y con N° de cliente del facturador (política del club).
+  if(!ccEsAdmin()) return;
   const rolSel=document.getElementById('rol-select-'+key)?.value||'alumno';
-  if(!confirm('¿Aprobar este usuario como '+rolSel+'?'))return;
+  const cc=ccNormCuenta(document.getElementById('ap-cc-'+key)?.value);
+  const nomEl=document.getElementById('ap-cc-nom-'+key);
+  if(!cc){ if(nomEl){ nomEl.textContent='⚠ Cargá el N° de cliente del facturador para aprobar'; nomEl.style.color='var(--red)'; } return; }
+  if(!confirm('¿Aprobar este usuario como '+rolSel+' con el N° de cliente '+ccNum(cc)+'?'))return;
   const al=await fbGet('alumnos/'+key);
+  try{ await ccGuardarVinculo(key,cc); }
+  catch(e){ if(nomEl){ nomEl.textContent='⚠ No se aprobó: '+(e.message||e); nomEl.style.color='var(--red)'; } return; }
   await fbUpdate('alumnos/'+key,{estado:'aprobado',rol:rolSel});
   await registrarAuditoria('aprobacion_usuario',session.rol||'instructor','exito',(al?.nombre||key)+' ('+(al?.email||'')+')'+(rolSel?' — rol: '+rolSel:''));
   renderAlumnosList();
@@ -11557,7 +11618,12 @@ window.guardarNuevoUsuario=async function(){
     if(await fbGet('alumnos/'+k)){showErr('nu-err','Ya existe una cuenta con ese email.');return;}
     const todos=await fbGet('alumnos')||{};
     if(Object.values(todos).some(a=>(a.username||'').toLowerCase()===username)){showErr('nu-err','Ese nombre de usuario ya está en uso.');return;}
-    await fbSet('alumnos/'+k,{nombre,username,email,tel:tel||null,fecha_nac:fechaNac||null,...await camposClave(pass),rol,estado:'aprobado',pass_temporal:true,ts:new Date().toISOString()});
+    // v8.89: política del club — solo admin/administrador dan de alta aprobado, y con N° de
+    // cliente; un alta hecha por un instructor queda pendiente de aprobación.
+    const ccAlta=ccNormCuenta(val('nu-cc-cuenta'));
+    if(ccEsAdmin()&&!ccAlta){showErr('nu-err','Cargá el N° de cliente del facturador (política: nadie vuela sin alta en el facturador).');return;}
+    const estadoAlta=ccEsAdmin()?'aprobado':'pendiente_aprobacion';
+    await fbSet('alumnos/'+k,{nombre,username,email,tel:tel||null,fecha_nac:fechaNac||null,...await camposClave(pass),rol,estado:estadoAlta,pass_temporal:true,ts:new Date().toISOString()});
     // v8.83: cuenta de Auth en la instancia secundaria (ver authAlta) — no toca la sesión del admin.
     authMigrarAlumno(k,email,pass,authAlta).finally(()=>signOut(authAlta).catch(()=>{}));
     // v8.83: vínculo con el cliente del facturador (opcional, solo admin/administrador)
@@ -11654,6 +11720,9 @@ async function ccGuardarVinculo(emailKey,cuentaNueva){
   if(cuentaNueva) upd['cc_vinculos/'+cuentaNueva]=emailKey;
   upd['cc_cuenta_de/'+emailKey]=cuentaNueva||null;
   try{ await update(ref(db),upd); }catch(e){ throw new Error(ccErrMsg(e)); }
+  // v8.89: marca de política en /alumnos (solo si existe el usuario: un instructor sin
+  // usuario de socio no debe generar un alumno fantasma).
+  try{ if(await fbGet('alumnos/'+emailKey)) await fbUpdate('alumnos/'+emailKey,{cc_ok:cuentaNueva?true:null}); }catch(e){ console.warn('cc_ok:',e); }
   registrarAuditoria('cc_vinculo',session?.user||'admin','exito',emailKey+': '+(ccNum(anterior)||'—')+' → '+(ccNum(cuentaNueva)||'—'));
 }
 

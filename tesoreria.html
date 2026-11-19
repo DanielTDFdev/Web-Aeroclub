@@ -2,6 +2,10 @@
 <!--
 ==================================================================================
   TESORERÍA — Aeroclub Río Grande
+  v1.02 · 2026-11-19 · Pedido de Daniel — política "nadie vuela sin alta en el facturador"
+           (turnos.html v8.89): al importar se completa la marca /alumnos/{k}/cc_ok=true de
+           todos los usuarios vinculados que no la tengan (el turnero la usa para dejar
+           reservar), y la vinculación desde "Socios sin vincular" también la escribe.
   v1.01 · 2026-11-19 · Pedido de Daniel: se saca la pestaña "Pagos sin aplicar" y el KPI
            "Cuentas con pagos sin aplicar" del resumen y de la vista previa — confundía más de
            lo que ayudaba (es un problema de carga en el facturador, no de tesorería). El
@@ -107,7 +111,7 @@ label.chk{font-family:var(--font-mono);font-size:12px;color:var(--text2);display
     <div class="sp">
       <div class="theme-toggle" onclick="toggleTheme()" title="Cambiar tema"><span>🌙</span><div class="theme-toggle-track"><div class="theme-toggle-thumb"></div></div><span>☀️</span></div>
       <span class="who" id="who-label"></span>
-      <span class="ver">v1.01</span>
+      <span class="ver">v1.02</span>
       <a class="btn" href="turnos.html">← TURNERO</a>
       <button class="btn" onclick="cerrarSesion()">⏻ SALIR</button>
     </div>
@@ -362,6 +366,7 @@ async function guardarVinculo(emailKey,cuenta){
   if(dueno&&dueno!==emailKey) throw new Error('el cliente '+ccNum(cuenta)+' ya está vinculado a otro usuario');
   const upd={}; if(anterior&&anterior!==cuenta) upd['cc_vinculos/'+anterior]=null;
   upd['cc_vinculos/'+cuenta]=emailKey; upd['cc_cuenta_de/'+emailKey]=cuenta;
+  if(await fbGet('alumnos/'+emailKey)) upd['alumnos/'+emailKey+'/cc_ok']=true; // v1.02
   try{ await update(ref(db),upd); }catch(e){ throw new Error(ccErrMsg(e)); }
   auditar('cc_vinculo',emailKey+': '+(ccNum(anterior)||'—')+' → '+ccNum(cuenta)+' (tesorería)');
 }
@@ -475,8 +480,10 @@ window.leerArchivo=async function(input){
   try{
     if(file.size>10*1024*1024) throw new Error('archivo demasiado grande');
     const res=ccInterpretar(ccParseBiff2(await file.arrayBuffer()));
-    const [vinc,meta,cli]=await Promise.all([fbGet('cc_vinculos'),fbGet('cc_meta'),fbGet('cc_clientes')]);
-    const v=vinc||{}, cat=cli||{};
+    const [vinc,meta,cli,alu]=await Promise.all([fbGet('cc_vinculos'),fbGet('cc_meta'),fbGet('cc_clientes'),fbGet('alumnos')]);
+    const v=vinc||{}, cat=cli||{}, al=alu||{};
+    // v1.02: usuarios vinculados sin la marca cc_ok (la usa el turnero para dejar reservar)
+    res.marcarCcOk=Object.values(v).filter(k=>al[k]&&al[k].cc_ok!==true);
     res.nuevosCat=Object.keys(res.cuentas).filter(c=>!cat[c]); res.archivo=file.name; res.morosos=calcularMorosos(res);
     const m=Object.values(res.morosos), mas90=ccRed(m.reduce((s,x)=>s+x.d180+x.dmas,0));
     const L=[];
@@ -507,6 +514,7 @@ window.confirmarImportacion=async function(){
     upd['cc_admin/morosos']=r.morosos;
     upd['cc_admin/historial/'+hk]={corte:r.corte.iso,corte_txt:r.corte.txt,cuentas:meta.cuentas,total:r.total,filas:r.filas,archivo:meta.archivo,importado_por:meta.importado_por,ts:serverTimestamp(),saldos:fotos};
     for(const c of r.nuevosCat||[]) upd['cc_clientes/'+c]={nombre:r.cuentas[c].nombre,dni:null};
+    for(const k of r.marcarCcOk||[]) upd['alumnos/'+k+'/cc_ok']=true; // v1.02
     await update(ref(db),upd);
     auditar('cc_importacion',`corte ${r.corte.txt} · ${meta.cuentas} cuentas · ${ccMonto(r.total)} (tesorería)`);
     _import=null; document.getElementById('imp-preview').style.display='none';
