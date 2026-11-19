@@ -2,6 +2,14 @@
 <!--
 ==================================================================================
   PORTAL SOCIO — Aeroclub Río Grande
+  v1.01 · 2026-11-19 · Pedido de Daniel: "un solo login y dos roles" para los instructores
+           que también son socios. Al entrar como instructor y elegir rol piloto, la
+           sesión de Auth es la del instructor (user@instructores...); ahora se busca
+           /cc_alias/{emailKey del instructor} → emailKey de su usuario de socio, y las
+           reglas (database.rules.json) aceptan ese alias para leer cc_cuenta_de, saldo y
+           detalle de ESA cuenta. /cc_alias se carga a mano desde la consola (solo
+           lectura para el propio instructor). Se sigue exigiendo que la sesión de Auth
+           sea la del instructor de la sesión de la app.
   v1.00 · 2026-11-19 · Pedido de Daniel: cada socio (alumno o piloto) ve su saldo y
            los comprobantes pendientes de su cuenta en el sistema de facturación del
            club. Los datos los importa el administrador cada semana desde turnos.html
@@ -119,7 +127,7 @@ h2{font-family:var(--font-mono);font-size:13px;color:var(--cyan);letter-spacing:
         <span class="theme-toggle-icon">☀️</span>
       </div>
       <span class="who" id="who-label"></span>
-      <span class="ver">v1.00</span>
+      <span class="ver">v1.01</span>
       <a class="back" href="turnos.html">← TURNERO</a>
       <button class="back" onclick="cerrarSesion()" title="Cerrar sesión">⏻ SALIR</button>
     </div>
@@ -198,18 +206,38 @@ function mostrarMensaje(txt){
   document.getElementById('app-wrap').style.display='block';
   resetSessionTimer();
   if(session.simuladoPor){ mostrarMensaje('Login simulado: la cuenta corriente no se muestra (solo la ve el propio socio).'); return; }
-  if(session.instructorOrigen){ mostrarMensaje('Entraste con tu usuario de instructor. Para ver tu cuenta de socio, salí e ingresá con tu email de socio.'); return; }
   // La sesión de Auth se restaura sola (misma origin que turnos.html). Se espera la
   // primera notificación; si no hay usuario o no es el de la sesión, no se muestra nada.
   onAuthStateChanged(auth,user=>{
     if(_cargado) return;
     if(!user||!user.email){ mostrarMensaje('Tu sesión no tiene acceso seguro a la cuenta corriente. Salí del turnero y volvé a entrar.'); return; }
-    const emailSesion=String(session.email||'').toLowerCase(), emailAuth=user.email.toLowerCase();
-    if(!emailSesion||emailSesion!==emailAuth){ mostrarMensaje('La sesión segura no corresponde a tu usuario (puede haber otra cuenta abierta en este navegador). Salí del turnero y volvé a entrar.'); return; }
+    const emailAuth=user.email.toLowerCase();
+    // v1.01: instructor que entró como piloto → la sesión de Auth es la del instructor
+    // (email sintético); se resuelve su usuario de socio por /cc_alias.
+    const esInstr=!!session.instructorOrigen;
+    const emailEsperado=esInstr
+      ? (typeof session.instructorOrigen==='string' ? (session.instructorOrigen+'@instructores.aeroclubriogrande.com.ar').toLowerCase() : null)
+      : String(session.email||'').toLowerCase();
+    const coincide=esInstr
+      ? (emailEsperado ? emailAuth===emailEsperado : emailAuth.endsWith('@instructores.aeroclubriogrande.com.ar'))
+      : (!!emailEsperado && emailAuth===emailEsperado);
+    if(!coincide){ mostrarMensaje('La sesión segura no corresponde a tu usuario (puede haber otra cuenta abierta en este navegador). Salí del turnero y volvé a entrar.'); return; }
     _cargado=true;
-    cargarCuenta(ek(emailAuth));
+    if(esInstr) cargarCuentaInstructor(ek(emailAuth));
+    else cargarCuenta(ek(emailAuth));
   });
 })();
+
+async function cargarCuentaInstructor(instKey){
+  try{
+    const socioKey=await fbGet('cc_alias/'+instKey);
+    if(!socioKey){ mostrarMensaje('Tu usuario de instructor no está asociado a tu usuario de socio. Pedile a administración que lo asocie, o ingresá con tu email de socio.'); return; }
+    cargarCuenta(socioKey);
+  }catch(e){
+    console.warn('portal socio (alias):',e);
+    mostrarMensaje('No se pudo verificar tu acceso a la cuenta corriente. Salí del turnero y volvé a entrar; si sigue, avisá en administración.');
+  }
+}
 
 async function cargarCuenta(emailKey){
   try{
