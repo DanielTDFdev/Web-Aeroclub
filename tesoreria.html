@@ -2,6 +2,11 @@
 <!--
 ==================================================================================
   TESORERÍA — Aeroclub Río Grande
+  v1.01 · 2026-11-19 · Pedido de Daniel: se saca la pestaña "Pagos sin aplicar" y el KPI
+           "Cuentas con pagos sin aplicar" del resumen y de la vista previa — confundía más de
+           lo que ayudaba (es un problema de carga en el facturador, no de tesorería). El
+           cálculo (ncred/creditos en /cc_admin/morosos) se sigue guardando al importar, por
+           si se quiere volver a mostrar.
   v1.00 · 2026-11-19 · Pedido de Daniel: módulo aparte para administración/tesorería,
            solo admin y administrador. Reúne lo que antes estaba en turnos.html →
            Config → Cta. Cte. (importación del Excel "Resumen de Facturas Pendientes" del
@@ -102,7 +107,7 @@ label.chk{font-family:var(--font-mono);font-size:12px;color:var(--text2);display
     <div class="sp">
       <div class="theme-toggle" onclick="toggleTheme()" title="Cambiar tema"><span>🌙</span><div class="theme-toggle-track"><div class="theme-toggle-thumb"></div></div><span>☀️</span></div>
       <span class="who" id="who-label"></span>
-      <span class="ver">v1.00</span>
+      <span class="ver">v1.01</span>
       <a class="btn" href="turnos.html">← TURNERO</a>
       <button class="btn" onclick="cerrarSesion()">⏻ SALIR</button>
     </div>
@@ -115,7 +120,6 @@ label.chk{font-family:var(--font-mono);font-size:12px;color:var(--text2);display
       <button class="tab on" data-tab="resumen" onclick="verTab('resumen')">Resumen</button>
       <button class="tab" data-tab="importar" onclick="verTab('importar')">Importar</button>
       <button class="tab" data-tab="morosos" onclick="verTab('morosos')">Morosos</button>
-      <button class="tab" data-tab="sinaplicar" onclick="verTab('sinaplicar')">Pagos sin aplicar</button>
       <button class="tab" data-tab="sinvincular" onclick="verTab('sinvincular')">Socios sin vincular</button>
       <button class="tab" data-tab="historial" onclick="verTab('historial')">Historial</button>
     </nav>
@@ -145,7 +149,7 @@ label.chk{font-family:var(--font-mono);font-size:12px;color:var(--text2);display
 
     <section class="card pane" id="pane-morosos" style="display:none">
       <h2>▸ Morosos por antigüedad</h2>
-      <p class="muted" style="margin-bottom:.8rem">Antigüedad de lo que falta pagar, contada a la fecha de corte. Los pagos sueltos se aplican primero a las facturas más viejas (mismo criterio que ve el socio en su portal).</p>
+      <p class="muted" style="margin-bottom:.8rem">Antigüedad de lo que falta pagar, contada a la fecha de corte. Los pagos se aplican primero a las facturas más viejas (mismo criterio que ve el socio en su portal).</p>
       <div class="toolbar">
         <input type="text" id="mor-filtro" placeholder="Buscar cliente o N°" oninput="pintarMorosos()">
         <label class="chk"><input type="checkbox" id="mor-solo-vinc" onchange="pintarMorosos()"> solo con usuario en la app</label>
@@ -154,12 +158,6 @@ label.chk{font-family:var(--font-mono);font-size:12px;color:var(--text2);display
         <span id="mor-count" class="muted"></span>
       </div>
       <div class="tbl-wrap"><table id="mor-tabla"></table></div>
-    </section>
-
-    <section class="card pane" id="pane-sinaplicar" style="display:none">
-      <h2>▸ Pagos sin aplicar en el facturador</h2>
-      <p class="muted" style="margin-bottom:.8rem">Cuentas con deuda que además tienen pagos o saldos a favor que no se imputaron a ninguna factura. Si quien carga los cobros los aplica a sus facturas en el facturador, el detalle que ve el socio queda corto y claro.</p>
-      <div class="tbl-wrap"><table id="sa-tabla"></table></div>
     </section>
 
     <section class="card pane" id="pane-sinvincular" style="display:none">
@@ -254,7 +252,6 @@ window.verTab=function(t){
   document.querySelectorAll('.pane').forEach(p=>p.style.display=(p.id==='pane-'+t)?'block':'none');
   if(t==='resumen') pintarResumen();
   if(t==='morosos') pintarMorosos();
-  if(t==='sinaplicar') pintarSinAplicar();
   if(t==='sinvincular') pintarSinVincular();
   if(t==='historial') pintarHistorial();
   if(t==='importar'){ document.getElementById('imp-status').textContent=''; document.getElementById('imp-preview').style.display='none'; _import=null; }
@@ -267,7 +264,6 @@ function pintarResumen(){
   const lista=Object.values(MOROSOS);
   const sum=k=>ccRed(lista.reduce((s,m)=>s+(Number(m[k])||0),0));
   const vincDeuda=Object.keys(MOROSOS).filter(c=>VINC[c]).length;
-  const conSA=lista.filter(m=>(m.ncred||0)>0).length;
   b.appendChild(el('div','muted',`Corte del facturador: ${META.corte_txt} · importado por ${META.importado_por||'?'}${META.archivo?' · '+META.archivo:''}`));
   if(!lista.length&&META.cuentas) b.appendChild(el('div','muted ambar','⚠ El detalle de morosos se genera desde la primera importación hecha en Tesorería. Volvé a importar el último Excel para completarlo.'));
   const k=el('div','kpis'); k.style.marginTop='12px';
@@ -277,7 +273,6 @@ function pintarResumen(){
   add('Con usuario en la app',String(vincDeuda)+' de '+META.cuentas);
   if(lista.length){
     add('Deuda de más de 90 días',ccMonto(ccRed(sum('d180')+sum('dmas'))),'ambar');
-    add('Cuentas con pagos sin aplicar',String(conSA),conSA?'ambar':'');
   }
   b.appendChild(k);
 }
@@ -325,20 +320,6 @@ window.exportarMorososCSV=function(){
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
   a.download='morosos_'+(META?.corte||'').replace(/[^0-9]/g,'').slice(0,12)+'.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
 };
-
-// ── PAGOS SIN APLICAR ──
-function pintarSinAplicar(){
-  const t=document.getElementById('sa-tabla'); t.textContent='';
-  const rows=Object.entries(MOROSOS).filter(([,m])=>(m.ncred||0)>0).sort((a,b)=>(b[1].creditos||0)-(a[1].creditos||0));
-  const h=el('tr'); [['N°',0],['Cliente',0],['Pagos sueltos',1],['Monto sin aplicar',1],['Saldo neto',1]].forEach(([l,n])=>h.appendChild(el('th',n?'n':'',l))); t.appendChild(h);
-  if(!rows.length){ const tr=el('tr'); tr.appendChild(el('td','gris','No hay cuentas con pagos sin aplicar (o falta importar desde Tesorería).')); t.appendChild(tr); return; }
-  for(const [c,m] of rows){
-    const tr=el('tr');
-    tr.appendChild(el('td','mono',ccNum(c))); tr.appendChild(el('td','',m.nombre||''));
-    tr.appendChild(el('td','n',String(m.ncred))); tr.appendChild(el('td','n verde',ccMonto(m.creditos))); tr.appendChild(el('td','n rojo',ccMonto(m.saldo)));
-    t.appendChild(tr);
-  }
-}
 
 // ── SOCIOS ACTIVOS SIN VINCULAR ──
 let _clientes=null;
@@ -497,13 +478,12 @@ window.leerArchivo=async function(input){
     const [vinc,meta,cli]=await Promise.all([fbGet('cc_vinculos'),fbGet('cc_meta'),fbGet('cc_clientes')]);
     const v=vinc||{}, cat=cli||{};
     res.nuevosCat=Object.keys(res.cuentas).filter(c=>!cat[c]); res.archivo=file.name; res.morosos=calcularMorosos(res);
-    const m=Object.values(res.morosos), mas90=ccRed(m.reduce((s,x)=>s+x.d180+x.dmas,0)), conSA=m.filter(x=>x.ncred>0).length;
+    const m=Object.values(res.morosos), mas90=ccRed(m.reduce((s,x)=>s+x.d180+x.dmas,0));
     const L=[];
     L.push(`Fecha de corte del reporte: <b>${ccEsc(res.corte.txt)}</b>`);
     L.push(`Comprobantes pendientes: <b>${res.filas}</b> · Cuentas con deuda: <b>${Object.keys(res.cuentas).length}</b>`);
     L.push(`Deuda total: <b>${ccEsc(ccMonto(res.total))}</b> · de más de 90 días: <b>${ccEsc(ccMonto(mas90))}</b>`);
     L.push(`Cuentas con deuda vinculadas a usuarios de la app: <b>${Object.keys(res.cuentas).filter(c=>v[c]).length}</b> (de ${Object.keys(v).length} vinculados)`);
-    L.push(`Cuentas con pagos sin aplicar: <b>${conSA}</b>`);
     if(res.nuevosCat.length) L.push(`Clientes nuevos que se agregan al catálogo: <b>${res.nuevosCat.length}</b>`);
     if(meta?.corte&&res.corte.iso<meta.corte) L.push(`<span class="rojo">⚠ Este archivo es MÁS VIEJO que la última importación (${ccEsc(meta.corte_txt)}).</span>`);
     else if(meta?.corte&&res.corte.iso===meta.corte) L.push(`<span class="ambar">⚠ Misma fecha de corte que la última importación — probablemente ya fue importado.</span>`);
