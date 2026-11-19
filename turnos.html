@@ -1,7 +1,22 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 8.85
-  CAMBIOS : Pedido de Daniel: botón "MI CUENTA" (portal-socio.html, nuevo) en la fila de
+  VERSION : 8.86
+  CAMBIOS : Pedido de Daniel: (1) claves con hash en vez de texto plano y (2) reseteo de
+            clave que no desincronice Firebase Auth (sin Cloud Functions / sin plan pago).
+            (1) PBKDF2-SHA256 con sal (hashClave/verificarClave/camposClave, misma copia
+            en vuelo.html y vuelo-piloto.html). Todas las escrituras de clave (registro,
+            alta manual, alta/edición de instructor, Mi perfil, cambio forzado, olvidé mi
+            clave, reseteo por admin) graban pass_hash y borran pass. Los registros
+            viejos con pass plano se convierten en el próximo login exitoso.
+            Eliminado el seed de /instructores/administrador con clave hardcodeada.
+            (2) Login: si entra por Auth y la clave de la app no coincide, se actualiza
+            la de la app (Auth manda). "Olvidé mi clave" y el botón nuevo "ENVIAR MAIL
+            PARA RESTABLECER" (Editar usuario → Acceso) usan sendPasswordResetEmail de
+            Firebase para usuarios ya migrados — el socio elige la clave nueva en Auth
+            y la app se pone al día sola en el siguiente login. Los no migrados siguen
+            con la clave temporal por EmailJS. Instructores (email sintético, no recibe
+            mails): reseteo manual + borrar su cuenta en Authentication.
+  ANTERIOR: v8.85 — Pedido de Daniel: botón "MI CUENTA" (portal-socio.html, nuevo) en la fila de
             accesos de alumno-screen (alumnos y pilotos): cada socio ve su saldo y sus
             comprobantes pendientes del facturador. Estilo .socio-link.
   ANTERIOR: v8.84 — Pedido de Daniel: sesión de Firebase Auth confiable (base del portal socio).
@@ -4561,7 +4576,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.85</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.86</div>
   </div>
 
 </div>
@@ -5557,9 +5572,18 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
             </div>
             <input type="hidden" id="edit-al-estado-login" value="normal">
           </div>
+          <div class="field" id="edit-al-mailreset-wrap" style="display:none">
+            <label>Restablecer contraseña (recomendado)</label>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <button type="button" onclick="enviarMailResetUsuario()">✉ ENVIAR MAIL PARA RESTABLECER</button>
+              <span id="edit-al-mailreset-msg" style="font-family:var(--font-mono);font-size:11px;color:var(--text3)"></span>
+            </div>
+            <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);margin-top:4px">Le llega un link para elegir una clave nueva. Mantiene sincronizado el acceso seguro (necesario para MI CUENTA).</div>
+          </div>
           <div class="field">
             <label>Resetear contraseña <span style="font-size:10px;color:var(--text3)">(opcional — dejar vacío para no cambiar)</span></label>
             <input type="text" id="edit-al-newpass" placeholder="nueva clave temporal (mín. 6)" autocomplete="off">
+            <div id="edit-al-newpass-aviso" style="display:none;font-family:var(--font-mono);font-size:10px;color:var(--amber);margin-top:4px">⚠ Este usuario ya usa acceso seguro: con una clave manual va a poder entrar, pero sin ver MI CUENTA hasta que restablezca por mail.</div>
           </div>
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;font-family:var(--font-mono);font-size:12px;color:var(--text2);margin-bottom:.85rem">
             <input type="checkbox" id="edit-al-forzar" style="accent-color:var(--cyan)">
@@ -6119,7 +6143,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getDatabase, ref, set, get, update, remove, push, onValue, child, runTransaction, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updatePassword, signOut }
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updatePassword, signOut, sendPasswordResetEmail }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const firebaseConfig={
@@ -6189,6 +6213,34 @@ async function authSincronizarClave(email, actual, nueva){
     return true;
   }catch(e){ console.warn('Auth: no se pudo sincronizar la clave de',email,'—',e?.code||e); return false; }
 }
+// ── HASH DE CLAVES (v8.86) ──────────────────────────────────────────────
+// Pedido de Daniel: no guardar más la clave en texto plano. PBKDF2-SHA256 (WebCrypto)
+// con sal aleatoria por usuario; formato "pbkdf2$<iter>$<salB64>$<hashB64>" en el campo
+// pass_hash. El campo pass (plano) queda solo como legado: verificarClave lo acepta y
+// turnos.html lo reemplaza por pass_hash en el próximo login exitoso. Misma función
+// copiada en turnos.html, vuelo.html y vuelo-piloto.html (no hay módulos compartidos).
+const PASS_ITER=100000;
+function _b64(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+function _unb64(s){ return Uint8Array.from(atob(s),c=>c.charCodeAt(0)); }
+async function _pbkdf2(pass,salt,iter){
+  const k=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveBits']);
+  return crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt,iterations:iter},k,256);
+}
+async function hashClave(pass){
+  const salt=crypto.getRandomValues(new Uint8Array(16));
+  return 'pbkdf2$'+PASS_ITER+'$'+_b64(salt)+'$'+_b64(await _pbkdf2(pass,salt,PASS_ITER));
+}
+async function verificarClave(rec,pass){
+  if(!rec||pass==null||pass==='') return false;
+  if(rec.pass_hash){
+    const p=String(rec.pass_hash).split('$'), it=parseInt(p[1],10);
+    if(p.length!==4||p[0]!=='pbkdf2'||!(it>=1000&&it<=1000000)) return false;
+    try{ return _b64(await _pbkdf2(pass,_unb64(p[2]),it))===p[3]; }catch(_){ return false; }
+  }
+  return rec.pass!=null&&rec.pass===pass;
+}
+// Campos a grabar para una clave nueva: hash + borra el plano.
+async function camposClave(pass){ return {pass_hash:await hashClave(pass),pass:null}; }
 const dbRef=()=>ref(db);
 async function fbGet(p){const s=await get(child(dbRef(),p));return s.exists()?s.val():null;}
 async function fbSet(p,v){await set(ref(db,p),v);}
@@ -6500,7 +6552,7 @@ window.guardarAeronaveModal=async function(){
 async function verificarPasswordAdmin(pass){
   for(const u of ['admin','administrador']){
     const rec=await fbGet('instructores/'+u);
-    if(rec&&rec.pass===pass) return u;
+    if(rec&&await verificarClave(rec,pass)) return u;
   }
   return null; // v8.84: sin fallback admin123 hardcodeado
 }
@@ -6843,7 +6895,7 @@ window.registrarAlumno=async function(){
     const todos=await fbGet('alumnos')||{};
     if(Object.values(todos).some(a=>(a.username||'').toLowerCase()===username)){showErr('reg-err','Ese nombre de usuario ya está en uso.');return;}
     // rol por defecto: alumno
-    await fbSet('alumnos/'+k,{nombre,username,email,tel,fecha_nac:fechaNac,pass,rol:'alumno',estado:'pendiente_aprobacion',ts:new Date().toISOString()});
+    await fbSet('alumnos/'+k,{nombre,username,email,tel,fecha_nac:fechaNac,...await camposClave(pass),rol:'alumno',estado:'pendiente_aprobacion',ts:new Date().toISOString()});
     // Crear también la cuenta en Firebase Auth (no bloquea el registro si el proveedor aún no está habilitado).
     authMigrarAlumno(k,email,pass);
     showOk('reg-ok','¡Cuenta creada! Ya podés ingresar.');
@@ -6901,8 +6953,13 @@ window.loginAlumno=async function(){
           try{ await signInWithEmailAndPassword(auth,alumno.email,pass); okLogin=true; }
           catch(_){ okLogin=false; }
         }
-        if(!okLogin && alumno.pass!=null && alumno.pass===pass){
+        if(okLogin){
+          // v8.86: entró por Auth → Auth manda. Si la clave de la app no coincide (reseteo
+          // por mail de Firebase) o sigue en texto plano, se actualiza (hash).
+          if(!alumno.pass_hash||!await verificarClave(alumno,pass)) await fbUpdate('alumnos/'+k,await camposClave(pass));
+        }else if(await verificarClave(alumno,pass)){
           okLogin=true;
+          if(!alumno.pass_hash) await fbUpdate('alumnos/'+k,await camposClave(pass)); // v8.86: plano → hash
           // v8.84: siempre (no solo si !authMigrado) — recrea la cuenta de Auth si falta.
           await authMigrarAlumno(k,alumno.email,pass);
         }
@@ -6963,8 +7020,11 @@ window.loginAlumno=async function(){
           if(found.authMigrado){
             try{ await signInWithEmailAndPassword(auth,instEmail,pass); okLogin=true; }catch(_){ okLogin=false; }
           }
-          if(!okLogin && found.pass!=null && found.pass===pass){
+          if(okLogin){
+            if(!found.pass_hash||!await verificarClave(found,pass)) await fbUpdate('instructores/'+found.key,await camposClave(pass)); // v8.86
+          }else if(await verificarClave(found,pass)){
             okLogin=true;
+            if(!found.pass_hash) await fbUpdate('instructores/'+found.key,await camposClave(pass)); // v8.86: plano → hash
             // v8.84: siempre (no solo si !authMigrado) — recrea la cuenta de Auth si falta.
             await authMigrarInstructor(found.key,instEmail,pass);
           }
@@ -7068,8 +7128,16 @@ window.olvideClave=async function(){
   try{
     const k=ek(email), alumno=await fbGet('alumnos/'+k);
     if(!alumno){showErr('olvide-err','No encontramos esa cuenta.');return;}
+    // v8.86: usuario ya migrado a Auth → mail de Firebase para elegir clave nueva (actualiza
+    // Auth; la clave de la app se pone al día sola en el siguiente login). Mandarle una
+    // clave temporal solo a la app desincronizaría Auth.
+    if(alumno.authMigrado){
+      await sendPasswordResetEmail(auth,alumno.email);
+      showOk('olvide-ok','Te enviamos un mail a '+email+' con un link para elegir una clave nueva. Revisá el spam.');
+      return;
+    }
     const np=genPass();
-    await fbUpdate('alumnos/'+k,{pass:np,pass_temporal:true});
+    await fbUpdate('alumnos/'+k,{...await camposClave(np),pass_temporal:true});
     mailReset({...alumno},np);
     showOk('olvide-ok','Contraseña temporal enviada a '+email+'. Revisá el spam.');
   }catch(e){showErr('olvide-err','Error. Intentá de nuevo.');}
@@ -7091,9 +7159,9 @@ function forzarCambioClave(dbPath){
       if(n.length<6){err.textContent='⚠ Mínimo 6 caracteres.';return;}
       if(n!==n2){err.textContent='⚠ Las contraseñas no coinciden.';return;}
       const rec=await fbGet(dbPath);
-      if(rec&&rec.pass===n){err.textContent='⚠ Elegí una contraseña distinta a la temporal.';return;}
+      if(rec&&await verificarClave(rec,n)){err.textContent='⚠ Elegí una contraseña distinta a la temporal.';return;}
       btnG.disabled=true;
-      await fbUpdate(dbPath,{pass:n,pass_temporal:null});
+      await fbUpdate(dbPath,{...await camposClave(n),pass_temporal:null});
       // Sincronizar con Firebase Auth si hay sesión de Auth activa (best-effort; el plano es la red de seguridad).
       try{ if(auth.currentUser) await updatePassword(auth.currentUser,n); }catch(e){ console.warn('Auth updatePassword pendiente —',e?.code||e); }
       btnG.disabled=false;
@@ -10441,10 +10509,10 @@ window.cambiarClave=async function(){
   const actual=val('perfil-pass-actual'),nueva=val('perfil-pass-nueva'),nueva2=val('perfil-pass-nueva2');
   const alumno=await fbGet('alumnos/'+session.emailKey);
   if(!alumno){showErr('perfil-err','Error al obtener datos.');return;}
-  if(alumno.pass!==actual){showErr('perfil-err','Contraseña actual incorrecta.');return;}
+  if(!await verificarClave(alumno,actual)){showErr('perfil-err','Contraseña actual incorrecta.');return;}
   if(nueva.length<6){showErr('perfil-err','Mínimo 6 caracteres.');return;}
   if(nueva!==nueva2){showErr('perfil-err','Las contraseñas no coinciden.');return;}
-  await fbUpdate('alumnos/'+session.emailKey,{pass:nueva,pass_temporal:null});
+  await fbUpdate('alumnos/'+session.emailKey,{...await camposClave(nueva),pass_temporal:null});
   // v8.84: también en Auth (no en login simulado ni instructor entrando como piloto:
   // la sesión de Auth no es la de este registro).
   if(!session.simuladoPor&&!session.instructorOrigen&&alumno.email) await authSincronizarClave(alumno.email,actual,nueva);
@@ -10473,10 +10541,10 @@ window.cambiarClaveInstructor=async function(){
   if(!actual||!nueva||!nueva2){showErr('inst-perfil-err','Completá todos los campos.');return;}
   const inst=await fbGet('instructores/'+session.user);
   if(!inst){showErr('inst-perfil-err','Error al obtener datos.');return;}
-  if(inst.pass!==actual){showErr('inst-perfil-err','Contraseña actual incorrecta.');return;}
+  if(!await verificarClave(inst,actual)){showErr('inst-perfil-err','Contraseña actual incorrecta.');return;}
   if(nueva.length<6){showErr('inst-perfil-err','Mínimo 6 caracteres.');return;}
   if(nueva!==nueva2){showErr('inst-perfil-err','Las contraseñas no coinciden.');return;}
-  await fbUpdate('instructores/'+session.user,{pass:nueva});
+  await fbUpdate('instructores/'+session.user,await camposClave(nueva));
   if(!session.simuladoPor) await authSincronizarClave(authEmailInstructor(session.user),actual,nueva); // v8.84
   showOk('inst-perfil-ok','// CONTRASEÑA ACTUALIZADA CORRECTAMENTE');
   clearVal('inst-pass-actual','inst-pass-nueva','inst-pass-nueva2');
@@ -11083,7 +11151,7 @@ window.agregarInstructor=async function(){
   if(pass.length<6){alert('La contraseña debe tener al menos 6 caracteres.');return;}
   if(email&&!email.includes('@')){alert('El email no es válido.');return;}
   if(await fbGet('instructores/'+user)){alert('Ese usuario ya existe.');return;}
-  const nuevo={user,pass,nombre};
+  const nuevo={user,...await camposClave(pass),nombre};
   if(email) nuevo.email=email;
   if(cel) nuevo.cel=cel;
   await fbSet('instructores/'+user,nuevo);
@@ -11126,7 +11194,7 @@ window.guardarInstructor=async function(){
   if(email&&!email.includes('@')){showErr('edit-inst-err','El email no es válido.');return;}
   if(pass&&pass.length<6){showErr('edit-inst-err','La contraseña debe tener al menos 6 caracteres.');return;}
   const updates={nombre,email:email||null,cel:cel||null};
-  if(pass) updates.pass=pass;
+  if(pass) Object.assign(updates,await camposClave(pass));
   if(forzar) updates.pass_temporal=true;
   else if(pass) updates.pass_temporal=null;  // clave nueva definitiva, sin forzar cambio
   await fbUpdate('instructores/'+_editInstKey,updates);
@@ -11257,6 +11325,17 @@ window.rechazarUsuario=async function(key,email){
 };
 
 let _editAlumnoKey=null;
+let _editAlumnoEmail=null; // v8.86
+window.enviarMailResetUsuario=async function(){
+  const m=document.getElementById('edit-al-mailreset-msg');
+  if(!_editAlumnoEmail){ m.textContent='⚠ El usuario no tiene email'; m.style.color='var(--amber)'; return; }
+  m.textContent='// Enviando…'; m.style.color='var(--text3)';
+  try{
+    await sendPasswordResetEmail(auth,_editAlumnoEmail);
+    m.textContent='✓ Mail enviado a '+_editAlumnoEmail; m.style.color='var(--green)';
+    registrarAuditoria('reset_clave_mail',session?.user||'instructor','exito',_editAlumnoEmail);
+  }catch(e){ m.textContent='⚠ No se pudo enviar: '+(e?.code||e?.message||e); m.style.color='var(--red)'; }
+};
 
 window.abrirModalAlumno=function(key){
   _editAlumnoKey=key;
@@ -11276,6 +11355,12 @@ window.abrirModalAlumno=function(key){
     document.getElementById('edit-al-estado-login').value=a.estado_login||'normal';
     document.getElementById('edit-al-newpass').value='';
     document.getElementById('edit-al-forzar').checked=false;
+    // v8.86: reseteo por mail de Firebase solo para usuarios ya migrados a Auth
+    const _mr=document.getElementById('edit-al-mailreset-wrap'),_mrm=document.getElementById('edit-al-mailreset-msg'),_nav=document.getElementById('edit-al-newpass-aviso');
+    if(_mr) _mr.style.display=a.authMigrado?'':'none';
+    if(_mrm) _mrm.textContent='';
+    if(_nav) _nav.style.display=a.authMigrado?'':'none';
+    _editAlumnoEmail=a.email||null;
     renderEstadoLoginToggle();
     ccCargarBloqueUsuario(key); // v8.83: cuenta facturación (async, no bloquea el modal)
     hideEl('edit-al-err');hideEl('edit-al-ok');
@@ -11343,7 +11428,7 @@ window.guardarAlumno=async function(){
   if(!nombre){showEditAlTab('datos');showErr('edit-al-err','El nombre no puede estar vacío.');return;}
   if(newpass && newpass.length<6){showEditAlTab('acceso');showErr('edit-al-err','La nueva contraseña debe tener al menos 6 caracteres.');return;}
   const upd={nombre,tel,rol,estado_login,vencimiento_cma,vencimiento_psa,fecha_nac,autorizacion_padres,horas_iniciales,aterrizajes_iniciales};
-  if(newpass) upd.pass=newpass;
+  if(newpass) Object.assign(upd,await camposClave(newpass));
   if(forzar) upd.pass_temporal=true;
   else if(newpass) upd.pass_temporal=null;  // clave nueva definitiva, sin forzar cambio
   // v8.83: validar el N° cliente ANTES de grabar nada (si es inválido o ya está tomado,
@@ -11395,7 +11480,7 @@ window.guardarNuevoUsuario=async function(){
     if(await fbGet('alumnos/'+k)){showErr('nu-err','Ya existe una cuenta con ese email.');return;}
     const todos=await fbGet('alumnos')||{};
     if(Object.values(todos).some(a=>(a.username||'').toLowerCase()===username)){showErr('nu-err','Ese nombre de usuario ya está en uso.');return;}
-    await fbSet('alumnos/'+k,{nombre,username,email,tel:tel||null,fecha_nac:fechaNac||null,pass,rol,estado:'aprobado',pass_temporal:true,ts:new Date().toISOString()});
+    await fbSet('alumnos/'+k,{nombre,username,email,tel:tel||null,fecha_nac:fechaNac||null,...await camposClave(pass),rol,estado:'aprobado',pass_temporal:true,ts:new Date().toISOString()});
     // v8.83: cuenta de Auth en la instancia secundaria (ver authAlta) — no toca la sesión del admin.
     authMigrarAlumno(k,email,pass,authAlta).finally(()=>signOut(authAlta).catch(()=>{}));
     // v8.83: vínculo con el cliente del facturador (opcional, solo admin/administrador)
@@ -12914,9 +12999,7 @@ async function restoreSession(){
   }
 }
 (async()=>{
-  if(!await fbGet('instructores/administrador')){
-    await fbSet('instructores/administrador',{user:'administrador',pass:'Aer0club',nombre:'Administrador',soloUsuarios:true});
-  }
+  // v8.86: eliminado el seed de /instructores/administrador con clave hardcodeada.
   if(!await restoreSession()){ switchLoginTab('alumno'); aplicarUsuarioRecordado(); }
 })();
 

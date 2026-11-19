@@ -2,6 +2,10 @@
 <!--
 ==================================================================================
   VUELO — App de registro de vuelo · Aeroclub Río Grande
+  v6.03 · 2026-11-19
+  Pedido de Daniel: las claves pasan a guardarse con hash (pass_hash, PBKDF2) en vez de
+  texto plano — ver turnos.html v8.86. El login de instructor usa verificarClave()
+  (acepta pass_hash y el pass plano legado).
   v6.02 · 2026-10-10
   Revisión exhaustiva pedida por Daniel (tras el TDZ de vuelo-piloto v4.85).
   Arranque: sin TDZ — todo lo que init()/abrirApp() leen sincrónico está
@@ -2195,6 +2199,35 @@ select.sin-elegir{border-color:var(--amber);box-shadow:0 0 0 2px rgba(240,165,0,
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
 import { getDatabase, ref, get, update, set, push, runTransaction } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+// ── HASH DE CLAVES (v6.03) ──────────────────────────────────────────────
+// Pedido de Daniel: no guardar más la clave en texto plano. PBKDF2-SHA256 (WebCrypto)
+// con sal aleatoria por usuario; formato "pbkdf2$<iter>$<salB64>$<hashB64>" en el campo
+// pass_hash. El campo pass (plano) queda solo como legado: verificarClave lo acepta y
+// turnos.html lo reemplaza por pass_hash en el próximo login exitoso. Misma función
+// copiada en turnos.html, vuelo.html y vuelo-piloto.html (no hay módulos compartidos).
+const PASS_ITER=100000;
+function _b64(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+function _unb64(s){ return Uint8Array.from(atob(s),c=>c.charCodeAt(0)); }
+async function _pbkdf2(pass,salt,iter){
+  const k=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveBits']);
+  return crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt,iterations:iter},k,256);
+}
+async function hashClave(pass){
+  const salt=crypto.getRandomValues(new Uint8Array(16));
+  return 'pbkdf2$'+PASS_ITER+'$'+_b64(salt)+'$'+_b64(await _pbkdf2(pass,salt,PASS_ITER));
+}
+async function verificarClave(rec,pass){
+  if(!rec||pass==null||pass==='') return false;
+  if(rec.pass_hash){
+    const p=String(rec.pass_hash).split('$'), it=parseInt(p[1],10);
+    if(p.length!==4||p[0]!=='pbkdf2'||!(it>=1000&&it<=1000000)) return false;
+    try{ return _b64(await _pbkdf2(pass,_unb64(p[2]),it))===p[3]; }catch(_){ return false; }
+  }
+  return rec.pass!=null&&rec.pass===pass;
+}
+// Campos a grabar para una clave nueva: hash + borra el plano.
+async function camposClave(pass){ return {pass_hash:await hashClave(pass),pass:null}; }
+
 
 const app = initializeApp({
   apiKey:'AIzaSyATPSaoOV_wKLaJR_dc1jgTzEF2L5p0tHk',
@@ -2266,7 +2299,7 @@ const LS_PENDIENTES = 'acrg-vuelo-v2-pendientes'; // cola de vuelos guardados lo
 // límite de tiempo.
 const RESTAURAR_TURNO_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '6.02'; // ⚠ actualizar acá Y en el comentario header de arriba en cada bump
+const APP_VERSION = '6.03'; // ⚠ actualizar acá Y en el comentario header de arriba en cada bump
 
 // ── Traza GPS (obligatoria, siempre activa — v5.96) ────────────
 const LS_GPS_PUNTOS = 'acrg-vuelo-v2-gps-puntos'; // puntos del vuelo en curso (resiliencia ante recarga)
@@ -2435,10 +2468,11 @@ async function login(){
     const snap=await get(ref(db,'instructores'));
     const inst=snap.val()||{};
     let found=null;
-    Object.entries(inst).forEach(([k,v])=>{
-      if((v.user||k)===user&&v.pass===pass)
-        found={user:v.user||k,nombre:v.nombre||k,email:v.email||''};
-    });
+    for(const [k,v] of Object.entries(inst)){
+      if((v.user||k)===user&&await verificarClave(v,pass)){ // v6.03: hash
+        found={user:v.user||k,nombre:v.nombre||k,email:v.email||''}; break;
+      }
+    }
     if(!found){$('l-err').textContent='Usuario o contraseña incorrectos.';return;}
     session=found;
     sessionStorage.setItem('lvoad-session',JSON.stringify({tipo:'instructor',...session}));
