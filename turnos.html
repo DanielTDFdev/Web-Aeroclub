@@ -1,7 +1,10 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 8.84
-  CAMBIOS : Pedido de Daniel: sesión de Firebase Auth confiable (base del portal socio).
+  VERSION : 8.85
+  CAMBIOS : Pedido de Daniel: botón "MI CUENTA" (portal-socio.html, nuevo) en la fila de
+            accesos de alumno-screen (alumnos y pilotos): cada socio ve su saldo y sus
+            comprobantes pendientes del facturador. Estilo .socio-link.
+  ANTERIOR: v8.84 — Pedido de Daniel: sesión de Firebase Auth confiable (base del portal socio).
             Causa: la clave de Auth se desincronizaba de la clave plana (Mi perfil y el
             reseteo por admin solo cambiaban la plana) o la cuenta de Auth faltaba con
             authMigrado:true; el login entraba igual por el fallback plano pero SIN Auth,
@@ -4154,6 +4157,7 @@ button.danger:hover{background:rgba(248,81,73,.18)}
 .wb-link,.wb-link .avnc-sub{color:#5be888;text-shadow:0 0 8px rgba(91,232,136,.9);}
 .vor-link,.vor-link .avnc-sub{color:#e88fee;text-shadow:0 0 8px rgba(232,143,238,.9);}
 .portal-link,.portal-link .avnc-sub{color:#3fd0dc;text-shadow:0 0 8px rgba(63,208,220,.9);}
+.socio-link,.socio-link .avnc-sub{color:#f5d76e;text-shadow:0 0 8px rgba(245,215,110,.9);} /* v8.85 */
 .reporte-link,.reporte-link .avnc-sub{color:#ff6b6b;text-shadow:0 0 8px rgba(255,107,107,.9);}
 
 /* SELECTOR DE AVIÓN */
@@ -4557,7 +4561,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.84</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.85</div>
   </div>
 
 </div>
@@ -4647,6 +4651,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="links-row">
     <span class="avnc-panel">
     <a href="portal-alumno.html" class="avnc-btn portal-link" id="al-portal-link"><span>PORTAL</span><span class="avnc-sub">educativo</span></a>
+    <a href="portal-socio.html" class="avnc-btn socio-link" id="al-socio-link"><span>MI</span><span class="avnc-sub">cuenta</span></a>
     <a href="fpl.html?volver=turnos.html" class="avnc-btn fpl-link"><span>PLAN DE</span><span class="avnc-sub">vuelo</span></a>
     <a href="peso-balance.html?volver=turnos.html" class="avnc-btn wb-link"><span>PESO Y</span><span class="avnc-sub">balance</span></a>
     <a href="vor-trainer.html" class="avnc-btn vor-link"><span>VOR</span><span class="avnc-sub">trainer</span></a>

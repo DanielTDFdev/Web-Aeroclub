@@ -16,7 +16,7 @@ Cada archivo principal tiene su propio número de versión, y **vive en más de 
 - **`turnos.html`**: versión en EXACTAMENTE DOS lugares — comentario del header (arriba del todo) y el string `.hero-sub` (`<div class="hero-sub">▸ RESERVA DE AERONAVES vX.XX</div>`). El `_meta.version` de `ejecutarBackup()` es la versión del esquema de backup, **no la toques**, es independiente.
 - **`vuelo.html` / `vuelo-piloto.html`**: comentario del header + constante `const APP_VERSION = 'X.X'`.
 - **`vor-trainer.html`**: comentario del header + `<span class="ver">vX.XX</span>`.
-- **`fpl.html`, `portal-alumno.html`, `peso-balance.html`, `reporte.html`**: comentario del header + `.ver` span.
+- **`fpl.html`, `portal-alumno.html`, `portal-socio.html`, `peso-balance.html`, `reporte.html`**: comentario del header + `.ver` span.
 
 Bump SIEMPRE que se toque el archivo, aunque sea un cambio chico. Agregá una entrada de changelog en el comentario del header (español, quién lo pidió — "Pedido de Daniel: ...", qué cambió, por qué).
 

@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<!--
+==================================================================================
+  PORTAL SOCIO — Aeroclub Río Grande
+  v1.00 · 2026-11-19 · Pedido de Daniel: cada socio (alumno o piloto) ve su saldo y
+           los comprobantes pendientes de su cuenta en el sistema de facturación del
+           club. Los datos los importa el administrador cada semana desde turnos.html
+           (Config → Cta. Cte., v8.83) a los nodos /cc_* de Firebase.
+           Seguridad: la sesión de la app (sessionStorage 'lvoad-session') solo se usa
+           para el gate y el nombre; los datos se leen con la sesión de Firebase Auth y
+           las reglas de /cc_* solo dejan leer cc_cuenta_de/{emailKey}, cc_saldos/{c} y
+           cc_detalle/{c} al dueño de esa cuenta (auth.token.email). Si la sesión de
+           Auth no coincide con el usuario logueado (login simulado, instructor que
+           entró como piloto, sesión de otro usuario en el mismo navegador) no se
+           muestra nada.
+           El reporte del facturador trae SOLO cuentas con deuda y SOLO comprobantes
+           pendientes: una cuenta sin datos se muestra "Sin deuda pendiente" (no "al
+           día": el reporte no informa saldos a favor).
+==================================================================================
+-->
+<html lang="es">
+<head>
+<script>if(localStorage.getItem('lvoad-theme')==='light')document.documentElement.classList.add('light');</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portal Socio · Aeroclub Río Grande</title>
+<link rel="apple-touch-icon" href="/icon-portal-192.png">
+<meta name="theme-color" content="#0a0c0f">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0c0f;--bg2:#111418;--bg3:#161b22;--bg4:#1c2330;
+  --text:#c8d8e8;--text2:#7a9bb8;--text3:#3d5a72;
+  --amber:#f0a500;--amber2:#ffc840;
+  --cyan:#00c8d4;
+  --green:#39d353;--red:#f85149;
+  --border:rgba(0,200,212,0.15);--border2:rgba(0,200,212,0.35);
+  --radius:4px;--radius-lg:6px;
+  --font-mono:'Share Tech Mono',monospace;
+  --font-ui:'Rajdhani',sans-serif;
+}
+:root.light{
+  --bg:#f0f4f8;--bg2:#e2e8f0;--bg3:#ffffff;--bg4:#d1dce8;
+  --text:#1a2a3a;--text2:#3a5a78;--text3:#7a9ab8;
+  --amber:#b87000;--amber2:#c87800;
+  --cyan:#0090a0;
+  --green:#1a8a30;--red:#c0392b;
+  --border:rgba(0,144,160,0.2);--border2:rgba(0,144,160,0.45);
+}
+html{overflow-x:hidden;max-width:100vw}
+body{font-family:var(--font-ui);font-size:15px;color:var(--text);background:var(--bg);min-height:100vh;letter-spacing:.02em;overflow-x:hidden;max-width:100vw;transition:background .25s,color .25s}
+.wrap{max-width:960px;margin:0 auto;padding:18px 16px 80px}
+header.bar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;border:1px solid var(--border2);
+  background:linear-gradient(180deg,var(--bg3),var(--bg2));padding:12px 16px;border-radius:var(--radius-lg);
+  margin-bottom:18px;box-shadow:0 0 0 1px #000 inset,0 0 22px rgba(0,200,212,.07)}
+header.bar .dot{width:11px;height:11px;border-radius:50%;background:var(--cyan);box-shadow:0 0 10px var(--cyan);animation:pulse 2.4s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+header.bar h1{font-size:20px;letter-spacing:2.5px;font-weight:700;text-transform:uppercase}
+header.bar h1 small{color:var(--amber);letter-spacing:2px;display:block;font-size:11px;font-family:var(--font-mono);margin-top:2px}
+header.bar .sp{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header.bar .ver{font-family:var(--font-mono);font-size:11px;color:var(--text3);border:1px solid var(--border);border-radius:4px;padding:2px 7px;letter-spacing:1px}
+header.bar .who{font-family:var(--font-mono);font-size:12px;color:var(--cyan)}
+.back{font-family:var(--font-mono);font-size:12px;color:var(--text2);text-decoration:none;border:1px solid var(--border);border-radius:var(--radius);padding:6px 12px;white-space:nowrap;background:none;cursor:pointer}
+.back:hover{color:var(--cyan);border-color:var(--cyan)}
+.theme-toggle{display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none}
+.theme-toggle-track{width:36px;height:20px;border-radius:10px;background:var(--bg4);border:1px solid var(--border2);position:relative}
+.theme-toggle-thumb{width:14px;height:14px;border-radius:50%;background:var(--cyan);position:absolute;top:2px;left:2px;transition:transform .25s,background .25s;box-shadow:0 0 6px rgba(0,200,212,.5)}
+:root.light .theme-toggle-thumb{transform:translateX(16px);background:var(--amber)}
+.theme-toggle-icon{font-size:13px;line-height:1}
+.card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;margin-bottom:16px;position:relative}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:.4}
+h2{font-family:var(--font-mono);font-size:13px;color:var(--cyan);letter-spacing:.16em;text-transform:uppercase;margin-bottom:1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border)}
+.mono{font-family:var(--font-mono)}
+.muted{color:var(--text3);font-family:var(--font-mono);font-size:12px;line-height:1.6}
+.msg{font-family:var(--font-mono);font-size:13px;color:var(--text2);line-height:1.7;text-align:center;padding:1.5rem .5rem}
+.saldo-num{font-family:var(--font-mono);font-size:34px;font-weight:700;letter-spacing:.04em;margin:.2rem 0 .4rem}
+.saldo-sub{font-family:var(--font-mono);font-size:12px;color:var(--text2);letter-spacing:.05em}
+.cli{font-family:var(--font-mono);font-size:12px;color:var(--text3);letter-spacing:.08em;margin-bottom:.6rem}
+.lista{display:flex;flex-direction:column}
+.fila{display:grid;grid-template-columns:96px 150px 1fr 130px 130px;gap:10px;align-items:center;padding:9px 4px;border-bottom:1px solid var(--border);font-size:14px}
+.fila.head{font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;border-bottom:1px solid var(--border2)}
+.fila .num{text-align:right;font-family:var(--font-mono)}
+.fila .comp{font-family:var(--font-mono);font-size:12px;color:var(--text2)}
+.fila.total{font-weight:700;border-bottom:none;border-top:1px solid var(--border2)}
+.fila.total .lbl{grid-column:1/5}
+.fila.total .x{display:none}
+.neg{color:var(--green)}
+@media (max-width:700px){
+  .fila{grid-template-columns:1fr auto;gap:2px 10px}
+  .fila.head{display:none}
+  .fila .f{grid-column:1;font-family:var(--font-mono);font-size:12px;color:var(--text2)}
+  .fila .comp{grid-column:1}
+  .fila .con{grid-column:1}
+  .fila .imp{grid-column:2;grid-row:1;font-size:12px;color:var(--text3)}
+  .fila .pen{grid-column:2;grid-row:2;font-weight:700}
+  .fila .imp::before{content:'Importe ';}
+  .fila .pen::before{content:'Pendiente ';font-weight:400;color:var(--text3);font-size:11px}
+  .fila.total .lbl{grid-column:1}
+  .fila.total .pen{grid-row:1}
+  .fila.total .pen::before{content:''}
+  .saldo-num{font-size:28px}
+}
+</style>
+</head>
+<body>
+<div id="gate-msg" class="msg" style="display:none">// VALIDANDO SESIÓN…<br>Si no tenés sesión activa, te redirige al turnero.</div>
+
+<div class="wrap" id="app-wrap" style="display:none">
+  <header class="bar">
+    <div class="dot"></div>
+    <h1>PORTAL SOCIO<small>AEROCLUB RÍO GRANDE</small></h1>
+    <div class="sp">
+      <div class="theme-toggle" onclick="toggleTheme()" title="Cambiar tema">
+        <span class="theme-toggle-icon">🌙</span>
+        <div class="theme-toggle-track"><div class="theme-toggle-thumb"></div></div>
+        <span class="theme-toggle-icon">☀️</span>
+      </div>
+      <span class="who" id="who-label"></span>
+      <span class="ver">v1.00</span>
+      <a class="back" href="turnos.html">← TURNERO</a>
+      <button class="back" onclick="cerrarSesion()" title="Cerrar sesión">⏻ SALIR</button>
+    </div>
+  </header>
+
+  <section class="card">
+    <h2>▸ Mi cuenta en el club</h2>
+    <div id="cc-cuerpo"><div class="msg">// Cargando…</div></div>
+  </section>
+
+  <section class="card" id="cc-detalle-card" style="display:none">
+    <h2>▸ Comprobantes pendientes</h2>
+    <div class="lista" id="cc-lista"></div>
+  </section>
+
+  <p class="muted" id="cc-nota" style="display:none"></p>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, get, child } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+const firebaseConfig={
+  apiKey:"AIzaSyATPSaoOV_wKLaJR_dc1jgTzEF2L5p0tHk",
+  authDomain:"turnos-lv-oad.firebaseapp.com",
+  databaseURL:"https://turnos-lv-oad-default-rtdb.firebaseio.com",
+  projectId:"turnos-lv-oad",
+  storageBucket:"turnos-lv-oad.firebasestorage.app",
+  messagingSenderId:"855020455192",
+  appId:"1:855020455192:web:4b6d18f1b2efbb52faca6d"
+};
+const app=initializeApp(firebaseConfig), db=getDatabase(app), auth=getAuth(app);
+async function fbGet(p){const s=await get(child(ref(db),p));return s.exists()?s.val():null;}
+
+// Mismo criterio que turnos.html (ek() y ccDescSaldo()).
+const CC_UMBRAL=1;
+const ek=e=>e.replace(/\./g,'_').replace(/@/g,'__at__');
+const red=n=>Math.round((Number(n)||0)*100)/100;
+const monto=n=>new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',minimumFractionDigits:2}).format(n||0);
+const fechaTxt=iso=>{ const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(iso||''); return m?`${m[3]}/${m[2]}/${m[1]}`:'—'; };
+function el(tag,cls,txt){ const e=document.createElement(tag); if(cls)e.className=cls; if(txt!=null)e.textContent=txt; return e; }
+
+// ── SESIÓN / TIMEOUT (declarado antes del gate: gate() lo usa sincrónicamente) ──
+const SESSION_TIMEOUT_MS=10*60*1000;
+let session=null,_sessionTimer=null,_cargado=false;
+function resetSessionTimer(){ if(!session)return; clearTimeout(_sessionTimer); _sessionTimer=setTimeout(()=>{ if(session) cerrarSesion(); },SESSION_TIMEOUT_MS); }
+['mousemove','mousedown','keydown','touchstart','scroll','click'].forEach(ev=>document.addEventListener(ev,resetSessionTimer,{passive:true}));
+
+window.cerrarSesion=function(){
+  try{ sessionStorage.removeItem('lvoad-session'); }catch(_){}
+  signOut(auth).catch(()=>{}).finally(()=>{ location.href='turnos.html'; });
+};
+window.toggleTheme=function(){
+  const isLight=document.documentElement.classList.toggle('light');
+  localStorage.setItem('lvoad-theme',isLight?'light':'dark');
+};
+
+function mostrarMensaje(txt){
+  const c=document.getElementById('cc-cuerpo'); c.textContent='';
+  c.appendChild(el('div','msg',txt));
+  document.getElementById('cc-detalle-card').style.display='none';
+  document.getElementById('cc-nota').style.display='none';
+}
+
+(function gate(){
+  let s=null;
+  try{ s=JSON.parse(sessionStorage.getItem('lvoad-session')||'null'); }catch(_){ s=null; }
+  if(s && s.tipo==='alumno') session=s;
+  if(!session){
+    document.getElementById('gate-msg').style.display='block';
+    setTimeout(()=>{ location.href='turnos.html'; },900);
+    return;
+  }
+  document.getElementById('who-label').textContent=(session.nombre||session.username||'')+(session.rol==='piloto'?' · PILOTO':' · ALUMNO');
+  document.getElementById('app-wrap').style.display='block';
+  resetSessionTimer();
+  if(session.simuladoPor){ mostrarMensaje('Login simulado: la cuenta corriente no se muestra (solo la ve el propio socio).'); return; }
+  if(session.instructorOrigen){ mostrarMensaje('Entraste con tu usuario de instructor. Para ver tu cuenta de socio, salí e ingresá con tu email de socio.'); return; }
+  // La sesión de Auth se restaura sola (misma origin que turnos.html). Se espera la
+  // primera notificación; si no hay usuario o no es el de la sesión, no se muestra nada.
+  onAuthStateChanged(auth,user=>{
+    if(_cargado) return;
+    if(!user||!user.email){ mostrarMensaje('Tu sesión no tiene acceso seguro a la cuenta corriente. Salí del turnero y volvé a entrar.'); return; }
+    const emailSesion=String(session.email||'').toLowerCase(), emailAuth=user.email.toLowerCase();
+    if(!emailSesion||emailSesion!==emailAuth){ mostrarMensaje('La sesión segura no corresponde a tu usuario (puede haber otra cuenta abierta en este navegador). Salí del turnero y volvé a entrar.'); return; }
+    _cargado=true;
+    cargarCuenta(ek(emailAuth));
+  });
+})();
+
+async function cargarCuenta(emailKey){
+  try{
+    const cuenta=await fbGet('cc_cuenta_de/'+emailKey);
+    if(!cuenta){ mostrarMensaje('Tu usuario todavía no está vinculado a una cuenta del sistema de facturación del club. Consultá en administración.'); return; }
+    const [meta,saldoNodo,detalle]=await Promise.all([fbGet('cc_meta'),fbGet('cc_saldos/'+cuenta),fbGet('cc_detalle/'+cuenta)]);
+    if(!meta){ mostrarMensaje('Todavía no hay información de cuenta corriente cargada.'); return; }
+    render(cuenta,meta,saldoNodo,detalle);
+  }catch(e){
+    console.warn('portal socio:',e);
+    const permiso=e?.code==='PERMISSION_DENIED'||/permission/i.test(e?.message||'');
+    mostrarMensaje(permiso?'No se pudo verificar tu acceso a la cuenta corriente. Salí del turnero y volvé a entrar; si sigue, avisá en administración.':'No se pudo cargar la cuenta corriente (sin conexión o error del servidor). Probá de nuevo en un rato.');
+  }
+}
+
+function render(cuenta,meta,saldoNodo,detalle){
+  const saldo=red(saldoNodo?.saldo||0);
+  const items=Array.isArray(detalle?.items)?detalle.items:Object.values(detalle?.items||{});
+  const c=document.getElementById('cc-cuerpo'); c.textContent='';
+  c.appendChild(el('div','cli','CLIENTE N° '+String(cuenta).replace(/^c/,'')+(saldoNodo?.nombre?' · '+saldoNodo.nombre:'')));
+  let txt,color;
+  if(saldo>=CC_UMBRAL){ txt=monto(saldo); color='var(--red)'; c.appendChild(el('div','saldo-sub','SALDO A PAGAR')); }
+  else if(saldo<=-CC_UMBRAL){ txt=monto(-saldo); color='var(--green)'; c.appendChild(el('div','saldo-sub','SALDO A FAVOR')); }
+  else { txt='Sin deuda pendiente'; color='var(--green)'; }
+  const n=el('div','saldo-num',txt); n.style.color=color; c.appendChild(n);
+  c.appendChild(el('div','saldo-sub','Información al '+(meta.corte_txt||'?')+' · fuente: facturación del club'));
+
+  const card=document.getElementById('cc-detalle-card'),lista=document.getElementById('cc-lista');
+  lista.textContent='';
+  if(items.length){
+    const h=el('div','fila head');
+    ['Fecha','Comprobante','Concepto','Importe','Pendiente'].forEach((t,i)=>{ const d=el('div',i>=3?'num':'',t); h.appendChild(d); });
+    lista.appendChild(h);
+    for(const it of items){
+      const f=el('div','fila');
+      f.appendChild(el('div','f',fechaTxt(it.f)));
+      f.appendChild(el('div','comp',it.comp||''));
+      // "Factura - B-0004-00001443" → "Factura" (el número ya está en la columna Comprobante)
+      let con=String(it.ref||'').replace(it.comp||'\u0000','').replace(/[\s\-–]+$/,'').trim();
+      f.appendChild(el('div','con',con||'Comprobante'));
+      f.appendChild(el('div','num imp',monto(it.imp)));
+      const p=el('div','num pen'+(red(it.pend)<0?' neg':''),monto(it.pend)); f.appendChild(p);
+      lista.appendChild(f);
+    }
+    const t=el('div','fila total');
+    t.appendChild(el('div','lbl','TOTAL PENDIENTE'));
+    ['','',''].forEach(()=>t.appendChild(el('div','x')));
+    const tp=el('div','num pen',monto(saldo)); tp.style.color=color; t.appendChild(tp);
+    lista.appendChild(t);
+    card.style.display='block';
+  } else card.style.display='none';
+
+  const nota=document.getElementById('cc-nota');
+  nota.textContent='Datos informativos importados del sistema de facturación del club al '+(meta.corte_txt||'?')+'. Los pagos posteriores a esa fecha se verán en la próxima actualización. Ante cualquier diferencia, consultá en administración.';
+  nota.style.display='block';
+}
+</script>
+</body>
+</html>
