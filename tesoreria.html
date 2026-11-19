@@ -2,6 +2,14 @@
 <!--
 ==================================================================================
   TESORERÍA — Aeroclub Río Grande
+  v1.03 · 2026-11-19 · Pedido de Daniel: Tesorería muestra solo lo que es del alcance del
+           sistema de reservas. Morosos y Resumen consideran únicamente las cuentas vinculadas
+           a un usuario de la app (/cc_vinculos, incluye instructores con alias); el resto de
+           los clientes del facturador (empresas, ex socios) se trabaja desde el facturador.
+           La importación sigue guardando todas las cuentas (si se vincula un usuario a
+           mitad de semana ya tiene su saldo) y la vista previa sigue mostrando los totales
+           del facturador como control de lectura del archivo. Se saca el filtro "solo con
+           usuario en la app" y la columna App (ya no aplican).
   v1.02 · 2026-11-19 · Pedido de Daniel — política "nadie vuela sin alta en el facturador"
            (turnos.html v8.89): al importar se completa la marca /alumnos/{k}/cc_ok=true de
            todos los usuarios vinculados que no la tengan (el turnero la usa para dejar
@@ -111,7 +119,7 @@ label.chk{font-family:var(--font-mono);font-size:12px;color:var(--text2);display
     <div class="sp">
       <div class="theme-toggle" onclick="toggleTheme()" title="Cambiar tema"><span>🌙</span><div class="theme-toggle-track"><div class="theme-toggle-thumb"></div></div><span>☀️</span></div>
       <span class="who" id="who-label"></span>
-      <span class="ver">v1.02</span>
+      <span class="ver">v1.03</span>
       <a class="btn" href="turnos.html">← TURNERO</a>
       <button class="btn" onclick="cerrarSesion()">⏻ SALIR</button>
     </div>
@@ -153,10 +161,9 @@ label.chk{font-family:var(--font-mono);font-size:12px;color:var(--text2);display
 
     <section class="card pane" id="pane-morosos" style="display:none">
       <h2>▸ Morosos por antigüedad</h2>
-      <p class="muted" style="margin-bottom:.8rem">Antigüedad de lo que falta pagar, contada a la fecha de corte. Los pagos se aplican primero a las facturas más viejas (mismo criterio que ve el socio en su portal).</p>
+      <p class="muted" style="margin-bottom:.8rem">Solo usuarios del sistema de reservas (cuentas vinculadas). Antigüedad de lo que falta pagar, contada a la fecha de corte. Los pagos se aplican primero a las facturas más viejas (mismo criterio que ve el socio en su portal).</p>
       <div class="toolbar">
         <input type="text" id="mor-filtro" placeholder="Buscar cliente o N°" oninput="pintarMorosos()">
-        <label class="chk"><input type="checkbox" id="mor-solo-vinc" onchange="pintarMorosos()"> solo con usuario en la app</label>
         <label class="chk"><input type="checkbox" id="mor-90" onchange="pintarMorosos()"> solo con deuda de más de 90 días</label>
         <button class="btn" onclick="exportarMorososCSV()">⬇ EXPORTAR CSV</button>
         <span id="mor-count" class="muted"></span>
@@ -261,33 +268,33 @@ window.verTab=function(t){
   if(t==='importar'){ document.getElementById('imp-status').textContent=''; document.getElementById('imp-preview').style.display='none'; _import=null; }
 };
 
+// v1.03: solo cuentas vinculadas a un usuario del sistema de reservas.
+function morososDeUsuarios(){ return Object.entries(MOROSOS).filter(([c])=>VINC[c]); }
+
 // ── RESUMEN ──
 function pintarResumen(){
   const b=document.getElementById('res-body'); b.textContent='';
   if(!META){ b.appendChild(el('div','msg','Todavía no se importó ningún archivo. Andá a la pestaña IMPORTAR.')); return; }
-  const lista=Object.values(MOROSOS);
+  const lista=morososDeUsuarios().map(([,m])=>m);
   const sum=k=>ccRed(lista.reduce((s,m)=>s+(Number(m[k])||0),0));
-  const vincDeuda=Object.keys(MOROSOS).filter(c=>VINC[c]).length;
+  const totalUsu=sum('saldo'), nVinc=Object.keys(VINC).length;
   b.appendChild(el('div','muted',`Corte del facturador: ${META.corte_txt} · importado por ${META.importado_por||'?'}${META.archivo?' · '+META.archivo:''}`));
-  if(!lista.length&&META.cuentas) b.appendChild(el('div','muted ambar','⚠ El detalle de morosos se genera desde la primera importación hecha en Tesorería. Volvé a importar el último Excel para completarlo.'));
+  b.appendChild(el('div','muted','Solo usuarios del sistema de reservas ('+nVinc+' vinculados al facturador).'));
+  if(!Object.keys(MOROSOS).length&&META.cuentas) b.appendChild(el('div','muted ambar','⚠ El detalle se genera desde la primera importación hecha en Tesorería. Volvé a importar el último Excel.'));
   const k=el('div','kpis'); k.style.marginTop='12px';
   const add=(l,v,cls)=>{ const d=el('div','kpi'); d.appendChild(el('div','l',l)); d.appendChild(el('div','v '+(cls||''),v)); k.appendChild(d); };
-  add('Deuda total',ccMonto(META.total),'rojo');
-  add('Cuentas con deuda',String(META.cuentas));
-  add('Con usuario en la app',String(vincDeuda)+' de '+META.cuentas);
-  if(lista.length){
-    add('Deuda de más de 90 días',ccMonto(ccRed(sum('d180')+sum('dmas'))),'ambar');
-  }
+  add('Deuda de usuarios',ccMonto(totalUsu),totalUsu?'rojo':'verde');
+  add('Usuarios con deuda',String(lista.length)+' de '+nVinc);
+  add('Deuda de más de 90 días',ccMonto(ccRed(sum('d180')+sum('dmas'))),'ambar');
   b.appendChild(k);
 }
 
 // ── MOROSOS ──
 function filasMorosos(){
   const q=(document.getElementById('mor-filtro')?.value||'').trim().toUpperCase();
-  const soloV=document.getElementById('mor-solo-vinc')?.checked, solo90=document.getElementById('mor-90')?.checked;
-  let rows=Object.entries(MOROSOS).map(([c,m])=>({c,...m,vinc:!!VINC[c]}));
+  const solo90=document.getElementById('mor-90')?.checked;
+  let rows=morososDeUsuarios().map(([c,m])=>({c,...m}));
   if(q) rows=rows.filter(r=>(r.nombre||'').toUpperCase().includes(q)||ccNum(r.c)===q);
-  if(soloV) rows=rows.filter(r=>r.vinc);
   if(solo90) rows=rows.filter(r=>(r.d180||0)+(r.dmas||0)>0);
   const {k,dir}=_morOrden;
   rows.sort((a,b)=>{ const x=a[k],y=b[k]; if(typeof x==='string'||typeof y==='string') return dir*String(x||'').localeCompare(String(y||'')); return dir*((x||0)-(y||0)); });
@@ -297,7 +304,8 @@ window.ordenarMorosos=function(k){ _morOrden=_morOrden.k===k?{k,dir:-_morOrden.d
 window.pintarMorosos=function(){
   const t=document.getElementById('mor-tabla'); t.textContent='';
   if(!Object.keys(MOROSOS).length){ const tr=el('tr'); const td=el('td','gris','Sin datos. Importá el Excel desde la pestaña IMPORTAR.'); tr.appendChild(td); t.appendChild(tr); return; }
-  const cols=[['c','N°',0],['nombre','Cliente',0],['vinc','App',0],['saldo','Saldo',1],['d30','0-30 d',1],['d90','31-90 d',1],['d180','91-180 d',1],['dmas','+180 d',1],['desde','Debe desde',0]];
+  if(!morososDeUsuarios().length){ const tr=el('tr'); tr.appendChild(el('td','verde','✓ Ningún usuario del sistema tiene deuda.')); t.appendChild(tr); document.getElementById('mor-count').textContent=''; return; }
+  const cols=[['c','N°',0],['nombre','Cliente',0],['saldo','Saldo',1],['d30','0-30 d',1],['d90','31-90 d',1],['d180','91-180 d',1],['dmas','+180 d',1],['desde','Debe desde',0]];
   const h=el('tr');
   cols.forEach(([k,l,n])=>{ const th=el('th',(n?'n ':'')+'sortable',l+(_morOrden.k===k?(_morOrden.dir>0?' ▲':' ▼'):'')); th.onclick=()=>ordenarMorosos(k); h.appendChild(th); });
   t.appendChild(h);
@@ -306,20 +314,19 @@ window.pintarMorosos=function(){
     const tr=el('tr');
     tr.appendChild(el('td','mono',ccNum(r.c)));
     tr.appendChild(el('td','',r.nombre||''));
-    tr.appendChild(el('td',r.vinc?'verde':'gris',r.vinc?'✓':'—'));
     tr.appendChild(el('td','n rojo',ccMonto(r.saldo)));
     for(const k of ['d30','d90','d180','dmas']){ const v=r[k]||0; tr.appendChild(el('td','n '+(v?(k==='dmas'||k==='d180'?'ambar':''):'gris'),v?ccMonto(v):'—')); }
     tr.appendChild(el('td','mono',fechaTxt(r.desde)));
     t.appendChild(tr);
   }
   const tot=rows.reduce((s,r)=>s+(r.saldo||0),0);
-  document.getElementById('mor-count').textContent=`${rows.length} cuentas · ${ccMonto(ccRed(tot))}`;
+  document.getElementById('mor-count').textContent=`${rows.length} usuarios · ${ccMonto(ccRed(tot))}`;
 };
 window.exportarMorososCSV=function(){
   const rows=filasMorosos();
   const num=v=>String(ccRed(v||0)).replace('.',',');
-  const lin=[['Cuenta','Cliente','Usuario app','Saldo','0-30 dias','31-90 dias','91-180 dias','Mas de 180 dias','Debe desde'].join(';')];
-  for(const r of rows) lin.push([ccNum(r.c),'"'+String(r.nombre||'').replace(/"/g,'""')+'"',r.vinc?'si':'no',num(r.saldo),num(r.d30),num(r.d90),num(r.d180),num(r.dmas),fechaTxt(r.desde)].join(';'));
+  const lin=[['Cuenta','Cliente','Saldo','0-30 dias','31-90 dias','91-180 dias','Mas de 180 dias','Debe desde'].join(';')];
+  for(const r of rows) lin.push([ccNum(r.c),'"'+String(r.nombre||'').replace(/"/g,'""')+'"',num(r.saldo),num(r.d30),num(r.d90),num(r.d180),num(r.dmas),fechaTxt(r.desde)].join(';'));
   const blob=new Blob(['﻿'+lin.join('\r\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
   a.download='morosos_'+(META?.corte||'').replace(/[^0-9]/g,'').slice(0,12)+'.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
