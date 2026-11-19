@@ -1,7 +1,10 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 8.89
-  CAMBIOS : Pedido de Daniel — política del club: "nadie vuela como alumno/piloto si no
+  VERSION : 8.90
+  CAMBIOS : Pedido de Daniel: "socio" → "usuario"/"cliente" en los textos visibles (no todos
+            los usuarios son socios del club: los alumnos no lo son). Cartel de Pedir Turno
+            y etiquetas del N° cliente en el ABM de instructores.
+  ANTERIOR: v8.89 — Pedido de Daniel — política del club: "nadie vuela como alumno/piloto si no
             tiene su alta en el facturador". Flujo: alta de cliente en el facturador →
             usuario en reservas → aprobación por admin/administrador con su N° de cliente.
             (1) Aprobar usuarios pendientes: solo admin/administrador, y exige el N° de
@@ -4612,7 +4615,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.89</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.90</div>
   </div>
 
 </div>
@@ -4740,7 +4743,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
     <div id="pedir-turno-sin-cliente" style="display:none;background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.35);border-radius:var(--radius);padding:1.25rem 1.25rem;font-family:var(--font-mono);font-size:13px;color:var(--red);letter-spacing:.04em;line-height:1.7;text-align:center">
       <div style="font-size:32px;margin-bottom:.5rem">✕</div>
       <div style="font-size:15px;margin-bottom:.5rem">NO PODÉS PEDIR TURNO</div>
-      <div>Tu usuario todavía no tiene asignado su N° de cliente/socio del club.</div>
+      <div>Tu usuario todavía no tiene asignado su N° de cliente del club.</div>
       <div style="margin-top:.75rem;color:var(--text3);font-size:11px">Pedile a administración que te asigne tu N° de cliente para poder reservar.</div>
     </div>
     <div id="pedir-turno-fuera-horario" style="display:none;background:rgba(240,165,0,.08);border:1px solid rgba(240,165,0,.35);border-radius:var(--radius);padding:1.25rem 1.25rem;font-family:var(--font-mono);font-size:13px;color:var(--amber);letter-spacing:.04em;line-height:1.7;text-align:center">
@@ -5400,7 +5403,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <div class="row">
           <div class="field"><label>Email <span style="font-size:10px;color:var(--text3)">(para recordatorios)</span></label><input type="email" id="new-inst-email" placeholder="instructor@email.com" autocapitalize="off" autocomplete="off"></div>
           <div class="field"><label>Celular <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><input type="tel" id="new-inst-cel" placeholder="Ej: +54 9 2964 000000"></div>
-          <div class="field"><label>N° cliente facturación <span style="font-size:10px;color:var(--text3)">(opcional — si también es socio; requiere email)</span></label>
+          <div class="field"><label>N° cliente facturación <span style="font-size:10px;color:var(--text3)">(opcional — si también vuela como piloto/alumno; requiere email)</span></label>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input type="text" inputmode="numeric" id="new-inst-cc" placeholder="N° cliente" autocomplete="off" style="max-width:120px" oninput="ccMostrarNombreCliente('new-inst-cc','new-inst-cc-nombre')"><span id="new-inst-cc-nombre" style="font-family:var(--font-mono);font-size:11px;color:var(--text3)"></span></div></div>
         </div>
         <button onclick="agregarInstructor()">AGREGAR INSTRUCTOR</button>
@@ -5852,7 +5855,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <input type="tel" id="edit-inst-cel" placeholder="Ej: +54 9 2964 000000">
     </div>
     <div class="field" id="edit-inst-cc-wrap">
-      <label>N° cliente facturación <span style="font-size:10px;color:var(--text3)">(si también es socio — requiere email)</span></label>
+      <label>N° cliente facturación <span style="font-size:10px;color:var(--text3)">(si también vuela como piloto/alumno — requiere email)</span></label>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input type="text" inputmode="numeric" id="edit-inst-cc" placeholder="N° cliente" autocomplete="off" style="max-width:120px" oninput="ccMostrarNombreCliente('edit-inst-cc','edit-inst-cc-nombre')"><span id="edit-inst-cc-nombre" style="font-family:var(--font-mono);font-size:11px;color:var(--text3)"></span></div>
     </div>
     <div class="field">

@@ -2,6 +2,9 @@
 <!--
 ==================================================================================
   TESORERÍA — Aeroclub Río Grande
+  v1.04 · 2026-11-19 · Pedido de Daniel: "socio" → "usuario" en los textos visibles (no todos
+           los usuarios son socios del club: los alumnos no lo son, y un cliente del
+           facturador puede no ser socio).
   v1.03 · 2026-11-19 · Pedido de Daniel: Tesorería muestra solo lo que es del alcance del
            sistema de reservas. Morosos y Resumen consideran únicamente las cuentas vinculadas
            a un usuario de la app (/cc_vinculos, incluye instructores con alias); el resto de
@@ -119,7 +122,7 @@ label.chk{font-family:var(--font-mono);font-size:12px;color:var(--text2);display
     <div class="sp">
       <div class="theme-toggle" onclick="toggleTheme()" title="Cambiar tema"><span>🌙</span><div class="theme-toggle-track"><div class="theme-toggle-thumb"></div></div><span>☀️</span></div>
       <span class="who" id="who-label"></span>
-      <span class="ver">v1.03</span>
+      <span class="ver">v1.04</span>
       <a class="btn" href="turnos.html">← TURNERO</a>
       <button class="btn" onclick="cerrarSesion()">⏻ SALIR</button>
     </div>
@@ -132,7 +135,7 @@ label.chk{font-family:var(--font-mono);font-size:12px;color:var(--text2);display
       <button class="tab on" data-tab="resumen" onclick="verTab('resumen')">Resumen</button>
       <button class="tab" data-tab="importar" onclick="verTab('importar')">Importar</button>
       <button class="tab" data-tab="morosos" onclick="verTab('morosos')">Morosos</button>
-      <button class="tab" data-tab="sinvincular" onclick="verTab('sinvincular')">Socios sin vincular</button>
+      <button class="tab" data-tab="sinvincular" onclick="verTab('sinvincular')">Usuarios sin vincular</button>
       <button class="tab" data-tab="historial" onclick="verTab('historial')">Historial</button>
     </nav>
 
@@ -172,7 +175,7 @@ label.chk{font-family:var(--font-mono);font-size:12px;color:var(--text2);display
     </section>
 
     <section class="card pane" id="pane-sinvincular" style="display:none">
-      <h2>▸ Socios activos sin vincular</h2>
+      <h2>▸ Usuarios activos sin vincular</h2>
       <p class="muted" style="margin-bottom:.8rem">Usuarios que reservaron en los últimos 90 días y no tienen N° de cliente del facturador: no pueden ver su cuenta en MI CUENTA. Cargá el N° y tocá VINCULAR.</p>
       <div class="tbl-wrap"><table id="sv-tabla"></table></div>
     </section>
@@ -350,7 +353,7 @@ async function pintarSinVincular(){
   const rows=Object.entries(act).filter(([k])=>alumnos[k]&&!cuentaDe[k]).map(([k,a])=>({k,...a,al:alumnos[k]})).sort((x,y)=>y.n-x.n);
   t.textContent='';
   const h=el('tr'); [['Usuario',0],['Email',0],['Rol',0],['Turnos 90 d',1],['Último',0],['N° cliente',0],['',0]].forEach(([l,n])=>h.appendChild(el('th',n?'n':'',l))); t.appendChild(h);
-  if(!rows.length){ const tr=el('tr'); tr.appendChild(el('td','verde','✓ Todos los socios activos están vinculados.')); t.appendChild(tr); return; }
+  if(!rows.length){ const tr=el('tr'); tr.appendChild(el('td','verde','✓ Todos los usuarios activos están vinculados.')); t.appendChild(tr); return; }
   for(const r of rows){
     const tr=el('tr');
     tr.appendChild(el('td','',r.al.nombre||r.k)); tr.appendChild(el('td','mono',r.al.email||'')); tr.appendChild(el('td','mono',r.al.rol||''));

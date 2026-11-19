@@ -2,6 +2,10 @@
 <!--
 ==================================================================================
   PORTAL SOCIO — Aeroclub Río Grande
+  v1.04 · 2026-11-19 · Pedido de Daniel: "socio" → "usuario" en los textos visibles (no todos
+           los usuarios son socios del club; un cliente del facturador puede no ser socio).
+           El título visible pasa a "MI CUENTA" (mismo nombre que el botón del turnero). El
+           nombre del archivo portal-socio.html no cambia, para no romper links/accesos.
   v1.03 · 2026-11-19 · Pedido de Daniel: que el detalle se entienda sin saber leer la
            numeración del facturador ("a prueba de boludos"), y que no confundan las columnas
            Importe/Pendiente (casi siempre iguales). Columna TIPO deducida de la numeración y
@@ -48,7 +52,7 @@
 <script>if(localStorage.getItem('lvoad-theme')==='light')document.documentElement.classList.add('light');</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Portal Socio · Aeroclub Río Grande</title>
+<title>Mi Cuenta · Aeroclub Río Grande</title>
 <link rel="apple-touch-icon" href="/icon-portal-192.png">
 <meta name="theme-color" content="#0a0c0f">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -145,7 +149,7 @@ h2{font-family:var(--font-mono);font-size:13px;color:var(--cyan);letter-spacing:
 <div class="wrap" id="app-wrap" style="display:none">
   <header class="bar">
     <div class="dot"></div>
-    <h1>PORTAL SOCIO<small>AEROCLUB RÍO GRANDE</small></h1>
+    <h1>MI CUENTA<small>AEROCLUB RÍO GRANDE</small></h1>
     <div class="sp">
       <div class="theme-toggle" onclick="toggleTheme()" title="Cambiar tema">
         <span class="theme-toggle-icon">🌙</span>
@@ -153,7 +157,7 @@ h2{font-family:var(--font-mono);font-size:13px;color:var(--cyan);letter-spacing:
         <span class="theme-toggle-icon">☀️</span>
       </div>
       <span class="who" id="who-label"></span>
-      <span class="ver">v1.03</span>
+      <span class="ver">v1.04</span>
       <a class="back" href="turnos.html">← TURNERO</a>
       <button class="back" onclick="cerrarSesion()" title="Cerrar sesión">⏻ SALIR</button>
     </div>
@@ -233,7 +237,7 @@ function mostrarMensaje(txt){
   document.getElementById('who-label').textContent=(session.nombre||session.username||'')+(session.rol==='piloto'?' · PILOTO':' · ALUMNO');
   document.getElementById('app-wrap').style.display='block';
   resetSessionTimer();
-  if(session.simuladoPor){ mostrarMensaje('Login simulado: la cuenta corriente no se muestra (solo la ve el propio socio).'); return; }
+  if(session.simuladoPor){ mostrarMensaje('Login simulado: la cuenta corriente no se muestra (solo la ve el propio usuario).'); return; }
   // La sesión de Auth se restaura sola (misma origin que turnos.html). Se espera la
   // primera notificación; si no hay usuario o no es el de la sesión, no se muestra nada.
   onAuthStateChanged(auth,user=>{
@@ -259,7 +263,7 @@ function mostrarMensaje(txt){
 async function cargarCuentaInstructor(instKey){
   try{
     const socioKey=await fbGet('cc_alias/'+instKey);
-    if(!socioKey){ mostrarMensaje('Tu usuario de instructor no está asociado a tu usuario de socio. Pedile a administración que lo asocie, o ingresá con tu email de socio.'); return; }
+    if(!socioKey){ mostrarMensaje('Tu usuario de instructor no está asociado a tu cuenta del club. Pedile a administración que la asocie, o ingresá con tu email de piloto/alumno.'); return; }
     cargarCuenta(socioKey);
   }catch(e){
     console.warn('portal socio (alias):',e);
