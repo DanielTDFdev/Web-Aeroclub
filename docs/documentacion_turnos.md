@@ -1,10 +1,10 @@
 # Documentación técnica — Sistema de Turnos (turnos.html)
 
 **Aeroclub Río Grande (SAWE) — Tierra del Fuego, Argentina**
-Versión documentada: **turnos.html v8.75** · **fpl.html v3.32** · **portal-alumno.html v1.35** · **peso-balance.html v1.10** · **reporte.html v1.15** · **vuelo.html v5.97** · **vuelo-piloto.html v4.74** · **vor-trainer.html v4.41** · **index.html v3.5** · **analisis3d.html v1.58** · Fecha: 2026-09-11
+Versión documentada: **turnos.html v8.86** · **portal-socio.html v1.03** · **fpl.html v3.32** · **portal-alumno.html v1.35** · **peso-balance.html v1.10** · **reporte.html v1.18** · **vuelo.html v6.03** · **vuelo-piloto.html v4.86** · **vor-trainer.html v4.41** · **index.html v3.9** · **analisis3d.html v2.42** · Fecha: 2026-11-19 (ver §18: hay versiones intermedias sin detalle en este documento)
 
 > Documento de referencia: describe qué hace cada parte del sistema. Mantener actualizado cuando se agreguen funciones.
-> Además de la app web (`turnos.html`) hay un generador de planes de vuelo (`fpl.html`, §22), un **portal de alumno** (`portal-alumno.html`, §23), una calculadora de peso y balance (`peso-balance.html`, §24), un **reporte de actividad** (`reporte.html`, §25), una **app de registro de vuelo para instructores** (`vuelo.html`, §26), su equivalente **para pilotos** (`vuelo-piloto.html`, §27) y un **simulador VOR/HSI** con Modo Libre y motor de vuelo simulado (`vor-trainer.html`, §29), soporte **PWA** en los archivos principales (instalables como app en el celular), la **página de inicio pública** (`index.html`, §30), y un **visor 3D de traza GPS** (`analisis3d.html`, §31, nuevo). Los **procesos server-side** en GitHub Actions se describen en §20 y §21.
+> Además de la app web (`turnos.html`) hay un generador de planes de vuelo (`fpl.html`, §22), un **portal de alumno** (`portal-alumno.html`, §23), una calculadora de peso y balance (`peso-balance.html`, §24), un **reporte de actividad** (`reporte.html`, §25), una **app de registro de vuelo para instructores** (`vuelo.html`, §26), su equivalente **para pilotos** (`vuelo-piloto.html`, §27) y un **simulador VOR/HSI** con Modo Libre y motor de vuelo simulado (`vor-trainer.html`, §29), soporte **PWA** en los archivos principales (instalables como app en el celular), la **página de inicio pública** (`index.html`, §30), un **visor 3D de traza GPS** (`analisis3d.html`, §31), y el **portal socio** con la cuenta corriente importada del facturador del club (`portal-socio.html`, §32, nuevo 2026-11-19). Los **procesos server-side** en GitHub Actions se describen en §20 y §21.
 
 ---
 
@@ -26,11 +26,13 @@ Aplicación web de página única (SPA) en un solo archivo HTML, para reservar l
 ## 3. Modelo de datos (Firebase Realtime Database)
 
 > Reglas actuales: `{".read":true, ".write":true}` (abiertas — ver §7 y limitaciones). No hay queries tipo SQL: todo el filtrado es del lado del cliente.
+> **Actualizado 2026-11-19 (turnos v8.83):** la raíz ya no es `true`. Un comodín `"$otro": {".read":true,".write":true}` deja abiertos todos los nodos existentes exactamente igual que antes (incluidos los que se agreguen después), y los nodos nuevos `/cc_*` tienen reglas cerradas basadas en Firebase Auth. Fuente de verdad: `database.rules.json` (se publica a mano en la consola, no está en el repo). Detalle en §32.
 
 ### `/alumnos/{emailKey}`
 Clave = email con `.`→`_` y `@`→`__at__` (función `ek()`).
 - `nombre`, `email`, `username` (único, minúsculas, 4–10 alfanumérico — visible de solo lectura en el modal EDITAR USUARIO y en Mi Perfil del alumno desde v6.59, faltaba en ambos lugares desde la implementación original), `tel` (obligatorio en el alta desde `registrarAlumno` a partir de v6.56 — ver §7; cuentas de antes de esa versión pueden no tenerlo)
-- `pass` — contraseña en texto plano (se eliminará al final de la migración a Auth)
+- `pass` — contraseña en texto plano (se eliminará al final de la migración a Auth). **Reemplazado en v8.86 por `pass_hash`** — se borra en el primer login exitoso de cada usuario; puede seguir existiendo en cuentas que no entraron desde entonces.
+- `pass_hash` (v8.86) — `pbkdf2$<iter>$<salB64>$<hashB64>`, PBKDF2-SHA256 con sal por usuario (WebCrypto). Ver §7.
 - `rol` — `alumno` | `piloto`
 - `estado` — `pendiente_aprobacion` | `aprobado`
 - `estado_login` — `normal` | `suspendido` (suspendido bloquea el ingreso)
@@ -159,7 +161,7 @@ Detalles técnicos comunes a los tres puntos de entrada:
 - **piloto** — reserva las tres aeronaves; en aviones que no son LV-OAD la aprobación es automática y puede reservar rangos de horas; en **LV-OAD reserva como alumno** (1 slot de 1h, queda pendiente de aprobación) con una diferencia clave (v5.94): **puede reservar aunque no haya instructor con horario cargado ese día** — solo se verifica que el avión esté disponible y el slot libre, sin exigir la combinación avión + instructor. Esos turnos se marcan `sinInstructor:true` y salen en color rosa hasta que un instructor los apruebe. El alumno, en cambio, sigue viendo únicamente slots con instructor disponible. Anticipación mínima 1h; horizonte 30 días.
 - **pendiente_aprobacion** — usuario recién registrado, sin acceso hasta que un instructor lo apruebe (pantalla de espera).
 - **instructor** (real) — aprueba/cancela/libera turnos, configura horarios, gestiona su disponibilidad y vacaciones. `esInstructorReal()` = sesión instructor que NO es `admin` ni `administrador`.
-- **admin** — acceso de emergencia con clave fija; acceso completo incluida la Zona Peligrosa. **No puede aprobar turnos.**
+- **admin** — acceso de emergencia con clave fija; acceso completo incluida la Zona Peligrosa. **No puede aprobar turnos.** *(Acceso de emergencia con clave fija retirado en v8.84: admin entra con la clave de `/instructores/admin` como cualquiera. Desde v8.83 admin/administrador migran a Firebase Auth — ver §7 y §32.)*
 - **administrador** — gestión completa salvo edición de horarios/disponibilidad (solo lectura) y Zona Peligrosa; `esAdminRO()` = true. **No puede aprobar turnos.**
 
 > Regla clave (v5.65/v5.68): **solo los instructores reales aprueban turnos**, por cualquier vía (modal de detalle y modal de Consultas). admin/administrador solo pueden cancelar.
@@ -247,6 +249,18 @@ Genera una clave temporal, la guarda con `pass_temporal:true` y la envía por ma
 
 ### Suspensión de acceso
 `estado_login:'suspendido'` (toggle en el modal de editar usuario) bloquea el login con aviso de contactar administración.
+
+### Cambios 2026-11-19 (turnos v8.83→v8.86, vuelo v6.03, vuelo-piloto v4.86)
+- **admin/administrador migran a Auth (v8.83)** con el mismo email sintético que los instructores (`admin@instructores.aeroclubriogrande.com.ar`). La línea de arriba "admin/administrador quedan en clave plana (no migran)" y "Acceso de emergencia: admin/admin123 siempre" quedan desactualizadas (corregido 2026-11-19, confirmado por Daniel): el acceso de emergencia hardcodeado se eliminó en v8.84 (también del login simulado), y el seed de `/instructores/administrador` con clave fija se eliminó en v8.86. `index_viejo.html` (que también tenía `admin123`) se borró del repo.
+- **`signOut(auth)` en logout y al empezar cada login (v8.83)**: antes una sesión de Auth de un usuario anterior podía sobrevivir si el siguiente entraba por el fallback plano.
+- **Alta manual de usuarios con instancia secundaria de Auth (v8.83, `authAlta`)**: `createUserWithEmailAndPassword` deja logueada la cuenta nueva en la instancia donde se llama; en la principal desloguearía al admin.
+- **Login siempre reintenta la migración (v8.84)**: si Auth falla y la clave de la app es correcta, se llama `authMigrar*` aunque `authMigrado` sea `true` → si la cuenta de Auth no existe, se recrea sola. Si existe con OTRA clave no se puede arreglar desde el cliente: borrarla en Authentication y el próximo login la recrea.
+- **Auth manda (v8.86)**: si el login entra por Auth y la clave de la app no coincide (o sigue en texto plano), se reescribe la de la app.
+- **Claves con hash (v8.86)**: `hashClave`/`verificarClave`/`camposClave` (copia idéntica en turnos.html, vuelo.html y vuelo-piloto.html). Todas las escrituras de clave graban `pass_hash` y borran `pass`; `verificarClave` acepta el plano legado. La lectura pública de `/alumnos` e `/instructores` sigue abierta (decisión de Daniel: sin plan pago no hay Cloud Functions para cerrar el ciclo); el hash evita que las claves se lean directamente.
+- **Mi perfil sincroniza Auth (v8.84)**: `authSincronizarClave` (re-login con la clave actual + `updatePassword`), alumno e instructor.
+- **Olvidé mi contraseña (v8.86)**: para usuarios con `authMigrado`, `sendPasswordResetEmail` de Firebase (el socio elige la clave en Auth; la app se pone al día en el siguiente login). No migrados: clave temporal por EmailJS como antes. El idioma del mail se configura en Authentication → Plantillas.
+- **Reseteo por admin (v8.86)**: Editar usuario → Acceso → "ENVIAR MAIL PARA RESTABLECER" (`enviarMailResetUsuario`, solo con `authMigrado`). La clave manual sigue disponible con aviso: deja al usuario sin Auth (no ve MI CUENTA) hasta que restablezca por mail. Instructores (email sintético, no reciben mail): clave manual + borrar su cuenta en Authentication.
+- **Causa típica de "entra pero sin Auth"**: clave de Auth distinta de la de la app (cambio por Mi perfil antes de v8.84, reseteo manual por admin). Síntoma: en DevTools → IndexedDB → `firebaseLocalStorage` no hay registro y la consola muestra 400 de `identitytoolkit`.
 
 ### Estado de la migración a Firebase Auth
 Modo **sombra**: Auth corre en paralelo, la clave plana es la red de seguridad y nadie puede quedar bloqueado.
@@ -565,6 +579,14 @@ Todos los servicios de los que depende el sistema para funcionar, y cuáles tien
 **Siempre incrementar la versión en cada modificación, en todos los archivos del sistema** (`turnos.html`, `fpl.html`, `portal-alumno.html`, `peso-balance.html`). En `turnos.html` se actualiza en **dos lugares**: (1) el bloque comentario del header, (2) el string `.hero-sub`. Los otros tres archivos usan el span `<span class="ver">vX.Y</span>` además del comentario del header. El `_meta.version` del backup (`ejecutarBackup`, solo en turnos.html) es la versión del esquema de backup (independiente del archivo, no se confunde).
 
 ## 18. Estado actual y trabajo pendiente
+
+- **⚠ GAP SIN DOCUMENTAR (turnos.html v8.76→v8.82; y en los demás archivos, lo posterior a lo documentado hasta: vuelo.html v6.02, vuelo-piloto.html v4.85, reporte.html v1.18, index.html v3.9, analisis3d.html v2.42):** cambios hechos entre 2026-09-11 y 2026-11-18 que no se volcaron a este documento. El detalle está en el changelog del header de cada archivo.
+- **Cuenta corriente del socio + seguridad de acceso — sesión 2026-11-19 (turnos.html v8.83→v8.86, portal-socio.html v1.00→v1.03 nuevo, vuelo.html v6.03, vuelo-piloto.html v4.86):**
+  - Cuenta corriente importada del facturador del club, vinculación usuario↔cliente, saldo visible para staff y portal socio — ver **§32**.
+  - Endurecimiento de Auth y claves con hash — ver **§7 "Cambios 2026-11-19"**.
+  - `CLAUDE.md` actualizado: rol admin y versionado de `portal-socio.html`.
+  - **Pendiente:** respuesta del programador del facturador (listado de clientes en Excel → saldo a favor; significado de `HVENPPGO`/`ESTCTA`; reporte de movimientos completo); decisión de la Comisión Directiva sobre bloquear turnos por deuda; cerrar lectura pública de `/alumnos`/`/instructores` (descartado por ahora: requiere Cloud Functions/plan Blaze).
+  - **Sincronizado a estas versiones:** turnos.html **v8.86**, portal-socio.html **v1.03**, vuelo.html **v6.03**, vuelo-piloto.html **v4.86**. Otros archivos sin cambios esta sesión.
 
 - **⚠ GAP SIN DOCUMENTAR (turnos.html v8.45→v8.54, vuelo.html v5.73→v5.75, vuelo-piloto.html v4.58→v4.59, portal-alumno.html v1.27→v1.34):** entre la última entrada de este documento (2026-09-02, hasta v8.44/v5.72/v4.57) y el arranque de la sesión 2026-09-04 (abajo), el repo siguió avanzando en otra sesión/máquina sin quedar asentado acá. Confirmado contra el repo en vivo que esas versiones existen y están desplegadas, pero sin el detalle línea-por-línea de cada bump. **Pendiente: backfillear leyendo el header comment de cada archivo.**
 - **Visor 3D de traza GPS — sesión 2026-09-04 (turnos.html v8.55→v8.58, vuelo.html v5.75→v5.76, vuelo-piloto.html v4.60→v4.61, portal-alumno.html v1.34→v1.35, analisis3d.html v1.0→v1.11, nuevo):**
@@ -1741,3 +1763,49 @@ Pantalla de carga/error propia (sin `?key=`, vuelo sin traza registrada, o fetch
 - No hay terreno ni relieve real — el suelo es una referencia visual lisa, sin datos de elevación.
 - La altitud GPS (`alt` en `/vuelo_tracks`) es sobre el elipsoide (WGS84/HAE), no MSL — no importa acá porque no se compara contra terreno real, pero si en algún momento se agrega elevación real del aeródromo, hay que corregir por la ondulación del geoide (en Tierra del Fuego ronda 30-40m).
 - El .glb no está a escala real entre sí y respecto del tubo — es intencionalmente grande para que se vea a las distancias de cámara que usa este visor (a escala real, un puntito invisible).
+
+## 32. Cuenta corriente del socio y Portal Socio (`portal-socio.html`)
+
+Nuevo 2026-11-19 (pedido de Daniel). El club factura con un sistema externo (no es nuestro, lo mantiene otro programador). Ese sistema exporta un Excel que el administrador importa acá cada semana; cada socio ve su saldo y sus comprobantes pendientes.
+
+### Fuente de datos
+- Reporte **"Resumen de Facturas Pendientes"** del facturador, formato **Excel 2.1 (BIFF2)**. Trae SOLO cuentas con saldo deudor y SOLO comprobantes no cancelados (facturas con saldo y pagos sin aplicar). Una cuenta que no figura = "Sin deuda pendiente" (no "al día": el reporte no informa saldos a favor).
+- Columnas usadas: `Cuenta`, `Cliente`, `Fecha` (dd/mm/aaaa), `Nro. Comprobante`, `Referencia`, **`NewImporte`/`NewSaldo` (con signo)** y `SALDO1` (saldo de la cuenta = suma de `NewSaldo`). `Importe`/`Saldo` vienen siempre positivos y NO se usan. `HVENPPGO` (¿vencimiento?) y `ESTCTA` (N/M/I) no se usan hasta que el programador confirme qué son. Fila 2 del Excel: "Fecha : dd/mm/aaaa hh:mm" = fecha de corte.
+- Numeración (deducida, a confirmar con el programador): `B-0004/0005-…` factura B; `A-0004/0005-…` factura A; `X-0004-…` recibo (pago); número suelto (`0001`, `1`, `9904`…) = movimiento cargado a mano (pagos/ajustes si es negativo, cargos si es positivo).
+- La carga inicial del vínculo usuario↔cliente se hizo una sola vez con el PDF "Listado de Clientes" (307 clientes) cruzado por nombre/teléfono con `/alumnos` y revisado a mano por Daniel (48 vinculados). De ahí en adelante el administrador carga el N° de cliente al dar de alta o editar usuarios.
+
+### Nodos (`/cc_*`, reglas cerradas)
+Claves de cuenta con prefijo `c` (`c196`) para que Firebase nunca convierta el nodo en array. `emailKey` = `ek(email)`.
+- `/cc_staff/{emailKeyAuth}` — `admin` | `administrador` | `instructor`. **Solo se edita desde la consola.** La clave es el email de la cuenta de Auth (para staff, el sintético `user@instructores.aeroclubriogrande.com.ar`). Los permisos NO salen de `/instructores` ni de `/alumnos.rol` porque esos nodos los puede escribir cualquiera.
+- `/cc_vinculos/{cNNN}` — emailKey del dueño. `/cc_cuenta_de/{emailKey}` — `cNNN`. Índice doble; las reglas (`.validate`) exigen que ambos coincidan → 1 cliente = 1 usuario y 1 usuario = 1 cliente.
+- `/cc_alias/{emailKeyInstructor}` — emailKey de su usuario de socio. **Solo consola.** Permite que un instructor que entra con su usuario y elige rol piloto vea su cuenta de socio ("un solo login, dos roles").
+- `/cc_clientes/{cNNN}` — catálogo `{nombre,dni}` (solo admin/administrador). La importación agrega solos los clientes nuevos que aparezcan en el Excel.
+- `/cc_saldos/{cNNN}` — `{saldo,nombre}`: lo ven el dueño (o su alias) y todo el staff.
+- `/cc_detalle/{cNNN}` — `{items:[{f,comp,ref,imp,pend}]}` (`f` = `YYYY-MM-DD`, string sin zona horaria): solo el dueño (o su alias).
+- `/cc_meta` — `{corte,corte_txt,cuentas,total,filas,archivo,importado_por,ts}`: cualquier usuario con Auth.
+
+Reglas: se identifican por `auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')` (en RTDB `replace` reemplaza todas las apariciones). Las de alias exigen que `cc_alias/{K}` exista (si no, `null === null` daría acceso a cuentas sin vínculo). Para probar: consola → Reglas → Zona de pruebas, proveedor personalizado con `{"provider":"password","uid":"test","token":{"email":"..."}}`.
+
+### Importación (turnos.html, Config → "Cta. Cte.", solo admin/administrador)
+- `ccParseBiff2` — parser propio de BIFF2 (registros BOF/DIMENSIONS/NUMBER/LABEL/EOF; también INTEGER/FORMULA por las dudas), decodifica `windows-1252`. Si el formato no es el esperado falla con mensaje claro. Se eligió en vez de SheetJS (autorizado) porque se pudo probar contra el archivo real y no agrega dependencia. Si el facturador cambia de formato, ahí sí evaluar SheetJS.
+- `ccInterpretar` — valida título, fecha de corte y columnas por nombre (no por posición); verifica por cuenta suma(`NewSaldo`) = `SALDO1` y lo muestra como aviso.
+- Vista previa (corte, comprobantes, cuentas, total, cuántas vinculadas, clientes nuevos, aviso si el archivo es más viejo o igual que la última importación) → **CONFIRMAR** hace un único `update(ref(db), {cc_saldos, cc_detalle, cc_meta, cc_clientes/cNNN…})`: reemplazo total y atómico. Registro en `/auditoria` (`cc_importacion`).
+- Validado con el export real del 19/11/2026: 2.173 comprobantes, 87 cuentas, $138.393.717,62 (coincide con el listado de clientes al centavo).
+
+### Vínculo y vista de staff (turnos.html)
+- Editar usuario y Nuevo usuario: campo "N° cliente facturación" (solo admin/administrador) que muestra el nombre del catálogo al tipear y escribe `cc_vinculos` + `cc_cuenta_de` juntos (`ccGuardarVinculo`, rechaza un cliente ya vinculado a otro usuario). Auditoría `cc_vinculo`.
+- Instructores con entrada en `/cc_staff` ven solo el saldo ("Debe $X" / "Sin deuda pendiente", con fecha de corte), sin desglose. Sin Auth o sin permiso el bloque se oculta.
+- `ccDescSaldo`: |saldo| < $1 = "Sin deuda pendiente" (residuos de centavos del facturador).
+
+### Portal Socio (`portal-socio.html`)
+- Botón **MI CUENTA** en `alumno-screen` de turnos.html (alumnos y pilotos). Gate por `sessionStorage 'lvoad-session'` (tipo alumno) + timeout de 10 min, igual que `portal-alumno.html`.
+- Los datos se leen con la sesión de Firebase Auth, que se restaura sola (mismo origin). No muestra nada si: no hay Auth; el email de Auth no es el del usuario de la sesión (otra cuenta abierta en el navegador); login simulado; usuario sin vincular. Instructor entrando como piloto: resuelve su cuenta por `/cc_alias` (v1.01).
+- **Facturas impagas (vista principal, v1.02/v1.03):** el reporte trae sobrantes de pagos que el club no imputó a facturas posteriores ("resto a favor"); `imputarCreditosFIFO` los aplica a las facturas abiertas empezando por la más antigua (en centavos enteros) y muestra solo "Falta pagar" (con el total si fue pago parcial). Es una deducción, no la imputación real del facturador; el total siempre coincide. Ej. real: Knorr pasa de 26 renglones a 1 (factura del 19/11/2026, falta $60.000,50 de $160.000). Caso donde la deducción difiere de la intención real: Viveros, pago de $175.000 del mismo día que una factura de $175.000 que FIFO aplica a facturas más viejas.
+- **Detalle como figura en el facturador** (botón, solo si hay créditos): columna Tipo con etiqueta de color (`tipoMovimiento`: FACTURA / PAGO / NOTA DE CRÉDITO / PAGO - AJUSTE / CARGO), un solo monto por renglón en "Debe" o "A favor", subtotales y saldo. "Cancelación de facturas…" se muestra como "Pago (parte sin aplicar a facturas)".
+- En celular las filas pasan a tarjetas (etiqueta del monto vía `data-lbl`).
+
+### Limitaciones / pendientes
+- Sin saldo a favor ni historial completo hasta que el facturador exporte el listado de clientes y los movimientos en Excel.
+- El staff (ni admin) no puede ver el desglose de un socio desde la app (decisión de Daniel); el login simulado no muestra la cuenta corriente.
+- Datos con hasta una semana de atraso (frecuencia de importación).
+
