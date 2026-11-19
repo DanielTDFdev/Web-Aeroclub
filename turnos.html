@@ -1,7 +1,27 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 8.82
-  CAMBIOS : Pedido de Daniel: en LV-ART, piloto pidiendo instrucción solo podía elegir UN
+  VERSION : 8.83
+  CAMBIOS : Pedido de Daniel: cuenta corriente del socio (importada del facturador del
+            club) — fase 1, lado administración. Nodos nuevos /cc_* con reglas cerradas
+            (database.rules.json, el resto de la base sigue abierto vía comodín $otro).
+            (1) admin/administrador ahora también migran a Firebase Auth (email sintético
+            user@instructores...), igual que los instructores — las reglas de /cc_* se
+            basan en auth.token.email + /cc_staff. El acceso de emergencia admin/admin123
+            sigue funcionando pero sin Auth (no puede tocar /cc_*).
+            (2) signOut(auth) al hacer logout y al empezar cada login: antes una sesión de
+            Auth de un usuario anterior podía quedar viva si el siguiente entraba por el
+            fallback de password plano.
+            (3) El alta manual de usuarios crea la cuenta de Auth en una instancia
+            secundaria de Firebase (authAlta): createUserWithEmailAndPassword abre sesión
+            con la cuenta nueva y, en la instancia principal, desloguearía al admin.
+            (4) Config → "Cta. Cte." (solo admin/administrador): importa el Excel "Resumen
+            de Facturas Pendientes" (BIFF2/Excel 2.1, parser propio ccParseBiff2 — sin
+            dependencias), vista previa y confirmación; reemplaza cc_saldos/cc_detalle/
+            cc_meta en un único update multi-path (atómico).
+            (5) Editar/Nuevo usuario: campo "N° cliente facturación" (admin/administrador)
+            que escribe cc_vinculos/cNNN + cc_cuenta_de/{emailKey} juntos; instructores
+            ven solo el saldo (sin desglose).
+  ANTERIOR: v8.82 — Pedido de Daniel: en LV-ART, piloto pidiendo instrucción solo podía elegir UN
             slot y no extenderlo. Causa: la disponibilidad de instructor se carga sobre la
             grilla horaria de LV-OAD (HH:00) y LV-ART usa slots de 30 min; ningún HH:30
             tenía instructor → quedaban fuera de la grilla (solo se veían las horas en
@@ -4519,7 +4539,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.82</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.83</div>
   </div>
 
 </div>
@@ -5136,6 +5156,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <button class="nav-btn"        id="cfg-tab-auditoria"    onclick="showCfgTab('auditoria')">Auditoría</button>
       <button class="nav-btn"        id="cfg-tab-auditoria-fpl" onclick="showCfgTab('auditoria-fpl')">Audit. FPL</button>
       <button class="nav-btn"        id="cfg-tab-parametros"   onclick="showCfgTab('parametros')" style="color:var(--red);border-color:rgba(248,81,73,.3)">Parámetros</button>
+      <button class="nav-btn"        id="cfg-tab-ctacte"       onclick="showCfgTab('ctacte')" style="display:none">Cta. Cte.</button>
       <button class="nav-btn"        id="cfg-tab-sistema"      onclick="showCfgTab('sistema')" style="color:var(--red);border-color:rgba(248,81,73,.3)">Sistema</button>
     </div>
 
@@ -5452,6 +5473,14 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
             <label>Teléfono</label>
             <input type="tel" id="edit-al-tel" placeholder="Ej: +54 9 2964 000000">
           </div>
+          <div class="field" id="edit-al-cc-wrap" style="display:none">
+            <label>Cuenta facturación</label>
+            <div id="edit-al-cc-admin" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <input type="text" inputmode="numeric" id="edit-al-cc-cuenta" placeholder="N° cliente" autocomplete="off" style="max-width:120px" oninput="ccMostrarNombreCliente('edit-al-cc-cuenta','edit-al-cc-nombre')">
+              <span id="edit-al-cc-nombre" style="font-family:var(--font-mono);font-size:11px;color:var(--text3)"></span>
+            </div>
+            <div id="edit-al-cc-saldo" style="font-family:var(--font-mono);font-size:12px;margin-top:6px"></div>
+          </div>
           <div class="field">
             <label>Categoría</label>
             <select id="edit-al-rol">
@@ -5567,6 +5596,13 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <div class="field">
           <label>Contraseña inicial <span style="font-size:10px;color:var(--text3)">(mín. 6 — se pedirá cambiarla al ingresar)</span></label>
           <input type="text" id="nu-pass" placeholder="clave temporal" autocomplete="off">
+        </div>
+        <div class="field" id="nu-cc-wrap" style="display:none">
+          <label>N° cliente facturación <span style="font-size:10px;color:var(--text3)">(opcional — mismo número que en el sistema de facturación)</span></label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input type="text" inputmode="numeric" id="nu-cc-cuenta" placeholder="N° cliente" autocomplete="off" style="max-width:120px" oninput="ccMostrarNombreCliente('nu-cc-cuenta','nu-cc-nombre')">
+            <span id="nu-cc-nombre" style="font-family:var(--font-mono);font-size:11px;color:var(--text3)"></span>
+          </div>
         </div>
         <div id="nu-err" class="error"></div>
         <div id="nu-ok" class="success-msg"></div>
@@ -5921,6 +5957,27 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       </div>
     </div>
 
+    <div id="cfg-ctacte" class="cfg-panel" style="display:none">
+      <div class="card" style="border-color:rgba(0,200,212,.2)">
+        <h3 style="color:var(--cyan);margin-bottom:.5rem">Cuenta Corriente — Importar del facturador</h3>
+        <p style="font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.05em;margin-bottom:.75rem">SUBÍ EL EXCEL "RESUMEN DE FACTURAS PENDIENTES" (.XLS) DEL SISTEMA DE FACTURACIÓN. REEMPLAZA POR COMPLETO LOS SALDOS ANTERIORES.</p>
+        <div id="cc-ultima" style="font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.05em;margin-bottom:1rem"></div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <button onclick="document.getElementById('cc-file').click()" style="font-family:var(--font-mono);font-size:12px;padding:9px 20px;background:rgba(0,200,212,.08);border:1px solid var(--cyan);color:var(--cyan);border-radius:var(--radius);cursor:pointer;letter-spacing:.08em">📂 ELEGIR ARCHIVO .XLS</button>
+          <input type="file" id="cc-file" accept=".xls" style="display:none" onchange="ccLeerArchivo(this)">
+          <span id="cc-status" style="font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.05em"></span>
+        </div>
+        <div id="cc-preview" style="display:none;margin-top:1rem;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);padding:1rem">
+          <div style="font-family:var(--font-mono);font-size:11px;color:var(--amber);letter-spacing:.12em;margin-bottom:.75rem">▸ VISTA PREVIA — REVISÁ ANTES DE CONFIRMAR</div>
+          <div id="cc-preview-body" style="font-family:var(--font-mono);font-size:12px;color:var(--text2);line-height:1.7"></div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:1rem">
+            <button id="cc-btn-confirmar" class="primary" onclick="ccConfirmarImportacion()">CONFIRMAR IMPORTACIÓN</button>
+            <button onclick="ccCancelarImportacion()">CANCELAR</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="cfg-sistema" class="cfg-panel" style="display:none">
       <div class="card" style="border-color:rgba(0,200,212,.2);margin-bottom:1rem">
         <h3 style="color:var(--cyan);margin-bottom:.5rem">Backup de Base de Datos</h3>
@@ -6039,7 +6096,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getDatabase, ref, set, get, update, remove, push, onValue, child, runTransaction, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updatePassword }
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updatePassword, signOut }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const firebaseConfig={
@@ -6054,20 +6111,25 @@ const firebaseConfig={
 
 const app=initializeApp(firebaseConfig), db=getDatabase(app);
 const auth=getAuth(app);
+// v8.83: instancia secundaria SOLO para crear cuentas de Auth desde el alta manual de
+// usuarios. createUserWithEmailAndPassword deja logueada la cuenta recién creada en la
+// instancia donde se llama; en la principal eso desloguearía al admin (y le quitaría
+// los permisos sobre /cc_*). Se cierra la sesión secundaria después de cada alta.
+const authAlta=getAuth(initializeApp(firebaseConfig,'alta-usuarios'));
 // ── FIREBASE AUTH (modo sombra durante la migración) ───────────
 // Mientras migramos, la password en texto plano sigue siendo la red de seguridad:
 // el login intenta primero Auth y si falla cae al chequeo plano. Nadie queda bloqueado.
 // authMigrado:true en el registro indica que ya existe la cuenta en Firebase Auth.
 // Crea (o reusa) la cuenta de Auth para un alumno ya verificado por password plano.
-async function authMigrarAlumno(emailKey, email, pass){
+async function authMigrarAlumno(emailKey, email, pass, authInst=auth){
   try{
-    await createUserWithEmailAndPassword(auth, email, pass);
+    await createUserWithEmailAndPassword(authInst, email, pass);
     await fbUpdate('alumnos/'+emailKey,{authMigrado:true});
     return true;
   }catch(e){
     if(e?.code==='auth/email-already-in-use'){
       // La cuenta ya existe en Auth: confirmamos que la password coincide y marcamos migrado.
-      try{ await signInWithEmailAndPassword(auth,email,pass); await fbUpdate('alumnos/'+emailKey,{authMigrado:true}); return true; }
+      try{ await signInWithEmailAndPassword(authInst,email,pass); await fbUpdate('alumnos/'+emailKey,{authMigrado:true}); return true; }
       catch(_){ return false; }
     }
     // Proveedor no habilitado, sin red, password <6, etc.: seguimos con password plano.
@@ -6782,6 +6844,10 @@ window.loginAlumno=async function(){
       simulando=true;
     }
 
+    // v8.83: cerrar cualquier sesión de Auth previa antes de verificar — si este login
+    // termina entrando por el fallback de password plano, no debe heredar la de otro.
+    try{ await signOut(auth); }catch(_){}
+
     // ── Intento 1: alumno/piloto ──────────────────────────────────────
     let alumno=null,k=null;
     if(id.includes('@')){
@@ -6853,11 +6919,12 @@ window.loginAlumno=async function(){
       if(data)for(const[key,i]of Object.entries(data))if((i.user||'').toLowerCase()===id){found={...i,key};break;}
 
       // Verificación de password: Auth primero (si ya migrado), fallback a plano +
-      // migración perezosa. admin/administrador quedan en password plano (acceso
-      // administrativo/emergencia), nunca se migran. En login simulado se salta entera.
+      // migración perezosa. v8.83: admin/administrador también migran (necesitan Auth
+      // para /cc_*); el acceso de emergencia admin/admin123 de abajo sigue sin Auth.
+      // En login simulado se salta entera.
       let okLogin=simulando;
       if(!simulando){
-        if(found && found.user!=='admin' && found.user!=='administrador'){
+        if(found){
           const instEmail=authEmailInstructor(found.user);
           if(found.authMigrado){
             try{ await signInWithEmailAndPassword(auth,instEmail,pass); okLogin=true; }catch(_){ okLogin=false; }
@@ -6866,8 +6933,6 @@ window.loginAlumno=async function(){
             okLogin=true;
             if(!found.authMigrado) await authMigrarInstructor(found.key,instEmail,pass);
           }
-        } else if(found){
-          okLogin = found.pass===pass;
         }
         // admin siempre accesible con clave fija (acceso de emergencia)
         if(!okLogin && id==='admin' && pass==='admin123'){
@@ -7145,6 +7210,7 @@ function setNavUser(nombre,tipo){
 
 window.logout=function(){
   stopSessionTimeout();
+  signOut(auth).catch(()=>{}); // v8.83: no dejar viva la sesión de Auth (permisos /cc_*)
   if(unsubReservas){unsubReservas();unsubReservas=null;}
   if(_unsubPendientes){_unsubPendientes();_unsubPendientes=null;}
   const banner=document.getElementById('banner-pendientes');if(banner)banner.style.display='none';
@@ -7162,6 +7228,7 @@ window.logout=function(){
   _dispEstado={};dispSemanaOffset=0;admDispOffset=0;admDispInst=null;admDispSemanaOffset=0;admDispVista='lista';
   _restoreData=null;
   _editAlumnoKey=null;_mcqKey=null;
+  _ccClientes=null;_ccImport=null;_ccCuentaOriginal=null; // v8.83
   // reset filtros/estados de UI
   window._misTurnosData=null;_histFiltro='todos';_histOrdenDesc=true;
   calAvionFiltro='todos';activeConfigAvion='LV-OAD';activeDiasAvion='LV-OAD';activeDow=1;
@@ -10436,6 +10503,8 @@ window.showInstTab=function(tab){
     });
     const btnAudFpl=document.getElementById('cfg-tab-auditoria-fpl');
     if(btnAudFpl) btnAudFpl.style.display=(session?.user==='admin')?'':'none';
+    const btnCc=document.getElementById('cfg-tab-ctacte'); // v8.83
+    if(btnCc) btnCc.style.display=(session?.user==='admin'||session?.user==='administrador')?'':'none';
   }
 };
 
@@ -10660,8 +10729,9 @@ window.showCfgTab=function(tab){
   if(tab==='parametros'&&session?.user!=='admin'&&session?.user!=='administrador') return; // v7.43: mismo gate que Sistema
   if(tab==='aeronaves'&&session?.user!=='admin'&&session?.user!=='administrador') return; // v7.63: mismo gate — ABM de flota
   if(tab==='auditoria-fpl'&&session?.user!=='admin') return;
+  if(tab==='ctacte'&&session?.user!=='admin'&&session?.user!=='administrador') return; // v8.83
   if(session?.soloUsuarios&&tab!=='usuarios'&&tab!=='sistema'&&tab!=='auditoria') return;
-  ['horarios','dias','aeronaves','instructores','usuarios','consultas','auditoria','auditoria-fpl','parametros','sistema'].forEach(t=>{
+  ['horarios','dias','aeronaves','instructores','usuarios','consultas','auditoria','auditoria-fpl','parametros','ctacte','sistema'].forEach(t=>{
     const panel=document.getElementById('cfg-'+t);
     const btn=document.getElementById('cfg-tab-'+t);
     if(panel)panel.style.display=t===tab?'block':'none';
@@ -10686,6 +10756,7 @@ window.showCfgTab=function(tab){
   if(tab==='auditoria')cargarAuditoria();
   if(tab==='auditoria-fpl')window.cargarAuditoriaFpl();
   if(tab==='parametros')pintarFormParametros();
+  if(tab==='ctacte')ccRenderPanel();
   if(tab==='sistema'){
     const zona=document.getElementById('card-zona-peligrosa');
     if(zona) zona.style.display=session?.user==='admin'?'block':'none';
@@ -11173,6 +11244,7 @@ window.abrirModalAlumno=function(key){
     document.getElementById('edit-al-newpass').value='';
     document.getElementById('edit-al-forzar').checked=false;
     renderEstadoLoginToggle();
+    ccCargarBloqueUsuario(key); // v8.83: cuenta facturación (async, no bloquea el modal)
     hideEl('edit-al-err');hideEl('edit-al-ok');
     // v6.89: pestaña Log — pedido de Daniel, antes el log privado del alumno solo era
     // accesible clickeando un turno puntual en Reservas (si el alumno no tenía turnos
@@ -11241,7 +11313,19 @@ window.guardarAlumno=async function(){
   if(newpass) upd.pass=newpass;
   if(forzar) upd.pass_temporal=true;
   else if(newpass) upd.pass_temporal=null;  // clave nueva definitiva, sin forzar cambio
+  // v8.83: validar el N° cliente ANTES de grabar nada (si es inválido o ya está tomado,
+  // no se guarda ningún cambio del modal).
+  let ccCambio=false, ccNuevo=null;
+  if(ccEsAdmin() && document.getElementById('edit-al-cc-wrap')?.style.display!=='none'){
+    ccNuevo=ccNormCuenta(document.getElementById('edit-al-cc-cuenta').value);
+    if(document.getElementById('edit-al-cc-cuenta').value.trim()!=='' && !ccNuevo){showEditAlTab('datos');showErr('edit-al-err','N° cliente inválido (solo números).');return;}
+    ccCambio = ccNuevo!==_ccCuentaOriginal;
+  }
   await fbUpdate('alumnos/'+_editAlumnoKey,upd);
+  if(ccCambio){
+    try{ await ccGuardarVinculo(_editAlumnoKey,ccNuevo); }
+    catch(e){ showEditAlTab('datos'); showErr('edit-al-err','Datos guardados, pero el N° cliente no: '+(e.message||e)); renderAlumnosList(); return; }
+  }
   showOk('edit-al-ok','// DATOS ACTUALIZADOS');
   renderAlumnosList();
   setTimeout(()=>cerrarModalAlumno(),1200);
@@ -11251,8 +11335,12 @@ document.addEventListener('click',e=>{if(e.target.id==='modal-alumno')cerrarModa
 
 // ── NUEVO USUARIO (alta manual por admin/instructor) ────────────
 window.abrirModalNuevoUsuario=function(){
-  clearVal('nu-nombre','nu-username','nu-email','nu-tel','nu-fecha-nac','nu-pass');
+  clearVal('nu-nombre','nu-username','nu-email','nu-tel','nu-fecha-nac','nu-pass','nu-cc-cuenta');
   document.getElementById('nu-rol').value='alumno';
+  const nuCc=document.getElementById('nu-cc-wrap'); // v8.83
+  if(nuCc) nuCc.style.display=ccEsAdmin()?'':'none';
+  const nuCcNom=document.getElementById('nu-cc-nombre'); if(nuCcNom) nuCcNom.textContent='';
+  if(ccEsAdmin()) ccCargarClientes();
   hideEl('nu-err');hideEl('nu-ok');
   document.getElementById('modal-nuevo-usuario').classList.add('open');
 };
@@ -11275,7 +11363,14 @@ window.guardarNuevoUsuario=async function(){
     const todos=await fbGet('alumnos')||{};
     if(Object.values(todos).some(a=>(a.username||'').toLowerCase()===username)){showErr('nu-err','Ese nombre de usuario ya está en uso.');return;}
     await fbSet('alumnos/'+k,{nombre,username,email,tel:tel||null,fecha_nac:fechaNac||null,pass,rol,estado:'aprobado',pass_temporal:true,ts:new Date().toISOString()});
-    authMigrarAlumno(k,email,pass);
+    // v8.83: cuenta de Auth en la instancia secundaria (ver authAlta) — no toca la sesión del admin.
+    authMigrarAlumno(k,email,pass,authAlta).finally(()=>signOut(authAlta).catch(()=>{}));
+    // v8.83: vínculo con el cliente del facturador (opcional, solo admin/administrador)
+    const ccNuevo=ccNormCuenta(val('nu-cc-cuenta'));
+    if(ccNuevo){
+      try{ await ccGuardarVinculo(k,ccNuevo); }
+      catch(e){ showErr('nu-err','Usuario creado, pero no se pudo vincular el N° cliente: '+(e.message||e)); renderAlumnosList(); return; }
+    }
     registrarAuditoria('alta_usuario_manual',session.rol||'instructor','exito',nombre+' ('+email+' / '+username+') — rol: '+rol);
     showOk('nu-ok','// USUARIO CREADO');
     renderAlumnosList();
@@ -11285,6 +11380,251 @@ window.guardarNuevoUsuario=async function(){
 };
 
 document.addEventListener('click',e=>{if(e.target.id==='modal-nuevo-usuario')cerrarModalNuevoUsuario();});
+
+/* ============================ CUENTA CORRIENTE DEL SOCIO (v8.83) ============================
+   Pedido de Daniel. Los saldos vienen del sistema de facturación del club (externo): el
+   administrador sube cada semana el Excel "Resumen de Facturas Pendientes". Ese reporte trae
+   SOLO cuentas con saldo deudor y SOLO comprobantes pendientes — una cuenta ausente se
+   muestra como "Sin deuda pendiente" (no "al día": podría tener saldo a favor, que este
+   reporte no trae).
+   Nodos (reglas cerradas, ver database.rules.json; claves de cuenta con prefijo "c" para que
+   Firebase nunca convierta el nodo en array):
+     /cc_staff/{emailKeyAuth}   rol para las reglas (admin|administrador|instructor) — solo consola
+     /cc_vinculos/{cNNN}        emailKey del usuario dueño de esa cuenta
+     /cc_cuenta_de/{emailKey}   cNNN — índice inverso; las reglas exigen que ambos coincidan
+     /cc_clientes/{cNNN}        catálogo {nombre,dni} (carga inicial + clientes nuevos del Excel)
+     /cc_saldos/{cNNN}          {saldo,nombre} — lo ve el dueño y el staff
+     /cc_detalle/{cNNN}         {items:[{f,comp,ref,imp,pend}]} — solo el dueño
+     /cc_meta                   {corte,corte_txt,cuentas,total,filas,archivo,importado_por,ts}
+   Columnas del Excel: se usan NewImporte/NewSaldo (con signo); Importe/Saldo vienen siempre
+   positivos. SALDO1 = suma de NewSaldo de la cuenta (se verifica en la vista previa). */
+
+const CC_UMBRAL=1;            // |saldo| menor a esto = "Sin deuda pendiente" (residuos de centavos)
+let _ccClientes=null;         // caché del catálogo (solo admin/administrador)
+let _ccImport=null;           // resultado parseado pendiente de confirmar
+let _ccCuentaOriginal=null;   // cuenta vinculada al abrir el modal de edición
+let _ccTok=0;                 // descarta respuestas viejas si se reabre el modal rápido
+
+function ccEsAdmin(){ return session?.tipo==='instructor'&&(session?.user==='admin'||session?.user==='administrador')&&!session?.simuladoPor; }
+function ccNormCuenta(v){
+  const m=String(v==null?'':v).trim().match(/^c?(\d{1,6})$/i);
+  return m?('c'+parseInt(m[1],10)):null;
+}
+function ccNum(c){ return c?String(c).replace(/^c/,''):''; }
+function ccEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function ccMonto(n){ return new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',minimumFractionDigits:2}).format(n||0); }
+function ccRed(n){ return Math.round((Number(n)||0)*100)/100; }
+function ccErrMsg(e){
+  if(e?.code==='PERMISSION_DENIED'||/permission/i.test(e?.message||'')) return 'sin permiso — ingresá con tu usuario (no el acceso de emergencia) y verificá que esté en /cc_staff';
+  return e?.message||String(e);
+}
+// Texto + color del saldo para mostrar (staff y portal usan el mismo criterio).
+function ccDescSaldo(saldo){
+  const s=ccRed(saldo);
+  if(s>=CC_UMBRAL) return {txt:'Debe '+ccMonto(s),color:'var(--red)'};
+  if(s<=-CC_UMBRAL) return {txt:'A favor '+ccMonto(-s),color:'var(--green)'};
+  return {txt:'Sin deuda pendiente',color:'var(--green)'};
+}
+
+async function ccCargarClientes(forzar){
+  if(_ccClientes&&!forzar) return _ccClientes;
+  try{ _ccClientes=await fbGet('cc_clientes')||{}; }catch(e){ console.warn('cc_clientes:',e); _ccClientes=null; }
+  return _ccClientes;
+}
+
+window.ccMostrarNombreCliente=function(inputId,spanId){
+  const span=document.getElementById(spanId); if(!span) return;
+  const raw=document.getElementById(inputId).value.trim();
+  const c=ccNormCuenta(raw);
+  if(!raw){ span.textContent=''; return; }
+  if(!c){ span.textContent='⚠ Solo números'; span.style.color='var(--amber)'; return; }
+  if(!_ccClientes){ span.textContent='…'; span.style.color='var(--text3)'; ccCargarClientes().then(()=>window.ccMostrarNombreCliente(inputId,spanId)); return; }
+  const cli=_ccClientes[c];
+  if(cli){ span.textContent='✓ '+(cli.nombre||''); span.style.color='var(--cyan)'; }
+  else{ span.textContent='⚠ No está en el catálogo (¿cliente nuevo?) — se puede guardar igual'; span.style.color='var(--amber)'; }
+};
+
+// Escribe el vínculo usuario↔cliente (o lo borra si cuentaNueva es null). Ambos índices
+// en un solo update multi-path: las reglas validan que queden consistentes.
+async function ccGuardarVinculo(emailKey,cuentaNueva){
+  const anterior=await fbGet('cc_cuenta_de/'+emailKey);
+  if(cuentaNueva){
+    const dueno=await fbGet('cc_vinculos/'+cuentaNueva);
+    if(dueno&&dueno!==emailKey){
+      const otro=await fbGet('alumnos/'+dueno);
+      throw new Error('el cliente '+ccNum(cuentaNueva)+' ya está vinculado a '+(otro?.nombre||dueno));
+    }
+  }
+  const upd={};
+  if(anterior&&anterior!==cuentaNueva) upd['cc_vinculos/'+anterior]=null;
+  if(cuentaNueva) upd['cc_vinculos/'+cuentaNueva]=emailKey;
+  upd['cc_cuenta_de/'+emailKey]=cuentaNueva||null;
+  try{ await update(ref(db),upd); }catch(e){ throw new Error(ccErrMsg(e)); }
+  registrarAuditoria('cc_vinculo',session?.user||'admin','exito',emailKey+': '+(ccNum(anterior)||'—')+' → '+(ccNum(cuentaNueva)||'—'));
+}
+
+// Bloque "Cuenta facturación" del modal Editar Usuario. admin/administrador: N° editable +
+// saldo. Instructor: solo saldo (sin desglose). Sin permiso / sin Auth: se oculta.
+async function ccCargarBloqueUsuario(emailKey){
+  const tok=++_ccTok;
+  _ccCuentaOriginal=null;
+  const wrap=document.getElementById('edit-al-cc-wrap'),adminDiv=document.getElementById('edit-al-cc-admin');
+  const inp=document.getElementById('edit-al-cc-cuenta'),nom=document.getElementById('edit-al-cc-nombre'),sal=document.getElementById('edit-al-cc-saldo');
+  if(!wrap) return;
+  wrap.style.display='none'; inp.value=''; nom.textContent=''; sal.textContent='';
+  if(session?.tipo!=='instructor'||session?.simuladoPor) return;
+  const esAdm=ccEsAdmin();
+  let cuenta=null,saldoNodo=null,meta=null;
+  try{
+    cuenta=await fbGet('cc_cuenta_de/'+emailKey);
+    if(cuenta) saldoNodo=await fbGet('cc_saldos/'+cuenta);
+    meta=await fbGet('cc_meta');
+    if(esAdm) await ccCargarClientes();
+  }catch(e){ if(tok===_ccTok) console.warn('cuenta facturación:',ccErrMsg(e)); return; }
+  if(tok!==_ccTok) return;
+  _ccCuentaOriginal=cuenta||null;
+  wrap.style.display='';
+  adminDiv.style.display=esAdm?'flex':'none';
+  if(esAdm){ inp.value=ccNum(cuenta); window.ccMostrarNombreCliente('edit-al-cc-cuenta','edit-al-cc-nombre'); }
+  if(!cuenta){ sal.textContent=esAdm?'Sin vincular al facturador':'Sin vincular al facturador'; sal.style.color='var(--text3)'; return; }
+  if(!meta){ sal.textContent='Todavía no se importaron saldos'; sal.style.color='var(--text3)'; return; }
+  const d=ccDescSaldo(saldoNodo?.saldo||0);
+  sal.textContent=d.txt+'  ·  al '+(meta.corte_txt||'?');
+  sal.style.color=d.color;
+}
+
+// ── Importación del Excel semanal ────────────────────────────────────────────
+// Parser BIFF2 (Excel 2.1) propio: el facturador exporta este formato viejo y el
+// archivo solo usa 5 tipos de registro (BOF, DIMENSIONS, NUMBER, LABEL, EOF). Probado
+// contra el export real del 19/11/2026. Si un día cambia el formato, falla con un
+// mensaje claro en vez de importar basura.
+function ccParseBiff2(buf){
+  const dv=new DataView(buf),n=buf.byteLength,dec=new TextDecoder('windows-1252');
+  if(n<4||dv.getUint16(0,true)!==0x0009) throw new Error('formato no reconocido: se esperaba el Excel 2.1 que exporta el facturador');
+  const grid=[];
+  const put=(r,c,v)=>{ (grid[r]||(grid[r]=[]))[c]=v; };
+  let i=0;
+  while(i+4<=n){
+    const t=dv.getUint16(i,true),len=dv.getUint16(i+2,true),o=i+4;
+    if(o+len>n) throw new Error('archivo truncado o dañado');
+    if(t===0x0003&&len>=15) put(dv.getUint16(o,true),dv.getUint16(o+2,true),dv.getFloat64(o+7,true));          // NUMBER
+    else if(t===0x0002&&len>=9) put(dv.getUint16(o,true),dv.getUint16(o+2,true),dv.getUint16(o+7,true));       // INTEGER
+    else if(t===0x0006&&len>=15) put(dv.getUint16(o,true),dv.getUint16(o+2,true),dv.getFloat64(o+7,true));     // FORMULA (resultado)
+    else if(t===0x0004&&len>=8){                                                                                 // LABEL
+      const l=dv.getUint8(o+7); put(dv.getUint16(o,true),dv.getUint16(o+2,true),dec.decode(new Uint8Array(buf,o+8,Math.min(l,len-8))));
+    }
+    else if(t===0x000A) break;                                                                                   // EOF
+    i=o+len;
+  }
+  return grid;
+}
+
+function ccInterpretar(grid){
+  const txt=v=>(v==null?'':String(v)).trim();
+  if(!/facturas\s+pendientes/i.test(txt(grid[0]?.[0]))) throw new Error('no es el reporte "Resumen de Facturas Pendientes"');
+  let corte=null;
+  for(let r=0;r<6&&!corte;r++){
+    const m=txt(grid[r]?.[0]).match(/^Fecha\s*:\s*(\d{2})\/(\d{2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
+    if(m) corte={iso:`${m[3]}-${m[2]}-${m[1]}T${m[4].padStart(2,'0')}:${m[5]}`,txt:`${m[1]}/${m[2]}/${m[3]} ${m[4].padStart(2,'0')}:${m[5]}`};
+  }
+  if(!corte) throw new Error('no se encontró la fecha del reporte (fila "Fecha : dd/mm/aaaa hh:mm")');
+  let h=-1;
+  for(let r=0;r<10;r++){ const row=(grid[r]||[]).map(txt); if(row.includes('Cuenta')&&row.includes('NewSaldo')){h=r;break;} }
+  if(h<0) throw new Error('no se encontró la fila de títulos de columnas');
+  const hdr=(grid[h]||[]).map(txt),col={};
+  for(const k of ['Cuenta','Cliente','Fecha','Nro. Comprobante','Referencia','NewImporte','NewSaldo','SALDO1']){
+    col[k]=hdr.indexOf(k); if(col[k]<0) throw new Error('falta la columna "'+k+'"');
+  }
+  const cuentas={}; let filas=0;
+  for(let r=h+1;r<grid.length;r++){
+    const row=grid[r]; if(!row) continue;
+    const nro=row[col.Cuenta]; if(typeof nro!=='number'||!(nro>0)) continue;
+    const c='c'+Math.trunc(nro);
+    const fm=txt(row[col.Fecha]).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    const cu=cuentas[c]||(cuentas[c]={nombre:txt(row[col.Cliente]),saldo1:ccRed(row[col.SALDO1]),suma:0,items:[]});
+    const it={f:fm?`${fm[3]}-${fm[2]}-${fm[1]}`:null,comp:txt(row[col['Nro. Comprobante']]),ref:txt(row[col.Referencia]),imp:ccRed(row[col.NewImporte]),pend:ccRed(row[col.NewSaldo])};
+    cu.items.push(it); cu.suma+=it.pend; filas++;
+  }
+  if(!filas) throw new Error('el archivo no tiene filas de datos');
+  const avisos=[]; let total=0;
+  for(const [c,cu] of Object.entries(cuentas)){
+    cu.suma=ccRed(cu.suma);
+    if(Math.abs(cu.suma-cu.saldo1)>0.01) avisos.push(`Cuenta ${ccNum(c)} ${cu.nombre}: la suma de comprobantes (${ccMonto(cu.suma)}) no coincide con SALDO1 (${ccMonto(cu.saldo1)})`);
+    cu.items.sort((a,b)=>(a.f||'').localeCompare(b.f||''));
+    total+=cu.saldo1;
+  }
+  return {corte,cuentas,filas,total:ccRed(total),avisos};
+}
+
+async function ccRenderPanel(){
+  const el=document.getElementById('cc-ultima'); if(!el) return;
+  el.textContent='// Cargando…';
+  try{
+    const m=await fbGet('cc_meta');
+    el.textContent=m?`ÚLTIMA IMPORTACIÓN: corte ${m.corte_txt} · ${m.cuentas} cuentas con deuda · total ${ccMonto(m.total)} · por ${m.importado_por||'?'}`:'TODAVÍA NO SE IMPORTÓ NINGÚN ARCHIVO';
+  }catch(e){ el.textContent='⚠ No se pudo leer la última importación: '+ccErrMsg(e); }
+}
+
+window.ccCancelarImportacion=function(){
+  _ccImport=null;
+  document.getElementById('cc-preview').style.display='none';
+  document.getElementById('cc-status').textContent='';
+};
+
+window.ccLeerArchivo=async function(input){
+  const file=input.files&&input.files[0]; input.value='';
+  if(!file) return;
+  const st=document.getElementById('cc-status'),prev=document.getElementById('cc-preview'),body=document.getElementById('cc-preview-body');
+  _ccImport=null; prev.style.display='none'; st.style.color='var(--text3)'; st.textContent='// Leyendo '+file.name+'…';
+  try{
+    if(file.size>10*1024*1024) throw new Error('archivo demasiado grande');
+    const res=ccInterpretar(ccParseBiff2(await file.arrayBuffer()));
+    const [vinc,meta,cli]=await Promise.all([fbGet('cc_vinculos'),fbGet('cc_meta'),ccCargarClientes(true)]);
+    const v=vinc||{}, cat=cli||{};
+    const deudoresVinc=Object.keys(res.cuentas).filter(c=>v[c]).length;
+    const nuevosCat=Object.keys(res.cuentas).filter(c=>!cat[c]);
+    res.nuevosCat=nuevosCat; res.archivo=file.name;
+    const L=[];
+    L.push(`Fecha de corte del reporte: <b>${ccEsc(res.corte.txt)}</b>`);
+    L.push(`Comprobantes pendientes: <b>${res.filas}</b> · Cuentas con deuda: <b>${Object.keys(res.cuentas).length}</b>`);
+    L.push(`Deuda total: <b>${ccEsc(ccMonto(res.total))}</b>`);
+    L.push(`Cuentas con deuda vinculadas a usuarios de la app: <b>${deudoresVinc}</b> (de ${Object.keys(v).length} vinculados)`);
+    if(nuevosCat.length) L.push(`Clientes nuevos que se agregan al catálogo: <b>${nuevosCat.length}</b>`);
+    if(meta?.corte&&res.corte.iso<meta.corte) L.push(`<span style="color:var(--red)">⚠ Este archivo es MÁS VIEJO que la última importación (${ccEsc(meta.corte_txt)}).</span>`);
+    else if(meta?.corte&&res.corte.iso===meta.corte) L.push(`<span style="color:var(--amber)">⚠ Misma fecha de corte que la última importación — probablemente ya fue importado.</span>`);
+    if(res.avisos.length) L.push(`<span style="color:var(--amber)">⚠ ${res.avisos.length} aviso(s):</span><br>`+res.avisos.slice(0,10).map(a=>'· '+ccEsc(a)).join('<br>')+(res.avisos.length>10?'<br>· …':''));
+    L.push(`<span style="color:var(--text3)">Al confirmar se REEMPLAZAN todos los saldos y comprobantes anteriores. Las cuentas que no figuran en el archivo quedan "Sin deuda pendiente".</span>`);
+    body.innerHTML=L.join('<br>');
+    _ccImport=res; prev.style.display='block'; st.textContent='';
+  }catch(e){ st.style.color='var(--red)'; st.textContent='⚠ '+ccErrMsg(e); }
+};
+
+let _ccImportando=false;
+window.ccConfirmarImportacion=async function(){
+  if(!_ccImport||_ccImportando) return;
+  _ccImportando=true;
+  const st=document.getElementById('cc-status'),btn=document.getElementById('cc-btn-confirmar');
+  btn.disabled=true; st.style.color='var(--text3)'; st.textContent='// Importando…';
+  try{
+    const r=_ccImport,saldos={},detalle={};
+    for(const [c,cu] of Object.entries(r.cuentas)){
+      saldos[c]={saldo:cu.saldo1,nombre:cu.nombre};
+      detalle[c]={items:cu.items};
+    }
+    // Un único update multi-path: los tres nodos se reemplazan juntos o no se toca nada.
+    const upd={cc_saldos:saldos,cc_detalle:detalle,cc_meta:{
+      corte:r.corte.iso,corte_txt:r.corte.txt,cuentas:Object.keys(r.cuentas).length,total:r.total,filas:r.filas,
+      archivo:r.archivo||null,importado_por:session?.nombre||session?.user||'?',ts:serverTimestamp()}};
+    for(const c of r.nuevosCat||[]) upd['cc_clientes/'+c]={nombre:r.cuentas[c].nombre,dni:null};
+    await update(ref(db),upd);
+    registrarAuditoria('cc_importacion',session?.user||'admin','exito',`corte ${r.corte.txt} · ${upd.cc_meta.cuentas} cuentas · ${ccMonto(r.total)}`);
+    _ccImport=null; document.getElementById('cc-preview').style.display='none';
+    st.style.color='var(--green)'; st.textContent='// IMPORTACIÓN COMPLETA';
+    if((r.nuevosCat||[]).length) ccCargarClientes(true);
+    ccRenderPanel();
+  }catch(e){ st.style.color='var(--red)'; st.textContent='⚠ No se importó nada: '+ccErrMsg(e); }
+  finally{ _ccImportando=false; btn.disabled=false; }
+};
 
 /* ============================ CARGAR TURNO MANUAL (instructor/admin) ============================
    v6.08. Herramienta para que instructor o admin (NO administrador, que es solo-lectura en
