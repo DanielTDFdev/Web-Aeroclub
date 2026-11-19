@@ -2,6 +2,14 @@
 <!--
 ==================================================================================
   PORTAL SOCIO — Aeroclub Río Grande
+  v1.03 · 2026-11-19 · Pedido de Daniel: que el detalle se entienda sin saber leer la
+           numeración del facturador ("a prueba de boludos"), y que no confundan las columnas
+           Importe/Pendiente (casi siempre iguales). Columna TIPO deducida de la numeración y
+           del signo (tipoMovimiento): B-/A- = FACTURA (o NOTA DE CRÉDITO si es negativa),
+           X- = PAGO (recibo), número suelto = PAGO / AJUSTE o CARGO cargado a mano. Un solo
+           importe por renglón: "Debe" / "A favor" en el detalle del facturador y "Falta
+           pagar" en facturas impagas; el total de la factura se muestra solo si hubo pago
+           parcial ("de $X"). Totales: facturas pendientes − pagos sin aplicar = saldo.
   v1.02 · 2026-11-19 · Pedido de Daniel: la lista de comprobantes pendientes era confusa
            (Knorr: 26 renglones, facturas viejas "pendientes" + créditos sueltos en verde).
            Causa: el reporte del facturador trae lo NO aplicado — sobrantes de pagos ("resto
@@ -97,27 +105,36 @@ h2{font-family:var(--font-mono);font-size:13px;color:var(--cyan);letter-spacing:
 .saldo-sub{font-family:var(--font-mono);font-size:12px;color:var(--text2);letter-spacing:.05em}
 .cli{font-family:var(--font-mono);font-size:12px;color:var(--text3);letter-spacing:.08em;margin-bottom:.6rem}
 .lista{display:flex;flex-direction:column}
-.fila{display:grid;grid-template-columns:96px 150px 1fr 130px 130px;gap:10px;align-items:center;padding:9px 4px;border-bottom:1px solid var(--border);font-size:14px}
+.fila{display:grid;grid-template-columns:96px 1fr 150px;gap:12px;align-items:center;padding:9px 4px;border-bottom:1px solid var(--border);font-size:14px}
+.lista.v-fact .fila{grid-template-columns:96px 130px 1fr 130px 130px}
+.det .d1{font-size:14px;color:var(--text)}
+.det .d2{font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-top:2px}
+.tipo{font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;font-weight:700;border-radius:3px;padding:3px 6px;display:inline-block;text-align:center;white-space:nowrap}
+.tipo.deb{color:var(--red);border:1px solid rgba(248,81,73,.45);background:rgba(248,81,73,.08)}
+.tipo.ok{color:var(--green);border:1px solid rgba(57,211,83,.45);background:rgba(57,211,83,.08)}
+.fila .vacio{color:var(--text3)}
 .fila.head{font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;border-bottom:1px solid var(--border2)}
 .fila .num{text-align:right;font-family:var(--font-mono)}
 .fila .comp{font-family:var(--font-mono);font-size:12px;color:var(--text2)}
 .fila.total{font-weight:700;border-bottom:none;border-top:1px solid var(--border2)}
-.fila.total .lbl{grid-column:1/5}
+.fila.total .lbl{grid-column:1/3}
+.lista.v-fact .fila.total .lbl{grid-column:1/4}
+.lista.v-fact .fila.total .x2{display:block}
 .fila.total .x{display:none}
 .neg{color:var(--green)}
 @media (max-width:700px){
-  .fila{grid-template-columns:1fr auto;gap:2px 10px}
+  .fila,.lista.v-fact .fila{grid-template-columns:1fr auto;gap:3px 10px}
   .fila.head{display:none}
   .fila .f{grid-column:1;font-family:var(--font-mono);font-size:12px;color:var(--text2)}
-  .fila .comp{grid-column:1}
-  .fila .con{grid-column:1}
-  .fila .imp{grid-column:2;grid-row:1;font-size:12px;color:var(--text3)}
-  .fila .pen{grid-column:2;grid-row:2;font-weight:700}
-  .fila .imp::before{content:'Importe ';}
-  .fila .pen::before{content:attr(data-lbl) ' ';font-weight:400;color:var(--text3);font-size:11px}
-  .fila.total .lbl{grid-column:1}
-  .fila.total .pen{grid-row:1}
-  .fila.total .pen::before{content:''}
+  .fila .det{grid-column:1}
+  .fila .tp{grid-column:2;grid-row:1;justify-self:end}
+  .fila .num{grid-column:2;grid-row:2}
+  .fila .num.vacio{display:none}
+  .fila .num::before{content:attr(data-lbl) ' ';font-weight:400;color:var(--text3);font-size:11px}
+  .fila.total .lbl,.lista.v-fact .fila.total .lbl{grid-column:1;grid-row:auto}
+  .fila.total .num{grid-row:auto}
+  .fila.total .num[data-lbl=""]::before{content:''}
+  .lista.v-fact .fila.total .x2{display:none}
   .saldo-num{font-size:28px}
 }
 </style>
@@ -136,7 +153,7 @@ h2{font-family:var(--font-mono);font-size:13px;color:var(--cyan);letter-spacing:
         <span class="theme-toggle-icon">☀️</span>
       </div>
       <span class="who" id="who-label"></span>
-      <span class="ver">v1.02</span>
+      <span class="ver">v1.03</span>
       <a class="back" href="turnos.html">← TURNERO</a>
       <button class="back" onclick="cerrarSesion()" title="Cerrar sesión">⏻ SALIR</button>
     </div>
@@ -305,16 +322,31 @@ function imputarCreditosFIFO(items){
 let _ccItems=[],_ccSaldo=0,_ccColor='',_ccVistaFact=false;
 window.ccCambiarVista=function(){ _ccVistaFact=!_ccVistaFact; pintarDetalle(); };
 
-function filaComprobante(it,etiquetaPend){
-  const f=el('div','fila');
-  f.appendChild(el('div','f',fechaTxt(it.f)));
-  f.appendChild(el('div','comp',it.comp||''));
-  // "Factura - B-0004-00001443" → "Factura" (el número ya está en la columna Comprobante)
-  let con=String(it.ref||'').replace(it.comp||'\u0000','').replace(/[\s\-–]+$/,'').trim();
-  f.appendChild(el('div','con',(con||'Comprobante')+(it.parcial?' (pago parcial)':'')));
-  f.appendChild(el('div','num imp',monto(it.imp)));
-  const p=el('div','num pen'+(red(it.pend)<0?' neg':''),monto(it.pend)); p.dataset.lbl=etiquetaPend; f.appendChild(p);
-  return f;
+// Tipo de movimiento deducido de la numeración del facturador y del signo (v1.03).
+function tipoMovimiento(it){
+  const m=/^([ABX])-\d{4}-\d+/.exec(String(it.comp||'').trim()), neg=red(it.pend)<0;
+  if(m&&m[1]==='X') return {txt:'PAGO',cls:'ok',d2:'Recibo '+it.comp};
+  if(m) return neg?{txt:'NOTA DE CRÉDITO',cls:'ok',d2:'Comprobante '+it.comp}:{txt:'FACTURA',cls:'deb',d2:'Factura '+it.comp};
+  const n=it.comp?'N° '+it.comp+' · ':'';
+  return neg?{txt:'PAGO / AJUSTE',cls:'ok',d2:n+'cargado a mano en el facturador'}:{txt:'CARGO',cls:'deb',d2:n+'cargado a mano en el facturador'};
+}
+// Texto legible del concepto: saca el número repetido y los "..." del facturador.
+function conceptoLegible(it,tipo){
+  let c=String(it.ref||'').replace(it.comp||'\u0000','').replace(/\.{2,}$/,'').replace(/[\s\-–:]+$/,'').trim();
+  if(/^factura$/i.test(c)||!c) c=tipo.txt==='FACTURA'?'Factura':(tipo.cls==='ok'?'Pago':'Cargo');
+  if(/^cancelaci[oó]n de factura/i.test(c)) c='Pago (parte sin aplicar a facturas)';
+  return c.charAt(0).toUpperCase()+c.slice(1);
+}
+function celdaDetalle(it,tipo,extra){
+  const d=el('div','det');
+  d.appendChild(el('div','d1',conceptoLegible(it,tipo)+(extra||'')));
+  d.appendChild(el('div','d2',tipo.d2));
+  return d;
+}
+function celdaMonto(v,lbl,cls){
+  const c=el('div','num '+(cls||''),v==null?'—':monto(v)); c.dataset.lbl=lbl;
+  if(v==null) c.classList.add('vacio');
+  return c;
 }
 
 function pintarDetalle(){
@@ -324,30 +356,55 @@ function pintarDetalle(){
   const items=_ccItems;
   if(!items.length){ card.style.display='none'; return; }
   const hayCreditos=items.some(i=>red(i.pend)<0);
-  const vistaFact=_ccVistaFact||!hayCreditos;
-  let filas,lblPend;
-  if(vistaFact){
-    tit.textContent=hayCreditos?'▸ Detalle como figura en el facturador':'▸ Facturas impagas';
-    ayuda.textContent=hayCreditos?'Facturas pendientes y pagos todavía no aplicados (en verde), tal cual los informa el sistema de facturación.':'';
-    filas=items; lblPend='Pendiente';
-  }else{
+  const vistaFact=_ccVistaFact&&hayCreditos;
+  btn.style.display=hayCreditos?'':'none';
+  btn.textContent=vistaFact?'← VOLVER A FACTURAS IMPAGAS':'VER EL DETALLE COMO FIGURA EN EL FACTURADOR →';
+  lista.classList.toggle('v-fact',vistaFact);
+
+  if(!vistaFact){
+    // ── Facturas impagas (vista principal) ──
     const r=imputarCreditosFIFO(items);
     tit.textContent='▸ Facturas impagas';
-    ayuda.textContent='Tus pagos y saldos a favor se aplican a las facturas más antiguas; se muestra lo que falta pagar de cada una.';
-    filas=r.abiertas; lblPend='Falta pagar';
-    if(r.creditoSobrante>0.004) filas=[...filas,{f:null,comp:'',ref:'Saldo a favor sin aplicar',imp:-r.creditoSobrante,pend:-r.creditoSobrante}];
+    ayuda.textContent=hayCreditos
+      ?'Lo que te falta pagar de cada factura. Tus pagos ya están descontados (se aplican primero a las facturas más viejas).'
+      :'Lo que te falta pagar de cada factura.';
+    const h=el('div','fila head'); ['Fecha','Factura','Falta pagar'].forEach((t,i)=>h.appendChild(el('div',i===2?'num':'',t))); lista.appendChild(h);
+    for(const it of r.abiertas){
+      const tipo=tipoMovimiento(it), f=el('div','fila');
+      f.appendChild(el('div','f',fechaTxt(it.f)));
+      const parcial=Math.abs(red(it.imp))-red(it.pend)>0.004;
+      f.appendChild(celdaDetalle(it,tipo,parcial?' — pagada en parte (total '+monto(it.imp)+')':''));
+      f.appendChild(celdaMonto(it.pend,'Falta pagar'));
+      lista.appendChild(f);
+    }
+    if(r.creditoSobrante>0.004){
+      const f=el('div','fila'); f.appendChild(el('div','f','—'));
+      const d=el('div','det'); d.appendChild(el('div','d1','Saldo a favor que sobra')); d.appendChild(el('div','d2','pagos que superan lo facturado')); f.appendChild(d);
+      f.appendChild(celdaMonto(-r.creditoSobrante,'A favor','neg')); lista.appendChild(f);
+    }
+    const t=el('div','fila total'); t.appendChild(el('div','lbl','TOTAL A PAGAR'));
+    const tp=celdaMonto(_ccSaldo,''); tp.style.color=_ccColor; t.appendChild(tp); lista.appendChild(t);
+  }else{
+    // ── Detalle tal cual el facturador ──
+    tit.textContent='▸ Detalle como figura en el facturador';
+    ayuda.textContent='Cada renglón es una factura que todavía tiene algo para pagar, o un pago que el club todavía no aplicó a ninguna factura. Tu saldo es lo que debés menos lo que tenés a favor.';
+    const h=el('div','fila head'); ['Fecha','Tipo','Detalle','Debe','A favor'].forEach((t,i)=>h.appendChild(el('div',i>=3?'num':'',t))); lista.appendChild(h);
+    let debe=0,favor=0;
+    for(const it of items){
+      const tipo=tipoMovimiento(it), v=red(it.pend), f=el('div','fila');
+      f.appendChild(el('div','f',fechaTxt(it.f)));
+      const tp=el('div','tp'); tp.appendChild(el('span','tipo '+tipo.cls,tipo.txt)); f.appendChild(tp);
+      const parcial=Math.abs(Math.abs(red(it.imp))-Math.abs(v))>0.004;
+      f.appendChild(celdaDetalle(it,tipo,parcial?' (queda '+monto(Math.abs(v))+' de '+monto(Math.abs(it.imp))+')':''));
+      if(v>=0){ debe+=v; f.appendChild(celdaMonto(v,'Debe')); f.appendChild(celdaMonto(null,'A favor')); }
+      else { favor+=-v; f.appendChild(celdaMonto(null,'Debe')); f.appendChild(celdaMonto(-v,'A favor','neg')); }
+      lista.appendChild(f);
+    }
+    const t1=el('div','fila total'); t1.appendChild(el('div','lbl','Subtotales'));
+    t1.appendChild(celdaMonto(red(debe),'Debe')); t1.appendChild(celdaMonto(red(favor),'A favor','neg')); lista.appendChild(t1);
+    const t2=el('div','fila total'); t2.appendChild(el('div','lbl','SALDO (debe − a favor)'));
+    t2.appendChild(el('div','x2 vacio-desk')); const ts=celdaMonto(_ccSaldo,''); ts.style.color=_ccColor; t2.appendChild(ts); lista.appendChild(t2);
   }
-  btn.style.display=hayCreditos?'':'none';
-  btn.textContent=vistaFact?'← VER FACTURAS IMPAGAS':'VER COMO FIGURA EN EL FACTURADOR →';
-  const h=el('div','fila head');
-  ['Fecha','Comprobante','Concepto','Importe',lblPend].forEach((t,i)=>h.appendChild(el('div',i>=3?'num':'',t)));
-  lista.appendChild(h);
-  for(const it of filas) lista.appendChild(filaComprobante(it,lblPend));
-  const t=el('div','fila total');
-  t.appendChild(el('div','lbl',vistaFact&&hayCreditos?'TOTAL PENDIENTE':'TOTAL A PAGAR'));
-  ['','',''].forEach(()=>t.appendChild(el('div','x')));
-  const tp=el('div','num pen',monto(_ccSaldo)); tp.style.color=_ccColor; t.appendChild(tp);
-  lista.appendChild(t);
   card.style.display='block';
 }
 </script>
