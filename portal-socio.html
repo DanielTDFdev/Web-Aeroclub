@@ -2,6 +2,15 @@
 <!--
 ==================================================================================
   PORTAL SOCIO — Aeroclub Río Grande
+  v1.02 · 2026-11-19 · Pedido de Daniel: la lista de comprobantes pendientes era confusa
+           (Knorr: 26 renglones, facturas viejas "pendientes" + créditos sueltos en verde).
+           Causa: el reporte del facturador trae lo NO aplicado — sobrantes de pagos ("resto
+           a favor") que el club no imputó a las facturas posteriores. Ahora la vista
+           principal es "Facturas impagas": imputarCreditosFIFO() aplica esos créditos a
+           las facturas abiertas empezando por la más antigua (en centavos enteros) y muestra
+           solo lo que falta pagar. Es una deducción, no la imputación real del facturador;
+           el total siempre coincide. Botón para ver el detalle tal cual figura en el
+           facturador (vista anterior). Si sobra crédito se muestra como saldo a favor.
   v1.01 · 2026-11-19 · Pedido de Daniel: "un solo login y dos roles" para los instructores
            que también son socios. Al entrar como instructor y elegir rol piloto, la
            sesión de Auth es la del instructor (user@instructores...); ahora se busca
@@ -105,7 +114,7 @@ h2{font-family:var(--font-mono);font-size:13px;color:var(--cyan);letter-spacing:
   .fila .imp{grid-column:2;grid-row:1;font-size:12px;color:var(--text3)}
   .fila .pen{grid-column:2;grid-row:2;font-weight:700}
   .fila .imp::before{content:'Importe ';}
-  .fila .pen::before{content:'Pendiente ';font-weight:400;color:var(--text3);font-size:11px}
+  .fila .pen::before{content:attr(data-lbl) ' ';font-weight:400;color:var(--text3);font-size:11px}
   .fila.total .lbl{grid-column:1}
   .fila.total .pen{grid-row:1}
   .fila.total .pen::before{content:''}
@@ -127,7 +136,7 @@ h2{font-family:var(--font-mono);font-size:13px;color:var(--cyan);letter-spacing:
         <span class="theme-toggle-icon">☀️</span>
       </div>
       <span class="who" id="who-label"></span>
-      <span class="ver">v1.01</span>
+      <span class="ver">v1.02</span>
       <a class="back" href="turnos.html">← TURNERO</a>
       <button class="back" onclick="cerrarSesion()" title="Cerrar sesión">⏻ SALIR</button>
     </div>
@@ -139,8 +148,10 @@ h2{font-family:var(--font-mono);font-size:13px;color:var(--cyan);letter-spacing:
   </section>
 
   <section class="card" id="cc-detalle-card" style="display:none">
-    <h2>▸ Comprobantes pendientes</h2>
+    <h2 id="cc-detalle-titulo">▸ Facturas impagas</h2>
+    <div class="muted" id="cc-detalle-ayuda" style="margin:-.4rem 0 .8rem"></div>
     <div class="lista" id="cc-lista"></div>
+    <div style="margin-top:1rem"><button class="back" id="cc-btn-vista" style="display:none" onclick="ccCambiarVista()"></button></div>
   </section>
 
   <p class="muted" id="cc-nota" style="display:none"></p>
@@ -265,34 +276,79 @@ function render(cuenta,meta,saldoNodo,detalle){
   const n=el('div','saldo-num',txt); n.style.color=color; c.appendChild(n);
   c.appendChild(el('div','saldo-sub','Información al '+(meta.corte_txt||'?')+' · fuente: facturación del club'));
 
-  const card=document.getElementById('cc-detalle-card'),lista=document.getElementById('cc-lista');
-  lista.textContent='';
-  if(items.length){
-    const h=el('div','fila head');
-    ['Fecha','Comprobante','Concepto','Importe','Pendiente'].forEach((t,i)=>{ const d=el('div',i>=3?'num':'',t); h.appendChild(d); });
-    lista.appendChild(h);
-    for(const it of items){
-      const f=el('div','fila');
-      f.appendChild(el('div','f',fechaTxt(it.f)));
-      f.appendChild(el('div','comp',it.comp||''));
-      // "Factura - B-0004-00001443" → "Factura" (el número ya está en la columna Comprobante)
-      let con=String(it.ref||'').replace(it.comp||'\u0000','').replace(/[\s\-–]+$/,'').trim();
-      f.appendChild(el('div','con',con||'Comprobante'));
-      f.appendChild(el('div','num imp',monto(it.imp)));
-      const p=el('div','num pen'+(red(it.pend)<0?' neg':''),monto(it.pend)); f.appendChild(p);
-      lista.appendChild(f);
-    }
-    const t=el('div','fila total');
-    t.appendChild(el('div','lbl','TOTAL PENDIENTE'));
-    ['','',''].forEach(()=>t.appendChild(el('div','x')));
-    const tp=el('div','num pen',monto(saldo)); tp.style.color=color; t.appendChild(tp);
-    lista.appendChild(t);
-    card.style.display='block';
-  } else card.style.display='none';
+  _ccItems=items; _ccSaldo=saldo; _ccColor=color;
+  _ccVistaFact=false;
+  pintarDetalle();
 
   const nota=document.getElementById('cc-nota');
   nota.textContent='Datos informativos importados del sistema de facturación del club al '+(meta.corte_txt||'?')+'. Los pagos posteriores a esa fecha se verán en la próxima actualización. Ante cualquier diferencia, consultá en administración.';
   nota.style.display='block';
+}
+
+// ── Imputación deducida (v1.02) ─────────────────────────────────────────────
+// El reporte trae facturas abiertas (pend>0) y créditos sin aplicar (pend<0: sobrantes
+// de pagos, "resto a favor"). Se aplican los créditos a las facturas abiertas empezando
+// por la más antigua. En centavos enteros para no arrastrar error de punto flotante.
+function imputarCreditosFIFO(items){
+  const cts=n=>Math.round((Number(n)||0)*100);
+  const orden=[...items].sort((a,b)=>(a.f||'').localeCompare(b.f||''));
+  let credito=orden.reduce((s,i)=>s+(cts(i.pend)<0?-cts(i.pend):0),0);
+  const abiertas=[];
+  for(const it of orden){
+    const p=cts(it.pend); if(p<=0) continue;
+    const aplicado=Math.min(credito,p); credito-=aplicado;
+    const resta=p-aplicado;
+    if(resta>0) abiertas.push({...it,pend:resta/100,parcial:aplicado>0});
+  }
+  return {abiertas,creditoSobrante:credito/100};
+}
+let _ccItems=[],_ccSaldo=0,_ccColor='',_ccVistaFact=false;
+window.ccCambiarVista=function(){ _ccVistaFact=!_ccVistaFact; pintarDetalle(); };
+
+function filaComprobante(it,etiquetaPend){
+  const f=el('div','fila');
+  f.appendChild(el('div','f',fechaTxt(it.f)));
+  f.appendChild(el('div','comp',it.comp||''));
+  // "Factura - B-0004-00001443" → "Factura" (el número ya está en la columna Comprobante)
+  let con=String(it.ref||'').replace(it.comp||'\u0000','').replace(/[\s\-–]+$/,'').trim();
+  f.appendChild(el('div','con',(con||'Comprobante')+(it.parcial?' (pago parcial)':'')));
+  f.appendChild(el('div','num imp',monto(it.imp)));
+  const p=el('div','num pen'+(red(it.pend)<0?' neg':''),monto(it.pend)); p.dataset.lbl=etiquetaPend; f.appendChild(p);
+  return f;
+}
+
+function pintarDetalle(){
+  const card=document.getElementById('cc-detalle-card'),lista=document.getElementById('cc-lista');
+  const tit=document.getElementById('cc-detalle-titulo'),ayuda=document.getElementById('cc-detalle-ayuda'),btn=document.getElementById('cc-btn-vista');
+  lista.textContent='';
+  const items=_ccItems;
+  if(!items.length){ card.style.display='none'; return; }
+  const hayCreditos=items.some(i=>red(i.pend)<0);
+  const vistaFact=_ccVistaFact||!hayCreditos;
+  let filas,lblPend;
+  if(vistaFact){
+    tit.textContent=hayCreditos?'▸ Detalle como figura en el facturador':'▸ Facturas impagas';
+    ayuda.textContent=hayCreditos?'Facturas pendientes y pagos todavía no aplicados (en verde), tal cual los informa el sistema de facturación.':'';
+    filas=items; lblPend='Pendiente';
+  }else{
+    const r=imputarCreditosFIFO(items);
+    tit.textContent='▸ Facturas impagas';
+    ayuda.textContent='Tus pagos y saldos a favor se aplican a las facturas más antiguas; se muestra lo que falta pagar de cada una.';
+    filas=r.abiertas; lblPend='Falta pagar';
+    if(r.creditoSobrante>0.004) filas=[...filas,{f:null,comp:'',ref:'Saldo a favor sin aplicar',imp:-r.creditoSobrante,pend:-r.creditoSobrante}];
+  }
+  btn.style.display=hayCreditos?'':'none';
+  btn.textContent=vistaFact?'← VER FACTURAS IMPAGAS':'VER COMO FIGURA EN EL FACTURADOR →';
+  const h=el('div','fila head');
+  ['Fecha','Comprobante','Concepto','Importe',lblPend].forEach((t,i)=>h.appendChild(el('div',i>=3?'num':'',t)));
+  lista.appendChild(h);
+  for(const it of filas) lista.appendChild(filaComprobante(it,lblPend));
+  const t=el('div','fila total');
+  t.appendChild(el('div','lbl',vistaFact&&hayCreditos?'TOTAL PENDIENTE':'TOTAL A PAGAR'));
+  ['','',''].forEach(()=>t.appendChild(el('div','x')));
+  const tp=el('div','num pen',monto(_ccSaldo)); tp.style.color=_ccColor; t.appendChild(tp);
+  lista.appendChild(t);
+  card.style.display='block';
 }
 </script>
 </body>
