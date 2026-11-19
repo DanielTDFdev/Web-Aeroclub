@@ -1,7 +1,25 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 8.83
-  CAMBIOS : Pedido de Daniel: cuenta corriente del socio (importada del facturador del
+  VERSION : 8.84
+  CAMBIOS : Pedido de Daniel: sesión de Firebase Auth confiable (base del portal socio).
+            Causa: la clave de Auth se desincronizaba de la clave plana (Mi perfil y el
+            reseteo por admin solo cambiaban la plana) o la cuenta de Auth faltaba con
+            authMigrado:true; el login entraba igual por el fallback plano pero SIN Auth,
+            y las reglas de /cc_* lo rechazaban (caso real: dcamargo, 19/11).
+            (1) Login alumno e instructor: si Auth falla y la clave plana es correcta,
+            se intenta SIEMPRE authMigrar* (antes solo si !authMigrado) — si la cuenta de
+            Auth no existe se recrea sola con la clave actual. Si existe con otra clave
+            no se puede arreglar desde el cliente: borrarla en Authentication y el
+            próximo login la recrea.
+            (2) Mi perfil (alumno e instructor): al cambiar la contraseña también se
+            actualiza la de Auth (authSincronizarClave: re-login con la actual +
+            updatePassword). El cambio forzado de clave temporal ya lo hacía.
+            (3) Eliminado el acceso de emergencia admin/admin123 hardcodeado (login y
+            verificarPasswordAdmin del login simulado): la clave estaba en el código
+            público. admin entra con la clave de /instructores/admin como cualquiera.
+            (4) Config → Cta. Cte.: al entrar a la pestaña se limpia el mensaje de
+            estado y la vista previa del intento anterior (quedaba un "sin permiso" viejo).
+  ANTERIOR: v8.83 — Pedido de Daniel: cuenta corriente del socio (importada del facturador del
             club) — fase 1, lado administración. Nodos nuevos /cc_* con reglas cerradas
             (database.rules.json, el resto de la base sigue abierto vía comodín $otro).
             (1) admin/administrador ahora también migran a Firebase Auth (email sintético
@@ -4539,7 +4557,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.83</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.84</div>
   </div>
 
 </div>
@@ -6155,6 +6173,17 @@ async function authMigrarInstructor(instKey, email, pass){
     return false;
   }
 }
+// v8.84: cambia la clave de Auth del usuario (Mi perfil). Re-login con la clave actual
+// (updatePassword exige un login reciente y asegura que la sesión sea la de este usuario)
+// y después updatePassword. Best-effort: si falla, la clave plana ya quedó cambiada y el
+// login sigue funcionando por el fallback (sin Auth hasta que se resincronice).
+async function authSincronizarClave(email, actual, nueva){
+  try{
+    await signInWithEmailAndPassword(auth,email,actual);
+    await updatePassword(auth.currentUser,nueva);
+    return true;
+  }catch(e){ console.warn('Auth: no se pudo sincronizar la clave de',email,'—',e?.code||e); return false; }
+}
 const dbRef=()=>ref(db);
 async function fbGet(p){const s=await get(child(dbRef(),p));return s.exists()?s.val():null;}
 async function fbSet(p,v){await set(ref(db,p),v);}
@@ -6468,8 +6497,7 @@ async function verificarPasswordAdmin(pass){
     const rec=await fbGet('instructores/'+u);
     if(rec&&rec.pass===pass) return u;
   }
-  if(pass==='admin123') return 'admin'; // mismo acceso de emergencia del login normal
-  return null;
+  return null; // v8.84: sin fallback admin123 hardcodeado
 }
 // Banner persistente mientras hay una sesión simulada activa — para que quede clarísimo
 // (para Daniel, y para cualquiera que use la compu después) que no es un login real. El
@@ -6870,7 +6898,8 @@ window.loginAlumno=async function(){
         }
         if(!okLogin && alumno.pass!=null && alumno.pass===pass){
           okLogin=true;
-          if(!alumno.authMigrado) await authMigrarAlumno(k,alumno.email,pass);
+          // v8.84: siempre (no solo si !authMigrado) — recrea la cuenta de Auth si falta.
+          await authMigrarAlumno(k,alumno.email,pass);
         }
       }
       if(!okLogin){
@@ -6920,8 +6949,8 @@ window.loginAlumno=async function(){
 
       // Verificación de password: Auth primero (si ya migrado), fallback a plano +
       // migración perezosa. v8.83: admin/administrador también migran (necesitan Auth
-      // para /cc_*); el acceso de emergencia admin/admin123 de abajo sigue sin Auth.
-      // En login simulado se salta entera.
+      // para /cc_*). v8.84: sin acceso de emergencia hardcodeado. En login simulado se
+      // salta entera.
       let okLogin=simulando;
       if(!simulando){
         if(found){
@@ -6931,14 +6960,9 @@ window.loginAlumno=async function(){
           }
           if(!okLogin && found.pass!=null && found.pass===pass){
             okLogin=true;
-            if(!found.authMigrado) await authMigrarInstructor(found.key,instEmail,pass);
+            // v8.84: siempre (no solo si !authMigrado) — recrea la cuenta de Auth si falta.
+            await authMigrarInstructor(found.key,instEmail,pass);
           }
-        }
-        // admin siempre accesible con clave fija (acceso de emergencia)
-        if(!okLogin && id==='admin' && pass==='admin123'){
-          if(!await fbGet('instructores/admin'))await fbSet('instructores/admin',{user:'admin',pass:'admin123',nombre:'Instructor'});
-          found={user:'admin',pass:'admin123',nombre:'Instructor',key:'admin'};
-          okLogin=true;
         }
       }
 
@@ -10416,6 +10440,9 @@ window.cambiarClave=async function(){
   if(nueva.length<6){showErr('perfil-err','Mínimo 6 caracteres.');return;}
   if(nueva!==nueva2){showErr('perfil-err','Las contraseñas no coinciden.');return;}
   await fbUpdate('alumnos/'+session.emailKey,{pass:nueva,pass_temporal:null});
+  // v8.84: también en Auth (no en login simulado ni instructor entrando como piloto:
+  // la sesión de Auth no es la de este registro).
+  if(!session.simuladoPor&&!session.instructorOrigen&&alumno.email) await authSincronizarClave(alumno.email,actual,nueva);
   showOk('perfil-ok','// CONTRASEÑA ACTUALIZADA CORRECTAMENTE');
   clearVal('perfil-pass-actual','perfil-pass-nueva','perfil-pass-nueva2');
 };
@@ -10445,6 +10472,7 @@ window.cambiarClaveInstructor=async function(){
   if(nueva.length<6){showErr('inst-perfil-err','Mínimo 6 caracteres.');return;}
   if(nueva!==nueva2){showErr('inst-perfil-err','Las contraseñas no coinciden.');return;}
   await fbUpdate('instructores/'+session.user,{pass:nueva});
+  if(!session.simuladoPor) await authSincronizarClave(authEmailInstructor(session.user),actual,nueva); // v8.84
   showOk('inst-perfil-ok','// CONTRASEÑA ACTUALIZADA CORRECTAMENTE');
   clearVal('inst-pass-actual','inst-pass-nueva','inst-pass-nueva2');
 };
@@ -11558,6 +11586,11 @@ function ccInterpretar(grid){
 
 async function ccRenderPanel(){
   const el=document.getElementById('cc-ultima'); if(!el) return;
+  // v8.84: limpiar estado/vista previa del intento anterior (si no, quedaba un error viejo).
+  _ccImport=null;
+  const st=document.getElementById('cc-status'),pv=document.getElementById('cc-preview');
+  if(st){st.textContent='';st.style.color='var(--text3)';}
+  if(pv) pv.style.display='none';
   el.textContent='// Cargando…';
   try{
     const m=await fbGet('cc_meta');

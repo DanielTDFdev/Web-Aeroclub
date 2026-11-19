@@ -50,7 +50,7 @@ Documento vivo, grande (~1300 líneas), en `docs/documentacion_turnos.md`. **Sol
 
 ## Cómo se llama cada rol (no lo inventes distinto)
 
-- `admin` — hardcoded fallback en `turnos.html`, no viene de Firebase.
+- `admin` — registro `/instructores/admin` (desde turnos v8.84 ya no hay fallback hardcodeado admin/admin123). Desde v8.83 admin/administrador migran a Firebase Auth con email sintético `user@instructores.aeroclubriogrande.com.ar`, igual que los instructores; los permisos de `/cc_*` salen de `/cc_staff/{emailKey}` (no de `/instructores`, que es escribible por cualquiera).
 - `administrador` — sí viene de Firebase, acceso restringido (`esAdminRO()`).
 - `instructor`, `alumno`, `piloto` — roles de `/alumnos`, determinan qué ve cada uno. `alumno` NO puede iniciar un vuelo sin turno previo y solo trackea GPS (el instructor graba tiempo/horarios); `piloto` tiene acceso completo. Ambos roles ven Libro y Reporte por igual en `vuelo-piloto.html`.
 - `cancelado_rol` en una reserva SOLO puede ser `'alumno'` o `'instructor'` (binario, no hay un tercer valor) — afecta cálculos reales de cuota semanal (`turnosRestantesSemana()`). Una cancelación automática/de sistema que no debería penalizar al dueño del turno va con `cancelado_rol:'instructor'` (mismo bucket que usa el sistema para bajas por meteorología/mantenimiento), nunca inventar un valor nuevo.
