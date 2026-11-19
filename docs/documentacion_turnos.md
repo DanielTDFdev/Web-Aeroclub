@@ -1,10 +1,10 @@
 # Documentación técnica — Sistema de Turnos (turnos.html)
 
 **Aeroclub Río Grande (SAWE) — Tierra del Fuego, Argentina**
-Versión documentada: **turnos.html v8.86** · **portal-socio.html v1.03** · **fpl.html v3.32** · **portal-alumno.html v1.35** · **peso-balance.html v1.10** · **reporte.html v1.18** · **vuelo.html v6.03** · **vuelo-piloto.html v4.86** · **vor-trainer.html v4.41** · **index.html v3.9** · **analisis3d.html v2.42** · Fecha: 2026-11-19 (ver §18: hay versiones intermedias sin detalle en este documento)
+Versión documentada: **turnos.html v8.91** · **portal-socio.html v1.04** · **tesoreria.html v1.04** · **fpl.html v3.32** · **portal-alumno.html v1.35** · **peso-balance.html v1.10** · **reporte.html v1.19** · **vuelo.html v6.03** · **vuelo-piloto.html v4.87** · **vor-trainer.html v4.41** · **index.html v3.9** · **analisis3d.html v2.42** · Fecha: 2026-11-19 (ver §18: hay versiones intermedias sin detalle en este documento)
 
 > Documento de referencia: describe qué hace cada parte del sistema. Mantener actualizado cuando se agreguen funciones.
-> Además de la app web (`turnos.html`) hay un generador de planes de vuelo (`fpl.html`, §22), un **portal de alumno** (`portal-alumno.html`, §23), una calculadora de peso y balance (`peso-balance.html`, §24), un **reporte de actividad** (`reporte.html`, §25), una **app de registro de vuelo para instructores** (`vuelo.html`, §26), su equivalente **para pilotos** (`vuelo-piloto.html`, §27) y un **simulador VOR/HSI** con Modo Libre y motor de vuelo simulado (`vor-trainer.html`, §29), soporte **PWA** en los archivos principales (instalables como app en el celular), la **página de inicio pública** (`index.html`, §30), un **visor 3D de traza GPS** (`analisis3d.html`, §31), y el **portal socio** con la cuenta corriente importada del facturador del club (`portal-socio.html`, §32, nuevo 2026-11-19). Los **procesos server-side** en GitHub Actions se describen en §20 y §21.
+> Además de la app web (`turnos.html`) hay un generador de planes de vuelo (`fpl.html`, §22), un **portal de alumno** (`portal-alumno.html`, §23), una calculadora de peso y balance (`peso-balance.html`, §24), un **reporte de actividad** (`reporte.html`, §25), una **app de registro de vuelo para instructores** (`vuelo.html`, §26), su equivalente **para pilotos** (`vuelo-piloto.html`, §27) y un **simulador VOR/HSI** con Modo Libre y motor de vuelo simulado (`vor-trainer.html`, §29), soporte **PWA** en los archivos principales (instalables como app en el celular), la **página de inicio pública** (`index.html`, §30), un **visor 3D de traza GPS** (`analisis3d.html`, §31), el **portal MI CUENTA** con la cuenta corriente importada del facturador del club (`portal-socio.html`, §32, nuevo 2026-11-19) y el módulo de **Tesorería** para admin/administrador (`tesoreria.html`, §33, nuevo 2026-11-19). Los **procesos server-side** en GitHub Actions se describen en §20 y §21.
 
 ---
 
@@ -226,6 +226,9 @@ Hasta v7.83 todos los aviones reservaban en franjas de 1 hora. Pedido de Daniel:
 
 > **Hora del servidor (v6.85/v6.86/v6.87) — reemplaza al reloj del cliente en toda decisión de "ahora"/"hoy":** hasta v6.84 toda esta sección dependía de `new Date()` del navegador. Motivo del cambio (reportado por Daniel, caso real 2026-07-12): con la fecha del sistema mal seteada en una compu, "+ CARGAR TURNO" prellenó la fecha con el día siguiente equivocado (ver detalle abajo) — un alumno con el reloj mal podría análogamente reservar/cancelar fuera de ventana sin que el sistema lo notara. Función nueva `ahoraServidor()` (helper global, cerca de la definición de `db`): usa el path especial de Firebase RTDB `.info/serverTimeOffset` (diferencia en ms entre el reloj del servidor de Firebase y el del cliente, sin necesidad de Cloud Functions ni backend propio) para corregir `Date.now()`. **Reemplaza a `new Date()`/`Date.now()` en todo lo que DECIDE algo con la hora actual:** `getDays` (días disponibles para pedir turno), `esMenorDeEdad`/`chequearHabilitacionAlumno`/`chequearProximoAVencer` (gating CMA/PSA/menor de edad), `ok12h`/`ok1h`/`okAnticipacion` y `puedeAlumnoCancelar` (ventanas de cancelación), `turnoYaPaso`, `vencerTurnosPendientes` (vencimiento automático del lado cliente), año para feriados, el default de `#ct-fecha` en "+ CARGAR TURNO" (v6.87, ver nota de bug abajo), y el resaltado de "hoy"/línea de hora actual en los 3 calendarios (semanal instructor, vista semana, disponibilidad instructor/admin). **NO se tocaron** los timestamps que se GUARDAN como registro salvo los migrados a `serverTimestamp()` en v6.86 (ver §3: `ts_cancelacion`, `obs_post_ts`, `obs_privada_ts`) ni el campo genérico `ts` (deliberadamente fuera de alcance, ver §3 y §19). **El cron de Python (`vencimiento_turnos.py`) corre en servidor con su propio reloj — no depende de este fix**, que es exclusivamente para lo que corre en el navegador.
 > **Bug real encontrado en el mismo pedido (v6.87):** el default de `#ct-fecha` en "+ CARGAR TURNO" (`abrirModalCargarTurno`) usaba `new Date().toISOString().slice(0,10)` — dos problemas apilados: (1) dependía del reloj del cliente (el motivo original del pedido); (2) `toISOString()` siempre devuelve la fecha en **UTC**, no en hora local — en Argentina (UTC-3), después de las 21:00 hora local ya es "mañana" en UTC, así que ese default mostraba el día siguiente incorrecto **incluso con el reloj perfectamente bien puesto**. Con el reloj además atrasado (caso real de Daniel: cargó un turno "para hoy domingo" con la compu mal seteada y quedó guardado el sábado anterior), el corrimiento se agrava. Fix: `fmtDate(ahoraServidor())` — `fmtDate()` arma la fecha con componentes locales (`getFullYear`/`getMonth`/`getDate`), no UTC. Se revisaron los demás `<input type="date">` del archivo (fecha_nac, CMA, PSA, filtros de auditoría/borrado) — ninguno tiene default automático, se completan a mano, no están afectados por este patrón.
+
+### Tipos de vuelo `bautismo` y `contratado` (v8.91, 2026-11-19)
+Pedido de Daniel. Además de `particular` e `instruccion`, el piloto (no el alumno) puede elegir **Vuelo Bautismo** (`tipo_vuelo:'bautismo'`) y **Vuelo Contratado** (`'contratado'`), en cualquier avión incluido LV-OAD. **Funcionan exactamente igual que `particular`** (sin instructor, aprobación automática salvo LV-OAD donde igual requiere instructor, multi-slot, mismo color en el calendario, quedan a nombre del piloto); la diferencia es solo estadística. Quién puede hacerlos lo define el jefe de instructores, no el sistema (decisión de Daniel). Helpers `TIPOS_SIN_INSTRUCTOR`/`esSinInstructor(t)`/`tipoVueloTxt(t)` en turnos.html (y la misma lista en reporte.html); toda condición que antes era `=== 'particular'` con sentido de "sin instructor" pasa por ahí. `vuelo-piloto.html` v4.87 vincula el vuelo con turnos de los tres tipos; `reporte.html` v1.19 los muestra como categorías propias y los excluye del reporte por instructor. Leyenda del calendario: "PILOTO SIN INSTRUCTOR (aprob.)". (`fpl.html` tiene un campo `tipo_vuelo` distinto — el tipo OACI del plan de vuelo, no relacionado.)
 
 ## 7. Autenticación y acceso
 
@@ -587,6 +590,13 @@ Todos los servicios de los que depende el sistema para funcionar, y cuáles tien
   - `CLAUDE.md` actualizado: rol admin y versionado de `portal-socio.html`.
   - **Pendiente:** respuesta del programador del facturador (listado de clientes en Excel → saldo a favor; significado de `HVENPPGO`/`ESTCTA`; reporte de movimientos completo); decisión de la Comisión Directiva sobre bloquear turnos por deuda; cerrar lectura pública de `/alumnos`/`/instructores` (descartado por ahora: requiere Cloud Functions/plan Blaze).
   - **Sincronizado a estas versiones:** turnos.html **v8.86**, portal-socio.html **v1.03**, vuelo.html **v6.03**, vuelo-piloto.html **v4.86**. Otros archivos sin cambios esta sesión.
+- **Misma sesión 2026-11-19, segunda parte (turnos.html v8.87→v8.91, tesoreria.html v1.00→v1.04 nuevo, portal-socio.html v1.04, vuelo-piloto.html v4.87, reporte.html v1.19):**
+  - **ABM de instructores mantiene `/cc_staff`, `/cc_alias` y el vínculo de facturación (v8.87)** — principio de diseño acordado con Daniel: la operación del sistema no debe depender de editar la consola de Firebase. Ver §32.
+  - **Tesorería** pasa a módulo aparte (`tesoreria.html`, solo admin/administrador): la importación se mudó desde Config → Cta. Cte. de turnos (v8.88). Ver **§33**.
+  - **Política del club (v8.89): "nadie vuela como alumno/piloto sin alta en el facturador".** Flujo: alta de cliente en el facturador → usuario en reservas → aprobación por admin/administrador con su N° de cliente. Solo admin/administrador aprueban usuarios (exige N° de cliente); alta manual de un instructor queda pendiente; Pedir Turno bloqueado con cartel si el usuario no tiene N° de cliente (marca `/alumnos/{k}/cc_ok`). Instructores entrando como piloto exceptuados.
+  - **Terminología (v8.90):** "usuario"/"cliente" en vez de "socio" en los textos visibles — no todos los usuarios son socios del club (los alumnos no lo son). El portal se muestra como **MI CUENTA** (archivo sigue siendo `portal-socio.html`).
+  - **Tipos de vuelo Bautismo y Contratado (v8.91, vuelo-piloto v4.87, reporte v1.19)** — ver §6.
+  - **Sincronizado a estas versiones:** turnos.html **v8.91**, tesoreria.html **v1.04**, portal-socio.html **v1.04**, vuelo-piloto.html **v4.87**, reporte.html **v1.19**. Otros archivos sin cambios.
 
 - **⚠ GAP SIN DOCUMENTAR (turnos.html v8.45→v8.54, vuelo.html v5.73→v5.75, vuelo-piloto.html v4.58→v4.59, portal-alumno.html v1.27→v1.34):** entre la última entrada de este documento (2026-09-02, hasta v8.44/v5.72/v4.57) y el arranque de la sesión 2026-09-04 (abajo), el repo siguió avanzando en otra sesión/máquina sin quedar asentado acá. Confirmado contra el repo en vivo que esas versiones existen y están desplegadas, pero sin el detalle línea-por-línea de cada bump. **Pendiente: backfillear leyendo el header comment de cada archivo.**
 - **Visor 3D de traza GPS — sesión 2026-09-04 (turnos.html v8.55→v8.58, vuelo.html v5.75→v5.76, vuelo-piloto.html v4.60→v4.61, portal-alumno.html v1.34→v1.35, analisis3d.html v1.0→v1.11, nuevo):**
@@ -1764,7 +1774,9 @@ Pantalla de carga/error propia (sin `?key=`, vuelo sin traza registrada, o fetch
 - La altitud GPS (`alt` en `/vuelo_tracks`) es sobre el elipsoide (WGS84/HAE), no MSL — no importa acá porque no se compara contra terreno real, pero si en algún momento se agrega elevación real del aeródromo, hay que corregir por la ondulación del geoide (en Tierra del Fuego ronda 30-40m).
 - El .glb no está a escala real entre sí y respecto del tubo — es intencionalmente grande para que se vea a las distancias de cámara que usa este visor (a escala real, un puntito invisible).
 
-## 32. Cuenta corriente del socio y Portal Socio (`portal-socio.html`)
+## 32. Cuenta corriente del usuario y portal MI CUENTA (`portal-socio.html`)
+
+> Terminología (2026-11-19, pedido de Daniel): en la interfaz se dice "usuario"/"cliente", no "socio" — no todos los usuarios son socios del club. Esta sección conserva "socio" en textos de época.
 
 Nuevo 2026-11-19 (pedido de Daniel). El club factura con un sistema externo (no es nuestro, lo mantiene otro programador). Ese sistema exporta un Excel que el administrador importa acá cada semana; cada socio ve su saldo y sus comprobantes pendientes.
 
@@ -1776,9 +1788,9 @@ Nuevo 2026-11-19 (pedido de Daniel). El club factura con un sistema externo (no 
 
 ### Nodos (`/cc_*`, reglas cerradas)
 Claves de cuenta con prefijo `c` (`c196`) para que Firebase nunca convierta el nodo en array. `emailKey` = `ek(email)`.
-- `/cc_staff/{emailKeyAuth}` — `admin` | `administrador` | `instructor`. **Solo se edita desde la consola.** La clave es el email de la cuenta de Auth (para staff, el sintético `user@instructores.aeroclubriogrande.com.ar`). Los permisos NO salen de `/instructores` ni de `/alumnos.rol` porque esos nodos los puede escribir cualquiera.
+- `/cc_staff/{emailKeyAuth}` — `admin` | `administrador` | `instructor`. **Solo se edita desde la consola** *(cambiado en v8.87: lo mantiene el ABM de Instructores de turnos.html; reglas: admin escribe cualquier entrada, administrador solo entradas `instructor`; admin/administrador se siguen cargando a mano)*. La clave es el email de la cuenta de Auth (para staff, el sintético `user@instructores.aeroclubriogrande.com.ar`). Los permisos NO salen de `/instructores` ni de `/alumnos.rol` porque esos nodos los puede escribir cualquiera.
 - `/cc_vinculos/{cNNN}` — emailKey del dueño. `/cc_cuenta_de/{emailKey}` — `cNNN`. Índice doble; las reglas (`.validate`) exigen que ambos coincidan → 1 cliente = 1 usuario y 1 usuario = 1 cliente.
-- `/cc_alias/{emailKeyInstructor}` — emailKey de su usuario de socio. **Solo consola.** Permite que un instructor que entra con su usuario y elige rol piloto vea su cuenta de socio ("un solo login, dos roles").
+- `/cc_alias/{emailKeyInstructor}` — emailKey de su usuario de socio. **Solo consola** *(cambiado en v8.87: lo escribe el ABM de Instructores a partir del email del instructor; admin/administrador)*. El valor no necesita un registro en `/alumnos` (instructores que vuelan como piloto sin usuario propio, ej. de Larminat 493, Rodríguez 381). Permite que un instructor que entra con su usuario y elige rol piloto vea su cuenta de socio ("un solo login, dos roles").
 - `/cc_clientes/{cNNN}` — catálogo `{nombre,dni}` (solo admin/administrador). La importación agrega solos los clientes nuevos que aparezcan en el Excel.
 - `/cc_saldos/{cNNN}` — `{saldo,nombre}`: lo ven el dueño (o su alias) y todo el staff.
 - `/cc_detalle/{cNNN}` — `{items:[{f,comp,ref,imp,pend}]}` (`f` = `YYYY-MM-DD`, string sin zona horaria): solo el dueño (o su alias).
@@ -1786,7 +1798,7 @@ Claves de cuenta con prefijo `c` (`c196`) para que Firebase nunca convierta el n
 
 Reglas: se identifican por `auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')` (en RTDB `replace` reemplaza todas las apariciones). Las de alias exigen que `cc_alias/{K}` exista (si no, `null === null` daría acceso a cuentas sin vínculo). Para probar: consola → Reglas → Zona de pruebas, proveedor personalizado con `{"provider":"password","uid":"test","token":{"email":"..."}}`.
 
-### Importación (turnos.html, Config → "Cta. Cte.", solo admin/administrador)
+### Importación (turnos.html, Config → "Cta. Cte.", solo admin/administrador) — *retirado de turnos en v8.88, ahora en `tesoreria.html` (§33)*
 - `ccParseBiff2` — parser propio de BIFF2 (registros BOF/DIMENSIONS/NUMBER/LABEL/EOF; también INTEGER/FORMULA por las dudas), decodifica `windows-1252`. Si el formato no es el esperado falla con mensaje claro. Se eligió en vez de SheetJS (autorizado) porque se pudo probar contra el archivo real y no agrega dependencia. Si el facturador cambia de formato, ahí sí evaluar SheetJS.
 - `ccInterpretar` — valida título, fecha de corte y columnas por nombre (no por posición); verifica por cuenta suma(`NewSaldo`) = `SALDO1` y lo muestra como aviso.
 - Vista previa (corte, comprobantes, cuentas, total, cuántas vinculadas, clientes nuevos, aviso si el archivo es más viejo o igual que la última importación) → **CONFIRMAR** hace un único `update(ref(db), {cc_saldos, cc_detalle, cc_meta, cc_clientes/cNNN…})`: reemplazo total y atómico. Registro en `/auditoria` (`cc_importacion`).
@@ -1804,8 +1816,34 @@ Reglas: se identifican por `auth.token.email.toLowerCase().replace('.', '_').rep
 - **Detalle como figura en el facturador** (botón, solo si hay créditos): columna Tipo con etiqueta de color (`tipoMovimiento`: FACTURA / PAGO / NOTA DE CRÉDITO / PAGO - AJUSTE / CARGO), un solo monto por renglón en "Debe" o "A favor", subtotales y saldo. "Cancelación de facturas…" se muestra como "Pago (parte sin aplicar a facturas)".
 - En celular las filas pasan a tarjetas (etiqueta del monto vía `data-lbl`).
 
+### ABM de instructores (v8.87)
+Alta/edición/baja de instructores en Config → Instructores mantiene sola `/cc_staff` (rol `instructor`), `/cc_alias` (si tiene email) y, con el campo "N° cliente facturación", el vínculo (`ccSincronizarInstructor`/`ccQuitarInstructor`). Baja: borra staff y alias, y el vínculo solo si no tiene usuario en `/alumnos`. La cuenta de Auth del instructor dado de baja queda (no se puede borrar la de otro desde el cliente) pero sin `/cc_staff` ni `/instructores` no puede entrar ni ver saldos. Instructores con clave de Auth desincronizada (email sintético, no reciben mail): borrar su cuenta en Authentication y el próximo login la recrea.
+
+### Política de N° de cliente (v8.89)
+Ver §18. `usuarioTieneCliente()`: marca `/alumnos/{k}/cc_ok` (escrita por `ccGuardarVinculo` y por Tesorería al importar) con respaldo en `/cc_cuenta_de` si hay Auth (y la marca se completa sola); ante error de red deja pasar. Control de política, no de seguridad.
+
 ### Limitaciones / pendientes
 - Sin saldo a favor ni historial completo hasta que el facturador exporte el listado de clientes y los movimientos en Excel.
 - El staff (ni admin) no puede ver el desglose de un socio desde la app (decisión de Daniel); el login simulado no muestra la cuenta corriente.
 - Datos con hasta una semana de atraso (frecuencia de importación).
+
+## 33. Tesorería (`tesoreria.html`)
+
+Nuevo 2026-11-19 (pedido de Daniel): módulo aparte para administración/tesorería, **solo admin y administrador**. Botón "TESORERÍA" en la fila de accesos de `instructor-screen` (turnos.html v8.88, visible solo admin/administrador y no en login simulado).
+
+**Acceso:** sesión de turnos (`sessionStorage 'lvoad-session'`, instructor `admin`/`administrador`, no simulada) + sesión de Firebase Auth con el email sintético del usuario + `/cc_staff` = `admin`|`administrador`. Timeout de 10 min como el resto.
+
+**Alcance (v1.03, criterio de Daniel):** todo apunta al usuario del sistema de reservas. Resumen y Morosos consideran **solo cuentas vinculadas** (`/cc_vinculos`, incluye instructores con alias); el resto de los clientes del facturador (empresas, ex socios) se trabaja desde el facturador. La importación igual guarda todas las cuentas (si se vincula un usuario a mitad de semana ya tiene su saldo) y la vista previa muestra los totales del facturador como control de lectura.
+
+**Pestañas:**
+- **Resumen** — deuda de usuarios, usuarios con deuda (de N vinculados), deuda de más de 90 días.
+- **Importar** — el Excel semanal (parser BIFF2 y validación copiados de turnos v8.83). Además de `cc_saldos`/`cc_detalle`/`cc_meta`/`cc_clientes`, escribe en el mismo update atómico: `/cc_admin/morosos/{cNNN}` `{nombre,saldo,d30,d90,d180,dmas,desde,ncred,creditos}` (antigüedad sobre facturas impagas después de aplicar los créditos sueltos a las más antiguas, contada a la fecha de corte), `/cc_admin/historial/{AAAAMMDDhhmm}` (resumen + foto de saldos por cuenta, base para evolución) y `/alumnos/{k}/cc_ok=true` para vinculados sin la marca (v1.02).
+- **Morosos** — tabla ordenable por columna, búsqueda, filtro "+90 días", exportación CSV (`;`, coma decimal, BOM para Excel).
+- **Usuarios sin vincular** — usuarios con turnos (no cancelados) en los últimos 90 días sin N° de cliente; vinculación en línea (mismo procedimiento que `ccGuardarVinculo`, también marca `cc_ok`).
+- **Historial** — importaciones hechas desde Tesorería.
+- *"Pagos sin aplicar"* existió en v1.00 y se retiró en v1.01 (confundía; es un problema de carga en el facturador). El cálculo (`ncred`/`creditos`) se sigue guardando.
+
+**Reglas:** `/cc_admin` lectura/escritura solo admin/administrador (`database.rules.json`, publicado a mano en la consola).
+
+**Dato del primer corte (19/11/2026):** deuda total del facturador $138,4 M (87 cuentas), de usuarios del sistema $4,85 M (22 de 50 vinculados), de usuarios con más de 90 días $1,79 M.
 
