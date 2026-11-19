@@ -2,6 +2,10 @@
 <!--
 ==================================================================================
   REPORTE DE ACTIVIDAD DE AERONAVES — Aeroclub Río Grande 
+  v1.19 · 2026-11-19 · Pedido de Daniel: tipos de vuelo nuevos 'bautismo' y 'contratado'
+         (turnos.html v8.91) como categorías propias en las tablas y exportaciones; para
+         la clasificación y el reporte por instructor se tratan igual que 'particular'
+         (sin instructor). Helpers TIPOS_SIN_INSTRUCTOR / tipoVueloTxt().
   v1.18 · Pedido de Daniel: el reporte por instructor ya no incluye vuelos
          particulares (tipo_vuelo==='particular') — caían en el grupo "(sin
          instructor registrado)". Ese grupo queda solo para instrucciones
@@ -406,7 +410,7 @@ table.det tbody td.gray{color:var(--text3)}
     <div class="dot"></div>
     <h1>REPORTE DE ACTIVIDAD<small>AEROCLUB RÍO GRANDE</small></h1>
     <div class="sp">
-      <span class="ver">v1.18</span>
+      <span class="ver">v1.19</span>
       <a class="btn-back" href="turnos.html">← TURNERO</a>
     </div>
   </header>
@@ -655,6 +659,10 @@ function esVolado(r) { return horasDe(r) != null || aterrDe(r) != null || !!obsD
 // Retorna una de: 'volado' | 'aprobado_futuro' | 'cancelado_alumno' |
 //                'cancelado_instructor' | 'vencido_confirmado' |
 //                'vencido_sin_aprobar' | 'pendiente' | 'cargado_staff'
+// v1.19: mismos tipos que turnos.html (bautismo/contratado = particular, solo estadística)
+const TIPOS_SIN_INSTRUCTOR=['particular','bautismo','contratado'];
+function tipoVueloTxt(t){ return ({particular:'Particular',instruccion:'Instrucción',bautismo:'Bautismo',contratado:'Contratado'})[t||'instruccion']||t; }
+
 function clasificar(r) {
   const hoyStr = hoy();
   const esPasado = r.fecha < hoyStr;
@@ -686,7 +694,7 @@ function clasificar(r) {
     // caso SIEMPRE tenía aprobado_por seteado por error, a nombre de quien cargó el
     // dato — ahora que eso está bien arreglado, hace falta este OR acá para no perder
     // la clasificación correcta en el caso legítimo de "no sé quién instruyó").
-    if (r.aprobado_por || r.tipo_vuelo === 'particular' || r.es_historico) {
+    if (r.aprobado_por || TIPOS_SIN_INSTRUCTOR.includes(r.tipo_vuelo) || r.es_historico) {
       // vencido CON aprobado_por = vuelo que se realizó (el avión salió y el turno venció por hora)
       // Si tiene algo cargado (tiempo, aterrizajes u obs) = 'volado'; si no, se considera que
       // NO se voló (pedido de Daniel: un turno vencido sin nada cargado es un no-show, no un
@@ -844,7 +852,7 @@ async function generarReporte() {
       const aterr = cls === 'volado' && aterrDe(r) ? `<span class="green">${aterrDe(r)}</span>` : '<span class="muted">—</span>';
       const instructor = esc(r.instructor || r.aprobado_por || r.cancelado_por || '—');
       const quien = esc((r.nombre || '—').split(' ').slice(0,2).join(' '));
-      const tipoVuelo = (r.tipo_vuelo || 'instruccion') === 'particular' ? 'Particular' : 'Instrucción';
+      const tipoVuelo = tipoVueloTxt(r.tipo_vuelo);
       const cargadoPor = r.cargado_por ? `<span style="color:var(--amber);font-size:9px">📋 ${esc(r.cargado_por)}</span>` : '';
 
       return `<tr>
@@ -922,7 +930,7 @@ async function generarReporte() {
       'Hora fin': r.horaFin || '',
       'Avión': r.avion || 'LV-OAD',
       'Alumno/Piloto': r.nombre || '',
-      'Tipo de vuelo': (r.tipo_vuelo||'instruccion')==='particular'?'Particular':'Instrucción',
+      'Tipo de vuelo': tipoVueloTxt(r.tipo_vuelo),
       'Estado': estadoLabel,
       'Horas de vuelo': cls==='volado' ? (horasDe(r)||'') : '',
       'Aterrizajes': cls==='volado' ? (aterrDe(r)||'') : '',
@@ -1111,7 +1119,7 @@ async function generarReporteAlumno() {
         ? '<span class="badge vol">VOLADO</span>'
         : '<span class="badge nvo">NO VOLADO</span>';
       const avion  = esc(r.avion||'LV-OAD');
-      const tipo   = (r.tipo_vuelo||'instruccion')==='particular' ? 'Particular' : 'Instrucción';
+      const tipo   = tipoVueloTxt(r.tipo_vuelo);
       const inst   = esc((r.aprobado_por || r.instructor || '—'));
       return `<tr>
         <td class="muted">${fmtDD(r.fecha)}</td>
@@ -1170,7 +1178,7 @@ async function generarReporteAlumno() {
       'Alumno/Piloto': nombreDe(r),
       'Rol': r.rol === 'piloto' ? 'Piloto' : 'Alumno',
       'Avión': r.avion || 'LV-OAD',
-      'Tipo de vuelo': (r.tipo_vuelo||'instruccion')==='particular'?'Particular':'Instrucción',
+      'Tipo de vuelo': tipoVueloTxt(r.tipo_vuelo),
       'Estado': cls==='volado'?'Volado':'No volado',
       'Horas de vuelo': horasDe(r) || '',
       'Aterrizajes': aterrDe(r) || '',
@@ -1217,7 +1225,7 @@ async function generarReporteInstructor() {
     // también vea sus ausencias/no-shows, no solo lo que sí voló)
     // v1.18: los vuelos particulares no tienen instructor — no van en este reporte
     // (ya figuran en el de aeronaves y en el de alumno/piloto).
-    if (r.tipo_vuelo === 'particular') return false;
+    if (TIPOS_SIN_INSTRUCTOR.includes(r.tipo_vuelo)) return false; // v1.19: incluye bautismo/contratado
     const cls = clasificar(r);
     return cls === 'volado' || cls === 'no_realizado';
   });
@@ -1295,7 +1303,7 @@ async function generarReporteInstructor() {
         : '<span class="badge nvo">NO VOLADO</span>';
       const alumno = esc((r.nombre||'—').split(' ').slice(0,2).join(' '));
       const avion  = esc(r.avion||'LV-OAD');
-      const tipo   = (r.tipo_vuelo||'instruccion')==='particular' ? 'Particular' : 'Instrucción';
+      const tipo   = tipoVueloTxt(r.tipo_vuelo);
       return `<tr>
         <td class="muted">${fmtDD(r.fecha)}</td>
         <td class="muted">${r.hora||r.horaInicio||'—'}</td>
@@ -1353,7 +1361,7 @@ async function generarReporteInstructor() {
       'Hora': r.hora || r.horaInicio || '',
       'Alumno/Piloto': r.nombre || '',
       'Avión': r.avion || 'LV-OAD',
-      'Tipo de vuelo': (r.tipo_vuelo||'instruccion')==='particular'?'Particular':'Instrucción',
+      'Tipo de vuelo': tipoVueloTxt(r.tipo_vuelo),
       'Estado': cls==='volado'?'Volado':'No volado',
       'Horas de vuelo': horasDe(r) || '',
       'Aterrizajes': aterrDe(r) || '',

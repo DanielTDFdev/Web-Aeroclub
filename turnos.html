@@ -1,7 +1,14 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 8.90
-  CAMBIOS : Pedido de Daniel: "socio" → "usuario"/"cliente" en los textos visibles (no todos
+  VERSION : 8.91
+  CAMBIOS : Pedido de Daniel: dos tipos de vuelo nuevos para pilotos, "Bautismo" y
+            "Contratado" (también en LV-OAD). Funcionan exactamente igual que Particular
+            (sin instructor, aprobación automática salvo LV-OAD, varios slots); la
+            diferencia es solo estadística (tipo_vuelo:'bautismo'|'contratado'). Quién
+            puede hacerlos lo define el jefe de instructores, no el sistema. Nuevo helper
+            esSinInstructor() reemplaza las comparaciones === 'particular'; tipoVueloTxt()
+            para mostrar el nombre. También en Cargar turno manual / histórico.
+  ANTERIOR: v8.90 — Pedido de Daniel: "socio" → "usuario"/"cliente" en los textos visibles (no todos
             los usuarios son socios del club: los alumnos no lo son). Cartel de Pedir Turno
             y etiquetas del N° cliente en el ABM de instructores.
   ANTERIOR: v8.89 — Pedido de Daniel — política del club: "nadie vuela como alumno/piloto si no
@@ -4615,7 +4622,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.90</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.91</div>
   </div>
 
 </div>
@@ -4766,6 +4773,8 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <select id="tipo-vuelo-select" onchange="cambiarTipoVuelo(this.value)" style="width:100%;max-width:340px;padding:9px 12px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:var(--font-mono);font-size:13px">
           <option value="" selected disabled>Seleccioná...</option>
           <option value="particular" id="tipo-vuelo-opt-particular">Particular — se aprueba automático</option>
+          <option value="bautismo" id="tipo-vuelo-opt-bautismo">Vuelo Bautismo — se aprueba automático</option>
+          <option value="contratado" id="tipo-vuelo-opt-contratado">Vuelo Contratado — se aprueba automático</option>
           <option value="instruccion">Instrucción — requiere aprobación del instructor</option>
         </select>
       </div>
@@ -4927,7 +4936,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <div class="cal-leyenda">
           <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(240,165,0,.4);border:1px dashed rgba(240,165,0,.6)"></div>PENDIENTE</div>
           <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(57,211,83,.4)"></div>APROBADO</div>
-          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(77,159,255,.3)"></div>PILOTO PARTICULAR (aprob.)</div>
+          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(77,159,255,.3)"></div>PILOTO SIN INSTRUCTOR (aprob.)</div>
           <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(224,82,156,.3);border:1px dashed rgba(224,82,156,.6)"></div>SIN INSTRUCTOR</div>
           <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(248,81,73,.3)"></div>CANCELADO</div>
           <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(120,80,200,.3)"></div>VENCIDO (voló)</div>
@@ -4950,7 +4959,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <div class="cal-leyenda">
           <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(240,165,0,.4);border:1px dashed rgba(240,165,0,.6)"></div>PENDIENTE</div>
           <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(57,211,83,.4)"></div>APROBADO</div>
-          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(77,159,255,.3)"></div>PILOTO PARTICULAR (aprob.)</div>
+          <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(77,159,255,.3)"></div>PILOTO SIN INSTRUCTOR (aprob.)</div>
           <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(224,82,156,.3);border:1px dashed rgba(224,82,156,.6)"></div>SIN INSTRUCTOR</div>
           <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(248,81,73,.3)"></div>CANCELADO</div>
           <div class="cal-leyenda-item"><div class="cal-leyenda-dot" style="background:rgba(120,80,200,.3)"></div>VENCIDO (voló)</div>
@@ -5756,6 +5765,8 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <select id="ct-tipovuelo" onchange="ctActualizarCampos()">
         <option value="" selected disabled>Seleccioná...</option>
         <option value="particular">Particular — se aprueba automático</option>
+        <option value="bautismo">Vuelo Bautismo — se aprueba automático</option>
+        <option value="contratado">Vuelo Contratado — se aprueba automático</option>
         <option value="instruccion">Instrucción — requiere aprobación del instructor</option>
       </select>
     </div>
@@ -5813,6 +5824,8 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <select id="ct-hist-tipovuelo">
           <option value="instruccion">Instrucción</option>
           <option value="particular">Particular</option>
+          <option value="bautismo">Vuelo Bautismo</option>
+          <option value="contratado">Vuelo Contratado</option>
         </select>
       </div>
       <div class="field">
@@ -7587,8 +7600,11 @@ window.seleccionarAvion=function(key){
   selectedTipoVuelo=null;
   if(selTV) selTV.value='';
   if(wrapTV) wrapTV.style.display='block';
-  const optParticular=document.getElementById('tipo-vuelo-opt-particular');
-  if(optParticular) optParticular.textContent=key==='LV-OAD'?'Particular — igual requiere aprobación del instructor':'Particular — se aprueba automático';
+  // v8.91: mismo texto para Particular/Bautismo/Contratado según el avión
+  [['particular','Particular'],['bautismo','Vuelo Bautismo'],['contratado','Vuelo Contratado']].forEach(([v,n])=>{
+    const o=document.getElementById('tipo-vuelo-opt-'+v);
+    if(o) o.textContent=n+(key==='LV-OAD'?' — igual requiere aprobación del instructor':' — se aprueba automático');
+  });
 
   // ocultar slots/confirm y redibujar días
   document.getElementById('slots-section').style.display='none';
@@ -8207,7 +8223,7 @@ window._guardarTurnoConfirmado=async function(){
   // v6.97/v8.35: defensa en profundidad — el calendario de días ya queda bloqueado hasta
   // elegir tipo de vuelo (renderDaysGrid), pero se revalida acá por si se llega a este
   // punto por otro camino. v8.35: ya no excluye LV-OAD — el dropdown también aplica ahí.
-  if((session.rol||'alumno')==='piloto'&&!selectedTipoVuelo){showErr('turno-err','Elegí el tipo de vuelo (Particular o Instrucción).');return;}
+  if((session.rol||'alumno')==='piloto'&&!selectedTipoVuelo){showErr('turno-err','Elegí el tipo de vuelo.');return;}
   if(!selectedDay||!selectedSlot){showErr('turno-err','Seleccioná día y horario.');return;}
   if(!okAnticipacion(selectedDay,selectedSlot)){showErr('turno-err','Se requiere al menos '+(requiereAnticipacionLarga()?'12 horas':'1 hora')+' de anticipación.');return;}
   const rol=session.rol||'alumno';
@@ -8678,6 +8694,13 @@ window.irAPendientes=function(){showInstTab('reservas');setCalVista('lista');con
 // criterio que ya usaban por separado Consultas (autoAprobPiloto, v6.67) y claseVencido()
 // (v6.93): piloto en avión≠LV-OAD sin dato explícito = 'particular' (así se comportaba el
 // sistema antes de v6.94, autoaprobado sin excepción). Cualquier otro caso = 'instruccion'.
+// v8.91: tipos de vuelo. 'bautismo' y 'contratado' funcionan EXACTAMENTE igual que
+// 'particular' (piloto al mando sin instructor, aprobación automática salvo LV-OAD,
+// multi-slot) — la diferencia es solo estadística. Toda condición que antes decía
+// "=== 'particular'" con sentido de "sin instructor" pasa por esSinInstructor().
+const TIPOS_SIN_INSTRUCTOR=['particular','bautismo','contratado'];
+function esSinInstructor(t){ return TIPOS_SIN_INSTRUCTOR.includes(t); }
+function tipoVueloTxt(t){ return ({particular:'Particular',instruccion:'Instrucción',bautismo:'Bautismo',contratado:'Contratado'})[t]||t||'—'; }
 function tipoVueloDe(r){
   if(r.tipo_vuelo)return r.tipo_vuelo;
   return(r.rol==='piloto'&&(r.avion||'LV-OAD')!=='LV-OAD')?'particular':'instruccion';
@@ -8754,7 +8777,7 @@ function claseBadgeEstado(r){
   return esAdelantado(r)?'vencido':r.estado;
 }
 function claseVencido(r){
-  const autoAprobPiloto=tipoVueloDe(r)==='particular';
+  const autoAprobPiloto=esSinInstructor(tipoVueloDe(r));
   const fueAprobado=!!(r.aprobado_por||r.instructor)||autoAprobPiloto;
   const tieneDatos=datosVueloDe(r).tieneVuelo;
   // v8.19: caso adelantado — mismo violeta que 'vencido (voló)', tooltip distinto para
@@ -8950,7 +8973,7 @@ async function renderTodasReservas(data){
         // alumno). Ahora el azul queda solo para 'particular' — un piloto en instrucción
         // aprobada se ve igual (verde) que un turno aprobado de alumno, porque pasó por
         // el mismo proceso real de aprobación.
-        const aprobPil=(r.rol==='piloto')&&r.estado==='aprobado'&&tipoVueloDe(r)==='particular';
+        const aprobPil=(r.rol==='piloto')&&r.estado==='aprobado'&&esSinInstructor(tipoVueloDe(r));
         const coincideDisp=r.estado==='pendiente'&&dispCompleta[r.fecha]?.misHoras?.has(r.hora);
         // v8.19: venc ahora también cubre 'aprobado' adelantado (ver esAdelantado) —
         // venc chequeado ANTES que aprobPil en colorCls/tipSin para que un piloto
@@ -8959,7 +8982,7 @@ async function renderTodasReservas(data){
         const venc=(esVencidoOVolado(r)||esAdelantado(r))?claseVencido(r):null;
         const colorCls=(sinInst?'sin-instructor':(venc?venc.cls:(aprobPil?'aprobado-piloto':r.estado)))+(coincideDisp?' mi-disp':'')+' acc-avion';
         const accStyle='border-left-color:'+accColorForAvion(r.avion||'LV-OAD')+';';
-        const tipSin=sinInst?' — SIN INSTRUCTOR (pendiente)':(venc?venc.tip:(aprobPil?' — turno de piloto (particular)':''));
+        const tipSin=sinInst?' — SIN INSTRUCTOR (pendiente)':(venc?venc.tip:(aprobPil?' — turno de piloto ('+tipoVueloTxt(tipoVueloDe(r)).toLowerCase()+')':''));
         const tipDisp=coincideDisp?' — ✓ Coincide con tu disponibilidad':'';
         const tipQuien=r.estado==='pendiente'?tipQuienesPueden(dispCompleta,r.fecha,r.hora):'';
         const badge=coincideDisp?'<span class="mi-disp-badge" title="Coincide con tu disponibilidad">★</span>':'';
@@ -8974,7 +8997,7 @@ async function renderTodasReservas(data){
         // hace falta cubrir vencido). Badge centrado verticalmente, pegado a la derecha.
         // v8.18: pedido de Daniel — antes solo se mostraba en 'aprobado'; un turno vencido
         // (tachado en la grilla) perdía la referencia de quién lo había aprobado.
-        const esPilotoParticular=(r.rol==='piloto')&&tipoVueloDe(r)==='particular';
+        const esPilotoParticular=(r.rol==='piloto')&&esSinInstructor(tipoVueloDe(r));
         const inicInst=((r.estado==='aprobado'||esVencidoOVolado(r))&&!esPilotoParticular&&(r.aprobado_por||r.instructor))?`<span class="cal-inst-inic" title="Aprobó: ${r.aprobado_por||r.instructor}">${iniciales(r.aprobado_por||r.instructor)}</span>`:'';
         // v8.37: pedido de Daniel — ícono en la esquina inferior derecha del bloque cuando
         // el tiempo/aterrizajes se grabó desde vuelo.html o vuelo-piloto.html (cargado_desde_app,
@@ -9115,7 +9138,7 @@ async function renderVistaSemana(){
         // v6.96: mismo criterio que renderTodasReservas — azul solo para piloto
         // 'particular' (autoaprobado); instrucción aprobada se ve verde, como cualquier
         // aprobado real.
-        const aprobPil=(r.rol==='piloto')&&r.estado==='aprobado'&&tipoVueloDe(r)==='particular';
+        const aprobPil=(r.rol==='piloto')&&r.estado==='aprobado'&&esSinInstructor(tipoVueloDe(r));
         const coincideDisp=r.estado==='pendiente'&&dispCompleta[ds]?.misHoras?.has(r.hora);
         // v6.16: color por ESTADO igual que vista LISTA; matricula visible en el bloque
         // v8.19: venc también cubre 'aprobado' adelantado, chequeado antes que aprobPil
@@ -9127,7 +9150,7 @@ async function renderVistaSemana(){
         // estado-driven (a diferencia de LISTA, que tacha por columna/día pasado), así
         // que suma natural para mantener el mismo criterio dentro de esta vista.
         const estiloExtra=(r.estado==='cancelado'||esVencidoOVolado(r)||esAdelantado(r))?'text-decoration:line-through;':'';
-        const tipSin=sinInst?' — SIN INSTRUCTOR (pendiente)':(venc?venc.tip:(aprobPil?' — turno de piloto (particular)':''));
+        const tipSin=sinInst?' — SIN INSTRUCTOR (pendiente)':(venc?venc.tip:(aprobPil?' — turno de piloto ('+tipoVueloTxt(tipoVueloDe(r)).toLowerCase()+')':''));
         const tipDisp=coincideDisp?' — ✓ Coincide con tu disponibilidad':'';
         const tipQuien=r.estado==='pendiente'?tipQuienesPueden(dispCompleta,ds,r.hora):'';
         const badge=coincideDisp?'<span class="mi-disp-badge" title="Coincide con tu disponibilidad">★</span>':'';
@@ -9136,7 +9159,7 @@ async function renderVistaSemana(){
         const cargadoBadge=r.cargado_por?`<span class="cargado-badge" title="Cargado por ${r.cargado_por} — ${r.consume_cupo?'CONSUME':'no consume'} cupo del alumno">📋</span>`:'';
         // v7.53/v8.18: ver nota en renderTodasReservas — mismas iniciales, ahora también
         // en vencido, con esPilotoParticular separado de aprobPil.
-        const esPilotoParticular=(r.rol==='piloto')&&tipoVueloDe(r)==='particular';
+        const esPilotoParticular=(r.rol==='piloto')&&esSinInstructor(tipoVueloDe(r));
         const inicInst=((r.estado==='aprobado'||esVencidoOVolado(r))&&!esPilotoParticular&&(r.aprobado_por||r.instructor))?`<span class="cal-inst-inic" title="Aprobó: ${r.aprobado_por||r.instructor}">${iniciales(r.aprobado_por||r.instructor)}</span>`:'';
         // v8.37: ver nota en renderTodasReservas — mismo ícono de "cargado desde la app".
         const appBadge=r.cargado_desde_app?`<span class="cal-app-badge" title="Datos de vuelo cargados desde la app">📱</span>`:'';
@@ -10220,7 +10243,7 @@ window.abrirModal=function(key){
         // instructor===session.nombre||aprobado_por===session.nombre, ver cargarTabVuelo).
         // El audit log sí registra quién aprobó en los hechos (session.nombre), separado
         // de lo que queda escrito en la reserva.
-        const esParticular=r.tipo_vuelo==='particular';
+        const esParticular=esSinInstructor(r.tipo_vuelo);
         const nombreAprobador=esParticular?r.nombre:session.nombre;
         await fbUpdate('reservas/'+key,{estado:'aprobado',instructor:nombreAprobador,aprobado_por:nombreAprobador});
         await registrarAuditoria('aprobacion_turno',session.rol||'instructor','exito',session.nombre+' (instructor) — '+(r.avion||'LV-OAD')+' — '+r.fecha+' '+r.hora+' hs — alumno: '+r.nombre+(esParticular?' — particular, aprobado a nombre propio del piloto':''));
@@ -10306,7 +10329,7 @@ window.abrirModal=function(key){
     // el texto hubiera dicho "aprobado por [nada]"/"piloto autoaprobado" (falso) para ese
     // caso — se recalculan los mismos booleanos que usa claseVencido() para elegir el texto
     // correcto sin duplicar la lógica de color.
-    const autoAprobPilotoNota=tipoVueloDe(r)==='particular';
+    const autoAprobPilotoNota=esSinInstructor(tipoVueloDe(r));
     const fueAprobadoNota=!!(r.aprobado_por||r.instructor)||autoAprobPilotoNota;
     const tieneDatosNota=datosVueloDe(r).tieneVuelo;
     if(venc.cls==='vencido-sin-confirmar'){
@@ -10731,7 +10754,7 @@ function segClasificar(r){
   if(r.estado==='aprobado' && !esPasado) return 'aprobado_futuro';
   if(r.estado==='cancelado') return r.cancelado_rol==='instructor'?'cancelado_instructor':'cancelado_alumno';
   if(r.estado==='vencido'){
-    if(r.aprobado_por||r.tipo_vuelo==='particular'||r.es_historico) return segEsVolado(r)?'volado':'no_realizado';
+    if(r.aprobado_por||esSinInstructor(r.tipo_vuelo)||r.es_historico) return segEsVolado(r)?'volado':'no_realizado';
     return 'vencido_sin_aprobar';
   }
   if(r.estado==='pendiente') return 'pendiente';
@@ -11911,7 +11934,7 @@ window.ctActualizarCampos=function(){
   wrapTV.style.display=mostrarTV?'':'none';
   if(!mostrarTV) selTV.value='';
 
-  const esParticular=mostrarTV&&selTV.value==='particular';
+  const esParticular=mostrarTV&&esSinInstructor(selTV.value);
   document.getElementById('ct-aprobado-wrap').style.display=esParticular?'none':'';
 };
 
@@ -12129,11 +12152,11 @@ window.guardarTurnoManual=async function(){
   }
   const wrapTVvisible=document.getElementById('ct-tipovuelo-wrap').style.display!=='none';
   const tipoVueloSel=document.getElementById('ct-tipovuelo').value;
-  if(wrapTVvisible&&!tipoVueloSel){showErr('ct-err','Elegí el tipo de vuelo (Particular o Instrucción).');return;}
+  if(wrapTVvisible&&!tipoVueloSel){showErr('ct-err','Elegí el tipo de vuelo.');return;}
   // Mismo criterio que confirmarTurno() (autoservicio): LV-OAD o alumno → siempre
   // 'instruccion'. Piloto en otro avión → lo que eligió en el dropdown.
   const tipoVuelo=(esPiloto&&avion!=='LV-OAD')?tipoVueloSel:'instruccion';
-  const esParticular=tipoVuelo==='particular';
+  const esParticular=esSinInstructor(tipoVuelo);
   const instructorSel=esParticular?'':document.getElementById('ct-instructor').value;
   const obs=document.getElementById('ct-obs').value.trim();
   const nuevo={
@@ -12155,7 +12178,7 @@ window.guardarTurnoManual=async function(){
   try{
     const refNueva=await fbPush('reservas',nuevo);
     const labelHora=horaFin?hora+' a '+horaFin+' hs':hora+' hs';
-    const estadoTxt=esParticular?' — particular, aprobado automático':(instructorSel?' — aprobado por '+instructorSel:' — pendiente');
+    const estadoTxt=esParticular?' — '+tipoVueloTxt(tipoVuelo).toLowerCase()+', aprobado automático':(instructorSel?' — aprobado por '+instructorSel:' — pendiente');
     await registrarAuditoria('alta_turno_manual',session.rol||'instructor','exito',
       (session.nombre||session.user)+' cargó turno — '+avion+' — '+fecha+' '+labelHora+
       ' — alumno: '+nuevo.nombre+estadoTxt);
@@ -12571,7 +12594,7 @@ function calcAlumnoStats(lista){
     if(r.estado==='volado'){
       st.volo++; // v8.39: 'volado' siempre tiene datos de vuelo, cuenta directo
     }else if(r.estado==='vencido'){
-      const autoAprobPiloto=tipoVueloDe(r)==='particular';
+      const autoAprobPiloto=esSinInstructor(tipoVueloDe(r));
       if(r.aprobado_por||r.instructor||autoAprobPiloto) st.volo++; else st.vencioSinAprobar++;
     }else if(r.estado==='cancelado'){
       if(r.cancelado_rol==='instructor') st.canceloInstructor++; else st.canceloAlumno++;

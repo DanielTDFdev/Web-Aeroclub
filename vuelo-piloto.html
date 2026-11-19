@@ -2,6 +2,10 @@
 <!--
 ==================================================================================
   VUELO PILOTO — Registro de vuelo para pilotos · Aeroclub Río Grande
+  v4.87 · 2026-11-19
+  Pedido de Daniel: tipos de vuelo nuevos 'bautismo' y 'contratado' (turnos.html v8.91),
+  que funcionan igual que 'particular'. La vinculación del vuelo con el turno propio del
+  piloto (buscarTurnoPropioParaAhora y el re-match al sincronizar) acepta los tres tipos.
   v4.86 · 2026-11-19
   Pedido de Daniel: las claves pasan a guardarse con hash (pass_hash, PBKDF2) en vez de
   texto plano — ver turnos.html v8.86. Login de instructor y de alumno/piloto usan
@@ -2038,7 +2042,7 @@ const LS_PENDIENTES = 'acrg-piloto-v1-pendientes'; // cola de vuelos guardados l
 // avión "sin arrancar todavía" que sobrevivía indefinidamente en localStorage.
 const RESTAURAR_AVION_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '4.86';
+const APP_VERSION = '4.87';
 document.querySelectorAll('.ver').forEach(el=>el.textContent='v'+APP_VERSION);
 
 // ── Traza GPS (obligatoria, siempre activa — v4.76) ──────────
@@ -2469,7 +2473,7 @@ async function buscarTurnoPropioParaAhora(){
       // que nadie aprobó (LV-ART/LV-MPH se auto-aprueban sin aprobador, LV-OAD no).
       const vencidoRecuperable=r.estado==='vencido'&&!r.ts_despegue&&(r.avion!=='LV-OAD'||!!(r.aprobado_por||r.instructor));
       if(r.estado!=='aprobado'&&!vencidoRecuperable) return false;
-      if(r.tipo_vuelo!=='particular') return false;
+      if(!['particular','bautismo','contratado'].includes(r.tipo_vuelo)) return false; // v4.87
       if(r.piloto_tiempo_vuelo!=null) return false; // ya registrado
       return true;
     }).map(r=>{
@@ -3634,7 +3638,7 @@ async function escribirPendiente(item){
       const todas=rArr((await conTimeout(get(ref(db,'reservas')))).val());
       const cands=todas.filter(r=>{
         if(r.email!==item.email||r.fecha!==item.fecha||r.avion!==item.avion) return false;
-        if(r.tipo_vuelo!=='particular') return false;
+        if(!['particular','bautismo','contratado'].includes(r.tipo_vuelo)) return false; // v4.87
         if(r.piloto_tiempo_vuelo!=null||r.ts_despegue) return false;
         // solo turnos que empezaban antes del despegue (o hasta 30min después) — nunca
         // "robar" un turno de más tarde en el día que el piloto todavía piensa volar
