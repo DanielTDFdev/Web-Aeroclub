@@ -1,7 +1,19 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 8.86
-  CAMBIOS : Pedido de Daniel: (1) claves con hash en vez de texto plano y (2) reseteo de
+  VERSION : 8.87
+  CAMBIOS : Pedido de Daniel: que las altas/bajas de instructores no dependan de que él
+            edite la consola de Firebase. El ABM de Instructores (admin/administrador)
+            ahora mantiene solo /cc_staff (rol instructor), /cc_alias (instructor → su
+            emailKey de socio, si tiene email) y, con el campo nuevo "N° cliente
+            facturación", el vínculo de su cuenta del facturador (cc_vinculos/cc_cuenta_de,
+            vía ccGuardarVinculo — sirve aunque no tenga usuario en /alumnos).
+            Baja: borra su cc_staff y cc_alias, y el vínculo solo si no tiene usuario de
+            socio en /alumnos. La cuenta de Auth del instructor dado de baja queda (no se
+            puede borrar la de otro desde el cliente) pero sin /cc_staff ni /instructores
+            no puede ver saldos ni entrar a la app. admin/administrador nunca se tocan.
+            Requiere las reglas nuevas (cc_staff/cc_alias escribibles por admin;
+            administrador solo puede escribir/borrar entradas 'instructor').
+  ANTERIOR: v8.86 — Pedido de Daniel: (1) claves con hash en vez de texto plano y (2) reseteo de
             clave que no desincronice Firebase Auth (sin Cloud Functions / sin plan pago).
             (1) PBKDF2-SHA256 con sal (hashClave/verificarClave/camposClave, misma copia
             en vuelo.html y vuelo-piloto.html). Todas las escrituras de clave (registro,
@@ -4576,7 +4588,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.86</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.87</div>
   </div>
 
 </div>
@@ -5358,8 +5370,11 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <div class="row">
           <div class="field"><label>Email <span style="font-size:10px;color:var(--text3)">(para recordatorios)</span></label><input type="email" id="new-inst-email" placeholder="instructor@email.com" autocapitalize="off" autocomplete="off"></div>
           <div class="field"><label>Celular <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><input type="tel" id="new-inst-cel" placeholder="Ej: +54 9 2964 000000"></div>
+          <div class="field"><label>N° cliente facturación <span style="font-size:10px;color:var(--text3)">(opcional — si también es socio; requiere email)</span></label>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input type="text" inputmode="numeric" id="new-inst-cc" placeholder="N° cliente" autocomplete="off" style="max-width:120px" oninput="ccMostrarNombreCliente('new-inst-cc','new-inst-cc-nombre')"><span id="new-inst-cc-nombre" style="font-family:var(--font-mono);font-size:11px;color:var(--text3)"></span></div></div>
         </div>
         <button onclick="agregarInstructor()">AGREGAR INSTRUCTOR</button>
+        <span id="new-inst-msg" style="font-family:var(--font-mono);font-size:11px;margin-left:10px"></span>
       </div>
 
       <!-- VISTA DISPONIBILIDAD INSTRUCTORES — admin + instructores reales (solo lectura).
@@ -5805,6 +5820,10 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
     <div class="field">
       <label>Celular <span style="font-size:10px;color:var(--text3)">(opcional)</span></label>
       <input type="tel" id="edit-inst-cel" placeholder="Ej: +54 9 2964 000000">
+    </div>
+    <div class="field" id="edit-inst-cc-wrap">
+      <label>N° cliente facturación <span style="font-size:10px;color:var(--text3)">(si también es socio — requiere email)</span></label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input type="text" inputmode="numeric" id="edit-inst-cc" placeholder="N° cliente" autocomplete="off" style="max-width:120px" oninput="ccMostrarNombreCliente('edit-inst-cc','edit-inst-cc-nombre')"><span id="edit-inst-cc-nombre" style="font-family:var(--font-mono);font-size:11px;color:var(--text3)"></span></div>
     </div>
     <div class="field">
       <label>Nueva contraseña <span style="font-size:10px;color:var(--text3)">(dejar vacío para no cambiar)</span></label>
@@ -7325,7 +7344,7 @@ window.logout=function(){
   _dispEstado={};dispSemanaOffset=0;admDispOffset=0;admDispInst=null;admDispSemanaOffset=0;admDispVista='lista';
   _restoreData=null;
   _editAlumnoKey=null;_mcqKey=null;
-  _ccClientes=null;_ccImport=null;_ccCuentaOriginal=null; // v8.83
+  _ccClientes=null;_ccImport=null;_ccCuentaOriginal=null;_editInstCuenta=null; // v8.83/v8.87
   // reset filtros/estados de UI
   window._misTurnosData=null;_histFiltro='todos';_histOrdenDesc=true;
   calAvionFiltro='todos';activeConfigAvion='LV-OAD';activeDiasAvion='LV-OAD';activeDow=1;
@@ -11144,10 +11163,39 @@ window.toggleVacacionesAdmin=async function(k){
   renderInstructoresList();
 };
 
+// ── v8.87: permisos de cuenta corriente del instructor, mantenidos desde el ABM ──
+// /cc_staff y /cc_alias se escriben acá (reglas: admin; administrador solo entradas
+// 'instructor'). Nunca para admin/administrador (sus entradas se mantienen a mano).
+const ccInstKey=user=>ek((user+'@instructores.aeroclubriogrande.com.ar').toLowerCase());
+async function ccSincronizarInstructor(user,email,cuentaNueva,cuentaAnterior){
+  if(user==='admin'||user==='administrador') return;
+  const instK=ccInstKey(user), socioK=email?ek(email.toLowerCase()):null;
+  const upd={}; upd['cc_staff/'+instK]='instructor'; upd['cc_alias/'+instK]=socioK||null;
+  try{ await update(ref(db),upd); }catch(e){ throw new Error(ccErrMsg(e)); }
+  if(cuentaNueva!==undefined&&cuentaNueva!==cuentaAnterior){
+    if(cuentaNueva&&!socioK) throw new Error('para vincular el N° cliente hace falta el email del instructor');
+    if(socioK) await ccGuardarVinculo(socioK,cuentaNueva);
+  }
+}
+async function ccQuitarInstructor(user,email){
+  if(user==='admin'||user==='administrador') return;
+  const instK=ccInstKey(user), upd={};
+  upd['cc_staff/'+instK]=null; upd['cc_alias/'+instK]=null;
+  try{ await update(ref(db),upd); }catch(e){ throw new Error(ccErrMsg(e)); }
+  // El vínculo se borra solo si NO tiene usuario de socio propio en /alumnos.
+  if(email){
+    const socioK=ek(email.toLowerCase());
+    if(!await fbGet('alumnos/'+socioK)&&await fbGet('cc_cuenta_de/'+socioK)) await ccGuardarVinculo(socioK,null);
+  }
+}
+
 window.agregarInstructor=async function(){
   const user=val('new-inst-user'),pass=val('new-inst-pass'),nombre=val('new-inst-nombre');
   const email=val('new-inst-email').toLowerCase(),cel=val('new-inst-cel');
+  const ccRaw=val('new-inst-cc'), ccCuenta=ccNormCuenta(ccRaw); // v8.87
+  const msg=document.getElementById('new-inst-msg'); if(msg) msg.textContent='';
   if(!user||!pass||!nombre)return;
+  if(ccRaw&&!ccCuenta){alert('N° cliente inválido (solo números).');return;}
   if(pass.length<6){alert('La contraseña debe tener al menos 6 caracteres.');return;}
   if(email&&!email.includes('@')){alert('El email no es válido.');return;}
   if(await fbGet('instructores/'+user)){alert('Ese usuario ya existe.');return;}
@@ -11155,13 +11203,28 @@ window.agregarInstructor=async function(){
   if(email) nuevo.email=email;
   if(cel) nuevo.cel=cel;
   await fbSet('instructores/'+user,nuevo);
-  clearVal('new-inst-user','new-inst-pass','new-inst-nombre','new-inst-email','new-inst-cel');
+  clearVal('new-inst-user','new-inst-pass','new-inst-nombre','new-inst-email','new-inst-cel','new-inst-cc');
+  const ccNom=document.getElementById('new-inst-cc-nombre'); if(ccNom) ccNom.textContent='';
+  // v8.87: permisos de cuenta corriente (no bloquea el alta si falla)
+  try{
+    await ccSincronizarInstructor(user,email,ccCuenta||undefined,undefined);
+    if(msg){ msg.style.color='var(--green)'; msg.textContent='✓ Instructor creado'+(ccCuenta?' y vinculado al cliente '+ccNum(ccCuenta):''); }
+  }catch(e){ if(msg){ msg.style.color='var(--amber)'; msg.textContent='⚠ Instructor creado, pero la cuenta corriente no se pudo configurar: '+(e.message||e); } }
   renderInstructoresList();
 };
 
-window.eliminarInstructor=async function(k){if(!confirm('¿Eliminar este instructor?'))return;await fbRemove('instructores/'+k);renderInstructoresList();};
+window.eliminarInstructor=async function(k){
+  if(!confirm('¿Eliminar este instructor?'))return;
+  const inst=await fbGet('instructores/'+k);
+  await fbRemove('instructores/'+k);
+  // v8.87: quitar también sus permisos de cuenta corriente
+  try{ await ccQuitarInstructor(inst?.user||k,inst?.email||null); }
+  catch(e){ console.warn('baja instructor — cuenta corriente:',e); }
+  renderInstructoresList();
+};
 
 let _editInstKey=null;
+let _editInstCuenta=null; // v8.87
 
 window.abrirModalInst=function(key){
   _editInstKey=key;
@@ -11174,6 +11237,18 @@ window.abrirModalInst=function(key){
     document.getElementById('edit-inst-pass').value='';
     document.getElementById('edit-inst-forzar').checked=false;
     hideEl('edit-inst-err');hideEl('edit-inst-ok');
+    // v8.87: N° cliente facturación (no para admin/administrador)
+    const ccW=document.getElementById('edit-inst-cc-wrap'),ccI=document.getElementById('edit-inst-cc'),ccN=document.getElementById('edit-inst-cc-nombre');
+    _editInstCuenta=null; ccI.value=''; ccN.textContent='';
+    const esEsp=(key==='admin'||key==='administrador');
+    ccW.style.display=(!esEsp&&ccEsAdmin())?'':'none';
+    if(!esEsp&&ccEsAdmin()&&i.email){
+      fbGet('cc_cuenta_de/'+ek(i.email.toLowerCase())).then(c=>{
+        if(_editInstKey!==key) return;
+        _editInstCuenta=c||null; ccI.value=ccNum(c);
+        if(c) window.ccMostrarNombreCliente('edit-inst-cc','edit-inst-cc-nombre');
+      }).catch(()=>{});
+    }
     document.getElementById('modal-inst').classList.add('open');
   });
 };
@@ -11193,11 +11268,26 @@ window.guardarInstructor=async function(){
   if(!nombre){showErr('edit-inst-err','El nombre no puede estar vacío.');return;}
   if(email&&!email.includes('@')){showErr('edit-inst-err','El email no es válido.');return;}
   if(pass&&pass.length<6){showErr('edit-inst-err','La contraseña debe tener al menos 6 caracteres.');return;}
+  const ccRawE=document.getElementById('edit-inst-cc').value.trim(), ccCuentaE=ccNormCuenta(ccRawE); // v8.87
+  const ccVisible=document.getElementById('edit-inst-cc-wrap').style.display!=='none';
+  if(ccVisible&&ccRawE&&!ccCuentaE){showErr('edit-inst-err','N° cliente inválido (solo números).');return;}
+  if(ccVisible&&ccCuentaE&&!email){showErr('edit-inst-err','Para vincular el N° cliente hace falta el email del instructor.');return;}
+  const instPrev=await fbGet('instructores/'+_editInstKey);
   const updates={nombre,email:email||null,cel:cel||null};
   if(pass) Object.assign(updates,await camposClave(pass));
   if(forzar) updates.pass_temporal=true;
   else if(pass) updates.pass_temporal=null;  // clave nueva definitiva, sin forzar cambio
   await fbUpdate('instructores/'+_editInstKey,updates);
+  // v8.87: cuenta corriente — si cambió el email, el vínculo viejo (de un instructor sin
+  // usuario de socio) se mueve al email nuevo.
+  if(_editInstKey!=='admin'&&_editInstKey!=='administrador'&&ccEsAdmin()){
+    try{
+      const emailPrev=(instPrev?.email||'').toLowerCase();
+      if(emailPrev&&emailPrev!==email&&_editInstCuenta&&!await fbGet('alumnos/'+ek(emailPrev))) await ccGuardarVinculo(ek(emailPrev),null);
+      const cuentaAnt=(emailPrev===email)?_editInstCuenta:(email?await fbGet('cc_cuenta_de/'+ek(email)):null);
+      await ccSincronizarInstructor(instPrev?.user||_editInstKey,email||null,ccVisible?(ccCuentaE||null):undefined,cuentaAnt||null);
+    }catch(e){ showErr('edit-inst-err','Datos guardados, pero la cuenta corriente no: '+(e.message||e)); renderInstructoresList(); return; }
+  }
   showOk('edit-inst-ok','// DATOS ACTUALIZADOS');
   renderInstructoresList();
   setTimeout(()=>cerrarModalInst(),1200);
