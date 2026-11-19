@@ -1,7 +1,15 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 8.87
-  CAMBIOS : Pedido de Daniel: que las altas/bajas de instructores no dependan de que él
+  VERSION : 8.88
+  CAMBIOS : Pedido de Daniel: administración/tesorería pasa a un módulo aparte,
+            tesoreria.html (solo admin/administrador). Se retira de acá la pestaña
+            Config → "Cta. Cte." y todo el código de importación (ccParseBiff2,
+            ccInterpretar, ccRenderPanel, ccLeerArchivo, ccConfirmarImportacion,
+            ccCancelarImportacion — ahora viven en tesoreria.html). Botón nuevo
+            "TESORERÍA" en la fila de accesos de instructor-screen, visible solo para
+            admin/administrador. Quedan acá el N° cliente en Editar/Nuevo usuario y en el
+            ABM de instructores, y el saldo que ven los instructores.
+  ANTERIOR: v8.87 — Pedido de Daniel: que las altas/bajas de instructores no dependan de que él
             edite la consola de Firebase. El ABM de Instructores (admin/administrador)
             ahora mantiene solo /cc_staff (rol instructor), /cc_alias (instructor → su
             emailKey de socio, si tiene email) y, con el campo nuevo "N° cliente
@@ -4186,6 +4194,7 @@ button.danger:hover{background:rgba(248,81,73,.18)}
 .portal-link,.portal-link .avnc-sub{color:#3fd0dc;text-shadow:0 0 8px rgba(63,208,220,.9);}
 .socio-link,.socio-link .avnc-sub{color:#f5d76e;text-shadow:0 0 8px rgba(245,215,110,.9);} /* v8.85 */
 .reporte-link,.reporte-link .avnc-sub{color:#ff6b6b;text-shadow:0 0 8px rgba(255,107,107,.9);}
+.tesoreria-link,.tesoreria-link .avnc-sub{color:#f5d76e;text-shadow:0 0 8px rgba(245,215,110,.9);} /* v8.88 */
 
 /* SELECTOR DE AVIÓN */
 .avion-selector{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1.25rem;}
@@ -4588,7 +4597,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.87</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.88</div>
   </div>
 
 </div>
@@ -4851,6 +4860,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
     <a href="peso-balance.html?volver=turnos.html" class="avnc-btn wb-link"><span>PESO Y</span><span class="avnc-sub">balance</span></a>
     <a href="vor-trainer.html" class="avnc-btn vor-link"><span>VOR</span><span class="avnc-sub">trainer</span></a>
     <a href="reporte.html" class="avnc-btn reporte-link" id="inst-reporte-link" style="display:none"><span>REPORTE</span><span class="avnc-sub">actividad</span></a>
+    <a href="tesoreria.html" class="avnc-btn tesoreria-link" id="inst-tesoreria-link" style="display:none"><span>TESO</span><span class="avnc-sub">rería</span></a>
     </span>
   </div>
   <div class="tab-bar">
@@ -5206,7 +5216,6 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <button class="nav-btn"        id="cfg-tab-auditoria"    onclick="showCfgTab('auditoria')">Auditoría</button>
       <button class="nav-btn"        id="cfg-tab-auditoria-fpl" onclick="showCfgTab('auditoria-fpl')">Audit. FPL</button>
       <button class="nav-btn"        id="cfg-tab-parametros"   onclick="showCfgTab('parametros')" style="color:var(--red);border-color:rgba(248,81,73,.3)">Parámetros</button>
-      <button class="nav-btn"        id="cfg-tab-ctacte"       onclick="showCfgTab('ctacte')" style="display:none">Cta. Cte.</button>
       <button class="nav-btn"        id="cfg-tab-sistema"      onclick="showCfgTab('sistema')" style="color:var(--red);border-color:rgba(248,81,73,.3)">Sistema</button>
     </div>
 
@@ -6019,27 +6028,6 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <div style="display:flex;gap:10px;align-items:center;margin-top:1.25rem;flex-wrap:wrap">
           <button onclick="guardarParametros()" style="font-family:var(--font-mono);font-size:12px;padding:9px 20px;background:rgba(0,200,212,.08);border:1px solid var(--cyan);color:var(--cyan);border-radius:var(--radius);cursor:pointer;letter-spacing:.1em">💾 GUARDAR PARÁMETROS</button>
           <span id="params-status" style="font-family:var(--font-mono);font-size:11px;letter-spacing:.05em"></span>
-        </div>
-      </div>
-    </div>
-
-    <div id="cfg-ctacte" class="cfg-panel" style="display:none">
-      <div class="card" style="border-color:rgba(0,200,212,.2)">
-        <h3 style="color:var(--cyan);margin-bottom:.5rem">Cuenta Corriente — Importar del facturador</h3>
-        <p style="font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.05em;margin-bottom:.75rem">SUBÍ EL EXCEL "RESUMEN DE FACTURAS PENDIENTES" (.XLS) DEL SISTEMA DE FACTURACIÓN. REEMPLAZA POR COMPLETO LOS SALDOS ANTERIORES.</p>
-        <div id="cc-ultima" style="font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.05em;margin-bottom:1rem"></div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-          <button onclick="document.getElementById('cc-file').click()" style="font-family:var(--font-mono);font-size:12px;padding:9px 20px;background:rgba(0,200,212,.08);border:1px solid var(--cyan);color:var(--cyan);border-radius:var(--radius);cursor:pointer;letter-spacing:.08em">📂 ELEGIR ARCHIVO .XLS</button>
-          <input type="file" id="cc-file" accept=".xls" style="display:none" onchange="ccLeerArchivo(this)">
-          <span id="cc-status" style="font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.05em"></span>
-        </div>
-        <div id="cc-preview" style="display:none;margin-top:1rem;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);padding:1rem">
-          <div style="font-family:var(--font-mono);font-size:11px;color:var(--amber);letter-spacing:.12em;margin-bottom:.75rem">▸ VISTA PREVIA — REVISÁ ANTES DE CONFIRMAR</div>
-          <div id="cc-preview-body" style="font-family:var(--font-mono);font-size:12px;color:var(--text2);line-height:1.7"></div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:1rem">
-            <button id="cc-btn-confirmar" class="primary" onclick="ccConfirmarImportacion()">CONFIRMAR IMPORTACIÓN</button>
-            <button onclick="ccCancelarImportacion()">CANCELAR</button>
-          </div>
         </div>
       </div>
     </div>
@@ -7312,6 +7300,9 @@ function actualizarLinkReporte(){
   // admin (nunca alumno/piloto), y esta función solo se llama tras confirmar
   // ese tipo — se muestra siempre.
   if(link) link.style.display='';
+  // v8.88: Tesorería solo admin/administrador (y no en login simulado)
+  const lt=document.getElementById('inst-tesoreria-link');
+  if(lt) lt.style.display=((session?.user==='admin'||session?.user==='administrador')&&!session?.simuladoPor)?'':'none';
 }
 
 function setNavUser(nombre,tipo){
@@ -7344,7 +7335,7 @@ window.logout=function(){
   _dispEstado={};dispSemanaOffset=0;admDispOffset=0;admDispInst=null;admDispSemanaOffset=0;admDispVista='lista';
   _restoreData=null;
   _editAlumnoKey=null;_mcqKey=null;
-  _ccClientes=null;_ccImport=null;_ccCuentaOriginal=null;_editInstCuenta=null; // v8.83/v8.87
+  _ccClientes=null;_ccCuentaOriginal=null;_editInstCuenta=null; // v8.83/v8.87
   // reset filtros/estados de UI
   window._misTurnosData=null;_histFiltro='todos';_histOrdenDesc=true;
   calAvionFiltro='todos';activeConfigAvion='LV-OAD';activeDiasAvion='LV-OAD';activeDow=1;
@@ -10623,8 +10614,6 @@ window.showInstTab=function(tab){
     });
     const btnAudFpl=document.getElementById('cfg-tab-auditoria-fpl');
     if(btnAudFpl) btnAudFpl.style.display=(session?.user==='admin')?'':'none';
-    const btnCc=document.getElementById('cfg-tab-ctacte'); // v8.83
-    if(btnCc) btnCc.style.display=(session?.user==='admin'||session?.user==='administrador')?'':'none';
   }
 };
 
@@ -10849,9 +10838,8 @@ window.showCfgTab=function(tab){
   if(tab==='parametros'&&session?.user!=='admin'&&session?.user!=='administrador') return; // v7.43: mismo gate que Sistema
   if(tab==='aeronaves'&&session?.user!=='admin'&&session?.user!=='administrador') return; // v7.63: mismo gate — ABM de flota
   if(tab==='auditoria-fpl'&&session?.user!=='admin') return;
-  if(tab==='ctacte'&&session?.user!=='admin'&&session?.user!=='administrador') return; // v8.83
   if(session?.soloUsuarios&&tab!=='usuarios'&&tab!=='sistema'&&tab!=='auditoria') return;
-  ['horarios','dias','aeronaves','instructores','usuarios','consultas','auditoria','auditoria-fpl','parametros','ctacte','sistema'].forEach(t=>{
+  ['horarios','dias','aeronaves','instructores','usuarios','consultas','auditoria','auditoria-fpl','parametros','sistema'].forEach(t=>{
     const panel=document.getElementById('cfg-'+t);
     const btn=document.getElementById('cfg-tab-'+t);
     if(panel)panel.style.display=t===tab?'block':'none';
@@ -10876,7 +10864,6 @@ window.showCfgTab=function(tab){
   if(tab==='auditoria')cargarAuditoria();
   if(tab==='auditoria-fpl')window.cargarAuditoriaFpl();
   if(tab==='parametros')pintarFormParametros();
-  if(tab==='ctacte')ccRenderPanel();
   if(tab==='sistema'){
     const zona=document.getElementById('card-zona-peligrosa');
     if(zona) zona.style.display=session?.user==='admin'?'block':'none';
@@ -11609,7 +11596,6 @@ document.addEventListener('click',e=>{if(e.target.id==='modal-nuevo-usuario')cer
 
 const CC_UMBRAL=1;            // |saldo| menor a esto = "Sin deuda pendiente" (residuos de centavos)
 let _ccClientes=null;         // caché del catálogo (solo admin/administrador)
-let _ccImport=null;           // resultado parseado pendiente de confirmar
 let _ccCuentaOriginal=null;   // cuenta vinculada al abrir el modal de edición
 let _ccTok=0;                 // descarta respuestas viejas si se reabre el modal rápido
 
@@ -11701,143 +11687,7 @@ async function ccCargarBloqueUsuario(emailKey){
   sal.style.color=d.color;
 }
 
-// ── Importación del Excel semanal ────────────────────────────────────────────
-// Parser BIFF2 (Excel 2.1) propio: el facturador exporta este formato viejo y el
-// archivo solo usa 5 tipos de registro (BOF, DIMENSIONS, NUMBER, LABEL, EOF). Probado
-// contra el export real del 19/11/2026. Si un día cambia el formato, falla con un
-// mensaje claro en vez de importar basura.
-function ccParseBiff2(buf){
-  const dv=new DataView(buf),n=buf.byteLength,dec=new TextDecoder('windows-1252');
-  if(n<4||dv.getUint16(0,true)!==0x0009) throw new Error('formato no reconocido: se esperaba el Excel 2.1 que exporta el facturador');
-  const grid=[];
-  const put=(r,c,v)=>{ (grid[r]||(grid[r]=[]))[c]=v; };
-  let i=0;
-  while(i+4<=n){
-    const t=dv.getUint16(i,true),len=dv.getUint16(i+2,true),o=i+4;
-    if(o+len>n) throw new Error('archivo truncado o dañado');
-    if(t===0x0003&&len>=15) put(dv.getUint16(o,true),dv.getUint16(o+2,true),dv.getFloat64(o+7,true));          // NUMBER
-    else if(t===0x0002&&len>=9) put(dv.getUint16(o,true),dv.getUint16(o+2,true),dv.getUint16(o+7,true));       // INTEGER
-    else if(t===0x0006&&len>=15) put(dv.getUint16(o,true),dv.getUint16(o+2,true),dv.getFloat64(o+7,true));     // FORMULA (resultado)
-    else if(t===0x0004&&len>=8){                                                                                 // LABEL
-      const l=dv.getUint8(o+7); put(dv.getUint16(o,true),dv.getUint16(o+2,true),dec.decode(new Uint8Array(buf,o+8,Math.min(l,len-8))));
-    }
-    else if(t===0x000A) break;                                                                                   // EOF
-    i=o+len;
-  }
-  return grid;
-}
-
-function ccInterpretar(grid){
-  const txt=v=>(v==null?'':String(v)).trim();
-  if(!/facturas\s+pendientes/i.test(txt(grid[0]?.[0]))) throw new Error('no es el reporte "Resumen de Facturas Pendientes"');
-  let corte=null;
-  for(let r=0;r<6&&!corte;r++){
-    const m=txt(grid[r]?.[0]).match(/^Fecha\s*:\s*(\d{2})\/(\d{2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
-    if(m) corte={iso:`${m[3]}-${m[2]}-${m[1]}T${m[4].padStart(2,'0')}:${m[5]}`,txt:`${m[1]}/${m[2]}/${m[3]} ${m[4].padStart(2,'0')}:${m[5]}`};
-  }
-  if(!corte) throw new Error('no se encontró la fecha del reporte (fila "Fecha : dd/mm/aaaa hh:mm")');
-  let h=-1;
-  for(let r=0;r<10;r++){ const row=(grid[r]||[]).map(txt); if(row.includes('Cuenta')&&row.includes('NewSaldo')){h=r;break;} }
-  if(h<0) throw new Error('no se encontró la fila de títulos de columnas');
-  const hdr=(grid[h]||[]).map(txt),col={};
-  for(const k of ['Cuenta','Cliente','Fecha','Nro. Comprobante','Referencia','NewImporte','NewSaldo','SALDO1']){
-    col[k]=hdr.indexOf(k); if(col[k]<0) throw new Error('falta la columna "'+k+'"');
-  }
-  const cuentas={}; let filas=0;
-  for(let r=h+1;r<grid.length;r++){
-    const row=grid[r]; if(!row) continue;
-    const nro=row[col.Cuenta]; if(typeof nro!=='number'||!(nro>0)) continue;
-    const c='c'+Math.trunc(nro);
-    const fm=txt(row[col.Fecha]).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-    const cu=cuentas[c]||(cuentas[c]={nombre:txt(row[col.Cliente]),saldo1:ccRed(row[col.SALDO1]),suma:0,items:[]});
-    const it={f:fm?`${fm[3]}-${fm[2]}-${fm[1]}`:null,comp:txt(row[col['Nro. Comprobante']]),ref:txt(row[col.Referencia]),imp:ccRed(row[col.NewImporte]),pend:ccRed(row[col.NewSaldo])};
-    cu.items.push(it); cu.suma+=it.pend; filas++;
-  }
-  if(!filas) throw new Error('el archivo no tiene filas de datos');
-  const avisos=[]; let total=0;
-  for(const [c,cu] of Object.entries(cuentas)){
-    cu.suma=ccRed(cu.suma);
-    if(Math.abs(cu.suma-cu.saldo1)>0.01) avisos.push(`Cuenta ${ccNum(c)} ${cu.nombre}: la suma de comprobantes (${ccMonto(cu.suma)}) no coincide con SALDO1 (${ccMonto(cu.saldo1)})`);
-    cu.items.sort((a,b)=>(a.f||'').localeCompare(b.f||''));
-    total+=cu.saldo1;
-  }
-  return {corte,cuentas,filas,total:ccRed(total),avisos};
-}
-
-async function ccRenderPanel(){
-  const el=document.getElementById('cc-ultima'); if(!el) return;
-  // v8.84: limpiar estado/vista previa del intento anterior (si no, quedaba un error viejo).
-  _ccImport=null;
-  const st=document.getElementById('cc-status'),pv=document.getElementById('cc-preview');
-  if(st){st.textContent='';st.style.color='var(--text3)';}
-  if(pv) pv.style.display='none';
-  el.textContent='// Cargando…';
-  try{
-    const m=await fbGet('cc_meta');
-    el.textContent=m?`ÚLTIMA IMPORTACIÓN: corte ${m.corte_txt} · ${m.cuentas} cuentas con deuda · total ${ccMonto(m.total)} · por ${m.importado_por||'?'}`:'TODAVÍA NO SE IMPORTÓ NINGÚN ARCHIVO';
-  }catch(e){ el.textContent='⚠ No se pudo leer la última importación: '+ccErrMsg(e); }
-}
-
-window.ccCancelarImportacion=function(){
-  _ccImport=null;
-  document.getElementById('cc-preview').style.display='none';
-  document.getElementById('cc-status').textContent='';
-};
-
-window.ccLeerArchivo=async function(input){
-  const file=input.files&&input.files[0]; input.value='';
-  if(!file) return;
-  const st=document.getElementById('cc-status'),prev=document.getElementById('cc-preview'),body=document.getElementById('cc-preview-body');
-  _ccImport=null; prev.style.display='none'; st.style.color='var(--text3)'; st.textContent='// Leyendo '+file.name+'…';
-  try{
-    if(file.size>10*1024*1024) throw new Error('archivo demasiado grande');
-    const res=ccInterpretar(ccParseBiff2(await file.arrayBuffer()));
-    const [vinc,meta,cli]=await Promise.all([fbGet('cc_vinculos'),fbGet('cc_meta'),ccCargarClientes(true)]);
-    const v=vinc||{}, cat=cli||{};
-    const deudoresVinc=Object.keys(res.cuentas).filter(c=>v[c]).length;
-    const nuevosCat=Object.keys(res.cuentas).filter(c=>!cat[c]);
-    res.nuevosCat=nuevosCat; res.archivo=file.name;
-    const L=[];
-    L.push(`Fecha de corte del reporte: <b>${ccEsc(res.corte.txt)}</b>`);
-    L.push(`Comprobantes pendientes: <b>${res.filas}</b> · Cuentas con deuda: <b>${Object.keys(res.cuentas).length}</b>`);
-    L.push(`Deuda total: <b>${ccEsc(ccMonto(res.total))}</b>`);
-    L.push(`Cuentas con deuda vinculadas a usuarios de la app: <b>${deudoresVinc}</b> (de ${Object.keys(v).length} vinculados)`);
-    if(nuevosCat.length) L.push(`Clientes nuevos que se agregan al catálogo: <b>${nuevosCat.length}</b>`);
-    if(meta?.corte&&res.corte.iso<meta.corte) L.push(`<span style="color:var(--red)">⚠ Este archivo es MÁS VIEJO que la última importación (${ccEsc(meta.corte_txt)}).</span>`);
-    else if(meta?.corte&&res.corte.iso===meta.corte) L.push(`<span style="color:var(--amber)">⚠ Misma fecha de corte que la última importación — probablemente ya fue importado.</span>`);
-    if(res.avisos.length) L.push(`<span style="color:var(--amber)">⚠ ${res.avisos.length} aviso(s):</span><br>`+res.avisos.slice(0,10).map(a=>'· '+ccEsc(a)).join('<br>')+(res.avisos.length>10?'<br>· …':''));
-    L.push(`<span style="color:var(--text3)">Al confirmar se REEMPLAZAN todos los saldos y comprobantes anteriores. Las cuentas que no figuran en el archivo quedan "Sin deuda pendiente".</span>`);
-    body.innerHTML=L.join('<br>');
-    _ccImport=res; prev.style.display='block'; st.textContent='';
-  }catch(e){ st.style.color='var(--red)'; st.textContent='⚠ '+ccErrMsg(e); }
-};
-
-let _ccImportando=false;
-window.ccConfirmarImportacion=async function(){
-  if(!_ccImport||_ccImportando) return;
-  _ccImportando=true;
-  const st=document.getElementById('cc-status'),btn=document.getElementById('cc-btn-confirmar');
-  btn.disabled=true; st.style.color='var(--text3)'; st.textContent='// Importando…';
-  try{
-    const r=_ccImport,saldos={},detalle={};
-    for(const [c,cu] of Object.entries(r.cuentas)){
-      saldos[c]={saldo:cu.saldo1,nombre:cu.nombre};
-      detalle[c]={items:cu.items};
-    }
-    // Un único update multi-path: los tres nodos se reemplazan juntos o no se toca nada.
-    const upd={cc_saldos:saldos,cc_detalle:detalle,cc_meta:{
-      corte:r.corte.iso,corte_txt:r.corte.txt,cuentas:Object.keys(r.cuentas).length,total:r.total,filas:r.filas,
-      archivo:r.archivo||null,importado_por:session?.nombre||session?.user||'?',ts:serverTimestamp()}};
-    for(const c of r.nuevosCat||[]) upd['cc_clientes/'+c]={nombre:r.cuentas[c].nombre,dni:null};
-    await update(ref(db),upd);
-    registrarAuditoria('cc_importacion',session?.user||'admin','exito',`corte ${r.corte.txt} · ${upd.cc_meta.cuentas} cuentas · ${ccMonto(r.total)}`);
-    _ccImport=null; document.getElementById('cc-preview').style.display='none';
-    st.style.color='var(--green)'; st.textContent='// IMPORTACIÓN COMPLETA';
-    if((r.nuevosCat||[]).length) ccCargarClientes(true);
-    ccRenderPanel();
-  }catch(e){ st.style.color='var(--red)'; st.textContent='⚠ No se importó nada: '+ccErrMsg(e); }
-  finally{ _ccImportando=false; btn.disabled=false; }
-};
+// v8.88: la importación del Excel semanal se mudó a tesoreria.html.
 
 /* ============================ CARGAR TURNO MANUAL (instructor/admin) ============================
    v6.08. Herramienta para que instructor o admin (NO administrador, que es solo-lectura en

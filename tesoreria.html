@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<!--
+==================================================================================
+  TESORERÍA — Aeroclub Río Grande
+  v1.00 · 2026-11-19 · Pedido de Daniel: módulo aparte para administración/tesorería,
+           solo admin y administrador. Reúne lo que antes estaba en turnos.html →
+           Config → Cta. Cte. (importación del Excel "Resumen de Facturas Pendientes" del
+           facturador del club, ver turnos.html v8.83) y agrega:
+           · Resumen (KPIs del último corte).
+           · Morosos por antigüedad (0-30 / 31-90 / 91-180 / +180 días, sobre facturas
+             impagas después de aplicar los pagos sueltos a las más antiguas — mismo
+             criterio que portal-socio.html v1.02) + exportación CSV.
+           · Pagos sin aplicar en el facturador (para que quien carga los cobros los
+             impute a sus facturas).
+           · Socios activos sin vincular (reservaron en los últimos 90 días y no tienen
+             N° de cliente) con vinculación en línea.
+           · Historial de importaciones (desde v1.00 se guarda una foto de saldos por
+             corte en /cc_admin/historial — base para la evolución de saldos).
+           Acceso: sesión de turnos.html (sessionStorage 'lvoad-session', instructor
+           admin/administrador, no simulada) + sesión de Firebase Auth con el email
+           sintético del usuario + /cc_staff = admin|administrador. Los datos de
+           /cc_admin solo los pueden leer/escribir admin y administrador (reglas).
+==================================================================================
+-->
+<html lang="es">
+<head>
+<script>if(localStorage.getItem('lvoad-theme')==='light')document.documentElement.classList.add('light');</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tesorería · Aeroclub Río Grande</title>
+<link rel="apple-touch-icon" href="/icon-192.png">
+<meta name="theme-color" content="#0a0c0f">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0c0f;--bg2:#111418;--bg3:#161b22;--bg4:#1c2330;
+  --text:#c8d8e8;--text2:#7a9bb8;--text3:#3d5a72;
+  --amber:#f0a500;--cyan:#00c8d4;--green:#39d353;--red:#f85149;
+  --border:rgba(0,200,212,0.15);--border2:rgba(0,200,212,0.35);
+  --radius:4px;--radius-lg:6px;
+  --font-mono:'Share Tech Mono',monospace;--font-ui:'Rajdhani',sans-serif;
+}
+:root.light{
+  --bg:#f0f4f8;--bg2:#e2e8f0;--bg3:#ffffff;--bg4:#d1dce8;
+  --text:#1a2a3a;--text2:#3a5a78;--text3:#7a9ab8;
+  --amber:#b87000;--cyan:#0090a0;--green:#1a8a30;--red:#c0392b;
+  --border:rgba(0,144,160,0.2);--border2:rgba(0,144,160,0.45);
+}
+html{overflow-x:hidden;max-width:100vw}
+body{font-family:var(--font-ui);font-size:15px;color:var(--text);background:var(--bg);min-height:100vh;letter-spacing:.02em;overflow-x:hidden;max-width:100vw}
+.wrap{max-width:1180px;margin:0 auto;padding:18px 16px 80px}
+header.bar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;border:1px solid var(--border2);background:linear-gradient(180deg,var(--bg3),var(--bg2));padding:12px 16px;border-radius:var(--radius-lg);margin-bottom:14px}
+header.bar .dot{width:11px;height:11px;border-radius:50%;background:var(--amber);box-shadow:0 0 10px var(--amber)}
+header.bar h1{font-size:20px;letter-spacing:2.5px;font-weight:700;text-transform:uppercase}
+header.bar h1 small{color:var(--amber);letter-spacing:2px;display:block;font-size:11px;font-family:var(--font-mono);margin-top:2px}
+header.bar .sp{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header.bar .ver{font-family:var(--font-mono);font-size:11px;color:var(--text3);border:1px solid var(--border);border-radius:4px;padding:2px 7px}
+header.bar .who{font-family:var(--font-mono);font-size:12px;color:var(--cyan)}
+.btn{font-family:var(--font-mono);font-size:12px;color:var(--text2);text-decoration:none;border:1px solid var(--border);border-radius:var(--radius);padding:6px 12px;white-space:nowrap;background:none;cursor:pointer;letter-spacing:.05em}
+.btn:hover{color:var(--cyan);border-color:var(--cyan)}
+.btn.prim{color:var(--cyan);border-color:var(--cyan);background:rgba(0,200,212,.08)}
+.btn:disabled{opacity:.5;cursor:default}
+.theme-toggle{display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none}
+.theme-toggle-track{width:36px;height:20px;border-radius:10px;background:var(--bg4);border:1px solid var(--border2);position:relative}
+.theme-toggle-thumb{width:14px;height:14px;border-radius:50%;background:var(--cyan);position:absolute;top:2px;left:2px;transition:transform .25s}
+:root.light .theme-toggle-thumb{transform:translateX(16px);background:var(--amber)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.tab{font-family:var(--font-mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;padding:7px 13px;border:1px solid var(--border);border-radius:var(--radius);background:none;color:var(--text2);cursor:pointer}
+.tab.on{color:var(--cyan);border-color:var(--cyan);background:rgba(0,200,212,.08)}
+.card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;margin-bottom:16px}
+h2{font-family:var(--font-mono);font-size:13px;color:var(--cyan);letter-spacing:.16em;text-transform:uppercase;margin-bottom:.8rem;padding-bottom:.5rem;border-bottom:1px solid var(--border)}
+.muted{color:var(--text3);font-family:var(--font-mono);font-size:12px;line-height:1.6}
+.msg{font-family:var(--font-mono);font-size:13px;color:var(--text2);line-height:1.7;text-align:center;padding:1.5rem .5rem}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.kpi{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px}
+.kpi .l{font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase}
+.kpi .v{font-family:var(--font-mono);font-size:19px;margin-top:4px;overflow-wrap:anywhere}
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;text-align:left;padding:7px 8px;border-bottom:1px solid var(--border2);white-space:nowrap;cursor:default}
+th.sortable{cursor:pointer} th.sortable:hover{color:var(--cyan)}
+td{padding:7px 8px;border-bottom:1px solid var(--border);vertical-align:middle}
+td.n,th.n{text-align:right;font-family:var(--font-mono);white-space:nowrap}
+td.mono{font-family:var(--font-mono);font-size:12px;color:var(--text2)}
+.rojo{color:var(--red)} .verde{color:var(--green)} .ambar{color:var(--amber)} .gris{color:var(--text3)}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+input[type=text]{font-family:var(--font-mono);font-size:13px;background:var(--bg2);border:1px solid var(--border2);color:var(--text);border-radius:var(--radius);padding:6px 9px}
+label.chk{font-family:var(--font-mono);font-size:12px;color:var(--text2);display:flex;gap:6px;align-items:center;cursor:pointer}
+#imp-preview-body{font-family:var(--font-mono);font-size:12px;color:var(--text2);line-height:1.7}
+</style>
+</head>
+<body>
+<div id="gate-msg" class="msg" style="display:none">// VALIDANDO SESIÓN…<br>Si no tenés sesión de admin/administrador, te redirige al turnero.</div>
+
+<div class="wrap" id="app-wrap" style="display:none">
+  <header class="bar">
+    <div class="dot"></div>
+    <h1>TESORERÍA<small>AEROCLUB RÍO GRANDE · CUENTA CORRIENTE</small></h1>
+    <div class="sp">
+      <div class="theme-toggle" onclick="toggleTheme()" title="Cambiar tema"><span>🌙</span><div class="theme-toggle-track"><div class="theme-toggle-thumb"></div></div><span>☀️</span></div>
+      <span class="who" id="who-label"></span>
+      <span class="ver">v1.00</span>
+      <a class="btn" href="turnos.html">← TURNERO</a>
+      <button class="btn" onclick="cerrarSesion()">⏻ SALIR</button>
+    </div>
+  </header>
+
+  <div id="acceso-msg" class="card" style="display:none"><div class="msg" id="acceso-txt"></div></div>
+
+  <div id="modulo" style="display:none">
+    <nav class="tabs">
+      <button class="tab on" data-tab="resumen" onclick="verTab('resumen')">Resumen</button>
+      <button class="tab" data-tab="importar" onclick="verTab('importar')">Importar</button>
+      <button class="tab" data-tab="morosos" onclick="verTab('morosos')">Morosos</button>
+      <button class="tab" data-tab="sinaplicar" onclick="verTab('sinaplicar')">Pagos sin aplicar</button>
+      <button class="tab" data-tab="sinvincular" onclick="verTab('sinvincular')">Socios sin vincular</button>
+      <button class="tab" data-tab="historial" onclick="verTab('historial')">Historial</button>
+    </nav>
+
+    <section class="card pane" id="pane-resumen">
+      <h2>▸ Resumen del último corte</h2>
+      <div id="res-body"><div class="msg">// Cargando…</div></div>
+    </section>
+
+    <section class="card pane" id="pane-importar" style="display:none">
+      <h2>▸ Importar del facturador</h2>
+      <p class="muted" style="margin-bottom:.8rem">Subí el Excel "Resumen de Facturas Pendientes" (.xls) del sistema de facturación. Reemplaza por completo los saldos anteriores. Hacelo al menos una vez por semana.</p>
+      <div class="toolbar">
+        <button class="btn prim" onclick="document.getElementById('imp-file').click()">📂 ELEGIR ARCHIVO .XLS</button>
+        <input type="file" id="imp-file" accept=".xls" style="display:none" onchange="leerArchivo(this)">
+        <span id="imp-status" class="muted"></span>
+      </div>
+      <div id="imp-preview" style="display:none;margin-top:.8rem;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);padding:1rem">
+        <div class="muted ambar" style="margin-bottom:.6rem;letter-spacing:.1em">▸ VISTA PREVIA — REVISÁ ANTES DE CONFIRMAR</div>
+        <div id="imp-preview-body"></div>
+        <div class="toolbar" style="margin-top:1rem">
+          <button class="btn prim" id="imp-btn-confirmar" onclick="confirmarImportacion()">CONFIRMAR IMPORTACIÓN</button>
+          <button class="btn" onclick="cancelarImportacion()">CANCELAR</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card pane" id="pane-morosos" style="display:none">
+      <h2>▸ Morosos por antigüedad</h2>
+      <p class="muted" style="margin-bottom:.8rem">Antigüedad de lo que falta pagar, contada a la fecha de corte. Los pagos sueltos se aplican primero a las facturas más viejas (mismo criterio que ve el socio en su portal).</p>
+      <div class="toolbar">
+        <input type="text" id="mor-filtro" placeholder="Buscar cliente o N°" oninput="pintarMorosos()">
+        <label class="chk"><input type="checkbox" id="mor-solo-vinc" onchange="pintarMorosos()"> solo con usuario en la app</label>
+        <label class="chk"><input type="checkbox" id="mor-90" onchange="pintarMorosos()"> solo con deuda de más de 90 días</label>
+        <button class="btn" onclick="exportarMorososCSV()">⬇ EXPORTAR CSV</button>
+        <span id="mor-count" class="muted"></span>
+      </div>
+      <div class="tbl-wrap"><table id="mor-tabla"></table></div>
+    </section>
+
+    <section class="card pane" id="pane-sinaplicar" style="display:none">
+      <h2>▸ Pagos sin aplicar en el facturador</h2>
+      <p class="muted" style="margin-bottom:.8rem">Cuentas con deuda que además tienen pagos o saldos a favor que no se imputaron a ninguna factura. Si quien carga los cobros los aplica a sus facturas en el facturador, el detalle que ve el socio queda corto y claro.</p>
+      <div class="tbl-wrap"><table id="sa-tabla"></table></div>
+    </section>
+
+    <section class="card pane" id="pane-sinvincular" style="display:none">
+      <h2>▸ Socios activos sin vincular</h2>
+      <p class="muted" style="margin-bottom:.8rem">Usuarios que reservaron en los últimos 90 días y no tienen N° de cliente del facturador: no pueden ver su cuenta en MI CUENTA. Cargá el N° y tocá VINCULAR.</p>
+      <div class="tbl-wrap"><table id="sv-tabla"></table></div>
+    </section>
+
+    <section class="card pane" id="pane-historial" style="display:none">
+      <h2>▸ Historial de importaciones</h2>
+      <div class="tbl-wrap"><table id="hi-tabla"></table></div>
+    </section>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, get, child, update, push, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+const firebaseConfig={
+  apiKey:"AIzaSyATPSaoOV_wKLaJR_dc1jgTzEF2L5p0tHk",
+  authDomain:"turnos-lv-oad.firebaseapp.com",
+  databaseURL:"https://turnos-lv-oad-default-rtdb.firebaseio.com",
+  projectId:"turnos-lv-oad",
+  storageBucket:"turnos-lv-oad.firebasestorage.app",
+  messagingSenderId:"855020455192",
+  appId:"1:855020455192:web:4b6d18f1b2efbb52faca6d"
+};
+const app=initializeApp(firebaseConfig), db=getDatabase(app), auth=getAuth(app);
+async function fbGet(p){const s=await get(child(ref(db),p));return s.exists()?s.val():null;}
+
+// ── helpers (mismo criterio que turnos.html / portal-socio.html) ──
+const ek=e=>e.replace(/\./g,'_').replace(/@/g,'__at__');
+function ccNormCuenta(v){ const m=String(v==null?'':v).trim().match(/^c?(\d{1,6})$/i); return m?('c'+parseInt(m[1],10)):null; }
+function ccNum(c){ return c?String(c).replace(/^c/,''):''; }
+function ccEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function ccMonto(n){ return new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',minimumFractionDigits:2}).format(n||0); }
+function ccRed(n){ return Math.round((Number(n)||0)*100)/100; }
+function ccErrMsg(e){
+  if(e?.code==='PERMISSION_DENIED'||/permission/i.test(e?.message||'')) return 'sin permiso — salí del turnero, volvé a entrar con tu usuario y verificá que esté en /cc_staff';
+  return e?.message||String(e);
+}
+const fechaTxt=iso=>{ const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(iso||''); return m?`${m[3]}/${m[2]}/${m[1]}`:'—'; };
+function el(tag,cls,txt){ const e=document.createElement(tag); if(cls)e.className=cls; if(txt!=null)e.textContent=txt; return e; }
+async function auditar(accion,detalle){ try{ await push(ref(db,'auditoria'),{accion,rol:session?.user||'admin',resultado:'exito',detalle,ts:new Date().toISOString()}); }catch(e){ console.warn('auditoria:',e); } }
+
+// ── SESIÓN (declarado antes del gate: se usa sincrónicamente) ──
+const SESSION_TIMEOUT_MS=10*60*1000;
+let session=null,_sessionTimer=null,_iniciado=false;
+function resetSessionTimer(){ if(!session)return; clearTimeout(_sessionTimer); _sessionTimer=setTimeout(()=>{ if(session) cerrarSesion(); },SESSION_TIMEOUT_MS); }
+['mousemove','mousedown','keydown','touchstart','scroll','click'].forEach(ev=>document.addEventListener(ev,resetSessionTimer,{passive:true}));
+window.cerrarSesion=function(){ try{ sessionStorage.removeItem('lvoad-session'); }catch(_){} signOut(auth).catch(()=>{}).finally(()=>{ location.href='turnos.html'; }); };
+window.toggleTheme=function(){ const l=document.documentElement.classList.toggle('light'); localStorage.setItem('lvoad-theme',l?'light':'dark'); };
+function sinAcceso(txt){ document.getElementById('acceso-txt').textContent=txt; document.getElementById('acceso-msg').style.display='block'; document.getElementById('modulo').style.display='none'; }
+
+// datos en memoria
+let META=null,MOROSOS={},VINC={},HIST={},_import=null,_importando=false,_morOrden={k:'saldo',dir:-1};
+
+(function gate(){
+  let s=null; try{ s=JSON.parse(sessionStorage.getItem('lvoad-session')||'null'); }catch(_){}
+  if(s&&s.tipo==='instructor'&&(s.user==='admin'||s.user==='administrador')) session=s;
+  if(!session){ document.getElementById('gate-msg').style.display='block'; setTimeout(()=>{ location.href='turnos.html'; },900); return; }
+  document.getElementById('who-label').textContent=(session.nombre||session.user)+' · '+session.user.toUpperCase();
+  document.getElementById('app-wrap').style.display='block';
+  resetSessionTimer();
+  if(session.simuladoPor){ sinAcceso('Login simulado: Tesorería no está disponible.'); return; }
+  onAuthStateChanged(auth,async user=>{
+    if(_iniciado) return;
+    const esperado=(session.user+'@instructores.aeroclubriogrande.com.ar').toLowerCase();
+    if(!user||(user.email||'').toLowerCase()!==esperado){ sinAcceso('Tu sesión no tiene acceso seguro. Salí del turnero y volvé a entrar con tu usuario.'); return; }
+    try{
+      const rol=await fbGet('cc_staff/'+ek(esperado));
+      if(rol!=='admin'&&rol!=='administrador'){ sinAcceso('Tu usuario no tiene permiso de tesorería (/cc_staff).'); return; }
+    }catch(e){ sinAcceso('No se pudo verificar el permiso: '+ccErrMsg(e)); return; }
+    _iniciado=true;
+    document.getElementById('modulo').style.display='block';
+    await cargarTodo();
+    verTab('resumen');
+  });
+})();
+
+async function cargarTodo(){
+  try{
+    const [meta,mor,vinc,hist]=await Promise.all([fbGet('cc_meta'),fbGet('cc_admin/morosos'),fbGet('cc_vinculos'),fbGet('cc_admin/historial')]);
+    META=meta; MOROSOS=mor||{}; VINC=vinc||{}; HIST=hist||{};
+  }catch(e){ sinAcceso('No se pudieron leer los datos: '+ccErrMsg(e)); }
+}
+
+window.verTab=function(t){
+  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.tab===t));
+  document.querySelectorAll('.pane').forEach(p=>p.style.display=(p.id==='pane-'+t)?'block':'none');
+  if(t==='resumen') pintarResumen();
+  if(t==='morosos') pintarMorosos();
+  if(t==='sinaplicar') pintarSinAplicar();
+  if(t==='sinvincular') pintarSinVincular();
+  if(t==='historial') pintarHistorial();
+  if(t==='importar'){ document.getElementById('imp-status').textContent=''; document.getElementById('imp-preview').style.display='none'; _import=null; }
+};
+
+// ── RESUMEN ──
+function pintarResumen(){
+  const b=document.getElementById('res-body'); b.textContent='';
+  if(!META){ b.appendChild(el('div','msg','Todavía no se importó ningún archivo. Andá a la pestaña IMPORTAR.')); return; }
+  const lista=Object.values(MOROSOS);
+  const sum=k=>ccRed(lista.reduce((s,m)=>s+(Number(m[k])||0),0));
+  const vincDeuda=Object.keys(MOROSOS).filter(c=>VINC[c]).length;
+  const conSA=lista.filter(m=>(m.ncred||0)>0).length;
+  b.appendChild(el('div','muted',`Corte del facturador: ${META.corte_txt} · importado por ${META.importado_por||'?'}${META.archivo?' · '+META.archivo:''}`));
+  if(!lista.length&&META.cuentas) b.appendChild(el('div','muted ambar','⚠ El detalle de morosos se genera desde la primera importación hecha en Tesorería. Volvé a importar el último Excel para completarlo.'));
+  const k=el('div','kpis'); k.style.marginTop='12px';
+  const add=(l,v,cls)=>{ const d=el('div','kpi'); d.appendChild(el('div','l',l)); d.appendChild(el('div','v '+(cls||''),v)); k.appendChild(d); };
+  add('Deuda total',ccMonto(META.total),'rojo');
+  add('Cuentas con deuda',String(META.cuentas));
+  add('Con usuario en la app',String(vincDeuda)+' de '+META.cuentas);
+  if(lista.length){
+    add('Deuda de más de 90 días',ccMonto(ccRed(sum('d180')+sum('dmas'))),'ambar');
+    add('Cuentas con pagos sin aplicar',String(conSA),conSA?'ambar':'');
+  }
+  b.appendChild(k);
+}
+
+// ── MOROSOS ──
+function filasMorosos(){
+  const q=(document.getElementById('mor-filtro')?.value||'').trim().toUpperCase();
+  const soloV=document.getElementById('mor-solo-vinc')?.checked, solo90=document.getElementById('mor-90')?.checked;
+  let rows=Object.entries(MOROSOS).map(([c,m])=>({c,...m,vinc:!!VINC[c]}));
+  if(q) rows=rows.filter(r=>(r.nombre||'').toUpperCase().includes(q)||ccNum(r.c)===q);
+  if(soloV) rows=rows.filter(r=>r.vinc);
+  if(solo90) rows=rows.filter(r=>(r.d180||0)+(r.dmas||0)>0);
+  const {k,dir}=_morOrden;
+  rows.sort((a,b)=>{ const x=a[k],y=b[k]; if(typeof x==='string'||typeof y==='string') return dir*String(x||'').localeCompare(String(y||'')); return dir*((x||0)-(y||0)); });
+  return rows;
+}
+window.ordenarMorosos=function(k){ _morOrden=_morOrden.k===k?{k,dir:-_morOrden.dir}:{k,dir:(k==='nombre'||k==='desde')?1:-1}; pintarMorosos(); };
+window.pintarMorosos=function(){
+  const t=document.getElementById('mor-tabla'); t.textContent='';
+  if(!Object.keys(MOROSOS).length){ const tr=el('tr'); const td=el('td','gris','Sin datos. Importá el Excel desde la pestaña IMPORTAR.'); tr.appendChild(td); t.appendChild(tr); return; }
+  const cols=[['c','N°',0],['nombre','Cliente',0],['vinc','App',0],['saldo','Saldo',1],['d30','0-30 d',1],['d90','31-90 d',1],['d180','91-180 d',1],['dmas','+180 d',1],['desde','Debe desde',0]];
+  const h=el('tr');
+  cols.forEach(([k,l,n])=>{ const th=el('th',(n?'n ':'')+'sortable',l+(_morOrden.k===k?(_morOrden.dir>0?' ▲':' ▼'):'')); th.onclick=()=>ordenarMorosos(k); h.appendChild(th); });
+  t.appendChild(h);
+  const rows=filasMorosos();
+  for(const r of rows){
+    const tr=el('tr');
+    tr.appendChild(el('td','mono',ccNum(r.c)));
+    tr.appendChild(el('td','',r.nombre||''));
+    tr.appendChild(el('td',r.vinc?'verde':'gris',r.vinc?'✓':'—'));
+    tr.appendChild(el('td','n rojo',ccMonto(r.saldo)));
+    for(const k of ['d30','d90','d180','dmas']){ const v=r[k]||0; tr.appendChild(el('td','n '+(v?(k==='dmas'||k==='d180'?'ambar':''):'gris'),v?ccMonto(v):'—')); }
+    tr.appendChild(el('td','mono',fechaTxt(r.desde)));
+    t.appendChild(tr);
+  }
+  const tot=rows.reduce((s,r)=>s+(r.saldo||0),0);
+  document.getElementById('mor-count').textContent=`${rows.length} cuentas · ${ccMonto(ccRed(tot))}`;
+};
+window.exportarMorososCSV=function(){
+  const rows=filasMorosos();
+  const num=v=>String(ccRed(v||0)).replace('.',',');
+  const lin=[['Cuenta','Cliente','Usuario app','Saldo','0-30 dias','31-90 dias','91-180 dias','Mas de 180 dias','Debe desde'].join(';')];
+  for(const r of rows) lin.push([ccNum(r.c),'"'+String(r.nombre||'').replace(/"/g,'""')+'"',r.vinc?'si':'no',num(r.saldo),num(r.d30),num(r.d90),num(r.d180),num(r.dmas),fechaTxt(r.desde)].join(';'));
+  const blob=new Blob(['﻿'+lin.join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='morosos_'+(META?.corte||'').replace(/[^0-9]/g,'').slice(0,12)+'.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+};
+
+// ── PAGOS SIN APLICAR ──
+function pintarSinAplicar(){
+  const t=document.getElementById('sa-tabla'); t.textContent='';
+  const rows=Object.entries(MOROSOS).filter(([,m])=>(m.ncred||0)>0).sort((a,b)=>(b[1].creditos||0)-(a[1].creditos||0));
+  const h=el('tr'); [['N°',0],['Cliente',0],['Pagos sueltos',1],['Monto sin aplicar',1],['Saldo neto',1]].forEach(([l,n])=>h.appendChild(el('th',n?'n':'',l))); t.appendChild(h);
+  if(!rows.length){ const tr=el('tr'); tr.appendChild(el('td','gris','No hay cuentas con pagos sin aplicar (o falta importar desde Tesorería).')); t.appendChild(tr); return; }
+  for(const [c,m] of rows){
+    const tr=el('tr');
+    tr.appendChild(el('td','mono',ccNum(c))); tr.appendChild(el('td','',m.nombre||''));
+    tr.appendChild(el('td','n',String(m.ncred))); tr.appendChild(el('td','n verde',ccMonto(m.creditos))); tr.appendChild(el('td','n rojo',ccMonto(m.saldo)));
+    t.appendChild(tr);
+  }
+}
+
+// ── SOCIOS ACTIVOS SIN VINCULAR ──
+let _clientes=null;
+async function pintarSinVincular(){
+  const t=document.getElementById('sv-tabla'); t.textContent='';
+  const cargando=el('tr'); cargando.appendChild(el('td','gris','// Cargando reservas y usuarios…')); t.appendChild(cargando);
+  let reservas,alumnos,cuentaDe;
+  try{ [reservas,alumnos,cuentaDe,_clientes]=await Promise.all([fbGet('reservas'),fbGet('alumnos'),fbGet('cc_cuenta_de'),_clientes?Promise.resolve(_clientes):fbGet('cc_clientes')]); }
+  catch(e){ t.textContent=''; const tr=el('tr'); tr.appendChild(el('td','rojo','⚠ '+ccErrMsg(e))); t.appendChild(tr); return; }
+  reservas=reservas||{}; alumnos=alumnos||{}; cuentaDe=cuentaDe||{}; _clientes=_clientes||{};
+  const hoy=new Date(), lim=new Date(hoy.getTime()-90*864e5).toISOString().slice(0,10);
+  const act={};
+  for(const r of Object.values(reservas)){
+    if(!r||!r.email||!r.fecha||r.fecha<lim||r.estado==='cancelado') continue;
+    const k=ek(String(r.email).toLowerCase()); const a=act[k]||(act[k]={n:0,ult:''}); a.n++; if(r.fecha>a.ult) a.ult=r.fecha;
+  }
+  const rows=Object.entries(act).filter(([k])=>alumnos[k]&&!cuentaDe[k]).map(([k,a])=>({k,...a,al:alumnos[k]})).sort((x,y)=>y.n-x.n);
+  t.textContent='';
+  const h=el('tr'); [['Usuario',0],['Email',0],['Rol',0],['Turnos 90 d',1],['Último',0],['N° cliente',0],['',0]].forEach(([l,n])=>h.appendChild(el('th',n?'n':'',l))); t.appendChild(h);
+  if(!rows.length){ const tr=el('tr'); tr.appendChild(el('td','verde','✓ Todos los socios activos están vinculados.')); t.appendChild(tr); return; }
+  for(const r of rows){
+    const tr=el('tr');
+    tr.appendChild(el('td','',r.al.nombre||r.k)); tr.appendChild(el('td','mono',r.al.email||'')); tr.appendChild(el('td','mono',r.al.rol||''));
+    tr.appendChild(el('td','n',String(r.n))); tr.appendChild(el('td','mono',fechaTxt(r.ult)));
+    const tdIn=el('td'); const inp=el('input'); inp.type='text'; inp.placeholder='N°'; inp.style.maxWidth='80px'; inp.inputMode='numeric';
+    const nom=el('div','muted',''); inp.oninput=()=>{ const c=ccNormCuenta(inp.value); nom.textContent=!inp.value?'':(!c?'⚠ solo números':(_clientes[c]?'✓ '+_clientes[c].nombre:'⚠ no está en el catálogo')); };
+    tdIn.appendChild(inp); tdIn.appendChild(nom); tr.appendChild(tdIn);
+    const tdB=el('td'); const b=el('button','btn prim','VINCULAR');
+    b.onclick=async()=>{ const c=ccNormCuenta(inp.value); if(!c){ nom.textContent='⚠ N° inválido'; return; } b.disabled=true;
+      try{ await guardarVinculo(r.k,c); nom.textContent='✓ vinculado a '+ccNum(c); nom.className='muted verde'; inp.disabled=true; VINC[c]=r.k; }
+      catch(e){ nom.textContent='⚠ '+(e.message||e); nom.className='muted rojo'; b.disabled=false; } };
+    tdB.appendChild(b); tr.appendChild(tdB);
+    t.appendChild(tr);
+  }
+}
+// Mismo procedimiento que ccGuardarVinculo de turnos.html (las reglas exigen ambos índices).
+async function guardarVinculo(emailKey,cuenta){
+  const anterior=await fbGet('cc_cuenta_de/'+emailKey);
+  const dueno=await fbGet('cc_vinculos/'+cuenta);
+  if(dueno&&dueno!==emailKey) throw new Error('el cliente '+ccNum(cuenta)+' ya está vinculado a otro usuario');
+  const upd={}; if(anterior&&anterior!==cuenta) upd['cc_vinculos/'+anterior]=null;
+  upd['cc_vinculos/'+cuenta]=emailKey; upd['cc_cuenta_de/'+emailKey]=cuenta;
+  try{ await update(ref(db),upd); }catch(e){ throw new Error(ccErrMsg(e)); }
+  auditar('cc_vinculo',emailKey+': '+(ccNum(anterior)||'—')+' → '+ccNum(cuenta)+' (tesorería)');
+}
+
+// ── HISTORIAL ──
+function pintarHistorial(){
+  const t=document.getElementById('hi-tabla'); t.textContent='';
+  const h=el('tr'); [['Corte',0],['Cuentas',1],['Deuda total',1],['Comprobantes',1],['Archivo',0],['Importó',0]].forEach(([l,n])=>h.appendChild(el('th',n?'n':'',l))); t.appendChild(h);
+  const rows=Object.entries(HIST).sort((a,b)=>b[0].localeCompare(a[0]));
+  if(!rows.length){ const tr=el('tr'); tr.appendChild(el('td','gris','El historial empieza con la primera importación hecha desde Tesorería.')); t.appendChild(tr); return; }
+  for(const [,x] of rows){
+    const tr=el('tr');
+    tr.appendChild(el('td','mono',x.corte_txt||'')); tr.appendChild(el('td','n',String(x.cuentas||0))); tr.appendChild(el('td','n rojo',ccMonto(x.total)));
+    tr.appendChild(el('td','n',String(x.filas||0))); tr.appendChild(el('td','mono',x.archivo||'')); tr.appendChild(el('td','',x.importado_por||''));
+    t.appendChild(tr);
+  }
+}
+
+// ── IMPORTACIÓN ──
+// Parser y validación: copia de turnos.html v8.83 (ccParseBiff2 / ccInterpretar).
+function ccParseBiff2(buf){
+  const dv=new DataView(buf),n=buf.byteLength,dec=new TextDecoder('windows-1252');
+  if(n<4||dv.getUint16(0,true)!==0x0009) throw new Error('formato no reconocido: se esperaba el Excel 2.1 que exporta el facturador');
+  const grid=[];
+  const put=(r,c,v)=>{ (grid[r]||(grid[r]=[]))[c]=v; };
+  let i=0;
+  while(i+4<=n){
+    const t=dv.getUint16(i,true),len=dv.getUint16(i+2,true),o=i+4;
+    if(o+len>n) throw new Error('archivo truncado o dañado');
+    if(t===0x0003&&len>=15) put(dv.getUint16(o,true),dv.getUint16(o+2,true),dv.getFloat64(o+7,true));          // NUMBER
+    else if(t===0x0002&&len>=9) put(dv.getUint16(o,true),dv.getUint16(o+2,true),dv.getUint16(o+7,true));       // INTEGER
+    else if(t===0x0006&&len>=15) put(dv.getUint16(o,true),dv.getUint16(o+2,true),dv.getFloat64(o+7,true));     // FORMULA (resultado)
+    else if(t===0x0004&&len>=8){                                                                                 // LABEL
+      const l=dv.getUint8(o+7); put(dv.getUint16(o,true),dv.getUint16(o+2,true),dec.decode(new Uint8Array(buf,o+8,Math.min(l,len-8))));
+    }
+    else if(t===0x000A) break;                                                                                   // EOF
+    i=o+len;
+  }
+  return grid;
+}
+
+function ccInterpretar(grid){
+  const txt=v=>(v==null?'':String(v)).trim();
+  if(!/facturas\s+pendientes/i.test(txt(grid[0]?.[0]))) throw new Error('no es el reporte "Resumen de Facturas Pendientes"');
+  let corte=null;
+  for(let r=0;r<6&&!corte;r++){
+    const m=txt(grid[r]?.[0]).match(/^Fecha\s*:\s*(\d{2})\/(\d{2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
+    if(m) corte={iso:`${m[3]}-${m[2]}-${m[1]}T${m[4].padStart(2,'0')}:${m[5]}`,txt:`${m[1]}/${m[2]}/${m[3]} ${m[4].padStart(2,'0')}:${m[5]}`};
+  }
+  if(!corte) throw new Error('no se encontró la fecha del reporte (fila "Fecha : dd/mm/aaaa hh:mm")');
+  let h=-1;
+  for(let r=0;r<10;r++){ const row=(grid[r]||[]).map(txt); if(row.includes('Cuenta')&&row.includes('NewSaldo')){h=r;break;} }
+  if(h<0) throw new Error('no se encontró la fila de títulos de columnas');
+  const hdr=(grid[h]||[]).map(txt),col={};
+  for(const k of ['Cuenta','Cliente','Fecha','Nro. Comprobante','Referencia','NewImporte','NewSaldo','SALDO1']){
+    col[k]=hdr.indexOf(k); if(col[k]<0) throw new Error('falta la columna "'+k+'"');
+  }
+  const cuentas={}; let filas=0;
+  for(let r=h+1;r<grid.length;r++){
+    const row=grid[r]; if(!row) continue;
+    const nro=row[col.Cuenta]; if(typeof nro!=='number'||!(nro>0)) continue;
+    const c='c'+Math.trunc(nro);
+    const fm=txt(row[col.Fecha]).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    const cu=cuentas[c]||(cuentas[c]={nombre:txt(row[col.Cliente]),saldo1:ccRed(row[col.SALDO1]),suma:0,items:[]});
+    const it={f:fm?`${fm[3]}-${fm[2]}-${fm[1]}`:null,comp:txt(row[col['Nro. Comprobante']]),ref:txt(row[col.Referencia]),imp:ccRed(row[col.NewImporte]),pend:ccRed(row[col.NewSaldo])};
+    cu.items.push(it); cu.suma+=it.pend; filas++;
+  }
+  if(!filas) throw new Error('el archivo no tiene filas de datos');
+  const avisos=[]; let total=0;
+  for(const [c,cu] of Object.entries(cuentas)){
+    cu.suma=ccRed(cu.suma);
+    if(Math.abs(cu.suma-cu.saldo1)>0.01) avisos.push(`Cuenta ${ccNum(c)} ${cu.nombre}: la suma de comprobantes (${ccMonto(cu.suma)}) no coincide con SALDO1 (${ccMonto(cu.saldo1)})`);
+    cu.items.sort((a,b)=>(a.f||'').localeCompare(b.f||''));
+    total+=cu.saldo1;
+  }
+  return {corte,cuentas,filas,total:ccRed(total),avisos};
+}
+
+
+// Facturas impagas por cuenta después de aplicar los créditos a las más antiguas
+// (mismo criterio que portal-socio.html imputarCreditosFIFO), en centavos.
+function imputarFIFO(items){
+  const cts=n=>Math.round((Number(n)||0)*100);
+  const orden=[...items].sort((a,b)=>(a.f||'').localeCompare(b.f||''));
+  let credito=orden.reduce((s,i)=>s+(cts(i.pend)<0?-cts(i.pend):0),0);
+  const creditosTot=credito, ncred=orden.filter(i=>cts(i.pend)<0).length;
+  const abiertas=[];
+  for(const it of orden){ const p=cts(it.pend); if(p<=0) continue; const ap=Math.min(credito,p); credito-=ap; if(p-ap>0) abiertas.push({f:it.f,resta:p-ap}); }
+  return {abiertas,ncred,creditos:creditosTot/100};
+}
+function diasEntre(isoA,isoB){ const p=s=>{ const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(s||''); return m?Date.UTC(+m[1],+m[2]-1,+m[3]):NaN; }; return Math.round((p(isoB)-p(isoA))/864e5); }
+function calcularMorosos(res){
+  const out={}, corteDia=res.corte.iso.slice(0,10);
+  for(const [c,cu] of Object.entries(res.cuentas)){
+    const r=imputarFIFO(cu.items), b={d30:0,d90:0,d180:0,dmas:0}; let desde=null;
+    for(const a of r.abiertas){
+      const d=a.f?diasEntre(a.f,corteDia):9999, v=a.resta;
+      if(d<=30) b.d30+=v; else if(d<=90) b.d90+=v; else if(d<=180) b.d180+=v; else b.dmas+=v;
+      if(a.f&&(!desde||a.f<desde)) desde=a.f;
+    }
+    out[c]={nombre:cu.nombre,saldo:cu.saldo1,d30:b.d30/100,d90:b.d90/100,d180:b.d180/100,dmas:b.dmas/100,desde,ncred:r.ncred,creditos:ccRed(r.creditos)};
+  }
+  return out;
+}
+
+window.cancelarImportacion=function(){ _import=null; document.getElementById('imp-preview').style.display='none'; document.getElementById('imp-status').textContent=''; };
+window.leerArchivo=async function(input){
+  const file=input.files&&input.files[0]; input.value=''; if(!file) return;
+  const st=document.getElementById('imp-status'),prev=document.getElementById('imp-preview'),body=document.getElementById('imp-preview-body');
+  _import=null; prev.style.display='none'; st.className='muted'; st.textContent='// Leyendo '+file.name+'…';
+  try{
+    if(file.size>10*1024*1024) throw new Error('archivo demasiado grande');
+    const res=ccInterpretar(ccParseBiff2(await file.arrayBuffer()));
+    const [vinc,meta,cli]=await Promise.all([fbGet('cc_vinculos'),fbGet('cc_meta'),fbGet('cc_clientes')]);
+    const v=vinc||{}, cat=cli||{};
+    res.nuevosCat=Object.keys(res.cuentas).filter(c=>!cat[c]); res.archivo=file.name; res.morosos=calcularMorosos(res);
+    const m=Object.values(res.morosos), mas90=ccRed(m.reduce((s,x)=>s+x.d180+x.dmas,0)), conSA=m.filter(x=>x.ncred>0).length;
+    const L=[];
+    L.push(`Fecha de corte del reporte: <b>${ccEsc(res.corte.txt)}</b>`);
+    L.push(`Comprobantes pendientes: <b>${res.filas}</b> · Cuentas con deuda: <b>${Object.keys(res.cuentas).length}</b>`);
+    L.push(`Deuda total: <b>${ccEsc(ccMonto(res.total))}</b> · de más de 90 días: <b>${ccEsc(ccMonto(mas90))}</b>`);
+    L.push(`Cuentas con deuda vinculadas a usuarios de la app: <b>${Object.keys(res.cuentas).filter(c=>v[c]).length}</b> (de ${Object.keys(v).length} vinculados)`);
+    L.push(`Cuentas con pagos sin aplicar: <b>${conSA}</b>`);
+    if(res.nuevosCat.length) L.push(`Clientes nuevos que se agregan al catálogo: <b>${res.nuevosCat.length}</b>`);
+    if(meta?.corte&&res.corte.iso<meta.corte) L.push(`<span class="rojo">⚠ Este archivo es MÁS VIEJO que la última importación (${ccEsc(meta.corte_txt)}).</span>`);
+    else if(meta?.corte&&res.corte.iso===meta.corte) L.push(`<span class="ambar">⚠ Misma fecha de corte que la última importación — probablemente ya fue importado.</span>`);
+    if(res.avisos.length) L.push(`<span class="ambar">⚠ ${res.avisos.length} aviso(s):</span><br>`+res.avisos.slice(0,10).map(a=>'· '+ccEsc(a)).join('<br>')+(res.avisos.length>10?'<br>· …':''));
+    L.push(`<span class="gris">Al confirmar se REEMPLAZAN todos los saldos y comprobantes anteriores. Las cuentas que no figuran en el archivo quedan "Sin deuda pendiente".</span>`);
+    body.innerHTML=L.join('<br>');
+    _import=res; prev.style.display='block'; st.textContent='';
+  }catch(e){ st.className='muted rojo'; st.textContent='⚠ '+ccErrMsg(e); }
+};
+window.confirmarImportacion=async function(){
+  if(!_import||_importando) return; _importando=true;
+  const st=document.getElementById('imp-status'),btn=document.getElementById('imp-btn-confirmar');
+  btn.disabled=true; st.className='muted'; st.textContent='// Importando…';
+  try{
+    const r=_import,saldos={},detalle={},fotos={};
+    for(const [c,cu] of Object.entries(r.cuentas)){ saldos[c]={saldo:cu.saldo1,nombre:cu.nombre}; detalle[c]={items:cu.items}; fotos[c]=cu.saldo1; }
+    const meta={corte:r.corte.iso,corte_txt:r.corte.txt,cuentas:Object.keys(r.cuentas).length,total:r.total,filas:r.filas,archivo:r.archivo||null,importado_por:session?.nombre||session?.user||'?',ts:serverTimestamp()};
+    const hk=r.corte.iso.replace(/[^0-9]/g,'').slice(0,12); // AAAAMMDDhhmm
+    // Un único update multi-path: todo se reemplaza junto o no se toca nada.
+    const upd={cc_saldos:saldos,cc_detalle:detalle,cc_meta:meta};
+    upd['cc_admin/morosos']=r.morosos;
+    upd['cc_admin/historial/'+hk]={corte:r.corte.iso,corte_txt:r.corte.txt,cuentas:meta.cuentas,total:r.total,filas:r.filas,archivo:meta.archivo,importado_por:meta.importado_por,ts:serverTimestamp(),saldos:fotos};
+    for(const c of r.nuevosCat||[]) upd['cc_clientes/'+c]={nombre:r.cuentas[c].nombre,dni:null};
+    await update(ref(db),upd);
+    auditar('cc_importacion',`corte ${r.corte.txt} · ${meta.cuentas} cuentas · ${ccMonto(r.total)} (tesorería)`);
+    _import=null; document.getElementById('imp-preview').style.display='none';
+    st.className='muted verde'; st.textContent='// IMPORTACIÓN COMPLETA';
+    await cargarTodo();
+  }catch(e){ st.className='muted rojo'; st.textContent='⚠ No se importó nada: '+ccErrMsg(e); }
+  finally{ _importando=false; btn.disabled=false; }
+};
+</script>
+</body>
+</html>
