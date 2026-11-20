@@ -1,7 +1,12 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 8.91
-  CAMBIOS : Pedido de Daniel: dos tipos de vuelo nuevos para pilotos, "Bautismo" y
+  VERSION : 8.92 · 2026-11-20
+  CAMBIOS : Pedido de Daniel: los instructores veían el botón Config→Parámetros aunque
+            no tienen acceso (showCfgTab() lo bloquea para no-admin desde v7.43, pero el
+            botón nunca se ocultaba → tocarlo no hacía nada). Mismo caso con Aeronaves
+            (gate v7.63). Fix: showInstTab('config') oculta ambos botones si el usuario
+            no es admin/administrador. Sin cambios de lógica ni de permisos.
+  ANTERIOR: v8.91 — Pedido de Daniel: dos tipos de vuelo nuevos para pilotos, "Bautismo" y
             "Contratado" (también en LV-OAD). Funcionan exactamente igual que Particular
             (sin instructor, aprobación automática salvo LV-OAD, varios slots); la
             diferencia es solo estadística (tipo_vuelo:'bautismo'|'contratado'). Quién
@@ -4622,7 +4627,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.91</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.92</div>
   </div>
 
 </div>
@@ -10691,6 +10696,12 @@ window.showInstTab=function(tab){
     });
     const btnAudFpl=document.getElementById('cfg-tab-auditoria-fpl');
     if(btnAudFpl) btnAudFpl.style.display=(session?.user==='admin')?'':'none';
+    // v8.92: Parámetros y Aeronaves ya estaban bloqueados en showCfgTab() para
+    // no-admin, pero el botón se seguía mostrando (tocarlo no hacía nada).
+    ['parametros','aeronaves'].forEach(t=>{
+      const b=document.getElementById('cfg-tab-'+t);
+      if(b) b.style.display=(session?.user==='admin'||session?.user==='administrador')?'':'none';
+    });
   }
 };
 
