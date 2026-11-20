@@ -1,0 +1,62 @@
+{
+  "rules": {
+    "$otro": {
+      ".read": true,
+      ".write": true
+    },
+    "cc_staff": {
+      "$k": {
+        ".read": "auth != null && $k === auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')",
+        ".write": "auth != null && (root.child('cc_staff').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).val() === 'admin' || (root.child('cc_staff').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).val() === 'administrador' && (!data.exists() || data.val() === 'instructor') && (!newData.exists() || newData.val() === 'instructor')))",
+        ".validate": "newData.isString() && (newData.val() === 'instructor' || newData.val() === 'administrador' || newData.val() === 'admin')"
+      }
+    },
+    "cc_alias": {
+      "$k": {
+        ".read": "auth != null && $k === auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')",
+        ".write": "auth != null && (root.child('cc_staff').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).val() === 'admin' || root.child('cc_staff').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).val() === 'administrador')",
+        ".validate": "newData.isString()"
+      }
+    },
+    "cc_vinculos": {
+      ".read": "auth != null && (root.child('cc_staff').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).val() === 'admin' || root.child('cc_staff').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).val() === 'administrador')",
+      ".write": "auth != null && (root.child('cc_staff').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).val() === 'admin' || root.child('cc_staff').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).val() === 'administrador')",
+      "$cuenta": {
+        ".validate": "newData.isString() && newData.parent().parent().child('cc_cuenta_de').child(newData.val()).val() === $cuenta"
+      }
+    },
+    "cc_cuenta_de": {
+      ".write": "auth != null && (root.child('cc_staff').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).val() === 'admin' || root.child('cc_staff').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).val() === 'administrador')",
+      ".read": "auth != null && root.child('cc_staff').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).exists()",
+      "$k": {
+        ".read": "auth != null && ($k === auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__') || root.child('cc_alias').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).val() === $k)",
+        ".validate": "newData.isString() && newData.parent().parent().child('cc_vinculos').child(newData.val()).val() === $k"
+      }
+    },
+    "cc_clientes": {
+      ".read": "auth != null && (root.child('cc_staff').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).val() === 'admin' || root.child('cc_staff').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).val() === 'administrador')",
+      ".write": "auth != null && (root.child('cc_staff').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).val() === 'admin' || root.child('cc_staff').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).val() === 'administrador')"
+    },
+    "cc_saldos": {
+      ".read": "auth != null && root.child('cc_staff').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).exists()",
+      ".write": "auth != null && (root.child('cc_staff').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).val() === 'admin' || root.child('cc_staff').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).val() === 'administrador')",
+      "$cuenta": {
+        ".read": "auth != null && (root.child('cc_vinculos').child($cuenta).val() === auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__') || (root.child('cc_alias').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).exists() && root.child('cc_vinculos').child($cuenta).val() === root.child('cc_alias').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).val()))"
+      }
+    },
+    "cc_detalle": {
+      ".write": "auth != null && (root.child('cc_staff').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).val() === 'admin' || root.child('cc_staff').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).val() === 'administrador')",
+      "$cuenta": {
+        ".read": "auth != null && (root.child('cc_vinculos').child($cuenta).val() === auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__') || (root.child('cc_alias').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).exists() && root.child('cc_vinculos').child($cuenta).val() === root.child('cc_alias').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).val()) || root.child('cc_staff').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).val() === 'admin' || root.child('cc_staff').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).val() === 'administrador')"
+      }
+    },
+    "cc_meta": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('cc_staff').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).val() === 'admin' || root.child('cc_staff').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).val() === 'administrador')"
+    },
+    "cc_admin": {
+      ".read": "auth != null && (root.child('cc_staff').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).val() === 'admin' || root.child('cc_staff').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).val() === 'administrador')",
+      ".write": "auth != null && (root.child('cc_staff').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).val() === 'admin' || root.child('cc_staff').child(auth.token.email.toLowerCase().replace('.', '_').replace('@', '__at__')).val() === 'administrador')"
+    }
+  }
+}
