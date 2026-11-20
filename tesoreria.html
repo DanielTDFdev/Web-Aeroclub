@@ -2,6 +2,10 @@
 <!--
 ==================================================================================
   TESORERÍA — Aeroclub Río Grande
+  v1.05 · 2026-11-20 · Pedido de Daniel: admin y administrador ven el detalle completo de la
+           deuda de un usuario. Morosos: columna "Detalle" con botón VER → abre
+           portal-socio.html?cuenta=cNNN (v1.05, modo staff: mismo render que ve el usuario).
+           Requiere la regla nueva de /cc_detalle (ver portal-socio.html v1.05).
   v1.04 · 2026-11-19 · Pedido de Daniel: "socio" → "usuario" en los textos visibles (no todos
            los usuarios son socios del club: los alumnos no lo son, y un cliente del
            facturador puede no ser socio).
@@ -122,7 +126,7 @@ label.chk{font-family:var(--font-mono);font-size:12px;color:var(--text2);display
     <div class="sp">
       <div class="theme-toggle" onclick="toggleTheme()" title="Cambiar tema"><span>🌙</span><div class="theme-toggle-track"><div class="theme-toggle-thumb"></div></div><span>☀️</span></div>
       <span class="who" id="who-label"></span>
-      <span class="ver">v1.04</span>
+      <span class="ver">v1.05</span>
       <a class="btn" href="turnos.html">← TURNERO</a>
       <button class="btn" onclick="cerrarSesion()">⏻ SALIR</button>
     </div>
@@ -311,6 +315,7 @@ window.pintarMorosos=function(){
   const cols=[['c','N°',0],['nombre','Cliente',0],['saldo','Saldo',1],['d30','0-30 d',1],['d90','31-90 d',1],['d180','91-180 d',1],['dmas','+180 d',1],['desde','Debe desde',0]];
   const h=el('tr');
   cols.forEach(([k,l,n])=>{ const th=el('th',(n?'n ':'')+'sortable',l+(_morOrden.k===k?(_morOrden.dir>0?' ▲':' ▼'):'')); th.onclick=()=>ordenarMorosos(k); h.appendChild(th); });
+  h.appendChild(el('th','','Detalle')); // v1.05
   t.appendChild(h);
   const rows=filasMorosos();
   for(const r of rows){
@@ -320,6 +325,9 @@ window.pintarMorosos=function(){
     tr.appendChild(el('td','n rojo',ccMonto(r.saldo)));
     for(const k of ['d30','d90','d180','dmas']){ const v=r[k]||0; tr.appendChild(el('td','n '+(v?(k==='dmas'||k==='d180'?'ambar':''):'gris'),v?ccMonto(v):'—')); }
     tr.appendChild(el('td','mono',fechaTxt(r.desde)));
+    // v1.05: detalle completo de la cuenta (misma vista que el usuario en MI CUENTA).
+    const tdv=el('td'), bv=el('button','btn','VER →'); bv.onclick=()=>{ location.href='portal-socio.html?cuenta='+encodeURIComponent(r.c); };
+    tdv.appendChild(bv); tr.appendChild(tdv);
     t.appendChild(tr);
   }
   const tot=rows.reduce((s,r)=>s+(r.saldo||0),0);

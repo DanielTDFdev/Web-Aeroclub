@@ -2,6 +2,16 @@
 <!--
 ==================================================================================
   PORTAL SOCIO — Aeroclub Río Grande
+  v1.05 · 2026-11-20 · Pedido de Daniel: admin y administrador ven el detalle completo de
+           la deuda de un usuario (antes el staff veía solo el saldo — decisión anterior,
+           revertida para estos dos roles; los instructores siguen viendo solo el saldo).
+           Modo staff: portal-socio.html?cuenta=cNNN, se abre desde Tesorería → Morosos.
+           Mismo render que ve el usuario (facturas impagas + detalle del facturador), con
+           textos en tercera persona y volver a Tesorería. Gate: sesión de turnos de
+           instructor admin/administrador no simulada + Auth con su email sintético +
+           /cc_staff = admin|administrador. REQUIERE regla nueva en database.rules.json:
+           /cc_detalle/$c .read también para cc_staff admin|administrador (sin la regla
+           muestra "sin permiso"). Sin parámetro ?cuenta el portal funciona igual que antes.
   v1.04 · 2026-11-19 · Pedido de Daniel: "socio" → "usuario" en los textos visibles (no todos
            los usuarios son socios del club; un cliente del facturador puede no ser socio).
            El título visible pasa a "MI CUENTA" (mismo nombre que el botón del turnero). El
@@ -149,7 +159,7 @@ h2{font-family:var(--font-mono);font-size:13px;color:var(--cyan);letter-spacing:
 <div class="wrap" id="app-wrap" style="display:none">
   <header class="bar">
     <div class="dot"></div>
-    <h1>MI CUENTA<small>AEROCLUB RÍO GRANDE</small></h1>
+    <h1 id="titulo-h1">MI CUENTA<small>AEROCLUB RÍO GRANDE</small></h1>
     <div class="sp">
       <div class="theme-toggle" onclick="toggleTheme()" title="Cambiar tema">
         <span class="theme-toggle-icon">🌙</span>
@@ -157,14 +167,14 @@ h2{font-family:var(--font-mono);font-size:13px;color:var(--cyan);letter-spacing:
         <span class="theme-toggle-icon">☀️</span>
       </div>
       <span class="who" id="who-label"></span>
-      <span class="ver">v1.04</span>
-      <a class="back" href="turnos.html">← TURNERO</a>
+      <span class="ver">v1.05</span>
+      <a class="back" id="btn-volver" href="turnos.html">← TURNERO</a>
       <button class="back" onclick="cerrarSesion()" title="Cerrar sesión">⏻ SALIR</button>
     </div>
   </header>
 
   <section class="card">
-    <h2>▸ Mi cuenta en el club</h2>
+    <h2 id="cc-titulo">▸ Mi cuenta en el club</h2>
     <div id="cc-cuerpo"><div class="msg">// Cargando…</div></div>
   </section>
 
@@ -206,6 +216,9 @@ function el(tag,cls,txt){ const e=document.createElement(tag); if(cls)e.classNam
 // ── SESIÓN / TIMEOUT (declarado antes del gate: gate() lo usa sincrónicamente) ──
 const SESSION_TIMEOUT_MS=10*60*1000;
 let session=null,_sessionTimer=null,_cargado=false;
+// v1.05: modo staff (admin/administrador mirando la cuenta de un usuario desde Tesorería).
+const _qCuenta=(()=>{ try{ const m=/^c?(\d{1,6})$/i.exec((new URLSearchParams(location.search).get('cuenta')||'').trim()); return m?'c'+parseInt(m[1],10):null; }catch(_){ return null; } })();
+let STAFF=false;
 function resetSessionTimer(){ if(!session)return; clearTimeout(_sessionTimer); _sessionTimer=setTimeout(()=>{ if(session) cerrarSesion(); },SESSION_TIMEOUT_MS); }
 ['mousemove','mousedown','keydown','touchstart','scroll','click'].forEach(ev=>document.addEventListener(ev,resetSessionTimer,{passive:true}));
 
@@ -229,11 +242,13 @@ function mostrarMensaje(txt){
   let s=null;
   try{ s=JSON.parse(sessionStorage.getItem('lvoad-session')||'null'); }catch(_){ s=null; }
   if(s && s.tipo==='alumno') session=s;
+  if(_qCuenta && s && s.tipo==='instructor' && (s.user==='admin'||s.user==='administrador')){ session=s; STAFF=true; }
   if(!session){
     document.getElementById('gate-msg').style.display='block';
     setTimeout(()=>{ location.href='turnos.html'; },900);
     return;
   }
+  if(STAFF){ gateStaff(); return; }
   document.getElementById('who-label').textContent=(session.nombre||session.username||'')+(session.rol==='piloto'?' · PILOTO':' · ALUMNO');
   document.getElementById('app-wrap').style.display='block';
   resetSessionTimer();
@@ -259,6 +274,34 @@ function mostrarMensaje(txt){
     else cargarCuenta(ek(emailAuth));
   });
 })();
+
+// v1.05: admin/administrador ven la cuenta ?cuenta=cNNN. La seguridad la dan las reglas
+// (cc_detalle legible por cc_staff admin|administrador); esto solo arma la pantalla.
+function gateStaff(){
+  document.title='Cuenta de usuario · Tesorería · Aeroclub Río Grande';
+  document.getElementById('titulo-h1').firstChild.textContent='CUENTA DE USUARIO';
+  document.getElementById('cc-titulo').textContent='▸ Cuenta en el club';
+  const v=document.getElementById('btn-volver'); v.href='tesoreria.html'; v.textContent='← TESORERÍA';
+  document.getElementById('who-label').textContent=(session.nombre||session.user)+' · '+session.user.toUpperCase();
+  document.getElementById('app-wrap').style.display='block';
+  resetSessionTimer();
+  if(session.simuladoPor){ mostrarMensaje('Login simulado: no disponible.'); return; }
+  onAuthStateChanged(auth,async user=>{
+    if(_cargado) return;
+    const esperado=(session.user+'@instructores.aeroclubriogrande.com.ar').toLowerCase();
+    if(!user||(user.email||'').toLowerCase()!==esperado){ mostrarMensaje('Tu sesión no tiene acceso seguro. Salí del turnero y volvé a entrar con tu usuario.'); return; }
+    _cargado=true;
+    try{
+      const [meta,saldoNodo,detalle]=await Promise.all([fbGet('cc_meta'),fbGet('cc_saldos/'+_qCuenta),fbGet('cc_detalle/'+_qCuenta)]);
+      if(!meta){ mostrarMensaje('Todavía no hay información de cuenta corriente cargada.'); return; }
+      render(_qCuenta,meta,saldoNodo,detalle);
+    }catch(e){
+      console.warn('portal socio (staff):',e);
+      const permiso=e?.code==='PERMISSION_DENIED'||/permission/i.test(e?.message||'');
+      mostrarMensaje(permiso?'Sin permiso para ver el detalle: falta publicar en Firebase la regla de /cc_detalle para admin/administrador, o tu usuario no está en /cc_staff.':'No se pudo cargar la cuenta corriente (sin conexión o error del servidor). Probá de nuevo en un rato.');
+    }
+  });
+}
 
 async function cargarCuentaInstructor(instKey){
   try{
@@ -302,7 +345,7 @@ function render(cuenta,meta,saldoNodo,detalle){
   pintarDetalle();
 
   const nota=document.getElementById('cc-nota');
-  nota.textContent='Datos informativos importados del sistema de facturación del club al '+(meta.corte_txt||'?')+'. Los pagos posteriores a esa fecha se verán en la próxima actualización. Ante cualquier diferencia, consultá en administración.';
+  nota.textContent='Datos informativos importados del sistema de facturación del club al '+(meta.corte_txt||'?')+'. Los pagos posteriores a esa fecha se verán en la próxima actualización.'+(STAFF?'':' Ante cualquier diferencia, consultá en administración.');
   nota.style.display='block';
 }
 
@@ -369,9 +412,11 @@ function pintarDetalle(){
     // ── Facturas impagas (vista principal) ──
     const r=imputarCreditosFIFO(items);
     tit.textContent='▸ Facturas impagas';
-    ayuda.textContent=hayCreditos
+    ayuda.textContent=STAFF
+      ?(hayCreditos?'Lo que falta pagar de cada factura. Los pagos sin aplicar ya están descontados (se aplican primero a las facturas más viejas — deducción, no la imputación real del facturador).':'Lo que falta pagar de cada factura.')
+      :(hayCreditos
       ?'Lo que te falta pagar de cada factura. Tus pagos ya están descontados (se aplican primero a las facturas más viejas).'
-      :'Lo que te falta pagar de cada factura.';
+      :'Lo que te falta pagar de cada factura.');
     const h=el('div','fila head'); ['Fecha','Factura','Falta pagar'].forEach((t,i)=>h.appendChild(el('div',i===2?'num':'',t))); lista.appendChild(h);
     for(const it of r.abiertas){
       const tipo=tipoMovimiento(it), f=el('div','fila');
@@ -391,7 +436,7 @@ function pintarDetalle(){
   }else{
     // ── Detalle tal cual el facturador ──
     tit.textContent='▸ Detalle como figura en el facturador';
-    ayuda.textContent='Cada renglón es una factura que todavía tiene algo para pagar, o un pago que el club todavía no aplicó a ninguna factura. Tu saldo es lo que debés menos lo que tenés a favor.';
+    ayuda.textContent='Cada renglón es una factura que todavía tiene algo para pagar, o un pago que el club todavía no aplicó a ninguna factura. '+(STAFF?'El saldo es lo que debe menos lo que tiene a favor.':'Tu saldo es lo que debés menos lo que tenés a favor.');
     const h=el('div','fila head'); ['Fecha','Tipo','Detalle','Debe','A favor'].forEach((t,i)=>h.appendChild(el('div',i>=3?'num':'',t))); lista.appendChild(h);
     let debe=0,favor=0;
     for(const it of items){
