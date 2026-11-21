@@ -1,7 +1,9 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 8.94 · 2026-11-21
-  CAMBIOS : Pedido de Daniel: el aviso/bloqueo por deuda de v8.93 aplica solo a usuarios
+  VERSION : 8.95 · 2026-11-21
+  CAMBIOS : Texto del cartel de bloqueo por deuda: decía "de 103 días o más" (usaba los días
+            reales); ahora dice "de 90 días o más" y los días reales van en el detalle.
+  ANTERIOR: v8.94 — Pedido de Daniel: el aviso/bloqueo por deuda de v8.93 aplica solo a usuarios
             con rol alumno, no a pilotos. estadoDeudaUsuario() devuelve null si rol≠alumno.
   ANTERIOR: v8.93 — Pedido de Daniel: aviso y bloqueo por deuda en Pedir Turno (alumno/piloto).
             Con saldo deudor en el facturador se muestra un cartel "TENÉS DEUDA PENDIENTE —
@@ -4638,7 +4640,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.94</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.95</div>
   </div>
 
 </div>
@@ -7839,7 +7841,7 @@ window.showAlumnoTab=function(tab){
     Promise.all([usuarioTieneCliente(),estadoDeudaUsuario()]).then(([ok,deuda])=>{
       if(!ok){ if(sinCli) sinCli.style.display='block'; return; }
       if(deudaBloquea(deuda)){
-        document.getElementById('pedir-turno-deuda-bloq-detalle').textContent='Tenés deuda con el club de '+deuda.dias+' días o más. '+deudaTxt(deuda);
+        document.getElementById('pedir-turno-deuda-bloq-detalle').textContent='Tenés deuda con el club de '+CC_DIAS_BLOQUEO+' días o más. '+deudaTxt(deuda);
         document.getElementById('pedir-turno-deuda-bloq').style.display='block';
         return;
       }
