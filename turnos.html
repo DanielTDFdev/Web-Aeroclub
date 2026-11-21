@@ -1,7 +1,16 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 8.92 · 2026-11-20
-  CAMBIOS : Pedido de Daniel: los instructores veían el botón Config→Parámetros aunque
+  VERSION : 8.93 · 2026-11-21
+  CAMBIOS : Pedido de Daniel: aviso y bloqueo por deuda en Pedir Turno (alumno/piloto).
+            Con saldo deudor en el facturador se muestra un cartel "TENÉS DEUDA PENDIENTE —
+            regularizá con administración lo antes posible" y se deja reservar igual. Si la
+            factura impaga más antigua (FIFO con créditos, mismo criterio que tesorería)
+            tiene 90 días o más contados a HOY, no se puede reservar (cartel + revalidación
+            al confirmar). Lee /cc_cuenta_de, /cc_saldos, /cc_detalle y /cc_meta con la
+            sesión de Auth del propio usuario (reglas ya existentes). Sin Auth / sin vínculo
+            / sin importación / error de red → no avisa ni bloquea. Instructor como piloto y
+            login simulado exceptuados. Es control de política, no de seguridad.
+  ANTERIOR: v8.92 — Pedido de Daniel: los instructores veían el botón Config→Parámetros aunque
             no tienen acceso (showCfgTab() lo bloquea para no-admin desde v7.43, pero el
             botón nunca se ocultaba → tocarlo no hacía nada). Mismo caso con Aeronaves
             (gate v7.63). Fix: showInstTab('config') oculta ambos botones si el usuario
@@ -4627,7 +4636,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.92</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.93</div>
   </div>
 
 </div>
@@ -4757,6 +4766,17 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <div style="font-size:15px;margin-bottom:.5rem">NO PODÉS PEDIR TURNO</div>
       <div>Tu usuario todavía no tiene asignado su N° de cliente del club.</div>
       <div style="margin-top:.75rem;color:var(--text3);font-size:11px">Pedile a administración que te asigne tu N° de cliente para poder reservar.</div>
+    </div>
+    <div id="pedir-turno-deuda-bloq" style="display:none;background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.35);border-radius:var(--radius);padding:1.25rem 1.25rem;font-family:var(--font-mono);font-size:13px;color:var(--red);letter-spacing:.04em;line-height:1.7;text-align:center">
+      <div style="font-size:32px;margin-bottom:.5rem">✕</div>
+      <div style="font-size:15px;margin-bottom:.5rem">NO PODÉS PEDIR TURNO</div>
+      <div id="pedir-turno-deuda-bloq-detalle"></div>
+      <div style="margin-top:.75rem;color:var(--text3);font-size:11px">Regularizá tu situación con administración para volver a reservar. Si ya pagaste, se verá reflejado en la próxima actualización de saldos.</div>
+    </div>
+    <div id="pedir-turno-deuda" style="display:none;background:rgba(240,165,0,.08);border:1px solid rgba(240,165,0,.35);border-radius:var(--radius);padding:.85rem 1rem;margin-bottom:1rem;font-family:var(--font-mono);font-size:12px;color:var(--amber);letter-spacing:.04em;line-height:1.6">
+      <div style="font-size:13px;margin-bottom:.25rem">⚠ TENÉS DEUDA PENDIENTE CON EL CLUB</div>
+      <div id="pedir-turno-deuda-detalle"></div>
+      <div style="margin-top:.35rem;color:var(--text2)">Regularizá con administración lo antes posible. Con deuda de 90 días o más no se pueden reservar turnos.</div>
     </div>
     <div id="pedir-turno-fuera-horario" style="display:none;background:rgba(240,165,0,.08);border:1px solid rgba(240,165,0,.35);border-radius:var(--radius);padding:1.25rem 1.25rem;font-family:var(--font-mono);font-size:13px;color:var(--amber);letter-spacing:.04em;line-height:1.7;text-align:center">
       <div style="font-size:32px;margin-bottom:.5rem">🕗</div>
@@ -7750,6 +7770,43 @@ async function usuarioTieneCliente(){
     return false;
   }catch(e){ console.warn('usuarioTieneCliente:',e); return true; }
 }
+// v8.93: deuda con el club (datos del facturador importados por tesorería). Devuelve
+// {dias,saldo,desde,corte_txt} si el usuario debe (dias = antigüedad de la factura impaga
+// más vieja, contada a HOY, después de aplicar los créditos a las más antiguas — mismo
+// criterio FIFO que tesoreria.html/portal-socio.html; null si no hay fecha), o null si no
+// debe / no se pudo saber (sin Auth, sin vínculo, sin importación, error de red: se deja
+// pasar, igual que usuarioTieneCliente). Instructor como piloto y login simulado: exceptuados.
+const CC_DIAS_BLOQUEO=90;
+async function estadoDeudaUsuario(){
+  if(!session||session.tipo!=='alumno'||session.instructorOrigen||session.simuladoPor) return null;
+  try{
+    if(auth.authStateReady) await auth.authStateReady(); // sesión restaurada: esperar a Auth
+    if(!auth.currentUser) return null;
+    const cuenta=await fbGet('cc_cuenta_de/'+session.emailKey); if(!cuenta) return null;
+    const [sal,det,meta]=await Promise.all([fbGet('cc_saldos/'+cuenta),fbGet('cc_detalle/'+cuenta),fbGet('cc_meta')]);
+    const saldo=ccRed(sal?.saldo||0);
+    if(!meta||saldo<CC_UMBRAL) return null;
+    const items=Array.isArray(det?.items)?det.items:Object.values(det?.items||{});
+    const cts=n=>Math.round((Number(n)||0)*100);
+    const orden=[...items].sort((a,b)=>(a.f||'').localeCompare(b.f||''));
+    let credito=orden.reduce((t,i)=>t+(cts(i.pend)<0?-cts(i.pend):0),0), desde=null;
+    for(const it of orden){
+      const pnd=cts(it.pend); if(pnd<=0) continue;
+      const ap=Math.min(credito,pnd); credito-=ap;
+      if(pnd-ap>0&&/^\d{4}-\d{2}-\d{2}/.test(it.f||'')){ desde=it.f.slice(0,10); break; }
+    }
+    let dias=null;
+    if(desde){
+      const p=x=>Date.UTC(+x.slice(0,4),+x.slice(5,7)-1,+x.slice(8,10));
+      dias=Math.round((p(fmtDate(ahoraServidor()))-p(desde))/864e5);
+    }
+    return {dias,saldo,desde,corte_txt:meta.corte_txt||''};
+  }catch(e){ console.warn('estadoDeudaUsuario:',e); return null; }
+}
+function deudaBloquea(d){ return !!d&&d.dias!=null&&d.dias>=CC_DIAS_BLOQUEO; }
+function deudaTxt(d){
+  return 'Saldo deudor '+ccMonto(d.saldo)+(d.desde?' · factura impaga más antigua del '+fmtFechaCorta(d.desde)+' ('+d.dias+' días)':'')+(d.corte_txt?' · datos al '+d.corte_txt:'');
+}
 window.showAlumnoTab=function(tab){
   ['mis-turnos','pedir-turno','perfil'].forEach(t=>document.getElementById('alumno-'+t).classList.toggle('active',t===tab));
   document.getElementById('al-tab-mis').classList.toggle('active',tab==='mis-turnos');
@@ -7775,9 +7832,19 @@ window.showAlumnoTab=function(tab){
     // de la apertura de la pestaña quedó en _abrirPedirTurno().
     const sinCli=document.getElementById('pedir-turno-sin-cliente');
     if(sinCli) sinCli.style.display='none';
-    ['pedir-turno-bloqueado','pedir-turno-fuera-horario','pedir-turno-card'].forEach(id=>{ const e=document.getElementById(id); if(e) e.style.display='none'; });
-    usuarioTieneCliente().then(ok=>{
+    ['pedir-turno-bloqueado','pedir-turno-fuera-horario','pedir-turno-card','pedir-turno-deuda','pedir-turno-deuda-bloq'].forEach(id=>{ const e=document.getElementById(id); if(e) e.style.display='none'; });
+    // v8.93: + deuda con el club — aviso si debe, bloqueo si la deuda tiene 90+ días.
+    Promise.all([usuarioTieneCliente(),estadoDeudaUsuario()]).then(([ok,deuda])=>{
       if(!ok){ if(sinCli) sinCli.style.display='block'; return; }
+      if(deudaBloquea(deuda)){
+        document.getElementById('pedir-turno-deuda-bloq-detalle').textContent='Tenés deuda con el club de '+deuda.dias+' días o más. '+deudaTxt(deuda);
+        document.getElementById('pedir-turno-deuda-bloq').style.display='block';
+        return;
+      }
+      if(deuda){
+        document.getElementById('pedir-turno-deuda-detalle').textContent=deudaTxt(deuda);
+        document.getElementById('pedir-turno-deuda').style.display='block';
+      }
       _abrirPedirTurno();
     });
   }
@@ -8224,6 +8291,7 @@ window.cancelarSeleccion=function(){
 window._guardarTurnoConfirmado=async function(){
   hideEl('turno-err');hideEl('turno-ok');
   if(!await usuarioTieneCliente()){showErr('turno-err','⚠ Tu usuario no tiene N° de cliente asignado. Pedile a administración que te lo asigne para poder reservar.');return;} // v8.89
+  {const dd=await estadoDeudaUsuario(); if(deudaBloquea(dd)){showErr('turno-err','⚠ Tenés deuda con el club de '+CC_DIAS_BLOQUEO+' días o más. Regularizá con administración para poder reservar.');return;}} // v8.93
   if(!selectedAvion){showErr('turno-err','Seleccioná un avión.');return;}
   // v6.97/v8.35: defensa en profundidad — el calendario de días ya queda bloqueado hasta
   // elegir tipo de vuelo (renderDaysGrid), pero se revalida acá por si se llega a este
