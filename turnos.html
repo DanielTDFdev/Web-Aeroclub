@@ -1,7 +1,15 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 8.95 · 2026-11-21
-  CAMBIOS : Texto del cartel de bloqueo por deuda: decía "de 103 días o más" (usaba los días
+  VERSION : 8.96 · 2026-11-21
+  CAMBIOS : Pedido de Daniel: en la grilla de reservas (LISTA y SEMANA) que ven instructores,
+            admin y administrador, los turnos pendientes/aprobados de un ALUMNO con deuda
+            pendiente con el club se marcan con contorno rojo punteado + "$" y el tooltip
+            "⚠ ALUMNO CON DEUDA PENDIENTE", para que decidan si cancelan. Deuda = saldo
+            >= CC_UMBRAL en /cc_saldos del último Excel importado (vía /cc_cuenta_de), con
+            la sesión de Auth del staff; caché 5 min. Sin Auth/permiso no se marca nada.
+            No distingue antigüedad (90+ días): el detalle por factura solo lo leen
+            admin/administrador.
+  ANTERIOR: v8.95 — Texto del cartel de bloqueo por deuda: decía "de 103 días o más" (usaba los días
             reales); ahora dice "de 90 días o más" y los días reales van en el detalle.
   ANTERIOR: v8.94 — Pedido de Daniel: el aviso/bloqueo por deuda de v8.93 aplica solo a usuarios
             con rol alumno, no a pilotos. estadoDeudaUsuario() devuelve null si rol≠alumno.
@@ -4386,6 +4394,11 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 /* v6.13: ayuda visual — turno PENDIENTE que coincide con la disponibilidad propia del
    instructor logueado. Se suma a cualquier color de estado/avión que ya tenga el bloque. */
 .cal-block.mi-disp{box-shadow:0 0 0 2px var(--green),0 0 7px rgba(57,211,83,.6);}
+/* v8.96: turno de un ALUMNO con deuda pendiente con el club (saldo del facturador) —
+   contorno rojo punteado + "$", para que instructor/administración decida si lo cancela.
+   Se usa outline (no box-shadow) para poder convivir con .mi-disp. */
+.cal-block.con-deuda{outline:2px dashed var(--red);outline-offset:1px;}
+.deuda-badge{color:var(--red);font-size:10px;font-weight:700;margin-right:2px;vertical-align:middle;}
 /* v7.85: turno de un solo slot en avión de media hora (hoy LV-ART) — mitad de alto que un
    bloque normal, para que se note a simple vista que no ocupa la hora completa. */
 .cal-block.media-hora{padding:2px 7px;line-height:1.15;font-size:10px;margin-bottom:2px;}
@@ -4640,7 +4653,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.95</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.96</div>
   </div>
 
 </div>
@@ -6685,6 +6698,7 @@ let unsubReservas=null;
 let activeDow=1;
 let activeConfigAvion='LV-OAD';  // avión activo en cfg horarios/días
 let calAvionFiltro='todos';       // filtro en calendario instructor
+let _deudoresCache={keys:null,ts:0}; // v8.96: emailKeys de usuarios con deuda (grilla staff)
 let ocultarCancelados=localStorage.getItem('lvoad-ocultar-cancelados')==='1'; // toggle calendario (LISTA+SEMANA), persiste por navegador
 let calMesActual=ahoraServidor(); calMesActual.setDate(1);
 
@@ -7806,6 +7820,32 @@ async function estadoDeudaUsuario(){
     }
     return {dias,saldo,desde,corte_txt:meta.corte_txt||''};
   }catch(e){ console.warn('estadoDeudaUsuario:',e); return null; }
+}
+// v8.96: para la grilla de reservas del staff. Set de emailKeys con saldo deudor
+// (>= CC_UMBRAL) según el último Excel importado. Lee /cc_cuenta_de y /cc_saldos completos
+// (las reglas los habilitan a cualquier /cc_staff con Auth: admin, administrador,
+// instructor). Sin Auth / sin permiso / error → Set vacío (no marca nada). Caché 5 min.
+async function cargarDeudores(){
+  if(session?.tipo!=='instructor'||session?.simuladoPor) return new Set();
+  if(_deudoresCache.keys&&Date.now()-_deudoresCache.ts<5*60*1000) return _deudoresCache.keys;
+  const keys=new Set();
+  try{
+    if(auth.authStateReady) await auth.authStateReady();
+    if(auth.currentUser){
+      const [cuentaDe,saldos]=await Promise.all([fbGet('cc_cuenta_de'),fbGet('cc_saldos')]);
+      for(const [k,c] of Object.entries(cuentaDe||{})) if(ccRed(saldos?.[c]?.saldo||0)>=CC_UMBRAL) keys.add(k);
+    }
+  }catch(e){ console.warn('cargarDeudores:',ccErrMsg(e)); }
+  _deudoresCache={keys,ts:Date.now()};
+  return keys;
+}
+// Solo turnos activos de rol alumno (no pilotos, no cancelados/vencidos/volados).
+function reservaConDeuda(r,deudores){
+  if(!deudores?.size||(r.rol||'alumno')!=='alumno'||!r.email) return false;
+  if(r.estado!=='pendiente'&&r.estado!=='aprobado') return false;
+  if(esVencidoOVolado(r)) return false;
+  const e=String(r.email);
+  return deudores.has(ek(e))||deudores.has(ek(e.toLowerCase()));
 }
 function deudaBloquea(d){ return !!d&&d.dias!=null&&d.dias>=CC_DIAS_BLOQUEO; }
 function deudaTxt(d){
@@ -8994,6 +9034,7 @@ async function renderTodasReservas(data){
   if(calAvionFiltro!=='todos') enRango=enRango.filter(r=>(r.avion||'LV-OAD')===calAvionFiltro);
   if(ocultarCancelados) enRango=enRango.filter(r=>r.estado!=='cancelado');
   const dispCompleta=await cargarDisponibilidadCompleta(fechasRango);
+  const deudores=await cargarDeudores(); // v8.96
 
   const horasConTurnos=[...new Set([
     ...enRango.map(r=>r.hora),
@@ -9057,12 +9098,13 @@ async function renderTodasReservas(data){
         // particular adelantado también se vea violeta (antes aprobPil ganaba siempre
         // que estado==='aprobado', pero eso nunca podía coincidir con venc hasta ahora).
         const venc=(esVencidoOVolado(r)||esAdelantado(r))?claseVencido(r):null;
-        const colorCls=(sinInst?'sin-instructor':(venc?venc.cls:(aprobPil?'aprobado-piloto':r.estado)))+(coincideDisp?' mi-disp':'')+' acc-avion';
+        const conDeuda=reservaConDeuda(r,deudores); // v8.96
+        const colorCls=(sinInst?'sin-instructor':(venc?venc.cls:(aprobPil?'aprobado-piloto':r.estado)))+(coincideDisp?' mi-disp':'')+(conDeuda?' con-deuda':'')+' acc-avion';
         const accStyle='border-left-color:'+accColorForAvion(r.avion||'LV-OAD')+';';
         const tipSin=sinInst?' — SIN INSTRUCTOR (pendiente)':(venc?venc.tip:(aprobPil?' — turno de piloto ('+tipoVueloTxt(tipoVueloDe(r)).toLowerCase()+')':''));
-        const tipDisp=coincideDisp?' — ✓ Coincide con tu disponibilidad':'';
+        const tipDisp=(coincideDisp?' — ✓ Coincide con tu disponibilidad':'')+(conDeuda?' — ⚠ ALUMNO CON DEUDA PENDIENTE':'');
         const tipQuien=r.estado==='pendiente'?tipQuienesPueden(dispCompleta,r.fecha,r.hora):'';
-        const badge=coincideDisp?'<span class="mi-disp-badge" title="Coincide con tu disponibilidad">★</span>':'';
+        const badge=(conDeuda?'<span class="deuda-badge" title="Alumno con deuda pendiente con el club">$</span>':'')+(coincideDisp?'<span class="mi-disp-badge" title="Coincide con tu disponibilidad">★</span>':'');
         // v6.99: turnos cargados con "+ CARGAR TURNO" (cargado_por) no consumen cupo del
         // alumno (v6.53) — se marcan visualmente en la grilla para que quede claro por qué
         // el saldo semanal no baja, y quién lo cargó.
@@ -9180,6 +9222,7 @@ async function renderVistaSemana(){
   if(!horasSet.size){grid.innerHTML='<div class="cal-empty">// SIN RESERVAS ESTA SEMANA</div>';return;}
   const horas=[...horasSet].sort();
   const dispCompleta=await cargarDisponibilidadCompleta(fechas);
+  const deudores=await cargarDeudores(); // v8.96
 
   // v6.15: color por AERONAVE (igual que antes), pero cancelados/vencidos ya no se
   // filtran — se muestran tachados. Sin-instructor y pil-aprob siguen como override.
@@ -9221,16 +9264,17 @@ async function renderVistaSemana(){
         // v8.19: venc también cubre 'aprobado' adelantado, chequeado antes que aprobPil
         // — ver nota completa en renderTodasReservas.
         const venc=(esVencidoOVolado(r)||esAdelantado(r))?claseVencido(r):null;
-        const colorCls=(sinInst?'sin-instructor':(venc?venc.cls:(aprobPil?'aprobado-piloto':r.estado)))+(coincideDisp?' mi-disp':'')+' acc-avion';
+        const conDeuda=reservaConDeuda(r,deudores); // v8.96
+        const colorCls=(sinInst?'sin-instructor':(venc?venc.cls:(aprobPil?'aprobado-piloto':r.estado)))+(coincideDisp?' mi-disp':'')+(conDeuda?' con-deuda':'')+' acc-avion';
         const accStyle='border-left-color:'+accColorForAvion(r.avion||'LV-OAD')+';';
         // v8.19: adelantado también se tacha, igual que vencido — acá estiloExtra ya es
         // estado-driven (a diferencia de LISTA, que tacha por columna/día pasado), así
         // que suma natural para mantener el mismo criterio dentro de esta vista.
         const estiloExtra=(r.estado==='cancelado'||esVencidoOVolado(r)||esAdelantado(r))?'text-decoration:line-through;':'';
         const tipSin=sinInst?' — SIN INSTRUCTOR (pendiente)':(venc?venc.tip:(aprobPil?' — turno de piloto ('+tipoVueloTxt(tipoVueloDe(r)).toLowerCase()+')':''));
-        const tipDisp=coincideDisp?' — ✓ Coincide con tu disponibilidad':'';
+        const tipDisp=(coincideDisp?' — ✓ Coincide con tu disponibilidad':'')+(conDeuda?' — ⚠ ALUMNO CON DEUDA PENDIENTE':'');
         const tipQuien=r.estado==='pendiente'?tipQuienesPueden(dispCompleta,ds,r.hora):'';
-        const badge=coincideDisp?'<span class="mi-disp-badge" title="Coincide con tu disponibilidad">★</span>':'';
+        const badge=(conDeuda?'<span class="deuda-badge" title="Alumno con deuda pendiente con el club">$</span>':'')+(coincideDisp?'<span class="mi-disp-badge" title="Coincide con tu disponibilidad">★</span>':'');
         // v6.99: ver nota en renderTodasReservas — mismo badge/tooltip para turnos con cargado_por.
         const tipCargado=r.cargado_por?` — CARGADO POR ${r.cargado_por} (${r.consume_cupo?'CONSUME':'no consume'} cupo del alumno)`:'';
         const cargadoBadge=r.cargado_por?`<span class="cargado-badge" title="Cargado por ${r.cargado_por} — ${r.consume_cupo?'CONSUME':'no consume'} cupo del alumno">📋</span>`:'';
