@@ -1,7 +1,9 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 8.93 · 2026-11-21
-  CAMBIOS : Pedido de Daniel: aviso y bloqueo por deuda en Pedir Turno (alumno/piloto).
+  VERSION : 8.94 · 2026-11-21
+  CAMBIOS : Pedido de Daniel: el aviso/bloqueo por deuda de v8.93 aplica solo a usuarios
+            con rol alumno, no a pilotos. estadoDeudaUsuario() devuelve null si rol≠alumno.
+  ANTERIOR: v8.93 — Pedido de Daniel: aviso y bloqueo por deuda en Pedir Turno (alumno/piloto).
             Con saldo deudor en el facturador se muestra un cartel "TENÉS DEUDA PENDIENTE —
             regularizá con administración lo antes posible" y se deja reservar igual. Si la
             factura impaga más antigua (FIFO con créditos, mismo criterio que tesorería)
@@ -4636,7 +4638,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.93</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.94</div>
   </div>
 
 </div>
@@ -7778,7 +7780,7 @@ async function usuarioTieneCliente(){
 // pasar, igual que usuarioTieneCliente). Instructor como piloto y login simulado: exceptuados.
 const CC_DIAS_BLOQUEO=90;
 async function estadoDeudaUsuario(){
-  if(!session||session.tipo!=='alumno'||session.instructorOrigen||session.simuladoPor) return null;
+  if(!session||session.tipo!=='alumno'||(session.rol||'alumno')!=='alumno'||session.instructorOrigen||session.simuladoPor) return null; // v8.94: solo rol alumno
   try{
     if(auth.authStateReady) await auth.authStateReady(); // sesión restaurada: esperar a Auth
     if(!auth.currentUser) return null;
