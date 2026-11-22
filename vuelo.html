@@ -2,6 +2,16 @@
 <!--
 ==================================================================================
   VUELO — App de registro de vuelo · Aeroclub Río Grande
+  v6.04 · 2026-11-22
+  Pedido de Daniel: blindar el caso de vuelo-piloto.html v4.88 (vuelo finalizado antes
+  de los 3 min = 0,0 hs, imposible de guardar). Acá el cierre no quedaba trabado
+  porque tiene "Nuevo vuelo", pero ese botón descartaba el vuelo con UN toque, sin
+  confirmación. Fixes: (1) FINALIZAR antes de VUELO_MIN_MS (3 min) pregunta "Seguir en
+  vuelo" (default) / "Descartar vuelo" en vez de ir al cierre. (2) "Nuevo vuelo" en el
+  cierre pide confirmación (descarta tiempo, aterrizajes y traza). (3) init() descarta
+  solo un cierre restaurado con 0 hs o menos (o tsFin sin tsInicio) sin tiempo manual
+  tipeado. (4) FINALIZAR bloqueado 2 s después de iniciar. confirmarAccion() acepta
+  texto propio para el botón "No".
   v6.03 · 2026-11-19
   Pedido de Daniel: las claves pasan a guardarse con hash (pass_hash, PBKDF2) en vez de
   texto plano — ver turnos.html v8.86. El login de instructor usa verificarClave()
@@ -2299,7 +2309,7 @@ const LS_PENDIENTES = 'acrg-vuelo-v2-pendientes'; // cola de vuelos guardados lo
 // límite de tiempo.
 const RESTAURAR_TURNO_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '6.03'; // ⚠ actualizar acá Y en el comentario header de arriba en cada bump
+const APP_VERSION = '6.04'; // ⚠ actualizar acá Y en el comentario header de arriba en cada bump
 
 // ── Traza GPS (obligatoria, siempre activa — v5.96) ────────────
 const LS_GPS_PUNTOS = 'acrg-vuelo-v2-gps-puntos'; // puntos del vuelo en curso (resiliencia ante recarga)
@@ -2394,6 +2404,9 @@ let _libroCalSel=null;                     // 'YYYY-MM-DD' del día tocado
 let _libroCalDias=new Set();               // 'YYYY-MM-DD' con al menos un vuelo mío
 
 // ── Init ─────────────────────────────────────────────────
+const VUELO_MIN_MS = 3*60*1000; // v6.04: menos que esto redondea a 0,0 hs y no se puede guardar
+let _vueloCeroDescartado=false; // v6.04: init() descartó un cierre de 0 hs restaurado
+
 init();
 
 function init(){
@@ -2418,7 +2431,13 @@ function init(){
   // reciente (RESTAURAR_TURNO_MAX_MS); más vieja que eso, se descarta y
   // cargarTabVuelo() arranca de cero con la detección normal.
   try{
-    const est=JSON.parse(localStorage.getItem(LS)||'null');
+    let est=JSON.parse(localStorage.getItem(LS)||'null');
+    // v6.04: cierre restaurado imposible de guardar (0 hs o menos, o tsFin sin tsInicio)
+    // y sin tiempo manual tipeado → se descarta solo.
+    if(est&&est.tsFin&&(!est.tsInicio||calcHorasDecimal(est.tsInicio,est.tsFin)<=0)&&!(parseFloat(est.tManualValor)>0)){
+      localStorage.removeItem(LS); localStorage.removeItem(LS_GPS_PUNTOS); localStorage.removeItem(LS_GPS_HUECOS);
+      est=null; _vueloCeroDescartado=true;
+    }
     if(est){
       const turnoVigente=est.turno&&(est.tsInicio||!est.ts||(Date.now()-est.ts)<RESTAURAR_TURNO_MAX_MS);
       turnoActual=turnoVigente?est.turno:null;
@@ -2506,6 +2525,7 @@ function aplicarUsuarioRecordado(){
 function abrirApp(){
   $('screen-login').classList.remove('active');
   $('app-shell').classList.add('active');
+  if(_vueloCeroDescartado){ _vueloCeroDescartado=false; toast('Se descartó un vuelo de 0 hs que había quedado sin guardar',4500); } // v6.04
   $('sh-nombre').textContent=session.nombre.split(' ')[0];
   $('sh-fecha').textContent=fmtFecha(hoy());
   // Libro: fecha default = hoy
@@ -2914,7 +2934,11 @@ $('btn-otro-alumno').addEventListener('click',async()=>{
   $('v-nuevo-wrap').scrollIntoView({behavior:'smooth',block:'start'});
   $('nt-buscar').focus();
 });
-$('btn-nuevo-vuelo').addEventListener('click',resetVuelo);
+// v6.04: antes descartaba el vuelo sin guardar con un solo toque
+$('btn-nuevo-vuelo').addEventListener('click',async()=>{
+  if(tsInicio&&!(await confirmarAccion('¿Descartar este vuelo y empezar uno nuevo? No se graba nada: ni tiempo, ni aterrizajes, ni traza GPS.','✕ Sí, descartar','Volver'))) return;
+  resetVuelo();
+});
 $('btn-otro-vuelo').addEventListener('click',()=>{ resetVuelo();cargarTabVuelo(); });
 
 function mostrarVista(v){
@@ -3155,10 +3179,11 @@ document.addEventListener('visibilitychange', () => {
 // que ya tenía el modal de cancelar (confirm() bloquea el hilo y corta
 // puntos GPS que lleguen mientras el instructor duda). textoSi es el label
 // del botón de confirmar (varía según la acción).
-function confirmarAccion(titulo,textoSi){
+function confirmarAccion(titulo,textoSi,textoNo='Cancelar'){ // v6.04: textoNo opcional
   return new Promise(resolve=>{
     $('accion-modal-title').textContent=titulo;
     $('btn-accion-modal-si').textContent=textoSi;
+    $('btn-accion-modal-no').textContent=textoNo;
     $('accion-modal-overlay').classList.add('open');
     function limpiar(){
       $('accion-modal-overlay').classList.remove('open');
@@ -3256,11 +3281,13 @@ $('btn-start-stop').addEventListener('click', async ()=>{
   if(_startStopBusy) return;
   _startStopBusy=true;
   $('btn-start-stop').disabled=true;
+  let bloqueoMs=0; // v6.04: >0 → FINALIZAR queda bloqueado ese tiempo después de iniciar
   try{
   if(!tsInicio){
     // START — confirmar antes de grabar (evita un toque accidental)
     if(!(await confirmarAccion('¿Iniciar el vuelo ahora?','▶ Sí, iniciar'))) return;
     tsInicio=new Date().toISOString();
+    tsFin=null; bloqueoMs=2000; // v6.04
     metarInicio=null;metarInicioListo=false;
     obtenerMetar('inicio'); // en segundo plano, no bloquea
     if(gpsHabilitado){
@@ -3285,6 +3312,12 @@ $('btn-start-stop').addEventListener('click', async ()=>{
     bloquearNavDuranteVuelo(true);
     toast('Vuelo iniciado · '+fmtLocalFull(tsInicio));
   } else {
+    // v6.04: antes de VUELO_MIN_MS da 0,0 hs — no se lleva al cierre. Default = seguir.
+    if(Date.now()-new Date(tsInicio).getTime()<VUELO_MIN_MS){
+      const seguir=await confirmarAccion('El vuelo lleva menos de 3 minutos — así no se puede guardar. ¿Qué querés hacer?','✈ Seguir en vuelo','✕ Descartar vuelo');
+      if(!seguir) cancelarVuelo();
+      return;
+    }
     // STOP — confirmar antes de grabar
     if(!(await confirmarAccion('¿Finalizar el vuelo ahora?','⏹ Sí, finalizar'))) return;
     tsFin=new Date().toISOString();
@@ -3298,8 +3331,8 @@ $('btn-start-stop').addEventListener('click', async ()=>{
     mostrarCierre();
   }
   } finally {
-    _startStopBusy=false;
-    $('btn-start-stop').disabled=false;
+    const liberar=()=>{ _startStopBusy=false; $('btn-start-stop').disabled=false; };
+    if(bloqueoMs) setTimeout(liberar,bloqueoMs); else liberar();
   }
 });
 

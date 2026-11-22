@@ -2,6 +2,28 @@
 <!--
 ==================================================================================
   VUELO PILOTO — Registro de vuelo para pilotos · Aeroclub Río Grande
+  v4.88 · 2026-11-22
+  Pedido de Daniel: varios pilotos reportan que al abrir la app para volar su reserva
+  les aparece directo la pantalla de cierre (CONFIRMAR Y GUARDAR) con 0 hs.
+  Causa raíz (reproducida en simulación): un vuelo finalizado antes de los 3 min
+  (INICIAR→Sí→FINALIZAR→Sí, los dos modales son idénticos y FINALIZAR aparece donde
+  estaba INICIAR) da 0 hs por el redondeo a 0,1. guardar() rechaza 0, y #v-cierre
+  (overlay fijo, z-index 1100) tapa el botón de cancelar y el slider de Salir: sin
+  salida. Como tsInicio/tsFin quedan en LS y init() los restaura sin límite, la
+  trampa reaparece en cada apertura, días después. Fixes:
+  (1) Botón "✕ Descartar vuelo" dentro del cierre (con confirmación) → cancelarVuelo().
+  (2) FINALIZAR antes de VUELO_MIN_MS (3 min) ya no va al cierre: pregunta
+      "Seguir en vuelo" (default) / "Descartar vuelo".
+  (3) init() descarta solo un cierre restaurado con 0 hs o menos (o tsFin sin
+      tsInicio), salvo que el piloto haya tipeado un tiempo manual > 0. Libera a los
+      que ya están atrapados.
+  (4) El estado en LS guarda el email del dueño del vuelo (_vueloEmail). Si otro
+      usuario se loguea en ese celular, se le pregunta si descarta el vuelo ajeno o
+      sale — antes lo heredaba y lo grababa con su nombre y el turno del otro.
+  (5) FINALIZAR queda bloqueado 2 s después de iniciar (contra toques de más).
+  (6) Al descartar un vuelo restaurado de LS se suelta su turnoVinculado (podía ser
+      de otro día); el re-match de escribirPendiente() vincula el turno de hoy.
+  (7) btn-confirmar-turno-si/no: guardia contra doble toque (TypeError en el Sí).
   v4.87 · 2026-11-19
   Pedido de Daniel: tipos de vuelo nuevos 'bautismo' y 'contratado' (turnos.html v8.91),
   que funcionan igual que 'particular'. La vinculación del vuelo con el turno propio del
@@ -1843,6 +1865,8 @@ select:disabled{opacity:.55}
 
       <div class="err" id="c-err" style="margin-top:4px"></div>
       <button class="btn btn-green" id="btn-confirmar">✓ CONFIRMAR Y GUARDAR</button>
+      <!-- v4.88: única salida del cierre sin guardar (antes el cancelar quedaba tapado por el overlay) -->
+      <button class="btn btn-ghost" id="btn-descartar-cierre">✕ Descartar vuelo</button>
      </div>
     </div>
 
@@ -2042,7 +2066,7 @@ const LS_PENDIENTES = 'acrg-piloto-v1-pendientes'; // cola de vuelos guardados l
 // avión "sin arrancar todavía" que sobrevivía indefinidamente en localStorage.
 const RESTAURAR_AVION_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '4.87';
+const APP_VERSION = '4.88';
 document.querySelectorAll('.ver').forEach(el=>el.textContent='v'+APP_VERSION);
 
 // ── Traza GPS (obligatoria, siempre activa — v4.76) ──────────
@@ -2129,6 +2153,11 @@ let _turnoRechazado=false; // v4.85: el piloto contestó "No, es otro" en esta s
 let _avionRestaurado=null; // valor guardado en localStorage, se aplica recién cuando el <select> ya tiene opciones
 let _avionRestauradoSinConfirmar=false;
 let _cierreRestaurado=null; // borrador del formulario de cierre, se aplica en mostrarCierre()
+// v4.88: declaradas antes de init() (TDZ) — las leen init() y _abrirAppInner() sincrónico.
+const VUELO_MIN_MS = 3*60*1000; // menos que esto redondea a 0,0 hs y no se puede guardar
+let _vueloEmail=null;            // dueño del vuelo en curso/finalizado (session.email al INICIAR)
+let _turnoVinculadoDeLS=false;   // turnoVinculado recuperado de LS (recarga) — se suelta si se descarta el vuelo
+let _vueloCeroDescartado=false;  // init() descartó un cierre de 0 hs restaurado → aviso al abrir
 
 init();
 
@@ -2189,9 +2218,17 @@ function init(){
   // pensado para sobrevivir un reload accidental en el momento exacto de elegir
   // avión) — más vieja que eso, se ignora y el select vuelve a nacer vacío.
   try{
-    const est=JSON.parse(localStorage.getItem(LS)||'null');
+    let est=JSON.parse(localStorage.getItem(LS)||'null');
+    // v4.88: cierre restaurado imposible de guardar (0 hs o menos, o tsFin sin tsInicio)
+    // y sin tiempo manual tipeado → se descarta solo. Era la trampa que reaparecía en
+    // cada apertura (ver header).
+    if(est&&est.tsFin&&(!est.tsInicio||calcHorasDecimal(est.tsInicio,est.tsFin)<=0)&&!(parseFloat(est.tManualValor)>0)){
+      localStorage.removeItem(LS); localStorage.removeItem(LS_GPS_PUNTOS); localStorage.removeItem(LS_GPS_HUECOS);
+      est=null; _vueloCeroDescartado=true;
+    }
     if(est){
       tsInicio=est.tsInicio||null;
+      _vueloEmail=est.tsInicio?(est.email||null):null; // v4.88
       tsFin=est.tsFin||null;
       metarInicio=est.metarInicio||null;
       metarFin=est.metarFin||null;
@@ -2383,6 +2420,20 @@ async function _abrirAppInner(){
   // buscarTurnoInstruccionHoyPiloto()). Si ya hay un vuelo en curso
   // restaurado (recarga a mitad de vuelo), no se re-chequea nada — el modo
   // ya quedó fijado al arrancar.
+  if(_vueloCeroDescartado){ _vueloCeroDescartado=false; toast('Se descartó un vuelo de 0 hs que había quedado sin guardar',4500); }
+  // v4.88: el vuelo guardado en este celular es de otro usuario → no se hereda.
+  if(tsInicio){
+    if(!_vueloEmail) _vueloEmail=session.email; // estado legado (pre v4.88) sin dueño: se asume el actual
+    else if(_vueloEmail!==session.email){
+      $('app-shell').classList.add('active');
+      const descartar=await confirmarAccion('Este celular tiene un vuelo sin guardar de otro usuario ('+_vueloEmail+'). ¿Lo descarto para que registres el tuyo? No se va a grabar.','✕ Sí, descartar','Salir');
+      if(!descartar){ ejecutarLogout(); return; }
+      descartarEstadoVuelo(); localStorage.removeItem(LS);
+      _avionRestaurado=null; _avionRestauradoSinConfirmar=false; // no preseleccionar el avión del otro
+      turnoVinculado=null; _turnoVinculadoDeLS=false; _turnoRechazado=false;
+      toast('Vuelo del otro usuario descartado');
+    }
+  }
   modoAlumnoEfectivo = session.rol==='alumno';
   if(!modoAlumnoEfectivo && !tsInicio && !shaTrackeando){
     const turnoInstr = await buscarTurnoInstruccionHoyPiloto();
@@ -2406,6 +2457,7 @@ async function _abrirAppInner(){
       mostrarConflictoTurnos(resultado.candidatos);
       return; // no abre app-shell hasta que se resuelva
     }
+    _turnoVinculadoDeLS=false; // v4.88
     if(resultado.match){
       turnoVinculado=resultado.match; // match directo en ±30min, sin preguntar
     } else if(resultado.sugerido){
@@ -2423,7 +2475,7 @@ async function _abrirAppInner(){
   if(tsInicio&&!turnoVinculado){
     try{
       const est=JSON.parse(localStorage.getItem(LS)||'null');
-      if(est&&est.turnoVinculado&&est.turnoVinculado.key) turnoVinculado=est.turnoVinculado;
+      if(est&&est.turnoVinculado&&est.turnoVinculado.key){ turnoVinculado=est.turnoVinculado; _turnoVinculadoDeLS=true; } // v4.88: marcado
       if(est&&est.turnoRechazado) _turnoRechazado=true; // v4.85: el "No, es otro" sobrevive a una recarga a mitad de vuelo
     }catch{}
   }
@@ -2572,6 +2624,7 @@ function mostrarConfirmarTurno(sugerido){
   $('screen-confirmar-turno').classList.add('active');
 }
 $('btn-confirmar-turno-si').addEventListener('click',async()=>{
+  if(!_turnoSugerido) return; // v4.88: doble toque — la 2da vez ya es null (TypeError en .avion)
   turnoVinculado=_turnoSugerido;
   _turnoSugerido=null;
   $('screen-confirmar-turno').classList.remove('active');
@@ -2584,6 +2637,7 @@ $('btn-confirmar-turno-si').addEventListener('click',async()=>{
   chequearVuelosPendientesPiloto();
 });
 $('btn-confirmar-turno-no').addEventListener('click',async()=>{
+  if(!_turnoSugerido) return; // v4.88: doble toque — no abrir dos veces la pregunta de cancelar
   const rechazado=_turnoSugerido;
   turnoVinculado=null;
   _turnoSugerido=null;
@@ -3304,6 +3358,7 @@ $('btn-start-stop').addEventListener('click',async()=>{
   if(_startStopBusy) return;
   _startStopBusy=true;
   $('btn-start-stop').disabled=true;
+  let bloqueoMs=0; // v4.88: >0 → FINALIZAR queda bloqueado ese tiempo después de iniciar
   try{
   if(!tsInicio){
     if(!$('p-avion').value){
@@ -3342,6 +3397,9 @@ $('btn-start-stop').addEventListener('click',async()=>{
     }
     if(!(await confirmarAccion('¿Iniciar el vuelo ahora?','▶ Sí, iniciar'))) return;
     tsInicio=new Date().toISOString();
+    tsFin=null; // v4.88: por las dudas, nunca arrastrar un tsFin anterior
+    _vueloEmail=session.email; // v4.88: dueño del vuelo
+    bloqueoMs=2000;
     metarInicio=null;metarInicioListo=false;
     obtenerMetar('inicio'); // en segundo plano, no bloquea
     $('p-avion').disabled=true;
@@ -3355,6 +3413,14 @@ $('btn-start-stop').addEventListener('click',async()=>{
     $('v-avion-wrap').style.display='none';
     toast('Vuelo iniciado · '+fmtLocalFull(tsInicio));
   } else {
+    // v4.88: antes de VUELO_MIN_MS el tiempo da 0,0 hs y no se puede guardar — no se
+    // lleva al cierre. Default (botón de arriba) = seguir en vuelo: si FINALIZAR fue un
+    // toque de más, no se pierde nada.
+    if(Date.now()-new Date(tsInicio).getTime()<VUELO_MIN_MS){
+      const seguir=await confirmarAccion('El vuelo lleva menos de 3 minutos — así no se puede guardar. ¿Qué querés hacer?','✈ Seguir en vuelo','✕ Descartar vuelo');
+      if(!seguir) cancelarVuelo();
+      return;
+    }
     if(!(await confirmarAccion('¿Finalizar el vuelo ahora?','⏹ Sí, finalizar'))) return;
     tsFin=new Date().toISOString();
     metarFin=null;metarFinListo=false;
@@ -3367,8 +3433,8 @@ $('btn-start-stop').addEventListener('click',async()=>{
     mostrarCierre();
   }
   } finally {
-    _startStopBusy=false;
-    $('btn-start-stop').disabled=false;
+    const liberar=()=>{ _startStopBusy=false; $('btn-start-stop').disabled=false; };
+    if(bloqueoMs) setTimeout(liberar,bloqueoMs); else liberar();
   }
 });
 
@@ -3390,12 +3456,23 @@ $('btn-start-stop').addEventListener('click',async()=>{
 //     El modal de abajo es HTML/CSS puro (#cancelar-modal-overlay): no
 //     bloquea el hilo, así que el GPS sigue grabando normalmente mientras
 //     está en pantalla.
-function cancelarVuelo(){
+// v4.88: limpieza del estado local del vuelo, compartida por cancelarVuelo() y el
+// descarte de un vuelo ajeno al abrir la app.
+function descartarEstadoVuelo(){
   detenerTrackGPS(); gpsPoints=[]; gpsGaps=[]; localStorage.removeItem(LS_GPS_PUNTOS); localStorage.removeItem(LS_GPS_HUECOS);
   liberarWakeLock();
   tsInicio=null; tsFin=null; metarInicio=null; metarFin=null; metarInicioListo=false; metarFinListo=false; guardadoExitoso=false;
+  _vueloEmail=null; _cierreRestaurado=null;
+}
+function cancelarVuelo(){
+  descartarEstadoVuelo();
+  // v4.88: un turnoVinculado recuperado de LS (recarga) puede ser de otro día — se suelta;
+  // el próximo vuelo sin vínculo lo re-vincula escribirPendiente() por email+fecha+avión.
+  if(_turnoVinculadoDeLS){ turnoVinculado=null; _turnoVinculadoDeLS=false; $('p-avion').value=''; }
+  $('p-avion').disabled=false;
   persistir();
   renderPantalla();
+  pintarEstadoAvion();
   toast('Vuelo cancelado — no se grabó nada');
 }
 
@@ -3474,6 +3551,10 @@ window.stepAterr = function(delta) {
   persistir();
 };
 $('c-obs').addEventListener('input',persistir);
+// v4.88: descartar desde la pantalla de cierre (accion-modal-overlay está después en el DOM → queda encima)
+$('btn-descartar-cierre').addEventListener('click',async()=>{
+  if(await confirmarAccion('¿Descartar este vuelo? No se graba nada: ni tiempo, ni aterrizajes, ni traza GPS.','✕ Sí, descartar','Volver')) cancelarVuelo();
+});
 
 $('btn-edit-t').addEventListener('click',()=>{
   const inp=$('t-manual');
@@ -3569,6 +3650,7 @@ async function guardar(){
   detenerTrackGPS(); gpsPoints=[]; gpsGaps=[]; localStorage.removeItem(LS_GPS_PUNTOS); localStorage.removeItem(LS_GPS_HUECOS);
   liberarWakeLock();
   tsInicio=null; tsFin=null; metarInicio=null; metarFin=null; metarInicioListo=false; metarFinListo=false; guardadoExitoso=false;
+  _vueloEmail=null; _turnoVinculadoDeLS=false; // v4.88
   localStorage.removeItem(LS);
   $('v-cierre').style.display='none';
   $('btn-cancelar-vuelo').style.display='none';
@@ -3769,13 +3851,14 @@ $('btn-otro-vuelo').addEventListener('click',resetVuelo);
 function resetVuelo(){
   detenerTrackGPS(); gpsPoints=[]; gpsGaps=[]; localStorage.removeItem(LS_GPS_PUNTOS); localStorage.removeItem(LS_GPS_HUECOS);
   tsInicio=null;tsFin=null;metarInicio=null;metarFin=null;metarInicioListo=false;metarFinListo=false;guardadoExitoso=false;
+  _vueloEmail=null; // v4.88
   localStorage.removeItem(LS);
   renderPantalla();
 }
 
 function persistir(){
   localStorage.setItem(LS,JSON.stringify({
-    avion:$('p-avion').value,turnoVinculado:turnoVinculado||null,turnoRechazado:_turnoRechazado,tsInicio,tsFin,metarInicio,metarFin,metarInicioListo,metarFinListo,gpsHabilitado,
+    avion:$('p-avion').value,email:tsInicio?_vueloEmail:null,turnoVinculado:turnoVinculado||null,turnoRechazado:_turnoRechazado,tsInicio,tsFin,metarInicio,metarFin,metarInicioListo,metarFinListo,gpsHabilitado,
     // Borrador del formulario de cierre — así, si la app se cuelga esperando
     // conexión en CONFIRMAR (ver guardar()) y hay que recargarla, no se
     // pierde lo ya tipeado (antes solo se guardaban los timestamps).
