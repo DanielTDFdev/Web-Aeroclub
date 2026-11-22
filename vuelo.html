@@ -2,6 +2,12 @@
 <!--
 ==================================================================================
   VUELO — App de registro de vuelo · Aeroclub Río Grande
+  v6.05 · 2026-11-22
+  Pedido de Daniel: red de seguridad para vuelos "colgados" (igual que vuelo-piloto
+  v4.89). Al abrir la app, si hay un vuelo en curso con más de VUELO_MAX_ABIERTO_MS
+  (12 h) desde el INICIAR, se pregunta "¿Lo descarto?" (Sí, descartar / Conservarlo)
+  antes de cargar la pestaña Vuelo. Descartar = resetVuelo() (suelta también el turno
+  viejo) y después cargarTabVuelo() busca el turno de hoy.
   v6.04 · 2026-11-22
   Pedido de Daniel: blindar el caso de vuelo-piloto.html v4.88 (vuelo finalizado antes
   de los 3 min = 0,0 hs, imposible de guardar). Acá el cierre no quedaba trabado
@@ -2309,7 +2315,7 @@ const LS_PENDIENTES = 'acrg-vuelo-v2-pendientes'; // cola de vuelos guardados lo
 // límite de tiempo.
 const RESTAURAR_TURNO_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '6.04'; // ⚠ actualizar acá Y en el comentario header de arriba en cada bump
+const APP_VERSION = '6.05'; // ⚠ actualizar acá Y en el comentario header de arriba en cada bump
 
 // ── Traza GPS (obligatoria, siempre activa — v5.96) ────────────
 const LS_GPS_PUNTOS = 'acrg-vuelo-v2-gps-puntos'; // puntos del vuelo en curso (resiliencia ante recarga)
@@ -2405,6 +2411,7 @@ let _libroCalDias=new Set();               // 'YYYY-MM-DD' con al menos un vuelo
 
 // ── Init ─────────────────────────────────────────────────
 const VUELO_MIN_MS = 3*60*1000; // v6.04: menos que esto redondea a 0,0 hs y no se puede guardar
+const VUELO_MAX_ABIERTO_MS = 12*3600*1000; // v6.05: vuelo en curso más viejo que esto = colgado
 let _vueloCeroDescartado=false; // v6.04: init() descartó un cierre de 0 hs restaurado
 
 init();
@@ -2531,7 +2538,17 @@ function abrirApp(){
   // Libro: fecha default = hoy
   $('libro-fecha').value=hoy();
   { const [y,m,d]=hoy().split('-').map(Number); _libroCalYear=y; _libroCalMes=m-1; _libroCalSel=hoy(); }
-  cargarTabVuelo();
+  // v6.05: vuelo colgado → preguntar antes de entrar a la pestaña Vuelo
+  if(tsInicio&&!tsFin&&Date.now()-new Date(tsInicio).getTime()>VUELO_MAX_ABIERTO_MS) chequearVueloColgado().then(()=>cargarTabVuelo());
+  else cargarTabVuelo();
+}
+async function chequearVueloColgado(){ // v6.05
+  const horas=Math.floor((Date.now()-new Date(tsInicio).getTime())/3600000);
+  const desde=new Date(tsInicio).toLocaleString('es-AR',{timeZone:'America/Argentina/Buenos_Aires',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
+  if(await confirmarAccion('Hay un vuelo abierto desde el '+desde+' (hace '+horas+' h) que nunca se finalizó. ¿Lo descarto? No se graba nada.','✕ Sí, descartar','Conservarlo')){
+    resetVuelo(); liberarWakeLock();
+    toast('Vuelo abierto descartado');
+  }
 }
 
 // Tabs

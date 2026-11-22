@@ -2,6 +2,14 @@
 <!--
 ==================================================================================
   VUELO PILOTO — Registro de vuelo para pilotos · Aeroclub Río Grande
+  v4.89 · 2026-11-22
+  Pedido de Daniel: red de seguridad para vuelos "colgados" — un piloto entraba siempre
+  a FINALIZAR porque le había quedado un vuelo iniciado y nunca cerrado; init() lo
+  restaura sin límite de tiempo (y además bloquea la detección del turno del día).
+  Fix: al abrir la app, si hay un vuelo en curso con más de VUELO_MAX_ABIERTO_MS (12 h)
+  desde el INICIAR, se pregunta "¿Lo descarto?" (Sí, descartar / Conservarlo). No se
+  descarta solo: puede ser un vuelo real que el piloto quiere cerrar corrigiendo el
+  tiempo. Al descartar se suelta el turno restaurado y corre la detección normal.
   v4.88 · 2026-11-22
   Pedido de Daniel: varios pilotos reportan que al abrir la app para volar su reserva
   les aparece directo la pantalla de cierre (CONFIRMAR Y GUARDAR) con 0 hs.
@@ -2066,7 +2074,7 @@ const LS_PENDIENTES = 'acrg-piloto-v1-pendientes'; // cola de vuelos guardados l
 // avión "sin arrancar todavía" que sobrevivía indefinidamente en localStorage.
 const RESTAURAR_AVION_MAX_MS = 3*60*60*1000; // 3 horas
 let _sincronizando = false; // evita que dos intentos de sync corran en paralelo
-const APP_VERSION = '4.88';
+const APP_VERSION = '4.89';
 document.querySelectorAll('.ver').forEach(el=>el.textContent='v'+APP_VERSION);
 
 // ── Traza GPS (obligatoria, siempre activa — v4.76) ──────────
@@ -2155,6 +2163,7 @@ let _avionRestauradoSinConfirmar=false;
 let _cierreRestaurado=null; // borrador del formulario de cierre, se aplica en mostrarCierre()
 // v4.88: declaradas antes de init() (TDZ) — las leen init() y _abrirAppInner() sincrónico.
 const VUELO_MIN_MS = 3*60*1000; // menos que esto redondea a 0,0 hs y no se puede guardar
+const VUELO_MAX_ABIERTO_MS = 12*3600*1000; // v4.89: vuelo en curso más viejo que esto = colgado
 let _vueloEmail=null;            // dueño del vuelo en curso/finalizado (session.email al INICIAR)
 let _turnoVinculadoDeLS=false;   // turnoVinculado recuperado de LS (recarga) — se suelta si se descarta el vuelo
 let _vueloCeroDescartado=false;  // init() descartó un cierre de 0 hs restaurado → aviso al abrir
@@ -2432,6 +2441,18 @@ async function _abrirAppInner(){
       _avionRestaurado=null; _avionRestauradoSinConfirmar=false; // no preseleccionar el avión del otro
       turnoVinculado=null; _turnoVinculadoDeLS=false; _turnoRechazado=false;
       toast('Vuelo del otro usuario descartado');
+    }
+  }
+  // v4.89: vuelo colgado (iniciado hace más de 12 h y nunca finalizado).
+  if(tsInicio&&!tsFin&&Date.now()-new Date(tsInicio).getTime()>VUELO_MAX_ABIERTO_MS){
+    $('app-shell').classList.add('active');
+    const horas=Math.floor((Date.now()-new Date(tsInicio).getTime())/3600000);
+    const desde=new Date(tsInicio).toLocaleString('es-AR',{timeZone:'America/Argentina/Buenos_Aires',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
+    if(await confirmarAccion('Tenés un vuelo abierto desde el '+desde+' (hace '+horas+' h) que nunca se finalizó. ¿Lo descarto? No se graba nada.','✕ Sí, descartar','Conservarlo')){
+      descartarEstadoVuelo(); localStorage.removeItem(LS);
+      _avionRestaurado=null; _avionRestauradoSinConfirmar=false;
+      turnoVinculado=null; _turnoVinculadoDeLS=false; _turnoRechazado=false;
+      toast('Vuelo abierto descartado');
     }
   }
   modoAlumnoEfectivo = session.rol==='alumno';
