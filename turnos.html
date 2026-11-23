@@ -1,7 +1,12 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 8.97 · 2026-11-23
-  CAMBIOS : Pedido de Daniel: Mi Perfil/Vuelos → Log de Vuelos pasa de lista (fecha + hs) a
+  VERSION : 8.98 · 2026-11-23
+  CAMBIOS : Pedido de Daniel: el log de vuelo son SOLO los turnos volados. El export XLS
+            (_generarYDescargarLogXLS: Mi Perfil y EDITAR USUARIO) filtraba por "tiene algún
+            dato de log" (obs_privada/horas/aterrizajes), así que podía incluir turnos
+            cancelados/vencidos/aprobados con solo una nota del instructor. Ahora filtra
+            estado==='volado', mismo criterio que la tabla de Mi Perfil (v8.61).
+  ANTERIOR: v8.97 — Pedido de Daniel: Mi Perfil/Vuelos → Log de Vuelos pasa de lista (fecha + hs) a
             TABLA con Fecha, Matrícula, Desde, Hasta, Tiempo, Aterrizajes, Instructor y pie
             con totalizadores (subtotal de vuelos listados, carga inicial si existe y TOTAL).
             Desde/Hasta = ts_despegue/ts_aterrizaje en UTC (fmtHoraUTC, mismo criterio que el
@@ -4675,7 +4680,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.97</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.98</div>
   </div>
 
 </div>
@@ -10065,7 +10070,7 @@ async function _generarYDescargarLogXLS(btn,soloPublico=false){
     // entran en el log), pero orden cronológico ascendente para exportar (más viejo
     // primero) — al revés que en pantalla, que muestra más nuevo primero.
     const turnos=Object.values(_reservasCache)
-      .filter(r=>r.email===email&&(r.obs_privada||r.obs_privada_tiempo_vuelo!=null||r.obs_privada_aterrizajes!=null||r.piloto_tiempo_vuelo!=null||r.piloto_aterrizajes!=null))
+      .filter(r=>r.email===email&&r.estado==='volado') // v8.98: solo volados (antes: cualquier turno con datos de log)
       .sort((a,b)=>(a.fecha+' '+a.hora).localeCompare(b.fecha+' '+b.hora));
 
     // v8.97: columnas Fecha/Matrícula/Desde/Hasta/Tiempo/Aterrizajes/Instructor (pedido
