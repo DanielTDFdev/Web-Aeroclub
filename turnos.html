@@ -1,7 +1,18 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 8.98 · 2026-11-23
-  CAMBIOS : Pedido de Daniel: el log de vuelo son SOLO los turnos volados. El export XLS
+  VERSION : 8.99 · 2026-11-23
+  CAMBIOS : Pedido de Daniel: que el instructor pueda cargar a mano Desde/Hasta (UTC) de un
+            vuelo. Los vuelos cargados desde Log del Alumno solo tenían tiempo/aterrizajes y
+            nunca ts_despegue/ts_aterrizaje (solo los escriben vuelo.html/vuelo-piloto.html y
+            el histórico), por eso la tabla de Mi Perfil (v8.97) mostraba "—". Campos nuevos
+            opcionales "Desde/Hasta (UTC)" en el form del Log del Alumno (mla-desde/mla-hasta)
+            y en el modal Editar Vuelo (elv-desde/elv-hasta). Con ambas horas el tiempo se
+            autocompleta (diferencia, redondeo 0.1, editable). Se guardan como ISO UTC en
+            ts_despegue/ts_aterrizaje: la fecha UTC es la del turno, +1 día si la hora UTC es
+            < 03:00 (vuelo después de las 21 local); Hasta <= Desde cruza medianoche. Validan:
+            las dos o ninguna, duración máx. 10 hs. Vacías → NO tocan los ts existentes (no
+            se pierden los que grabó la app).
+  ANTERIOR: v8.98 — Pedido de Daniel: el log de vuelo son SOLO los turnos volados. El export XLS
             (_generarYDescargarLogXLS: Mi Perfil y EDITAR USUARIO) filtraba por "tiene algún
             dato de log" (obs_privada/horas/aterrizajes), así que podía incluir turnos
             cancelados/vencidos/aprobados con solo una nota del instructor. Ahora filtra
@@ -4680,7 +4691,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.98</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.99</div>
   </div>
 
 </div>
@@ -5149,6 +5160,17 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
                 <input type="number" id="mla-aterrizajes" step="1" min="0" placeholder="Ej: 4">
               </div>
             </div>
+            <div class="row" style="margin-top:.5rem">
+              <div class="field" style="margin:0;min-width:110px">
+                <label style="font-size:10px">Desde (UTC)</label>
+                <input type="time" id="mla-desde">
+              </div>
+              <div class="field" style="margin:0;min-width:110px">
+                <label style="font-size:10px">Hasta (UTC)</label>
+                <input type="time" id="mla-hasta">
+              </div>
+            </div>
+            <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);margin-top:.3rem">Desde/Hasta opcionales, en UTC (local + 3). Con ambas se calcula el tiempo.</div>
             <div style="display:flex;align-items:center;gap:.7rem;margin-top:.5rem">
               <button id="mla-guardar" onclick="guardarObsPrivada()">GUARDAR</button>
               <span id="mla-msg" style="font-family:var(--font-mono);font-size:11px;color:var(--text3)"></span>
@@ -5213,6 +5235,17 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
           <input type="number" id="elv-aterrizajes" step="1" min="0" placeholder="Ej: 4">
         </div>
       </div>
+      <div class="row" style="margin-top:.5rem">
+        <div class="field" style="margin:0;flex:1">
+          <label style="font-size:10px">Desde (UTC)</label>
+          <input type="time" id="elv-desde">
+        </div>
+        <div class="field" style="margin:0;flex:1">
+          <label style="font-size:10px">Hasta (UTC)</label>
+          <input type="time" id="elv-hasta">
+        </div>
+      </div>
+      <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);margin-top:.3rem">Desde/Hasta en UTC; vacías no modifican las horas guardadas.</div>
       <div id="elv-err" style="font-family:var(--font-mono);font-size:11px;color:var(--red);margin-top:.4rem;min-height:16px;letter-spacing:.05em"></div>
       <div style="display:flex;gap:8px;margin-top:.6rem;justify-content:flex-end">
         <button id="elv-btn-cancelar" style="font-family:var(--font-mono);font-size:12px;padding:7px 16px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);border-radius:var(--radius);cursor:pointer">CANCELAR</button>
@@ -9800,6 +9833,8 @@ function renderFormObsPrivada(){
   ta.value=r?.obs_privada||'';
   tvInput.value=r?.obs_privada_tiempo_vuelo!=null?r.obs_privada_tiempo_vuelo:'';
   atInput.value=r?.obs_privada_aterrizajes!=null?r.obs_privada_aterrizajes:'';
+  document.getElementById('mla-desde').value=_horaUTCDeTs(r?.ts_despegue);   // v8.99
+  document.getElementById('mla-hasta').value=_horaUTCDeTs(r?.ts_aterrizaje);
   btn.textContent=autor?'ACTUALIZAR':'GUARDAR';
 }
 
@@ -9969,14 +10004,57 @@ window.borrarVueloLogAlumno=async function(key){
   renderNotasPrivadasAlumno();
 };
 
+// v8.99: Desde/Hasta (UTC) cargados a mano por el instructor ↔ ts_despegue/ts_aterrizaje
+// (ISO UTC, mismo formato que escriben vuelo.html/vuelo-piloto.html).
+function _horaUTCDeTs(iso){
+  if(!iso) return '';
+  const dt=new Date(iso); if(isNaN(dt)) return '';
+  return String(dt.getUTCHours()).padStart(2,'0')+':'+String(dt.getUTCMinutes()).padStart(2,'0');
+}
+// fecha = fecha LOCAL del turno (YYYY-MM-DD). El día local D va de D 03:00Z a D+1 03:00Z
+// (Argentina UTC-3 fijo), así que una hora UTC < 03:00 cae en D+1. Hasta <= Desde = cruzó
+// medianoche UTC. Devuelve {vacio:true} | {error} | {ts_despegue,ts_aterrizaje,horas}.
+function _parTsVuelo(fecha,desde,hasta){
+  desde=(desde||'').trim(); hasta=(hasta||'').trim();
+  if(!desde&&!hasta) return {vacio:true};
+  if(!desde||!hasta) return {error:'Completá Desde y Hasta, o dejá las dos vacías.'};
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(fecha||'')) return {error:'El turno no tiene fecha válida.'};
+  const [y,m,d]=fecha.split('-').map(Number);
+  const [dh,dm]=desde.split(':').map(Number), [hh,hm]=hasta.split(':').map(Number);
+  const ini=Date.UTC(y,m-1,d+(dh<3?1:0),dh,dm);
+  let fin=Date.UTC(y,m-1,d+(dh<3?1:0),hh,hm);
+  if(fin<=ini) fin+=86400000;
+  const horas=(fin-ini)/3600000;
+  if(horas>10) return {error:'Desde/Hasta da más de 10 hs de vuelo — revisá las horas.'};
+  return {ts_despegue:new Date(ini).toISOString(),ts_aterrizaje:new Date(fin).toISOString(),horas};
+}
+// Autocompleta el tiempo con la diferencia Desde→Hasta (redondeo 0.1), editable después.
+function _bindAutoTiempoVuelo(idDesde,idHasta,idTiempo){
+  const a=document.getElementById(idDesde), b=document.getElementById(idHasta), t=document.getElementById(idTiempo);
+  if(!a||!b||!t) return;
+  const calc=()=>{
+    const par=_parTsVuelo('2000-01-01',a.value,b.value);
+    if(par.horas!=null) t.value=(Math.round(par.horas*10)/10).toFixed(1);
+  };
+  a.addEventListener('change',calc); b.addEventListener('change',calc);
+}
+_bindAutoTiempoVuelo('mla-desde','mla-hasta','mla-tiempo-vuelo');
+_bindAutoTiempoVuelo('elv-desde','elv-hasta','elv-tiempo');
+
 // v7.88: modal Promise para editar tiempo/aterrizajes — mismo patrón que
 // pedirMotivoCancelacion(). Devuelve {tiempo,aterrizajes} (cualquiera de los 2 puede
 // ser null = "borrar el dato") o null si se canceló.
-function pedirEdicionLogVuelo(tiempoActual,aterrActual){
+// v8.99: recibe la reserva r (opcional) para Desde/Hasta UTC; devuelve además
+// {ts_despegue,ts_aterrizaje} o vacio:true (no tocar los ts existentes).
+function pedirEdicionLogVuelo(tiempoActual,aterrActual,r){
   return new Promise(resolve=>{
     const overlay=document.getElementById('modal-editar-log-vuelo');
     const inTiempo=document.getElementById('elv-tiempo');
     const inAterr=document.getElementById('elv-aterrizajes');
+    const inDesde=document.getElementById('elv-desde');
+    const inHasta=document.getElementById('elv-hasta');
+    inDesde.value=_horaUTCDeTs(r?.ts_despegue);
+    inHasta.value=_horaUTCDeTs(r?.ts_aterrizaje);
     const err=document.getElementById('elv-err');
     const btnGuardar=document.getElementById('elv-btn-guardar');
     const btnCancelar=document.getElementById('elv-btn-cancelar');
@@ -9998,7 +10076,9 @@ function pedirEdicionLogVuelo(tiempoActual,aterrActual){
       const aterrizajes=aStr===''?null:parseInt(aStr,10);
       if(tiempo!=null&&(isNaN(tiempo)||tiempo<0)){err.textContent='Tiempo de vuelo inválido.';return;}
       if(aterrizajes!=null&&(isNaN(aterrizajes)||aterrizajes<0)){err.textContent='Cantidad de aterrizajes inválida.';return;}
-      cerrar({tiempo,aterrizajes});
+      const par=_parTsVuelo(r?.fecha,inDesde.value,inHasta.value);
+      if(par.error){err.textContent=par.error;return;}
+      cerrar({tiempo,aterrizajes,par});
     };
     const onCancelar=()=>cerrar(null);
     const onOverlayClick=(e)=>{ if(e.target===overlay)cerrar(null); };
@@ -10021,11 +10101,12 @@ window.editarVueloLogAlumno=async function(key,esPiloto){
   if(!r)return;
   const campoTiempo=esPiloto?'piloto_tiempo_vuelo':'obs_privada_tiempo_vuelo';
   const campoAterr=esPiloto?'piloto_aterrizajes':'obs_privada_aterrizajes';
-  const resultado=await pedirEdicionLogVuelo(r[campoTiempo],r[campoAterr]);
+  const resultado=await pedirEdicionLogVuelo(r[campoTiempo],r[campoAterr],r);
   if(!resultado)return; // canceló
   const updates={};
   updates[campoTiempo]=resultado.tiempo;
   updates[campoAterr]=resultado.aterrizajes;
+  if(!resultado.par.vacio){ updates.ts_despegue=resultado.par.ts_despegue; updates.ts_aterrizaje=resultado.par.ts_aterrizaje; } // v8.99
   try{
     await fbUpdate('reservas/'+key,updates);
   }catch(e){
@@ -10181,6 +10262,10 @@ window.guardarObsPrivada=async function(){
   if(!texto&&tiempoVuelo==null&&aterrizajes==null){ msg.style.color='var(--red)'; msg.textContent='Cargá al menos un dato antes de guardar.'; return; }
   if(tiempoVuelo!=null&&(isNaN(tiempoVuelo)||tiempoVuelo<0)){ msg.style.color='var(--red)'; msg.textContent='Tiempo de vuelo inválido.'; return; }
   if(aterrizajes!=null&&(isNaN(aterrizajes)||aterrizajes<0)){ msg.style.color='var(--red)'; msg.textContent='Aterrizajes inválido.'; return; }
+  // v8.99: Desde/Hasta (UTC) opcionales → ts_despegue/ts_aterrizaje
+  const rTs=_reservasCache[_logAlumnoCtx.reservaKey];
+  const par=_parTsVuelo(rTs?.fecha,document.getElementById('mla-desde').value,document.getElementById('mla-hasta').value);
+  if(par.error){ msg.style.color='var(--red)'; msg.textContent=par.error; return; }
   const yo=session.nombre||session.user||'—';
   const esAdminGlobal=session?.user==='admin'||session?.user==='administrador';
   btn.disabled=true; msg.style.color='var(--text3)'; msg.textContent='Guardando…';
@@ -10206,7 +10291,8 @@ window.guardarObsPrivada=async function(){
       obs_privada_tiempo_vuelo:tiempoVuelo,
       obs_privada_aterrizajes:aterrizajes,
       obs_privada_autor:autorFresh||yo,
-      obs_privada_ts:serverTimestamp()
+      obs_privada_ts:serverTimestamp(),
+      ...(par.vacio?{}:{ts_despegue:par.ts_despegue,ts_aterrizaje:par.ts_aterrizaje})
     };
     // v8.41 (revisión post-v8.39): si con este guardado el turno queda CON datos y
     // estaba 'aprobado'/'vencido', pasa a 'volado' (igual que antes). Pero si queda SIN
@@ -10232,7 +10318,7 @@ window.guardarObsPrivada=async function(){
     // sentinel serverTimestamp() (eso solo lo resuelve el servidor al escribir). Se usa
     // ahoraServidor() como mejor aproximación hasta que el listener traiga el valor real.
     if(_reservasCache[_logAlumnoCtx.reservaKey]){
-      Object.assign(_reservasCache[_logAlumnoCtx.reservaKey],{obs_privada:texto||null,obs_privada_tiempo_vuelo:tiempoVuelo,obs_privada_aterrizajes:aterrizajes,obs_privada_autor:autorFresh||yo,obs_privada_ts:ahoraServidor().getTime(),...(upd.estado?{estado:upd.estado}:{})});
+      Object.assign(_reservasCache[_logAlumnoCtx.reservaKey],{obs_privada:texto||null,obs_privada_tiempo_vuelo:tiempoVuelo,obs_privada_aterrizajes:aterrizajes,obs_privada_autor:autorFresh||yo,obs_privada_ts:ahoraServidor().getTime(),...(upd.estado?{estado:upd.estado}:{}),...(par.vacio?{}:{ts_despegue:par.ts_despegue,ts_aterrizaje:par.ts_aterrizaje})});
     }
     renderFormObsPrivada();
     renderNotasPrivadasAlumno();
