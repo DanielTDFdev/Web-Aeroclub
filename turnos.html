@@ -1,7 +1,19 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 8.96 · 2026-11-21
-  CAMBIOS : Pedido de Daniel: en la grilla de reservas (LISTA y SEMANA) que ven instructores,
+  VERSION : 8.97 · 2026-11-23
+  CAMBIOS : Pedido de Daniel: Mi Perfil/Vuelos → Log de Vuelos pasa de lista (fecha + hs) a
+            TABLA con Fecha, Matrícula, Desde, Hasta, Tiempo, Aterrizajes, Instructor y pie
+            con totalizadores (subtotal de vuelos listados, carga inicial si existe y TOTAL).
+            Desde/Hasta = ts_despegue/ts_aterrizaje en UTC (fmtHoraUTC, mismo criterio que el
+            modal de detalle y el Libro de vuelo.html); sin timestamps → "—". Instructor:
+            vacío en vuelos autorregistrados por el piloto; si no, obs_privada_autor ||
+            aprobado_por || instructor (helper _instructorDeVuelo, compartido con el XLS).
+            Export XLS (_generarYDescargarLogXLS, que comparte el export del alumno y el de
+            EDITAR USUARIO): columnas Fecha, Matrícula, Desde, Hasta, Tiempo de vuelo (hs),
+            Aterrizajes, Instructor — se quitan "Hora" (hora del turno) y "Origen", "Cargado
+            por" pasa a "Instructor". Se mantienen fila (inicial) y TOTAL. La fila de la tabla
+            sigue abriendo abrirMiLogVuelos(key).
+  ANTERIOR: v8.96 — Pedido de Daniel: en la grilla de reservas (LISTA y SEMANA) que ven instructores,
             admin y administrador, los turnos pendientes/aprobados de un ALUMNO con deuda
             pendiente con el club se marcan con contorno rojo punteado + "$" y el tooltip
             "⚠ ALUMNO CON DEUDA PENDIENTE", para que decidan si cancelan. Deuda = saldo
@@ -4189,6 +4201,16 @@ html{overflow-x:hidden;max-width:100vw;}
 
 .card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem 1.5rem;margin-bottom:1rem;position:relative;overflow:hidden;}
 .ap-log-row:hover{border-color:var(--cyan);background:var(--bg4,#161b22);}
+/* v8.97: tabla del Log de Vuelos en Mi Perfil */
+.ap-log-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:.75rem}
+.ap-log-tabla{width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:12px;white-space:nowrap}
+.ap-log-tabla th{background:var(--bg2);color:var(--amber);font-size:10px;letter-spacing:.1em;text-transform:uppercase;text-align:left;padding:.5rem .65rem;border-bottom:1px solid var(--border2)}
+.ap-log-tabla td{padding:.5rem .65rem;color:var(--text2);border-bottom:1px solid var(--border)}
+.ap-log-tabla .num{text-align:right}
+.ap-log-tabla tbody tr{cursor:pointer}
+.ap-log-tabla tbody tr:hover td{background:var(--bg4,#161b22);color:var(--cyan)}
+.ap-log-tabla tfoot td{background:var(--bg2);color:var(--text3);border-bottom:none}
+.ap-log-tabla tfoot tr.total td{color:var(--cyan);font-weight:600;border-top:1px solid var(--border2)}
 .card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:.4;}
 
 h2{font-family:var(--font-mono);font-size:14px;color:var(--cyan);letter-spacing:.18em;text-transform:uppercase;margin-bottom:1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);}
@@ -4653,7 +4675,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.96</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.97</div>
   </div>
 
 </div>
@@ -4853,7 +4875,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
         <h3>Mi Log de Vuelos</h3>
         <p style="font-family:var(--font-mono);font-size:11px;color:var(--text3);letter-spacing:.05em;line-height:1.6;margin-bottom:.75rem">Observaciones de tus vuelos y el total de horas/aterrizajes que tus instructores fueron registrando.</p>
         <div id="ap-log-totales" style="display:none;font-family:var(--font-mono);font-size:12px;color:var(--cyan);margin-bottom:.6rem"></div>
-        <div id="ap-log-lista" style="display:flex;flex-direction:column;gap:.5rem;margin-bottom:.75rem"></div>
+        <div id="ap-log-lista"></div>
         <div id="ap-log-vacio" style="display:none;font-family:var(--font-mono);font-size:11px;color:var(--text3);padding:.5rem 0 .75rem">Todavía no tenés vuelos registrados.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="primary" onclick="abrirMiLogVuelos()">◈ VER DETALLE COMPLETO</button>
@@ -7699,7 +7721,8 @@ async function renderMiLogVuelosInline(){
 
   // Totales (incluye carga inicial del alumno, mismo criterio que el modal)
   const al=await fbGet('alumnos/'+(session.emailKey||ek(session.email)));
-  let totalHs=al?.horas_iniciales||0, totalAter=al?.aterrizajes_iniciales||0;
+  const iniHs=Number(al?.horas_iniciales||0), iniAter=Number(al?.aterrizajes_iniciales||0);
+  let totalHs=iniHs, totalAter=iniAter;
   turnos.forEach(r=>{
     if(r.obs_privada_tiempo_vuelo!=null)totalHs+=Number(r.obs_privada_tiempo_vuelo);
     else if(r.piloto_tiempo_vuelo!=null)totalHs+=Number(r.piloto_tiempo_vuelo);
@@ -7713,20 +7736,45 @@ async function renderMiLogVuelosInline(){
     totalesBox.style.display='none';
   }
 
-  cont.innerHTML=turnos.map(r=>{
-    const fecha=fmtFechaLinda(r.fecha);
+  // v8.97: tabla (pedido de Daniel). Valores de Firebase escapados (XSS, ver CLAUDE.md).
+  const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  let subHs=0, subAter=0;
+  const filas=turnos.map(r=>{
     const horasVal=r.obs_privada_tiempo_vuelo!=null?r.obs_privada_tiempo_vuelo:r.piloto_tiempo_vuelo;
-    const horas=horasVal!=null?Number(horasVal).toFixed(1)+' hs':'—';
-    // v8.60 — pedido de Daniel: ícono 🛰 después de las horas si el vuelo tiene traza
-    // GPS asociada (mismo flag r.tiene_traza_gps que ya usa el modal de detalle
-    // completo para mostrar "Ver recorrido GPS" — no hace falta ir a buscar a
-    // /vuelo_tracks, el flag ya vive en la reserva).
+    const aterrVal=r.obs_privada_aterrizajes!=null?r.obs_privada_aterrizajes:r.piloto_aterrizajes;
+    if(horasVal!=null)subHs+=Number(horasVal);
+    if(aterrVal!=null)subAter+=Number(aterrVal);
+    const horas=horasVal!=null?Number(horasVal).toFixed(1):'—';
+    // v8.60: ícono 🛰 si el vuelo tiene traza GPS (flag r.tiene_traza_gps de la reserva).
     const iconoGps=r.tiene_traza_gps?' <span title="Tiene recorrido GPS" style="color:var(--cyan)">🛰</span>':'';
-    return `<div class="ap-log-row" onclick="abrirMiLogVuelos('${r.key}')" style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:.6rem .75rem;background:var(--bg3);border:1px solid var(--border);border-left:3px solid var(--cyan);border-radius:var(--radius);cursor:pointer;font-family:var(--font-mono)">
-      <span style="font-size:12px;color:var(--text2)">${fecha}</span>
-      <span style="font-size:13px;color:var(--cyan)">${horas}${iconoGps}</span>
-    </div>`;
+    return `<tr onclick="abrirMiLogVuelos('${esc(r.key)}')" title="Ver detalle">
+      <td>${esc(fmtFechaCorta(r.fecha))}</td>
+      <td>${esc(r.avion||'LV-OAD')}</td>
+      <td>${esc(fmtHoraUTC(r.ts_despegue)||'—')}</td>
+      <td>${esc(fmtHoraUTC(r.ts_aterrizaje)||'—')}</td>
+      <td class="num">${horas}${iconoGps}</td>
+      <td class="num">${aterrVal!=null?Number(aterrVal):'—'}</td>
+      <td>${esc(_instructorDeVuelo(r)||'—')}</td>
+    </tr>`;
   }).join('');
+  const hayInicial=iniHs>0||iniAter>0;
+  const pie=`<tr><td colspan="4">Subtotal (${turnos.length} vuelo${turnos.length===1?'':'s'})</td><td class="num">${subHs.toFixed(1)}</td><td class="num">${subAter}</td><td></td></tr>`
+    +(hayInicial?`<tr><td colspan="4">Carga inicial (pre-sistema)</td><td class="num">${iniHs.toFixed(1)}</td><td class="num">${iniAter}</td><td></td></tr>`:'')
+    +`<tr class="total"><td colspan="4">TOTAL</td><td class="num">${totalHs.toFixed(1)}</td><td class="num">${totalAter}</td><td></td></tr>`;
+  cont.innerHTML=`<div class="ap-log-wrap"><table class="ap-log-tabla">
+    <thead><tr><th>Fecha</th><th>Matrícula</th><th>Desde</th><th>Hasta</th><th class="num">Tiempo (hs)</th><th class="num">Aterrizajes</th><th>Instructor</th></tr></thead>
+    <tbody>${filas}</tbody>
+    <tfoot>${pie}</tfoot>
+  </table></div>`;
+}
+
+// v8.97: instructor de un vuelo del log (pantalla Mi Perfil y export XLS). Vuelo
+// autorregistrado por el piloto (sin datos obs_privada_*) → sin instructor. Si lo cargó
+// un instructor: quien lo cargó, o en su defecto quien aprobó / instructor del turno.
+function _instructorDeVuelo(r){
+  const esPiloto=r.obs_privada_tiempo_vuelo==null&&r.obs_privada_aterrizajes==null&&r.obs_privada==null&&(r.piloto_tiempo_vuelo!=null||r.piloto_aterrizajes!=null||r.piloto_obs);
+  if(esPiloto)return '';
+  return r.obs_privada_autor||r.aprobado_por||r.instructor||'';
 }
 
 window.showAlumnoPerfilTab=function(tab){
@@ -10020,21 +10068,25 @@ async function _generarYDescargarLogXLS(btn,soloPublico=false){
       .filter(r=>r.email===email&&(r.obs_privada||r.obs_privada_tiempo_vuelo!=null||r.obs_privada_aterrizajes!=null||r.piloto_tiempo_vuelo!=null||r.piloto_aterrizajes!=null))
       .sort((a,b)=>(a.fecha+' '+a.hora).localeCompare(b.fecha+' '+b.hora));
 
+    // v8.97: columnas Fecha/Matrícula/Desde/Hasta/Tiempo/Aterrizajes/Instructor (pedido
+    // de Daniel, igual que la tabla de Mi Perfil). Sin "Hora" del turno ni "Origen".
     const filas=turnos.map(r=>{
       const esPiloto=r.obs_privada_tiempo_vuelo==null&&r.obs_privada_aterrizajes==null&&r.obs_privada==null&&(r.piloto_tiempo_vuelo!=null||r.piloto_aterrizajes!=null||r.piloto_obs);
       const horasVal=esPiloto?r.piloto_tiempo_vuelo:r.obs_privada_tiempo_vuelo;
       const aterrVal=esPiloto?r.piloto_aterrizajes:r.obs_privada_aterrizajes;
-      const autorVal=esPiloto?r.piloto_autor:r.obs_privada_autor;
       return {
         'Fecha': r.fecha||'',
-        'Hora': r.hora||'',
-        'Avión': r.avion||'LV-OAD',
+        'Matrícula': r.avion||'LV-OAD',
+        'Desde (UTC)': fmtHoraUTC(r.ts_despegue)||'',
+        'Hasta (UTC)': fmtHoraUTC(r.ts_aterrizaje)||'',
         'Tiempo de vuelo (hs)': horasVal!=null?Number(horasVal):'',
         'Aterrizajes': aterrVal!=null?Number(aterrVal):'',
-        'Cargado por': autorVal||'',
-        'Origen': esPiloto?'Autorregistrado (piloto)':'Instructor'
+        'Instructor': _instructorDeVuelo(r)
       };
     });
+    const vacia={'Fecha':'','Matrícula':'','Desde (UTC)':'','Hasta (UTC)':'','Tiempo de vuelo (hs)':'','Aterrizajes':'','Instructor':''};
+    let subHs=0, subAter=0;
+    filas.forEach(f=>{ if(f['Tiempo de vuelo (hs)']!=='')subHs+=f['Tiempo de vuelo (hs)']; if(f['Aterrizajes']!=='')subAter+=f['Aterrizajes']; });
 
     let totalHs=_logAlumnoCtx.horasIniciales||0, totalAter=_logAlumnoCtx.aterrizajesIniciales||0;
     turnos.forEach(r=>{
@@ -10043,23 +10095,18 @@ async function _generarYDescargarLogXLS(btn,soloPublico=false){
       if(r.obs_privada_aterrizajes!=null)totalAter+=Number(r.obs_privada_aterrizajes);
       else if(r.piloto_aterrizajes!=null)totalAter+=Number(r.piloto_aterrizajes);
     });
+    const nVuelos=filas.length;
+    filas.push({...vacia});
+    filas.push({...vacia,'Fecha':`SUBTOTAL (${nVuelos} vuelo${nVuelos===1?'':'s'})`,'Tiempo de vuelo (hs)':Number(subHs.toFixed(1)),'Aterrizajes':subAter});
     if(_logAlumnoCtx.horasIniciales||_logAlumnoCtx.aterrizajesIniciales){
-      filas.unshift({
-        'Fecha':'(inicial)','Hora':'','Avión':'',
+      filas.push({...vacia,'Fecha':'CARGA INICIAL (pre-sistema)',
         'Tiempo de vuelo (hs)':Number(_logAlumnoCtx.horasIniciales||0),
-        'Aterrizajes':Number(_logAlumnoCtx.aterrizajesIniciales||0),
-        'Cargado por':'','Origen':'Carga inicial (histórico pre-sistema)'
-      });
+        'Aterrizajes':Number(_logAlumnoCtx.aterrizajesIniciales||0)});
     }
-    filas.push({'Fecha':'','Hora':'','Avión':'','Tiempo de vuelo (hs)':'','Aterrizajes':'','Cargado por':'','Origen':''});
-    filas.push({
-      'Fecha':'TOTAL','Hora':'','Avión':'',
-      'Tiempo de vuelo (hs)':Number(totalHs.toFixed(1)),'Aterrizajes':totalAter,
-      'Cargado por':'','Origen':''
-    });
+    filas.push({...vacia,'Fecha':'TOTAL','Tiempo de vuelo (hs)':Number(totalHs.toFixed(1)),'Aterrizajes':totalAter});
 
     const ws=XLSX.utils.json_to_sheet(filas);
-    ws['!cols']=[{wch:12},{wch:7},{wch:9},{wch:18},{wch:12},{wch:16},{wch:24}];
+    ws['!cols']=[{wch:26},{wch:10},{wch:11},{wch:11},{wch:18},{wch:12},{wch:22}];
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,ws,'Log de vuelos');
     const fechaHoy=ahoraServidor().toISOString().slice(0,10);
