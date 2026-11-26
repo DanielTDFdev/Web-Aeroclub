@@ -1,7 +1,17 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 8.99 · 2026-11-23
-  CAMBIOS : Pedido de Daniel: que el instructor pueda cargar a mano Desde/Hasta (UTC) de un
+  VERSION : 9.00 · 2026-11-26
+  CAMBIOS : Pedido de Daniel: toggle en Config→Parámetros "No permitir pedir turnos con
+            deuda" (/parametros/bloquear_turnos_con_deuda, booleano, default false). ON →
+            un ALUMNO con cualquier saldo deudor (>= CC_UMBRAL, estadoDeudaUsuario() ≠ null)
+            no puede pedir turno: cartel warning "Ud. posee deuda pendiente, por favor
+            comunicarse con la administración del Aeroclub. Gracias." (pedir-turno-deuda-total)
+            + revalidación en _guardarTurnoConfirmado. OFF → igual que hasta ahora (aviso
+            con deuda, bloqueo con 90+ días). Pilotos, instructor-como-piloto y login
+            simulado siguen exceptuados. El booleano va aparte de PARAMS_DEFAULT (que valida
+            números > 0): faltante o no-booleano = false, sin banner de parámetro inválido.
+            Se guarda con el resto en GUARDAR PARÁMETROS.
+  ANTERIOR: v8.99 — Pedido de Daniel: que el instructor pueda cargar a mano Desde/Hasta (UTC) de un
             vuelo. Los vuelos cargados desde Log del Alumno solo tenían tiempo/aterrizajes y
             nunca ts_despegue/ts_aterrizaje (solo los escriben vuelo.html/vuelo-piloto.html y
             el histórico), por eso la tabla de Mi Perfil (v8.97) mostraba "—". Campos nuevos
@@ -4691,7 +4701,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v8.99</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v9.00</div>
   </div>
 
 </div>
@@ -4827,6 +4837,11 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
       <div style="font-size:15px;margin-bottom:.5rem">NO PODÉS PEDIR TURNO</div>
       <div id="pedir-turno-deuda-bloq-detalle"></div>
       <div style="margin-top:.75rem;color:var(--text3);font-size:11px">Regularizá tu situación con administración para volver a reservar. Si ya pagaste, se verá reflejado en la próxima actualización de saldos.</div>
+    </div>
+    <!-- v9.00: bloqueo por CUALQUIER deuda (toggle Config→Parámetros) -->
+    <div id="pedir-turno-deuda-total" style="display:none;background:rgba(240,165,0,.08);border:1px solid rgba(240,165,0,.35);border-radius:var(--radius);padding:1.25rem 1.25rem;font-family:var(--font-mono);font-size:13px;color:var(--amber);letter-spacing:.04em;line-height:1.7;text-align:center">
+      <div style="font-size:32px;margin-bottom:.5rem">⚠</div>
+      <div style="font-size:14px">Ud. posee deuda pendiente, por favor comunicarse con la administración del Aeroclub. Gracias.</div>
     </div>
     <div id="pedir-turno-deuda" style="display:none;background:rgba(240,165,0,.08);border:1px solid rgba(240,165,0,.35);border-radius:var(--radius);padding:.85rem 1rem;margin-bottom:1rem;font-family:var(--font-mono);font-size:12px;color:var(--amber);letter-spacing:.04em;line-height:1.6">
       <div style="font-size:13px;margin-bottom:.25rem">⚠ TENÉS DEUDA PENDIENTE CON EL CLUB</div>
@@ -6146,6 +6161,15 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
               <span style="font-family:var(--font-mono);font-size:11px;color:var(--text3)">días</span>
             </div>
           </div>
+          <div class="field">
+            <label>Turnos de alumnos con deuda (v9.00)</label>
+            <label class="cancel-toggle" style="display:flex;text-transform:none;letter-spacing:.06em;margin-bottom:0" title="ON: un alumno con deuda pendiente no puede pedir turno. OFF: se le avisa y solo se bloquea con deuda de 90 días o más.">
+              <input type="checkbox" id="param-bloquear_turnos_con_deuda">
+              <span class="cancel-toggle-track"><span class="cancel-toggle-thumb"></span></span>
+              <span class="cancel-toggle-label">No permitir pedir turnos con deuda</span>
+            </label>
+            <span style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.04em;margin-top:4px;display:block">Apagado: solo aviso; bloquea con deuda de 90+ días.</span>
+          </div>
           <div style="border-top:1px solid var(--border2);margin:4px 0;padding-top:14px">
             <p style="font-family:var(--font-mono);font-size:11px;color:var(--amber);letter-spacing:.05em;margin-bottom:14px">▸ ESTOS DOS LOS USAN LOS CRON DE PYTHON (GitHub Actions), NO ESTE ARCHIVO</p>
           </div>
@@ -6433,6 +6457,8 @@ const PARAMS_DEFAULT={
   cron_recordatorio_instructor_horas:   12   // REMIND_HOURS
 };
 let PARAMS={...PARAMS_DEFAULT};       // valores efectivos en uso (validados)
+// v9.00: booleano aparte (PARAMS_DEFAULT valida números > 0). Solo true explícito activa.
+let PARAM_BLOQUEAR_DEUDA=false;
 let _paramsInvalidos=[];              // claves que cayeron al default por venir mal de Firebase
 function _paramValido(v){ return typeof v==='number'&&isFinite(v)&&v>0; }
 function aplicarParametros(data){
@@ -6444,6 +6470,7 @@ function aplicarParametros(data){
     else inval.push(k);
   }
   PARAMS=nuevos;
+  PARAM_BLOQUEAR_DEUDA=data?.bloquear_turnos_con_deuda===true; // v9.00
   _paramsInvalidos=inval;
   pintarAvisoParametros();
 }
@@ -7934,6 +7961,9 @@ function reservaConDeuda(r,deudores){
   return deudores.has(ek(e))||deudores.has(ek(e.toLowerCase()));
 }
 function deudaBloquea(d){ return !!d&&d.dias!=null&&d.dias>=CC_DIAS_BLOQUEO; }
+// v9.00: toggle Config→Parámetros — con el switch ON bloquea cualquier deuda (alumno).
+function deudaBloqueaTotal(d){ return !!d&&PARAM_BLOQUEAR_DEUDA; }
+const MSG_DEUDA_TOTAL='Ud. posee deuda pendiente, por favor comunicarse con la administración del Aeroclub. Gracias.';
 function deudaTxt(d){
   return 'Saldo deudor '+ccMonto(d.saldo)+(d.desde?' · factura impaga más antigua del '+fmtFechaCorta(d.desde)+' ('+d.dias+' días)':'')+(d.corte_txt?' · datos al '+d.corte_txt:'');
 }
@@ -7962,10 +7992,11 @@ window.showAlumnoTab=function(tab){
     // de la apertura de la pestaña quedó en _abrirPedirTurno().
     const sinCli=document.getElementById('pedir-turno-sin-cliente');
     if(sinCli) sinCli.style.display='none';
-    ['pedir-turno-bloqueado','pedir-turno-fuera-horario','pedir-turno-card','pedir-turno-deuda','pedir-turno-deuda-bloq'].forEach(id=>{ const e=document.getElementById(id); if(e) e.style.display='none'; });
+    ['pedir-turno-bloqueado','pedir-turno-fuera-horario','pedir-turno-card','pedir-turno-deuda','pedir-turno-deuda-bloq','pedir-turno-deuda-total'].forEach(id=>{ const e=document.getElementById(id); if(e) e.style.display='none'; });
     // v8.93: + deuda con el club — aviso si debe, bloqueo si la deuda tiene 90+ días.
     Promise.all([usuarioTieneCliente(),estadoDeudaUsuario()]).then(([ok,deuda])=>{
       if(!ok){ if(sinCli) sinCli.style.display='block'; return; }
+      if(deudaBloqueaTotal(deuda)){ document.getElementById('pedir-turno-deuda-total').style.display='block'; return; } // v9.00
       if(deudaBloquea(deuda)){
         document.getElementById('pedir-turno-deuda-bloq-detalle').textContent='Tenés deuda con el club de '+CC_DIAS_BLOQUEO+' días o más. '+deudaTxt(deuda);
         document.getElementById('pedir-turno-deuda-bloq').style.display='block';
@@ -8421,7 +8452,7 @@ window.cancelarSeleccion=function(){
 window._guardarTurnoConfirmado=async function(){
   hideEl('turno-err');hideEl('turno-ok');
   if(!await usuarioTieneCliente()){showErr('turno-err','⚠ Tu usuario no tiene N° de cliente asignado. Pedile a administración que te lo asigne para poder reservar.');return;} // v8.89
-  {const dd=await estadoDeudaUsuario(); if(deudaBloquea(dd)){showErr('turno-err','⚠ Tenés deuda con el club de '+CC_DIAS_BLOQUEO+' días o más. Regularizá con administración para poder reservar.');return;}} // v8.93
+  {const dd=await estadoDeudaUsuario(); if(deudaBloqueaTotal(dd)){showErr('turno-err','⚠ '+MSG_DEUDA_TOTAL);return;} if(deudaBloquea(dd)){showErr('turno-err','⚠ Tenés deuda con el club de '+CC_DIAS_BLOQUEO+' días o más. Regularizá con administración para poder reservar.');return;}} // v8.93
   if(!selectedAvion){showErr('turno-err','Seleccioná un avión.');return;}
   // v6.97/v8.35: defensa en profundidad — el calendario de días ya queda bloqueado hasta
   // elegir tipo de vuelo (renderDaysGrid), pero se revalida acá por si se llega a este
@@ -11223,6 +11254,8 @@ function pintarFormParametros(){
     const inp=document.getElementById('param-'+k);
     if(inp) inp.value=PARAMS[k];
   }
+  const chkDeuda=document.getElementById('param-bloquear_turnos_con_deuda'); // v9.00
+  if(chkDeuda) chkDeuda.checked=PARAM_BLOQUEAR_DEUDA;
   document.getElementById('params-status').textContent='';
 }
 
@@ -11246,6 +11279,7 @@ window.guardarParametros=async function(){
     mostrarEstadoParametros('⚠ El vencimiento del cron ('+nuevos.cron_vencimiento_turno_horas+'h) debe ser MENOR que la anticipación mínima del alumno ('+nuevos.anticipacion_alumno_horas+'h).','error');
     return;
   }
+  nuevos.bloquear_turnos_con_deuda=!!document.getElementById('param-bloquear_turnos_con_deuda')?.checked; // v9.00
   mostrarEstadoParametros('Guardando...','info');
   try{
     await fbUpdate('parametros',nuevos);
