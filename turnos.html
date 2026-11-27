@@ -1,7 +1,12 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 9.01 · 2026-11-27
-  CAMBIOS : Pedido de Daniel: que el alumno con deuda vea el aviso apenas se loguea y que le
+  VERSION : 9.02 · 2026-11-27
+  CAMBIOS : Pedido de Daniel: en Pedir Turno, con deuda menor a 90 días y switch OFF, se veían
+            dos carteles ámbar casi iguales (banner persistente v9.01 + #pedir-turno-deuda).
+            Se deja de mostrar #pedir-turno-deuda (el banner ya informa); quedan los carteles
+            de bloqueo (90+ días y switch ON), que explican por qué no aparece el calendario.
+            El div sigue en el HTML (oculto) por si se quiere volver atrás.
+  ANTERIOR: v9.01 — Pedido de Daniel: que el alumno con deuda vea el aviso apenas se loguea y que le
             quede persistente mientras navega (antes solo aparecía al abrir Pedir Turno, y
             si no entraba ahí nunca se enteraba). Banner nuevo #al-deuda-banner arriba de las
             pestañas de alumno-screen (mismo lugar que el de documentación vencida), visible
@@ -4711,7 +4716,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v9.01</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v9.02</div>
   </div>
 
 </div>
@@ -8049,10 +8054,8 @@ window.showAlumnoTab=function(tab){
         document.getElementById('pedir-turno-deuda-bloq').style.display='block';
         return;
       }
-      if(deuda){
-        document.getElementById('pedir-turno-deuda-detalle').textContent=deudaTxt(deuda);
-        document.getElementById('pedir-turno-deuda').style.display='block';
-      }
+      // v9.02: el aviso (deuda < 90 días, switch OFF) ya lo muestra #al-deuda-banner —
+      // el cartel #pedir-turno-deuda queda en el HTML pero no se muestra (duplicaba el texto).
       _abrirPedirTurno();
     });
   }
