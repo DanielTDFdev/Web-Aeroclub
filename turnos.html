@@ -1,7 +1,17 @@
 <!--
   ARCHIVO : turnos.html
-  VERSION : 9.00 · 2026-11-26
-  CAMBIOS : Pedido de Daniel: toggle en Config→Parámetros "No permitir pedir turnos con
+  VERSION : 9.01 · 2026-11-27
+  CAMBIOS : Pedido de Daniel: que el alumno con deuda vea el aviso apenas se loguea y que le
+            quede persistente mientras navega (antes solo aparecía al abrir Pedir Turno, y
+            si no entraba ahí nunca se enteraba). Banner nuevo #al-deuda-banner arriba de las
+            pestañas de alumno-screen (mismo lugar que el de documentación vencida), visible
+            en Mis Turnos / Pedir Turno / Mi Perfil. Se pinta al loguear, al restaurar sesión
+            y se refresca cada vez que se abre Pedir Turno. Ámbar si solo es aviso; rojo si
+            no puede reservar (switch ON o deuda de 90+ días). Repinta si cambia el switch.
+            Mismas exclusiones que estadoDeudaUsuario() (pilotos, instructor como piloto,
+            login simulado, sin Auth/vínculo/importación). Los carteles de Pedir Turno y el
+            bloqueo no cambian.
+  ANTERIOR: v9.00 — Pedido de Daniel: toggle en Config→Parámetros "No permitir pedir turnos con
             deuda" (/parametros/bloquear_turnos_con_deuda, booleano, default false). ON →
             un ALUMNO con cualquier saldo deudor (>= CC_UMBRAL, estadoDeudaUsuario() ≠ null)
             no puede pedir turno: cartel warning "Ud. posee deuda pendiente, por favor
@@ -4701,7 +4711,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
   <div class="hero-text">
     <div class="hero-aeroclub">Aeroclub Río Grande</div>
     <div class="hero-callsign" id="hero-callsign">TURNOS</div>
-    <div class="hero-sub">▸ RESERVA DE AERONAVES v9.00</div>
+    <div class="hero-sub">▸ RESERVA DE AERONAVES v9.01</div>
   </div>
 
 </div>
@@ -4788,6 +4798,12 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--cy
 <!-- USUARIO (alumno / piloto) -->
 <div id="alumno-screen" class="screen">
   <div id="al-vencimiento-banner" style="display:none;background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.35);color:var(--red);font-family:var(--font-mono);font-size:12px;letter-spacing:.05em;line-height:1.6;padding:.85rem 1rem;border-radius:var(--radius);margin-bottom:1rem"></div>
+  <!-- v9.01: aviso persistente de deuda (visible en todas las pestañas del alumno) -->
+  <div id="al-deuda-banner" style="display:none;font-family:var(--font-mono);font-size:12px;letter-spacing:.05em;line-height:1.6;padding:.85rem 1rem;border-radius:var(--radius);margin-bottom:1rem">
+    <div id="al-deuda-banner-tit" style="font-size:13px;margin-bottom:.25rem">⚠ TENÉS DEUDA PENDIENTE CON EL CLUB</div>
+    <div id="al-deuda-banner-det"></div>
+    <div id="al-deuda-banner-msg" style="margin-top:.35rem;color:var(--text2)"></div>
+  </div>
   <div class="links-row">
     <span class="avnc-panel">
     <a href="portal-alumno.html" class="avnc-btn portal-link" id="al-portal-link"><span>PORTAL</span><span class="avnc-sub">educativo</span></a>
@@ -6459,6 +6475,7 @@ const PARAMS_DEFAULT={
 let PARAMS={...PARAMS_DEFAULT};       // valores efectivos en uso (validados)
 // v9.00: booleano aparte (PARAMS_DEFAULT valida números > 0). Solo true explícito activa.
 let PARAM_BLOQUEAR_DEUDA=false;
+let _deudaBanner=null; // v9.01: último estado de deuda pintado en el banner del alumno
 let _paramsInvalidos=[];              // claves que cayeron al default por venir mal de Firebase
 function _paramValido(v){ return typeof v==='number'&&isFinite(v)&&v>0; }
 function aplicarParametros(data){
@@ -6471,6 +6488,7 @@ function aplicarParametros(data){
   }
   PARAMS=nuevos;
   PARAM_BLOQUEAR_DEUDA=data?.bloquear_turnos_con_deuda===true; // v9.00
+  if(_deudaBanner) pintarBannerDeuda(_deudaBanner); // v9.01
   _paramsInvalidos=inval;
   pintarAvisoParametros();
 }
@@ -7169,6 +7187,7 @@ window.loginAlumno=async function(){
       await loadConfig();
       showScreen('alumno-screen');
       renderBannerVencimientoAlumno(alumno);
+      renderBannerDeudaAlumno(); // v9.01
       initAvionSelector();
       showAlumnoTab('mis-turnos');
       suscribirReservas();
@@ -7964,6 +7983,33 @@ function deudaBloquea(d){ return !!d&&d.dias!=null&&d.dias>=CC_DIAS_BLOQUEO; }
 // v9.00: toggle Config→Parámetros — con el switch ON bloquea cualquier deuda (alumno).
 function deudaBloqueaTotal(d){ return !!d&&PARAM_BLOQUEAR_DEUDA; }
 const MSG_DEUDA_TOTAL='Ud. posee deuda pendiente, por favor comunicarse con la administración del Aeroclub. Gracias.';
+// v9.01: banner persistente de deuda en alumno-screen (login, sesión restaurada y cada
+// vez que se abre Pedir Turno). Solo pinta con lo que devuelve estadoDeudaUsuario()
+// (mismas exclusiones: rol≠alumno, instructor como piloto, login simulado, sin Auth/
+// vínculo/importación). _deudaBanner guarda el último estado para repintar si cambia el
+// switch de Config→Parámetros (llega async por onValue, puede ser después del login).
+// (_deudaBanner se declara junto a PARAM_BLOQUEAR_DEUDA, antes de cualquier uso — TDZ.)
+function pintarBannerDeuda(d){
+  _deudaBanner=d||null;
+  const b=document.getElementById('al-deuda-banner'); if(!b) return;
+  if(!d){ b.style.display='none'; return; }
+  const bloq=deudaBloqueaTotal(d)||deudaBloquea(d);
+  b.style.background=bloq?'rgba(248,81,73,.08)':'rgba(240,165,0,.08)';
+  b.style.border='1px solid '+(bloq?'rgba(248,81,73,.35)':'rgba(240,165,0,.35)');
+  b.style.color=bloq?'var(--red)':'var(--amber)';
+  document.getElementById('al-deuda-banner-det').textContent=deudaTxt(d);
+  document.getElementById('al-deuda-banner-msg').textContent=deudaBloqueaTotal(d)
+    ?'No podés pedir turnos hasta regularizarla. Comunicate con la administración del Aeroclub.'
+    :deudaBloquea(d)
+      ?'Tiene '+CC_DIAS_BLOQUEO+' días o más: no podés pedir turnos hasta regularizarla con administración.'
+      :'Regularizá con administración lo antes posible. Con deuda de '+CC_DIAS_BLOQUEO+' días o más no se pueden reservar turnos.';
+  b.style.display='block';
+}
+function renderBannerDeudaAlumno(){
+  pintarBannerDeuda(null);
+  const k=session?.emailKey;
+  estadoDeudaUsuario().then(d=>{ if(session?.emailKey===k) pintarBannerDeuda(d); }).catch(()=>{});
+}
 function deudaTxt(d){
   return 'Saldo deudor '+ccMonto(d.saldo)+(d.desde?' · factura impaga más antigua del '+fmtFechaCorta(d.desde)+' ('+d.dias+' días)':'')+(d.corte_txt?' · datos al '+d.corte_txt:'');
 }
@@ -7995,6 +8041,7 @@ window.showAlumnoTab=function(tab){
     ['pedir-turno-bloqueado','pedir-turno-fuera-horario','pedir-turno-card','pedir-turno-deuda','pedir-turno-deuda-bloq','pedir-turno-deuda-total'].forEach(id=>{ const e=document.getElementById(id); if(e) e.style.display='none'; });
     // v8.93: + deuda con el club — aviso si debe, bloqueo si la deuda tiene 90+ días.
     Promise.all([usuarioTieneCliente(),estadoDeudaUsuario()]).then(([ok,deuda])=>{
+      pintarBannerDeuda(deuda); // v9.01: banner persistente con el dato fresco
       if(!ok){ if(sinCli) sinCli.style.display='block'; return; }
       if(deudaBloqueaTotal(deuda)){ document.getElementById('pedir-turno-deuda-total').style.display='block'; return; } // v9.00
       if(deudaBloquea(deuda)){
@@ -13317,6 +13364,7 @@ async function restoreSession(){
       showScreen('alumno-screen');
       if(s.rol==='alumno'){
         fbGet('alumnos/'+s.emailKey).then(a=>renderBannerVencimientoAlumno(a));
+        renderBannerDeudaAlumno(); // v9.01
       }
       initAvionSelector();
       showAlumnoTab('mis-turnos');
